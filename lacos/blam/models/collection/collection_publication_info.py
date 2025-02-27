@@ -1,0 +1,41 @@
+from django.db import models
+from lacos.blam.models.base_publication_info import PublicationInfo, Creator as BaseCreator, Contributor as BaseContributor
+
+
+class CollectionPublicationInfo(PublicationInfo):
+    """
+    Concrete implementation of PublicationInfo for Collections
+    
+    Extends the abstract PublicationInfo model with collection-specific fields
+    and relationships.
+    """
+
+    creators = models.ManyToManyField('CollectionCreator', blank=True)
+    contributors = models.ManyToManyField('CollectionContributor', blank=True)
+    
+    class Meta:
+        verbose_name = "Collection Publication Info"
+        verbose_name_plural = "Collection Publication Info"
+
+
+class CollectionCreator(BaseCreator):
+    """
+    Concrete implementation of Creator for Collections
+    
+    Represents individuals who created the collection.
+    """
+    class Meta:
+        verbose_name = "Collection Creator"
+        verbose_name_plural = "Collection Creators"
+
+
+class CollectionContributor(BaseContributor):
+    """
+    Concrete implementation of Contributor for Collections
+    
+    Represents individuals who contributed to the collection in various roles.
+    """
+    contributor_display_name = models.CharField(max_length=255, null=False)
+    class Meta:
+        verbose_name = "Collection Contributor"
+        verbose_name_plural = "Collection Contributors"
