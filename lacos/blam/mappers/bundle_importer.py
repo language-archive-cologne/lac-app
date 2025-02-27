@@ -9,7 +9,8 @@ from lacos.blam.models.bundle import (
     Creator, Contributor, License, RightsHolder,
     MediaResource, WrittenResource, OtherResource,
     BundleKeyword, Project, Funder, SegmentationUnit,
-    TranscriptionType, TranslationLanguage
+    TranscriptionType, TranslationLanguage,
+    CollectionIdentifier
 )
 from blam_schemas.bundle.blam_bundle_repository_v1_0 import Cmd
 
@@ -102,6 +103,29 @@ class BundleImporter:
         # Import data info (segmentation units, transcription types, translation languages)
         if hasattr(bundle_repo, 'bundle_data_info'):
             cls._import_data_info(bundle, bundle_repo.bundle_data_info)
+
+        # Handle collection membership
+        if hasattr(general_info, 'bundle_is_member_of_collection') and general_info.bundle_is_member_of_collection:
+            collection_id = general_info.bundle_is_member_of_collection
+            collection_type = general_info.bundle_is_member_of_collection_type
+            
+            # Find the collection by its identifier
+            try:
+                collection_identifier = CollectionIdentifier.objects.get(
+                    value=collection_id,
+                    identifier_type=collection_type
+                )
+                # Set the collection reference
+                bundle.bundle_is_member_of_collection = collection_identifier.collection.id
+                bundle.bundle_is_member_of_collection_type = collection_type
+            except CollectionIdentifier.DoesNotExist:
+                # Raise an exception with a clear error message
+                raise ValueError(
+                    f"Cannot import bundle: Collection with identifier '{collection_id}' of type '{collection_type}' "
+                    f"not found. Collections must be created before their associated bundles."
+                )
+            
+            bundle.save()
 
         return bundle
     
