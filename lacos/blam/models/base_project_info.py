@@ -1,9 +1,16 @@
 from django.db import models
 from base_indentifiers import FunderIdentifierTypeChoices
+from .base_model import BaseModel
 
-## projectinfo contains a single project
+"""
+Unlike other base models in this package which are abstract and extended by collection/bundle
+specific implementations, ProjectInfo is a concrete model that is shared and referenced by
+both collections and bundles. This allows project information to be consistently maintained
+across different types of resources that are part of the same project.
+"""
 
-class ProjectInfo(models.Model):
+
+class ProjectInfo(BaseModel):
     """
     Model for descriptive information about a project relating to bundle data.
     """
@@ -20,7 +27,7 @@ class ProjectInfo(models.Model):
     funder_infos = models.ManyToManyField('FunderInfo', related_name='projects')
 
 
-class FunderIdentifier(models.Model):
+class FunderIdentifier(BaseModel):
     """
     Model for identifiers that uniquely identify funding bodies.
     """
@@ -37,7 +44,7 @@ class FunderIdentifier(models.Model):
     )
 
 
-class FunderInfo(models.Model):
+class FunderInfo(BaseModel):
     """
     Model for information about a funding organization associated with this resource.
     """

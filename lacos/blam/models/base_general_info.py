@@ -1,8 +1,8 @@
 from django.db import models
 from base_general_info import IdentifierTypeChoices
+from .base_model import BaseModel
 
-
-class GeneralInfo(models.Model):
+class GeneralInfo(BaseModel):
     """
     Abstract base model containing common general information fields.
     
@@ -30,7 +30,7 @@ class GeneralInfo(models.Model):
         abstract = True
 
 
-class Location(models.Model):
+class Location(BaseModel):
     """
     Abstract model for storing hierarchical location information.
     
@@ -51,7 +51,7 @@ class Location(models.Model):
         abstract = True
 
 
-class Keyword(models.Model):
+class Keyword(BaseModel):
     """
     Abstract model for resource keywords/tags.
     
@@ -65,7 +65,7 @@ class Keyword(models.Model):
         abstract = True
 
 
-class ObjectLanguage(models.Model):
+class ObjectLanguage(BaseModel):
     """
     Abstract model for languages that are the subject of study.
     
@@ -83,7 +83,7 @@ class ObjectLanguage(models.Model):
         abstract = True
 
 
-class ObjectLanguageAlternativeName(models.Model):
+class ObjectLanguageAlternativeName(BaseModel):
     """
     Abstract model for alternative names/variants of object languages.
     
@@ -96,7 +96,7 @@ class ObjectLanguageAlternativeName(models.Model):
         abstract = True
 
 
-class ObjectLanguageLanguageFamily(models.Model):
+class ObjectLanguageLanguageFamily(BaseModel):
     """
     Abstract model representing language families.
     
@@ -108,7 +108,7 @@ class ObjectLanguageLanguageFamily(models.Model):
     class Meta:
         abstract = True
 
-class ObjectLanguageTaxonomy(models.Model):
+class ObjectLanguageTaxonomy(BaseModel):
     """
     Abstract model for language taxonomic classification.
     

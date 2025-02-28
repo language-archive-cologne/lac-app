@@ -1,9 +1,9 @@
 from django.db import models
 from lacos.blam.models.base_repository import Repository
-from lacos.blam.models.collection_general_info import CollectionGeneralInfo
-from lacos.blam.models.collection_publication_info import CollectionPublicationInfo
-from lacos.blam.models.collection_administrative_info import CollectionAdministrativeInfo
-from lacos.blam.models.collection_structural_info import CollectionStructuralInfo
+from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo
+from lacos.blam.models.collection.collection_publication_info import CollectionPublicationInfo
+from lacos.blam.models.collection.collection_administrative_info import CollectionAdministrativeInfo
+from lacos.blam.models.collection.collection_structural_info import CollectionStructuralInfo
 
 
 class Collection(Repository):
@@ -14,22 +14,22 @@ class Collection(Repository):
     general_info = models.ForeignKey(
         CollectionGeneralInfo,
         on_delete=models.CASCADE,
-        related_name='collections'
+        related_name='collections_general'
     )
     publication_info = models.ForeignKey(
         CollectionPublicationInfo,
         on_delete=models.CASCADE,
-        related_name='collections'
+        related_name='collections_publication'
     )
     administrative_info = models.ForeignKey(
         CollectionAdministrativeInfo,
         on_delete=models.CASCADE,
-        related_name='collections'
+        related_name='collections_administrative'
     )
     structural_info = models.ForeignKey(
         CollectionStructuralInfo,
         on_delete=models.CASCADE,
-        related_name='collections'
+        related_name='collections_structural'
     )
     # Note: project_info is inherited from Repository and uses the concrete ProjectInfo model
 

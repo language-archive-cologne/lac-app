@@ -1,7 +1,8 @@
 from django.db import models
 from base_indentifiers import AccessTypeChoices
+from .base_model import BaseModel
 
-class AdministrativeInfo(models.Model):
+class AdministrativeInfo(BaseModel):
     """
     Abstract model for administrative metadata that will be publicly communicated,
     especially in regard to metacatalogues and user interfaces.
@@ -36,7 +37,7 @@ class AdministrativeInfo(models.Model):
         abstract = True
 
 
-class IdenticalResource(models.Model):
+class IdenticalResource(BaseModel):
     """
     Abstract model for resources that are identical to the current resource.
     """
@@ -49,7 +50,7 @@ class IdenticalResource(models.Model):
         abstract = True
 
 
-class License(models.Model):
+class License(BaseModel):
     """
     Abstract model for license information under which the resource is available.
     """
@@ -74,7 +75,7 @@ class License(models.Model):
         abstract = True
 
 
-class RightsHolderIdentifier(models.Model):
+class RightsHolderIdentifier(BaseModel):
     """
     Abstract model for identifiers that uniquely identify rights holders.
     """
@@ -87,7 +88,7 @@ class RightsHolderIdentifier(models.Model):
         abstract = True
 
 
-class RightsHolder(models.Model):
+class RightsHolder(BaseModel):
     """
     Abstract model for information about the individual or institution 
     owning or managing the rights in regard to the resource.

@@ -1,8 +1,8 @@
 from django.db import models
 from base_indentifiers import PersonIdentifierTypeChoices
+from .base_model import BaseModel
 
-
-class PublicationInfo(models.Model):
+class PublicationInfo(BaseModel):
     """
     Abstract model for publication information
     
@@ -18,7 +18,7 @@ class PublicationInfo(models.Model):
         abstract = True
 
 
-class Creator(models.Model):
+class Creator(BaseModel):
     """
     Abstract model for resource creators
     
@@ -41,7 +41,7 @@ class Creator(models.Model):
         abstract = True
 
 
-class Contributor(models.Model):
+class Contributor(BaseModel):
     """
     Abstract model for resource contributors
     

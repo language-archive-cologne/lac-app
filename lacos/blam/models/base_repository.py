@@ -1,6 +1,7 @@
 from django.db import models
+from .base_model import BaseModel       
 
-class Repository(models.Model):
+class Repository(BaseModel):
     """
     Abstract base model for repository information
     """
@@ -22,7 +23,7 @@ class Repository(models.Model):
     administrative_info = models.ForeignKey(
         'AdministrativeInfo',
         on_delete=models.CASCADE,
-        related_name='%(app_label)s_%(class)s_repositories'
+        related_name='repositories'
     )
     structural_info = models.ForeignKey(
         'StructuralInfo',
