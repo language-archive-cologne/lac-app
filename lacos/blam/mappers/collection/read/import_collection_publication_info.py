@@ -1,0 +1,226 @@
+from django.db import transaction
+from lacos.blam.models.collection.collection_publication_info import (
+    CollectionPublicationInfo,
+    CollectionCreator,
+    CollectionContributor
+)
+from blam_schemas.collection.blam_collection_repository_v1_0 import (
+    Cmd,
+    CreatorNameIdentifierIdentifierType,
+    ContributorNameIdentifierIdentifierType
+)
+
+
+@transaction.atomic
+def import_publication_info(collection_schema: Cmd) -> CollectionPublicationInfo:
+    """
+    Import publication info from a BLAM collection repository schema to Django models.
+    
+    This function extracts publication metadata from the BLAM collection repository schema
+    and converts it to Django model representations, including related models for
+    creators and contributors.
+    
+    The entire import process is wrapped in a database transaction to ensure atomicity.
+    If any part of the import fails, all database changes will be rolled back.
+    
+    Args:
+        collection_schema: The BLAM collection repository schema containing publication info.
+        
+    Returns:
+        A fully populated CollectionPublicationInfo instance with all related objects.
+    """
+    # Extract the publication info section from the schema
+    publication_info_schema = collection_schema.components.blam_collection_repository_v1_0.collection_publication_info
+    
+    # Create and populate the publication info model
+    publication_info = create_base_publication_info(publication_info_schema)
+    
+    # Import creators
+    import_creators(publication_info, publication_info_schema)
+    
+    # Import contributors if they exist
+    if hasattr(publication_info_schema, 'collection_contributors') and publication_info_schema.collection_contributors:
+        import_contributors(publication_info, publication_info_schema)
+    
+    publication_info.save()
+    return publication_info
+
+
+def create_base_publication_info(publication_info_schema) -> CollectionPublicationInfo:
+    """
+    Create and populate the base publication info model.
+    
+    Args:
+        publication_info_schema: The publication info section of the BLAM collection repository schema.
+        
+    Returns:
+        A CollectionPublicationInfo instance with basic fields populated.
+    """
+    # Prepare publication info data
+    publication_info_data = {}
+    
+    # Set the publication year
+    if publication_info_schema.collection_publication_year:
+        publication_info_data['publication_year'] = publication_info_schema.collection_publication_year.value
+    
+    # Set the data provider
+    if publication_info_schema.collection_data_provider:
+        publication_info_data['data_provider'] = publication_info_schema.collection_data_provider
+    
+    # Create a new publication info (we don't use get_or_create as publication info is typically unique per collection)
+    publication_info = CollectionPublicationInfo.objects.create(**publication_info_data)
+    
+    return publication_info
+
+
+def import_creators(publication_info: CollectionPublicationInfo, publication_info_schema) -> None:
+    """
+    Import creators from the schema to the publication info model.
+    
+    This function creates CollectionCreator objects for each creator in the schema
+    and associates them with the publication info model.
+    
+    Args:
+        publication_info: The CollectionPublicationInfo instance to add creators to.
+        publication_info_schema: The publication info section of the BLAM collection repository schema.
+    """
+    if publication_info_schema.collection_creators:
+        for creator_schema in publication_info_schema.collection_creators.collection_creator:
+            # Prepare creator data
+            creator_data = {}
+            
+            # Set name fields
+            if creator_schema.creator_name:
+                creator_data['family_name'] = creator_schema.creator_name.creator_family_name
+                
+                if hasattr(creator_schema.creator_name, 'creator_given_name') and creator_schema.creator_name.creator_given_name:
+                    creator_data['given_name'] = creator_schema.creator_name.creator_given_name
+            
+            # Set display name (combination of given and family name)
+            given_name = creator_data.get('given_name', '')
+            family_name = creator_data.get('family_name', '')
+            display_name = f"{given_name} {family_name}".strip()
+            creator_data['creator_display_name'] = display_name
+            
+            # Set order if it exists
+            if hasattr(creator_schema, 'order') and creator_schema.order is not None:
+                creator_data['order'] = creator_schema.order
+            
+            # Try to find an existing creator with the same display name, or create a new one
+            creator, created = CollectionCreator.objects.get_or_create(
+                creator_display_name=creator_data['creator_display_name'],
+                defaults=creator_data
+            )
+            
+            # Update fields that might have changed
+            if not created:
+                for key, value in creator_data.items():
+                    setattr(creator, key, value)
+                creator.save()
+            
+            # Add affiliations if they exist
+            if hasattr(creator_schema, 'creator_affiliation') and creator_schema.creator_affiliation:
+                creator.affiliations = creator_schema.creator_affiliation
+                creator.save()
+            
+            # Add name identifiers if they exist
+            if hasattr(creator_schema, 'creator_name_identifier') and creator_schema.creator_name_identifier:
+                for identifier_schema in creator_schema.creator_name_identifier:
+                    # Map identifier type from schema to model
+                    id_type_mapping = {
+                        CreatorNameIdentifierIdentifierType.ORCID: "orcid",
+                        CreatorNameIdentifierIdentifierType.ISNI: "isni",
+                        CreatorNameIdentifierIdentifierType.EMAIL: "email",
+                        CreatorNameIdentifierIdentifierType.OTHER: "other"
+                    }
+                    id_type = id_type_mapping.get(identifier_schema.identifier_type, "orcid")
+                    
+                    # Store the identifier in the appropriate field based on type
+                    if id_type == "orcid":
+                        creator.orcid = identifier_schema.value
+                    elif id_type == "isni":
+                        creator.isni = identifier_schema.value
+                    elif id_type == "email":
+                        creator.email = identifier_schema.value
+                    # For "other" type, we might need a separate model if needed
+                    
+                    creator.save()
+            
+            # Add the creator to the publication info
+            publication_info.creators.add(creator)
+
+
+def import_contributors(publication_info: CollectionPublicationInfo, publication_info_schema) -> None:
+    """
+    Import contributors from the schema to the publication info model.
+    
+    This function creates CollectionContributor objects for each contributor in the schema
+    and associates them with the publication info model.
+    
+    Args:
+        publication_info: The CollectionPublicationInfo instance to add contributors to.
+        publication_info_schema: The publication info section of the BLAM collection repository schema.
+    """
+    for contributor_schema in publication_info_schema.collection_contributors.collection_contributor:
+        # Prepare contributor data
+        contributor_data = {}
+        
+        # Set name fields
+        if contributor_schema.contributor_name:
+            contributor_data['family_name'] = contributor_schema.contributor_name.contributor_family_name
+            
+            if hasattr(contributor_schema.contributor_name, 'contributor_given_name') and contributor_schema.contributor_name.contributor_given_name:
+                contributor_data['given_name'] = contributor_schema.contributor_name.contributor_given_name
+        
+        # Set display name (combination of given and family name)
+        given_name = contributor_data.get('given_name', '')
+        family_name = contributor_data.get('family_name', '')
+        display_name = f"{given_name} {family_name}".strip()
+        contributor_data['contributor_display_name'] = display_name
+        
+        # Set roles if they exist
+        if hasattr(contributor_schema, 'contributor_role') and contributor_schema.contributor_role:
+            contributor_data['roles'] = contributor_schema.contributor_role
+        
+        # Try to find an existing contributor with the same display name, or create a new one
+        contributor, created = CollectionContributor.objects.get_or_create(
+            contributor_display_name=contributor_data['contributor_display_name'],
+            defaults=contributor_data
+        )
+        
+        # Update fields that might have changed
+        if not created:
+            for key, value in contributor_data.items():
+                setattr(contributor, key, value)
+            contributor.save()
+        
+        # Add affiliations if they exist
+        if hasattr(contributor_schema, 'contributor_affiliation') and contributor_schema.contributor_affiliation:
+            contributor.affiliations = contributor_schema.contributor_affiliation
+            contributor.save()
+        
+        # Add name identifiers if they exist
+        if hasattr(contributor_schema, 'contributor_name_identifier') and contributor_schema.contributor_name_identifier:
+            for identifier_schema in contributor_schema.contributor_name_identifier:
+                # Map identifier type from schema to model
+                id_type_mapping = {
+                    ContributorNameIdentifierIdentifierType.ORCID: "orcid",
+                    ContributorNameIdentifierIdentifierType.ISNI: "isni",
+                    ContributorNameIdentifierIdentifierType.EMAIL: "email",
+                    ContributorNameIdentifierIdentifierType.OTHER: "other"
+                }
+                id_type = id_type_mapping.get(identifier_schema.identifier_type, "orcid")
+                
+                # Store the identifier in the appropriate field based on type
+                if id_type == "orcid":
+                    contributor.orcid = identifier_schema.value
+                elif id_type == "isni":
+                    contributor.isni = identifier_schema.value
+                elif id_type == "email":
+                    contributor.email = identifier_schema.value
+                # For "other" type, we might need a separate model if needed
+                
+                contributor.save()
+        
+        # Add the contributor to the publication info
+        publication_info.contributors.add(contributor)

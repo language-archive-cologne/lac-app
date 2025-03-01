@@ -1,0 +1,152 @@
+from django.db import transaction
+from django.utils.dateparse import parse_date
+from lacos.blam.models.collection.collection_administrative_info import (
+    CollectionAdministrativeInfo,
+    CollectionIdenticalResource,
+    CollectionLicense,
+    CollectionRightsHolder,
+    CollectionRightsHolderIdentifier
+)
+from blam_schemas.collection.blam_collection_repository_v1_0 import (
+    Cmd,
+    SimpletypeAccess41
+)
+
+
+@transaction.atomic
+def import_administrative_info(collection_schema: Cmd) -> CollectionAdministrativeInfo:
+    """
+    Import administrative info from a BLAM collection repository schema to a Django model.
+    
+    This function extracts administrative metadata from the BLAM collection repository schema
+    and converts it to a Django model representation, including related models for
+    identical resources, licenses, and rights holders.
+    
+    The entire import process is wrapped in a database transaction to ensure atomicity.
+    If any part of the import fails, all database changes will be rolled back.
+    
+    Args:
+        collection_schema: The BLAM collection repository schema containing administrative info.
+        
+    Returns:
+        A fully populated CollectionAdministrativeInfo instance with all related objects.
+    """
+    # Extract the administrative info section from the schema
+    admin_info_schema = collection_schema.components.blam_collection_repository_v1_0.collection_administrative_info
+    
+    # Create and populate the administrative info model
+    admin_info = create_base_administrative_info(admin_info_schema)
+    
+    # Import related objects
+    import_identical_resources(admin_info, admin_info_schema)
+    import_licenses(admin_info, admin_info_schema)
+    import_rights_holders(admin_info, admin_info_schema)
+    
+    admin_info.save()
+    return admin_info
+
+
+def create_base_administrative_info(admin_info_schema) -> CollectionAdministrativeInfo:
+    """
+    Create and populate the base administrative info model.
+    
+    Args:
+        admin_info_schema: The administrative info section of the BLAM collection repository schema.
+        
+    Returns:
+        A CollectionAdministrativeInfo instance with basic fields populated.
+    """
+    # Prepare administrative info data
+    admin_info_data = {}
+    
+    # Set the availability date
+    if admin_info_schema.availability_date:
+        admin_info_data['availability_date'] = admin_info_schema.availability_date.value
+    
+    # Set the derivation URI if it exists
+    if admin_info_schema.collection_is_derivation_of:
+        admin_info_data['is_derivation_of'] = admin_info_schema.collection_is_derivation_of
+    
+    # Create a new administrative info (we don't use get_or_create as admin info is typically unique per collection)
+    admin_info = CollectionAdministrativeInfo.objects.create(**admin_info_data)
+    
+    return admin_info
+
+
+def import_identical_resources(admin_info: CollectionAdministrativeInfo, admin_info_schema) -> None:
+    """
+    Import identical resources from the schema to the administrative info model.
+    
+    Args:
+        admin_info: The CollectionAdministrativeInfo instance to add identical resources to.
+        admin_info_schema: The administrative info section of the BLAM collection repository schema.
+    """
+    for identical_resource_uri in admin_info_schema.collection_is_identical_to:
+        identical_resource, created = CollectionIdenticalResource.objects.get_or_create(
+            uri=identical_resource_uri
+        )
+        admin_info.is_identical_to.add(identical_resource)
+
+
+def import_licenses(admin_info: CollectionAdministrativeInfo, admin_info_schema) -> None:
+    """
+    Import licenses from the schema to the administrative info model.
+    
+    This function creates CollectionLicense objects for each license in the schema
+    and associates them with the administrative info model. It also maps the
+    access type from the schema to the model.
+    
+    Args:
+        admin_info: The CollectionAdministrativeInfo instance to add licenses to.
+        admin_info_schema: The administrative info section of the BLAM collection repository schema.
+    """
+    # Map access type from schema to model
+    access = "open"  # Default value
+    if admin_info_schema.access and admin_info_schema.access.value:
+        access_mapping = {
+            SimpletypeAccess41.OPEN: "open",
+            SimpletypeAccess41.REGISTRATION_REQUIRED: "registration_required",
+            SimpletypeAccess41.REQUEST_REQUIRED: "request_required"
+        }
+        access = access_mapping.get(admin_info_schema.access.value, "open")
+    
+    for license_schema in admin_info_schema.license:
+        license_model, created = CollectionLicense.objects.get_or_create(
+            license_name=license_schema.license_name,
+            license_identifier=license_schema.license_identifier,
+            defaults={'access': access}
+        )
+        
+        # Update access if the license already existed
+        if not created:
+            license_model.access = access
+            license_model.save()
+            
+        admin_info.licenses.add(license_model)
+
+
+def import_rights_holders(admin_info: CollectionAdministrativeInfo, admin_info_schema) -> None:
+    """
+    Import rights holders from the schema to the administrative info model.
+    
+    This function creates CollectionRightsHolder objects for each rights holder in the schema
+    and associates them with the administrative info model. It also imports the rights
+    holder identifiers for each rights holder.
+    
+    Args:
+        admin_info: The CollectionAdministrativeInfo instance to add rights holders to.
+        admin_info_schema: The administrative info section of the BLAM collection repository schema.
+    """
+    for rights_holder_schema in admin_info_schema.rights_holder:
+        rights_holder, created = CollectionRightsHolder.objects.get_or_create(
+            rights_holder_name=rights_holder_schema.rights_holder_name
+        )
+        
+        # Import rights holder identifiers
+        for identifier_schema in rights_holder_schema.rights_holder_identifier:
+            identifier, created = CollectionRightsHolderIdentifier.objects.get_or_create(
+                value=identifier_schema.value
+            )
+            rights_holder.rights_holder_identifiers.add(identifier)
+        
+        admin_info.rights_holders.add(rights_holder)
