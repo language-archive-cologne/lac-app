@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
 from pathlib import Path
-from lacos.blam.mappers.bundle_importer import BundleImporter
+from lacos.blam.mappers.bundle.read.bundle_importer import BundleImporter
 
 # Fixture to load the XML content once and reuse it across tests
 @pytest.fixture

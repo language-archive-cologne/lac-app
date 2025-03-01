@@ -16,8 +16,9 @@ from lacos.blam.models.bundle.bundle_general_info import (
 )
 
 
+
 @transaction.atomic
-def import_bundle_general_info(cmd_data: Cmd) -> BundleGeneralInfo:
+def import_general_info(cmd_data: Cmd) -> BundleGeneralInfo:
     """
     Import bundle general information from BLAM schema to Django models.
     
@@ -30,17 +31,17 @@ def import_bundle_general_info(cmd_data: Cmd) -> BundleGeneralInfo:
     bundle_info = cmd_data.components.blam_bundle_repository_v1_0.bundle_general_info
     
     # Create location first since it's needed as a foreign key
-    location = _create_bundle_location(bundle_info.bundle_location)
+    location = create_bundle_location(bundle_info.bundle_location)
     
     # Create the main general info record
     general_info = create_bundle_general_info(bundle_info, location)
     
     # Import keywords if present
     if bundle_info.bundle_keywords:
-        _import_keywords(general_info, bundle_info.bundle_keywords.bundle_keyword)
+        import_keywords(general_info, bundle_info.bundle_keywords.bundle_keyword)
     
     # Import object languages (required in schema)
-    _import_object_languages(general_info, bundle_info.bundle_object_languages.bundle_object_language)
+    import_object_languages(general_info, bundle_info.bundle_object_languages.bundle_object_language)
     
     return general_info
 
@@ -59,15 +60,18 @@ def create_bundle_general_info(bundle_info: Any, location: BundleLocation) -> Bu
     id_value = extract_id_value(bundle_info)
     id_type = extract_id_type(bundle_info)
     
-    return BundleGeneralInfo.objects.create(
+    general_info, created = BundleGeneralInfo.objects.get_or_create(
         id_value=id_value,
         id_type=id_type,
-        display_title=bundle_info.bundle_display_title,
-        description=bundle_info.bundle_description,
-        version=bundle_info.bundle_version,
-        bundle_recording_date=_parse_recording_date(bundle_info.bundle_recording_date.value),
-        bundle_location=location
+        defaults={
+            'display_title': bundle_info.bundle_display_title,
+            'description': bundle_info.bundle_description,
+            'version': bundle_info.bundle_version,
+            'bundle_recording_date': parse_recording_date(bundle_info.bundle_recording_date.value),
+            'bundle_location': location
+        }
     )
+    return general_info
 
 
 def extract_id_value(bundle_info: Any) -> str:
@@ -94,10 +98,10 @@ def extract_id_type(bundle_info: Any) -> str:
     Returns:
         The mapped ID type as a string
     """
-    return _map_identifier_type(bundle_info.bundle_id[0].identifier_type)
+    return map_identifier_type(bundle_info.bundle_id[0].identifier_type)
 
 
-def _map_identifier_type(id_type: Optional[BundleIdIdentifierType]) -> str:
+def map_identifier_type(id_type: Optional[BundleIdIdentifierType]) -> str:
     """
     Map schema identifier type to model choices.
     
@@ -119,7 +123,7 @@ def _map_identifier_type(id_type: Optional[BundleIdIdentifierType]) -> str:
     return mapping.get(id_type, IdentifierTypeChoices.DOI.value)
 
 
-def _parse_recording_date(date_str: str) -> Optional[str]:
+def parse_recording_date(date_str: str) -> Optional[str]:
     """
     Parse recording date from schema format to Django model format.
     
@@ -134,7 +138,7 @@ def _parse_recording_date(date_str: str) -> Optional[str]:
     return date_str
 
 
-def _create_bundle_location(location_data: Any) -> BundleLocation:
+def create_bundle_location(location_data: Any) -> BundleLocation:
     """
     Create a BundleLocation instance from schema data.
     
@@ -144,19 +148,22 @@ def _create_bundle_location(location_data: Any) -> BundleLocation:
     Returns:
         The created BundleLocation instance
     """
-    return BundleLocation.objects.create(
-        geo_location=getattr(location_data, 'bundle_geo_location', None),
-        location_name=getattr(location_data, 'bundle_location_name', None),
-        location_facet=getattr(location_data, 'bundle_location_facet', None),
+    location, created = BundleLocation.objects.get_or_create(
         region_name=location_data.bundle_region_name,
-        region_facet=location_data.bundle_region_facet,
         country_name=location_data.bundle_country_name,
-        country_facet=location_data.bundle_country_facet,
-        country_code=location_data.bundle_country_code.value
+        country_code=location_data.bundle_country_code.value,
+        defaults={
+            'geo_location': getattr(location_data, 'bundle_geo_location', None),
+            'location_name': getattr(location_data, 'bundle_location_name', None),
+            'location_facet': getattr(location_data, 'bundle_location_facet', None),
+            'region_facet': location_data.bundle_region_facet,
+            'country_facet': location_data.bundle_country_facet,
+        }
     )
+    return location
 
 
-def _import_keywords(general_info: BundleGeneralInfo, keywords: List[str]) -> None:
+def import_keywords(general_info: BundleGeneralInfo, keywords: List[str]) -> None:
     """
     Import keywords from schema data to BundleKeyword models.
     
@@ -165,11 +172,11 @@ def _import_keywords(general_info: BundleGeneralInfo, keywords: List[str]) -> No
         keywords: List of keyword strings from the schema
     """
     for keyword_value in keywords:
-        keyword = BundleKeyword.objects.create(value=keyword_value)
+        keyword, created = BundleKeyword.objects.get_or_create(value=keyword_value)
         general_info.bundle_keywords.add(keyword)
 
 
-def _import_object_languages(general_info: BundleGeneralInfo, languages: List[Any]) -> None:
+def import_object_languages(general_info: BundleGeneralInfo, languages: List[Any]) -> None:
     """
     Import object languages from schema data to BundleObjectLanguage models.
     
@@ -200,13 +207,16 @@ def create_object_language(general_info: BundleGeneralInfo, lang_data: Any) -> B
     Returns:
         The created BundleObjectLanguage instance
     """
-    return BundleObjectLanguage.objects.create(
+    language, created = BundleObjectLanguage.objects.get_or_create(
         bundle=general_info,
         display_name=lang_data.object_language_display_name,
-        name=lang_data.object_language_name,
-        iso_639_3_code=getattr(lang_data.object_language_iso639_3_code, 'value', None),
-        glottolog_code=getattr(lang_data.object_language_glottolog_code, 'value', None)
+        defaults={
+            'name': lang_data.object_language_name,
+            'iso_639_3_code': getattr(lang_data.object_language_iso639_3_code, 'value', None),
+            'glottolog_code': getattr(lang_data.object_language_glottolog_code, 'value', None)
+        }
     )
+    return language
 
 
 def add_alternative_names(language: BundleObjectLanguage, alt_names: List[str]) -> None:
@@ -218,7 +228,7 @@ def add_alternative_names(language: BundleObjectLanguage, alt_names: List[str]) 
         alt_names: List of alternative name strings from the schema
     """
     for alt_name in alt_names:
-        alt_name_obj = BundleObjectLanguageAlternativeName.objects.create(value=alt_name)
+        alt_name_obj, created = BundleObjectLanguageAlternativeName.objects.get_or_create(value=alt_name)
         language.alternative_names.add(alt_name_obj)
 
 
@@ -233,10 +243,10 @@ def create_language_taxonomy(language: BundleObjectLanguage, taxonomy_data: Any)
     Returns:
         The created BundleObjectLanguageTaxonomy instance
     """
-    taxonomy = BundleObjectLanguageTaxonomy.objects.create(object_language=language)
+    taxonomy, created = BundleObjectLanguageTaxonomy.objects.get_or_create(object_language=language)
     
     for family_name in taxonomy_data.object_language_language_family:
-        family = BundleObjectLanguageLanguageFamily.objects.create(value=family_name)
+        family, created = BundleObjectLanguageLanguageFamily.objects.get_or_create(value=family_name)
         taxonomy.language_family.add(family)
     
     return taxonomy
