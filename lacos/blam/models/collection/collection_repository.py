@@ -4,7 +4,7 @@ from lacos.blam.models.collection.collection_general_info import CollectionGener
 from lacos.blam.models.collection.collection_publication_info import CollectionPublicationInfo
 from lacos.blam.models.collection.collection_administrative_info import CollectionAdministrativeInfo
 from lacos.blam.models.collection.collection_structural_info import CollectionStructuralInfo
-
+from lacos.blam.models.base_project_info import ProjectInfo
 
 class Collection(Repository):
     """
@@ -21,6 +21,11 @@ class Collection(Repository):
         on_delete=models.CASCADE,
         related_name='collections_publication'
     )
+    project_info = models.ForeignKey(
+        ProjectInfo,
+        on_delete=models.CASCADE,
+        related_name='collections_project'
+    )
     administrative_info = models.ForeignKey(
         CollectionAdministrativeInfo,
         on_delete=models.CASCADE,
@@ -31,7 +36,6 @@ class Collection(Repository):
         on_delete=models.CASCADE,
         related_name='collections_structural'
     )
-    # Note: project_info is inherited from Repository and uses the concrete ProjectInfo model
 
     class Meta:
         verbose_name = "Collection"

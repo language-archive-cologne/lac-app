@@ -21,7 +21,6 @@ from lacos.blam.models.bundle.bundle_structural_info import (
     MediaResource, WrittenResource, WrittenResourceAnnotation, OtherResource
 )
 from lacos.blam.models.base_project_info import ProjectInfo, FunderInfo, FunderIdentifier
-from lacos.blam.models.bundle.bundle_identifier import BundleIdentifier
 from blam_schemas.bundle.blam_bundle_repository_v1_0 import Cmd
 
 class BundleImporter:
@@ -116,9 +115,7 @@ class BundleImporter:
     def _import_related_data(cls, bundle, bundle_repo, general_info, pub_info, admin_info, structural_info):
         """Import all related data for the bundle"""
         # GENERAL INFORMATION SECTION
-        # ---------------------------
-        # Import bundle identifiers (DOI, Handle, etc.)
-        cls._import_bundle_identifiers(bundle, general_info)
+
         
         # Import keywords/tags for the bundle
         cls._import_keywords(bundle, general_info)
@@ -171,16 +168,7 @@ class BundleImporter:
         if hasattr(bundle_repo, 'bundle_data_info'):
             cls._import_data_info(bundle, bundle_repo.bundle_data_info)
     
-    @classmethod
-    def _import_bundle_identifiers(cls, bundle: Bundle, general_info: Any) -> None:
-        """Import persistent identifiers for the bundle (DOI, Handle, etc.)"""
-        if hasattr(general_info, 'bundle_id'):
-            for bundle_id in general_info.bundle_id:
-                BundleIdentifier.objects.create(
-                    bundle=bundle,
-                    value=bundle_id.value,  # The actual identifier value
-                    identifier_type=bundle_id.identifier_type.value if bundle_id.identifier_type else None  # Type (DOI, Handle, etc.)
-                )
+
     
     @classmethod
     def _import_keywords(cls, bundle: Bundle, general_info: Any) -> None:
