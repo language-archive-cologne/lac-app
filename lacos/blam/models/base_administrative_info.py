@@ -1,26 +1,51 @@
 from django.db import models
 from base_indentifiers import AccessTypeChoices
 from .base_model import BaseModel
+from django.utils.translation import gettext_lazy as _
 
 class AdministrativeInfo(BaseModel):
     """
     Abstract model for administrative metadata that will be publicly communicated,
     especially in regard to metacatalogues and user interfaces.
     """
-    is_identical_to = models.ManyToManyField(
-        'IdenticalResource', 
-        blank=True,
-        related_name='%(app_label)s_%(class)s_identical_resources',
-        help_text="URIs that uniquely identify identical resources"
+    ACCESS_LEVELS = [
+        ('embargo', _('Embargo - No access')),
+        ('private', _('Private - Specific users only')),
+        ('protected', _('Protected - All authenticated users')),
+        ('public', _('Public - Everyone')),
+    ]
+    
+    access_level = models.CharField(
+        max_length=10,
+        choices=ACCESS_LEVELS,
+        default='public',
+        help_text=_("Access level for this resource")
     )
+    
+    availability_date = models.DateField(
+        null=False,
+        help_text="Date at which the resource became or will become available (ISO 8601: YYYY-MM-DD)"
+    )
+    
     is_derivation_of = models.URLField(
         null=True,
         blank=True,
         help_text="URI that uniquely identifies the resource from which the current resource is derived"
     )
-    availability_date = models.DateField(
-        null=False,
-        help_text="Date at which the resource became or will become available (ISO 8601: YYYY-MM-DD)"
+    
+    # For private access level, we need to track authorized users
+    authorized_users = models.ManyToManyField(
+        'users.User',
+        blank=True,
+        related_name='%(class)s_authorized_resources',
+        help_text=_("Users with explicit access to private resources")
+    )
+    
+    is_identical_to = models.ManyToManyField(
+        'IdenticalResource', 
+        blank=True,
+        related_name='%(app_label)s_%(class)s_identical_resources',
+        help_text="URIs that uniquely identify identical resources"
     )
     licenses = models.ManyToManyField(
         'License',
@@ -35,6 +60,8 @@ class AdministrativeInfo(BaseModel):
     
     class Meta:
         abstract = True
+        verbose_name = "Administrative Info"
+        verbose_name_plural = "Administrative Info"
 
 
 class IdenticalResource(BaseModel):
@@ -48,6 +75,11 @@ class IdenticalResource(BaseModel):
     
     class Meta:
         abstract = True
+        verbose_name = "Identical Resource"
+        verbose_name_plural = "Identical Resources"
+
+    def __str__(self):
+        return self.uri
 
 
 class License(BaseModel):
@@ -73,19 +105,41 @@ class License(BaseModel):
     
     class Meta:
         abstract = True
+        verbose_name = "License"
+        verbose_name_plural = "Licenses"
+
+    def __str__(self):
+        return self.license_name
 
 
 class RightsHolderIdentifier(BaseModel):
     """
     Abstract model for identifiers that uniquely identify rights holders.
     """
-    value = models.URLField(
-        null=False,
-        help_text="URI that uniquely identifies the rights holder"
-    )
+    IDENTIFIER_TYPES = [
+        ('ORCID', 'ORCID'),
+        ('ISNI', 'ISNI'),
+        ('EMAIL', 'Email'),
+        ('OTHER', 'Other'),
+    ]
     
+    identifier = models.CharField(
+        max_length=255,
+        help_text="Identifier for the rights holder"
+    )
+    identifier_type = models.CharField(
+        max_length=10,
+        choices=IDENTIFIER_TYPES,
+        help_text="Type of the identifier"
+    )
+
     class Meta:
         abstract = True
+        verbose_name = "Rights Holder Identifier"
+        verbose_name_plural = "Rights Holder Identifiers"
+
+    def __str__(self):
+        return f"{self.identifier_type}: {self.identifier}"
 
 
 class RightsHolder(BaseModel):
@@ -107,3 +161,8 @@ class RightsHolder(BaseModel):
     
     class Meta:
         abstract = True
+        verbose_name = "Rights Holder"
+        verbose_name_plural = "Rights Holders"
+
+    def __str__(self):
+        return self.rights_holder_name
