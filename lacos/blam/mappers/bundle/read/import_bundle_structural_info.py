@@ -9,7 +9,8 @@ from lacos.blam.models.bundle.bundle_structural_info import (
     WrittenResourceAnnotation,
     OtherResource
 )
-from lacos.blam.models.collection.collection import Collection
+from lacos.blam.models.collection.collection_repository import Collection
+from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo
 from blam_schemas.bundle.blam_bundle_repository_v1_0 import (
     Cmd, BundleIsMemberOfCollectionIdentifierType
 )
@@ -17,13 +18,14 @@ from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
 
 
 @transaction.atomic
-def import_structural_info(cmd_data: Cmd, collection_id: int) -> Optional[BundleStructuralInfo]:
+def import_structural_info(cmd_data: Cmd, collection_identifier: str, identifier_type: str) -> Optional[BundleStructuralInfo]:
     """
     Import structural info from CMD object to Django models.
     
     Args:
         cmd_data: The CMD object containing bundle structural information
-        collection_id: The ID of the collection this bundle belongs to
+        collection_identifier: The identifier value (e.g., DOI, Handle) of the collection
+        identifier_type: The type of identifier (e.g., "DOI", "Handle")
         
     Returns:
         BundleStructuralInfo object or None if structural info is missing
@@ -37,11 +39,16 @@ def import_structural_info(cmd_data: Cmd, collection_id: int) -> Optional[Bundle
     if not struct_info:
         return None
     
-    # Verify that the collection exists
+    # Verify that the collection exists by looking up its identifier
     try:
-        collection = Collection.objects.get(id=collection_id)
-    except Collection.DoesNotExist:
-        raise ValueError(f"Collection with ID {collection_id} does not exist")
+        # Find the collection by its identifier in the general_info
+        collection_general_info = CollectionGeneralInfo.objects.get(
+            id_value=collection_identifier,
+            id_type=identifier_type
+        )
+        collection = Collection.objects.get(general_info=collection_general_info)
+    except (CollectionGeneralInfo.DoesNotExist, Collection.DoesNotExist):
+        raise ValueError(f"Collection with identifier {collection_identifier} ({identifier_type}) does not exist")
     
     # Get or create structural info with collection reference
     bundle_struct_info, created = BundleStructuralInfo.objects.get_or_create(

@@ -113,8 +113,8 @@ class BundleImporter:
     def _extract_metadata_license(cls, cmd_data: Cmd) -> tuple:
         """Extract metadata license information from CMD data"""
         repo = cmd_data.components.blam_bundle_repository_v1_0
-        md_license = repo.md_license.value if repo.md_license else None
-        md_license_uri = repo.md_license.uri if repo.md_license else None
+        md_license = repo.mdlicense.value if repo.mdlicense else None
+        md_license_uri = repo.mdlicense.uri if repo.mdlicense else None
         return md_license, md_license_uri
     
     @classmethod
