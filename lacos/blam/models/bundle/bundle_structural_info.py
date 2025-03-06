@@ -1,6 +1,6 @@
 from django.db import models
 from lacos.blam.models.base_structural_info import AdditionalMetadataFile, StructuralInfo
-from base_indentifiers import IdentifierTypeChoices
+from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
 
 
 class BundleStructuralInfo(StructuralInfo):

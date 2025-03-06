@@ -1,6 +1,6 @@
 from django.db import models
-from base_general_info import IdentifierTypeChoices
-from .base_model import BaseModel
+from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
+from lacos.blam.models.base_model import BaseModel
 
 class GeneralInfo(BaseModel):
     """

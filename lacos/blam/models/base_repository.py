@@ -1,5 +1,5 @@
 from django.db import models
-from .base_model import BaseModel       
+from lacos.blam.models.base_model import BaseModel       
 
 class Repository(BaseModel):
     """

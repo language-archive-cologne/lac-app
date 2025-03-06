@@ -1,6 +1,6 @@
 from django.db import models
-from base_indentifiers import AccessTypeChoices
-from .base_model import BaseModel
+from lacos.blam.models.base_indentifiers import AccessTypeChoices
+from lacos.blam.models.base_model import BaseModel
 from django.utils.translation import gettext_lazy as _
 
 class AdministrativeInfo(BaseModel):

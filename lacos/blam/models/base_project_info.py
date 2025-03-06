@@ -1,6 +1,6 @@
 from django.db import models
-from base_indentifiers import FunderIdentifierTypeChoices
-from .base_model import BaseModel
+from lacos.blam.models.base_indentifiers import FunderIdentifierTypeChoices
+from lacos.blam.models.base_model import BaseModel
 
 """
 Unlike other base models in this package which are abstract and extended by collection/bundle
