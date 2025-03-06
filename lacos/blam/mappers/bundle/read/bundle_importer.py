@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.base_project_info import ProjectInfo
 from blam_schemas.bundle.blam_bundle_repository_v1_0 import Cmd
+from xsdata.formats.dataclass.parsers import XmlParser
 
 # Import the standalone import functions
 from lacos.blam.mappers.bundle.read.import_bundle_general_info import import_general_info
@@ -17,7 +18,7 @@ from lacos.blam.mappers.bundle.read.import_bundle_project_info import import_pro
 
 class BundleImporter:
     """
-    Handles importing BLAM XML into Django models.
+    Handles importing BLAM Bundle XML into Django models.
     """
     
     @staticmethod
@@ -27,8 +28,9 @@ class BundleImporter:
         Returns parsed Cmd object if valid, raises ValidationError if invalid
         """
         try:
-            # Using the generated dataclasses to parse XML
-            cmd_data = Cmd.from_xml(xml_content)
+            # Using xsdata parser to parse XML into Cmd dataclass
+            parser = XmlParser()
+            cmd_data = parser.from_string(xml_content, Cmd)
             return cmd_data
         except Exception as e:
             raise ValidationError(f"Invalid BLAM bundle XML: {str(e)}")

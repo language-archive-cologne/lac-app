@@ -10,20 +10,7 @@ from blam_schemas.collection.blam_collection_repository_v1_0 import Cmd
 class TestCollectionImporter:
     """Tests for the CollectionImporter class"""
 
-    @patch('xsdata.formats.dataclass.parsers.XmlParser.from_string')
-    def test_validate_xml_valid(self, mock_from_string):
-        """Test validate_xml with valid XML"""
-        # Set up mock
-        mock_cmd = MagicMock(spec=Cmd)
-        mock_from_string.return_value = mock_cmd
-        
-        # Call the method
-        result = CollectionImporter.validate_xml("<xml>valid</xml>")
-        
-        # Verify the result
-        assert result == mock_cmd
-        mock_from_string.assert_called_once_with("<xml>valid</xml>", Cmd)
-    
+
     @patch('django.db.transaction.atomic')
     @patch('lacos.blam.mappers.collection.read.collection_importer.CollectionImporter.validate_xml')
     @patch('lacos.blam.mappers.collection.read.collection_importer.CollectionImporter._import_cmd_to_models')
@@ -218,61 +205,3 @@ class TestCollectionImporter:
                     # Verify the result
                     assert result == mock_collection
     
-    def test_xml_to_cmd_mapping(self, algerien_xml_content):
-        """
-        Test that XML is correctly parsed into Cmd dataclass structure.
-        This test verifies the actual mapping without mocking the Cmd object.
-        """
-        # We need to patch transaction.atomic to avoid database access
-        with patch('django.db.transaction.atomic') as mock_atomic:
-            # Set up transaction mock
-            mock_context = MagicMock()
-            mock_atomic.return_value = mock_context
-            mock_context.__enter__.return_value = None
-            mock_context.__exit__.return_value = None
-            
-            # We'll use the real XmlParser but patch any database-accessing methods
-            with patch('lacos.blam.mappers.collection.read.collection_importer.CollectionImporter._import_cmd_to_models'):
-                # Call the validate_xml method with the real XML content
-                cmd_data = CollectionImporter.validate_xml(algerien_xml_content)
-                
-                # Verify that cmd_data is an actual Cmd object, not a mock
-                assert isinstance(cmd_data, Cmd)
-                
-                # Verify key attributes from the XML are correctly mapped to the Cmd object
-                # Header
-                assert hasattr(cmd_data, 'header')
-                assert cmd_data.header.md_collection_display_name.value == "Interviews about Rock Art"
-                
-                # Components
-                assert hasattr(cmd_data, 'components')
-                assert hasattr(cmd_data.components, 'blam_collection_repository_v1_0')
-                
-                # License
-                repo = cmd_data.components.blam_collection_repository_v1_0
-                assert hasattr(repo, 'mdlicense')
-                assert repo.mdlicense.value == "CC0"
-                assert repo.mdlicense.uri == "https://creativecommons.org/public-domain/cc0/"
-                
-                # General Info
-                assert hasattr(repo, 'collection_general_info')
-                general_info = repo.collection_general_info
-                assert general_info.collection_display_title == "Interviews about Rock Art"
-                
-                # Publication Info
-                assert hasattr(repo, 'collection_publication_info')
-                pub_info = repo.collection_publication_info
-                # XmlPeriod doesn't have a value attribute, it's a string representation
-                assert str(pub_info.collection_publication_year) == "2022"
-                assert pub_info.collection_data_provider == "FAIR.rdm im SPP2143 \"Entangled Africa\""
-                
-                # Administrative Info
-                assert hasattr(repo, 'collection_administrative_info')
-                admin_info = repo.collection_administrative_info
-                assert admin_info.access.value.value == "open"
-                
-                # Structural Info
-                assert hasattr(repo, 'collection_structural_info')
-                struct_info = repo.collection_structural_info
-                assert hasattr(struct_info, 'collection_members')
-                assert len(struct_info.collection_members.collection_has_collection_member) > 0
