@@ -18,10 +18,10 @@ class AdditionalMetadataFile(models.Model):
         null=False,
         help_text="Name of the metadata file"
     )
-    file_pid = models.CharField(
+    file_pid = models.URLField(
         max_length=255,
         null=False,
-        help_text="Persistent identifier for the metadata file"
+        help_text="Persistent identifier URL for the metadata file"
     )
     mime_type = models.CharField(
         max_length=100,

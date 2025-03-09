@@ -1,16 +1,32 @@
 from django.db import models
 from lacos.blam.models.base_repository import Repository
+from lacos.blam.models.base_license import MdLicense
+from lacos.blam.models.collection.collection_header import CollectionHeader
 from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo
 from lacos.blam.models.collection.collection_publication_info import CollectionPublicationInfo
 from lacos.blam.models.collection.collection_administrative_info import CollectionAdministrativeInfo
 from lacos.blam.models.collection.collection_structural_info import CollectionStructuralInfo
 from lacos.blam.models.base_project_info import ProjectInfo
+from lacos.blam.models.collection.collection_resources import CollectionResources
+
 
 class Collection(Repository):
     """
     Concrete implementation of Repository for collections.
     A collection is a curated set of bundles that form a meaningful unit.
     """
+
+    base_header = models.ForeignKey(
+        CollectionHeader,
+        on_delete=models.CASCADE,
+        related_name='collections_header'
+    )
+    base_license = models.ForeignKey(
+        MdLicense,
+        on_delete=models.CASCADE,
+        related_name='collections_license'
+    )
+
     general_info = models.ForeignKey(
         CollectionGeneralInfo,
         on_delete=models.CASCADE,

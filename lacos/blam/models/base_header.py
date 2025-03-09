@@ -8,6 +8,9 @@ class MdHeader(BaseModel):
     The CMDI Header contains metadata about the metadata document itself,
     such as who created it, when it was created, and identifiers for the
     metadata document.
+    
+    Requirements:
+    - Each metadata document must have a unique self-link identifier
     """
     md_creator = models.CharField(
         max_length=255,
@@ -18,6 +21,7 @@ class MdHeader(BaseModel):
         help_text="Date when the metadata was created"
     )
     md_self_link = models.URLField(
+        unique=True,
         help_text="Persistent identifier for this metadata document"
     )
     md_profile = models.URLField(

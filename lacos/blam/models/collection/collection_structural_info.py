@@ -1,6 +1,7 @@
 from django.db import models
 from lacos.blam.models.base_structural_info import AdditionalMetadataFile, StructuralInfo
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
+from lacos.blam.models.bundle.bundle_repository import Bundle
 
 
 class CollectionStructuralInfo(StructuralInfo):
@@ -86,7 +87,9 @@ class CollectionHasCollectionMember(models.Model):
     """
     References to a bundle contained in the collection. Based on the `hasCollectionMember` 
     relationship of the Fedora Relationship Ontology.
-
+    
+    This model supports both direct references to existing bundles and identifier-based
+    references for bundles that don't exist yet in the system.
     """
     collection_members = models.ForeignKey(
         'CollectionMembers',
@@ -94,16 +97,32 @@ class CollectionHasCollectionMember(models.Model):
         related_name='member_references',
         help_text="Collection members component this reference belongs to"
     )
-    member_uri = models.URLField(
+    
+    # Direct reference to bundle when it exists
+    bundle = models.ForeignKey(
+        Bundle,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='collection_references',
+        help_text="Direct reference to the bundle when it exists in the system"
+    )
+    
+    # Identifier information for when bundle doesn't exist yet
+    identifier = models.CharField(
+        max_length=255,
         null=False,
-        help_text="URI reference to a bundle contained in the collection"
+        blank=False,
+        help_text="The identifier value (DOI or Handle) for the bundle"
     )
     identifier_type = models.CharField(
         max_length=10,
         choices=IdentifierTypeChoices.choices,
         null=False,
+        blank=False,
         help_text="The identifier type used (DOI or Handle)"
     )
+    
     order = models.PositiveIntegerField(
         null=True,
         blank=True,
@@ -114,3 +133,54 @@ class CollectionHasCollectionMember(models.Model):
         verbose_name = "Collection Has Collection Member"
         verbose_name_plural = "Collection Has Collection Members"
         ordering = ['order']
+        unique_together = [('identifier', 'identifier_type')]
+        
+    def resolve_bundle(self):
+        """
+        Attempts to resolve and link to the actual bundle if it exists in the system.
+        If no bundle exists with this identifier, creates just the publication info
+        with only the identifier information.
+        Returns True if successful, False if there was an error.
+        """
+        if self.bundle is not None:
+            return True
+            
+        try:
+            # Try to find the bundle by its identifier
+            from lacos.blam.models.bundle.bundle_publication_info import BundlePublicationInfo
+            
+            # First, check if a bundle with this identifier already exists
+            try:
+                bundle = Bundle.objects.get(
+                    publication_info__identifier=self.identifier,
+                    publication_info__identifier_type=self.identifier_type
+                )
+                self.bundle = bundle
+                self.save()
+                return True
+            except Bundle.DoesNotExist:
+                # Check if publication info with this identifier exists
+                try:
+                    pub_info = BundlePublicationInfo.objects.get(
+                        identifier=self.identifier,
+                        identifier_type=self.identifier_type
+                    )
+                except BundlePublicationInfo.DoesNotExist:
+                    # Create new publication info with the identifier
+                    pub_info = BundlePublicationInfo.objects.create(
+                        identifier=self.identifier,
+                        identifier_type=self.identifier_type,
+                        # Required fields from PublicationInfo
+                        publication_year=0,  # Placeholder value
+                        data_provider="Placeholder"  # Placeholder value
+                    )
+                
+                # We don't create a bundle here, just the publication info
+                return True
+            
+        except Exception as e:
+            # Log the error
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error resolving bundle for {self.identifier_type} {self.identifier}: {str(e)}")
+            return False

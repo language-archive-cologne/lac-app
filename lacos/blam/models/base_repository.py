@@ -9,6 +9,17 @@ class Repository(BaseModel):
     with relationships to various types of information. Concrete subclasses should
     override these fields with specific implementations.
     """
+
+    base_header = models.ForeignKey(
+        'MdHeader',
+        on_delete=models.CASCADE,
+        related_name='base_header'
+    )
+    base_license = models.ForeignKey(
+        'MdLicense',
+        on_delete=models.CASCADE,
+        related_name='base_license'
+    )
     general_info = models.ForeignKey(
         'GeneralInfo',
         on_delete=models.CASCADE,

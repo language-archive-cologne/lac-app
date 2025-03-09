@@ -13,9 +13,14 @@ class BundlePublicationInfo(PublicationInfo):
     creators = models.ManyToManyField('BundleCreator', blank=True)
     contributors = models.ManyToManyField('BundleContributor', blank=True)
     
+    # Add identifier fields with not-null constraints
+    identifier = models.CharField(max_length=255, null=False, blank=False)
+    identifier_type = models.CharField(max_length=10, null=False, blank=False)
+    
     class Meta:
         verbose_name = "Bundle Publication Info"
         verbose_name_plural = "Bundle Publication Info"
+        unique_together = [('identifier', 'identifier_type')]
 
 
 class BundleCreator(BaseCreator):

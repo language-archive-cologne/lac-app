@@ -10,6 +10,16 @@ class BundleStructuralInfo(StructuralInfo):
     is_member_of_collection = models.ForeignKey('Collection', on_delete=models.CASCADE, related_name='bundle_members')
     additional_metadata_files = models.ManyToManyField('BundleAdditionalMetadataFile', blank=True)
     bundle_topics = models.ManyToManyField('BundleTopic', blank=True)
+    
+    # Link to the CMDI Resources (optional, as it might be created later)
+    cmdi_resources = models.OneToOneField(
+        'blam.CmdiResources',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='bundle_structural_info',
+        help_text="CMDI Resources associated with this bundle"
+    )
 
     class Meta:
         verbose_name = "Bundle Structural Info"
@@ -17,8 +27,19 @@ class BundleStructuralInfo(StructuralInfo):
 
 class BundleAdditionalMetadataFile(AdditionalMetadataFile):
     """
-    Concrete model for additional metadata files associated with a bundle.
+    Concrete implementation of AdditionalMetadataFile for bundles
     """
+    
+    # Optional link to the corresponding CMDI resource
+    cmdi_resource = models.OneToOneField(
+        'blam.CmdiAdditionalMetadataFile',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='blam_resource',
+        help_text="Corresponding CMDI additional metadata file"
+    )
+    
     class Meta:
         verbose_name = "Bundle Additional Metadata File"
         verbose_name_plural = "Bundle Additional Metadata Files"
@@ -123,6 +144,16 @@ class BundleResources(models.Model):
     bundle_written_resources = models.ManyToManyField('WrittenResource', blank=True)
     bundle_other_resources = models.ManyToManyField('OtherResource', blank=True)
     
+    # Link to the CMDI Resources (optional, as it might be created later)
+    cmdi_resources = models.OneToOneField(
+        'blam.CmdiResources',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='bundle_resources',
+        help_text="CMDI Resources associated with these bundle resources"
+    )
+
     class Meta:
         verbose_name = "Bundle Resources"
         verbose_name_plural = "Bundle Resources"
@@ -158,6 +189,16 @@ class MediaResource(models.Model):
         help_text="A human readable, file specific description"
     )
     
+    # Optional link to the corresponding CMDI resource
+    cmdi_resource = models.OneToOneField(
+        'blam.CmdiMediaResource',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='blam_resource',
+        help_text="Corresponding CMDI media resource"
+    )
+    
     class Meta:
         verbose_name = "Media Resource"
         verbose_name_plural = "Media Resources"
@@ -187,6 +228,16 @@ class WrittenResource(models.Model):
         null=True,
         blank=True,
         help_text="A human readable, file specific description"
+    )
+    
+    # Optional link to the corresponding CMDI resource
+    cmdi_resource = models.OneToOneField(
+        'blam.CmdiWrittenResource',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='blam_resource',
+        help_text="Corresponding CMDI written resource"
     )
     
     class Meta:
@@ -238,6 +289,16 @@ class OtherResource(models.Model):
         null=True,
         blank=True,
         help_text="A human readable, file specific description"
+    )
+    
+    # Optional link to the corresponding CMDI resource
+    cmdi_resource = models.OneToOneField(
+        'blam.CmdiOtherResource',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='blam_resource',
+        help_text="Corresponding CMDI other resource"
     )
     
     class Meta:
