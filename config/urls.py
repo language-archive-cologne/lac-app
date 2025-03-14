@@ -24,6 +24,7 @@ urlpatterns = [
     path("users/", include("lacos.users.urls", namespace="users")),
     path("accounts/", include("allauth.urls")),
     # Your stuff: custom urls includes go here
+    path("storage/", include("lacos.storage.urls", namespace="storage")),
     # ...
     # Media files
     *static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT),

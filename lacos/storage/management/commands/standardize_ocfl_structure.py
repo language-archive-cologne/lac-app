@@ -277,8 +277,18 @@ class Command(BaseCommand):
         """Copy directory from ingest to production bucket"""
         try:
             source_handler = PathHandler(source_path)
-            relative_path = source_path.split('/')[-2]  # e.g., 'algerien'
-            target_path = f"{production_bucket.rstrip('/')}/{relative_path}/{source_path.split('/')[-1]}"
+            
+            # Convert to string if it's a Path object
+            source_path_str = str(source_path)
+            
+            # Extract the relative path components
+            path_parts = source_path_str.rstrip('/').split('/')
+            if len(path_parts) >= 2:
+                relative_path = path_parts[-2]  # e.g., 'algerien'
+                target_path = f"{production_bucket.rstrip('/')}/{relative_path}/{path_parts[-1]}"
+            else:
+                # Handle case where there's no parent directory
+                target_path = f"{production_bucket.rstrip('/')}/{path_parts[-1]}"
             
             if dry_run:
                 self.stdout.write(f"Would copy {source_path} to {target_path}")
@@ -345,27 +355,54 @@ class Command(BaseCommand):
                         acl_handler.move(new_acl_path)
                         self.stdout.write(f"Moved acl.json to metadata directory")
             
-            # Handle Resources directory for bundles
-            if not is_collection_dir:
-                resources_path = f"{content_path}/Resources"
-                resources_handler = PathHandler(resources_path)
-                
-                # For S3, we need to check if Resources directory exists by listing objects
-                resources_exists = False
+            # Check for Resources directory in both collections and bundles
+            resources_path = f"{content_path}/Resources"
+            resources_handler = PathHandler(resources_path)
+            
+            # For S3, we need to check if Resources directory exists by listing objects
+            resources_exists = False
+            if resources_handler.is_s3:
+                try:
+                    response = resources_handler.s3_client.list_objects_v2(
+                        Bucket=resources_handler.bucket_name,
+                        Prefix=resources_handler.key.rstrip('/') + '/'
+                    )
+                    resources_exists = 'Contents' in response and len(response.get('Contents', [])) > 0
+                except Exception as e:
+                    self.stdout.write(self.style.WARNING(f"Error checking Resources directory: {str(e)}"))
+            else:
+                resources_exists = resources_handler.exists()
+            
+            # Handle Resources directory
+            if resources_exists:
+                # Check if Resources directory is empty
+                is_empty = True
                 if resources_handler.is_s3:
                     try:
                         response = resources_handler.s3_client.list_objects_v2(
                             Bucket=resources_handler.bucket_name,
                             Prefix=resources_handler.key.rstrip('/') + '/'
                         )
-                        resources_exists = 'Contents' in response and len(response.get('Contents', [])) > 0
+                        # Check if there are any non-directory objects
+                        for obj in response.get('Contents', []):
+                            if not obj['Key'].endswith('/'):
+                                is_empty = False
+                                break
                     except Exception as e:
-                        self.stdout.write(self.style.WARNING(f"Error checking Resources directory: {str(e)}"))
+                        self.stdout.write(self.style.WARNING(f"Error checking if Resources directory is empty: {str(e)}"))
                 else:
-                    resources_exists = resources_handler.exists()
+                    # For local filesystem
+                    is_empty = not any(resources_handler.path.iterdir()) if resources_handler.path.exists() else True
                 
-                # Check if Resources directory exists
-                if resources_exists:
+                if is_empty:
+                    # If Resources directory is empty, just remove it
+                    if dry_run:
+                        self.stdout.write(f"Would remove empty Resources directory")
+                    else:
+                        resources_handler.remove()
+                        self.stdout.write(f"Removed empty Resources directory")
+                elif not is_collection_dir:
+                    # For bundles with content, rename Resources to data
                     data_path = f"{content_path}/data"
                     data_handler = PathHandler(data_path)
                     
@@ -441,6 +478,80 @@ class Command(BaseCommand):
                                         resource_handler.move(new_path)
                                 resources_handler.remove()  # Remove empty Resources directory
                                 self.stdout.write(f"Renamed Resources directory to data")
+                elif is_collection_dir:
+                    # For collections with non-empty Resources, move contents to data
+                    data_path = f"{content_path}/data"
+                    data_handler = PathHandler(data_path)
+                    
+                    if dry_run:
+                        self.stdout.write(f"Would move Resources contents to data directory for collection")
+                    else:
+                        # Create data directory
+                        data_handler.mkdir(parents=True, exist_ok=True)
+                        
+                        # For S3, we need special handling
+                        if resources_handler.is_s3:
+                            # Create a directory marker for S3
+                            if data_handler.is_s3:
+                                # Ensure we create a proper directory marker
+                                data_handler.s3_client.put_object(
+                                    Bucket=data_handler.bucket_name,
+                                    Key=data_handler.key.rstrip('/') + '/',
+                                    Body=''
+                                )
+                                self.stdout.write(f"Created data directory: {data_path}")
+                            
+                            # List all objects under Resources prefix
+                            response = resources_handler.s3_client.list_objects_v2(
+                                Bucket=resources_handler.bucket_name,
+                                Prefix=resources_handler.key.rstrip('/') + '/'
+                            )
+                            
+                            # Move each object to the data directory
+                            for obj in response.get('Contents', []):
+                                source_key = obj['Key']
+                                # Skip if this is just the directory marker
+                                if source_key.endswith('/'):
+                                    continue
+                                    
+                                # Get the filename from the key
+                                filename = source_key.split('/')[-1]
+                                # Create the new path in the data directory
+                                new_key = f"{data_handler.key.rstrip('/')}/{filename}"
+                                
+                                # Copy the object to the new location
+                                data_handler.s3_client.copy_object(
+                                    Bucket=data_handler.bucket_name,
+                                    CopySource={'Bucket': resources_handler.bucket_name, 'Key': source_key},
+                                    Key=new_key
+                                )
+                                
+                                # Delete the original object
+                                resources_handler.s3_client.delete_object(
+                                    Bucket=resources_handler.bucket_name,
+                                    Key=source_key
+                                )
+                            
+                            # Delete the Resources directory marker if it exists
+                            try:
+                                resources_handler.s3_client.delete_object(
+                                    Bucket=resources_handler.bucket_name,
+                                    Key=resources_handler.key.rstrip('/') + '/'
+                                )
+                            except:
+                                pass
+                            
+                            self.stdout.write(f"Moved Resources contents to data directory for collection")
+                        else:
+                            # For local files, use the original approach
+                            resource_files = list(resources_handler.glob('*'))
+                            for resource in resource_files:
+                                resource_handler = PathHandler(resource)
+                                new_path = f"{data_path}/{resource.split('/')[-1]}"
+                                if new_path != resource:  # Only move if source and destination are different
+                                    resource_handler.move(new_path)
+                            resources_handler.remove()  # Remove empty Resources directory
+                            self.stdout.write(f"Moved Resources contents to data directory for collection")
             
             return True
             

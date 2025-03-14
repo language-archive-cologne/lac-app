@@ -1,0 +1,51 @@
+<div class="file-download">
+    <div class="mb-4">
+        <h3 class="text-lg font-semibold">{{ file_path }}</h3>
+        <p class="text-sm text-gray-500">{{ content_type }}</p>
+    </div>
+    
+    <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-4">
+        <p>This file type ({{ content_type }}) cannot be displayed directly in the browser.</p>
+    </div>
+    
+    <div class="flex justify-center">
+        <a href="/storage/file-content/{{ bucket_type }}/{{ file_path }}?download=true" 
+           class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded inline-flex items-center">
+            <svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+            </svg>
+            Download File
+        </a>
+    </div>
+    
+    {% if content_type.startswith("image/") %}
+        <div class="mt-6">
+            <h4 class="text-md font-semibold mb-2">Image Preview:</h4>
+            <div class="flex justify-center">
+                <img src="/storage/file-content/{{ bucket_type }}/{{ file_path }}?download=true" 
+                     alt="{{ file_path }}" 
+                     class="max-w-full max-h-96 object-contain border border-gray-300 rounded">
+            </div>
+        </div>
+    {% elif content_type.startswith("audio/") %}
+        <div class="mt-6">
+            <h4 class="text-md font-semibold mb-2">Audio Preview:</h4>
+            <div class="flex justify-center">
+                <audio controls class="w-full max-w-md">
+                    <source src="/storage/file-content/{{ bucket_type }}/{{ file_path }}?download=true" type="{{ content_type }}">
+                    Your browser does not support the audio element.
+                </audio>
+            </div>
+        </div>
+    {% elif content_type.startswith("video/") %}
+        <div class="mt-6">
+            <h4 class="text-md font-semibold mb-2">Video Preview:</h4>
+            <div class="flex justify-center">
+                <video controls class="max-w-full max-h-96 object-contain border border-gray-300 rounded">
+                    <source src="/storage/file-content/{{ bucket_type }}/{{ file_path }}?download=true" type="{{ content_type }}">
+                    Your browser does not support the video element.
+                </video>
+            </div>
+        </div>
+    {% endif %}
+</div> 

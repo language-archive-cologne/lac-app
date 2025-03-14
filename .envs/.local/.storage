@@ -1,0 +1,9 @@
+# S3/MinIO Settings for Local Development
+# ------------------------------------------------------------------------------
+USE_MINIO=true
+AWS_S3_ENDPOINT_URL=http://minio:9000
+AWS_ACCESS_KEY_ID=minioadmin
+AWS_SECRET_ACCESS_KEY=minioadmin
+AWS_STORAGE_BUCKET_NAME=lacos-ingest
+AWS_PRODUCTION_BUCKET_NAME=lacos-production
+AWS_S3_REGION_NAME=eu-central-1

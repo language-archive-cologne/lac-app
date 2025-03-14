@@ -1,0 +1,112 @@
+{% if structure %}
+<ul class="space-y-2">
+    {% for item in structure %}
+        <li class="pl-2">
+            {% if item.is_dir %}
+                <div class="flex items-center cursor-pointer hover:bg-gray-100 p-1 rounded" onclick="toggleFolder(this)">
+                    <svg class="folder-icon h-4 w-4 mr-1 text-gray-500 transition-transform duration-200" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                    <svg class="h-5 w-5 mr-1 text-yellow-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+                    </svg>
+                    <span class="text-sm font-medium">{{ item.name }}</span>
+                    
+                    <div class="ml-auto flex space-x-1">
+                        {% if bucket_type == "ingest" and item.path %}
+                            <!-- Move to production button (only for ingest bucket) -->
+                            <button 
+                                onclick="event.stopPropagation(); moveToProduction('{{ item.path }}')" 
+                                class="text-xs bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded"
+                                title="Move to Production"
+                            >
+                                Move
+                            </button>
+                        {% endif %}
+                        
+                        <!-- Delete button -->
+                        <button 
+                            onclick="event.stopPropagation(); deleteObject('{{ bucket_type }}', 'folder', '{{ item.path }}')" 
+                            class="text-xs bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded"
+                            title="Delete Folder"
+                        >
+                            Delete
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Folder contents (initially hidden) -->
+                <div class="ml-4 mt-1 hidden">
+                    {% include "storage/folder_structure_partial.html" with structure=item.children bucket_type=bucket_type %}
+                </div>
+            {% else %}
+                <div class="flex items-center hover:bg-gray-100 p-1 rounded">
+                    <!-- File icon based on extension -->
+                    {% with ext=item.name|lower|slice:"-3:" %}
+                        {% if ext == "pdf" %}
+                            <svg class="h-5 w-5 mr-1 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd" />
+                            </svg>
+                        {% elif ext == "jpg" or ext == "png" or ext == "gif" %}
+                            <svg class="h-5 w-5 mr-1 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd" />
+                            </svg>
+                        {% elif ext == "mp3" or ext == "wav" %}
+                            <svg class="h-5 w-5 mr-1 text-purple-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z" clip-rule="evenodd" />
+                            </svg>
+                        {% elif ext == "mp4" or ext == "mov" %}
+                            <svg class="h-5 w-5 mr-1 text-blue-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                            </svg>
+                        {% else %}
+                            <svg class="h-5 w-5 mr-1 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
+                            </svg>
+                        {% endif %}
+                    {% endwith %}
+                    
+                    <span class="text-sm">{{ item.name }}</span>
+                    
+                    <!-- File size if available -->
+                    {% if item.size %}
+                        <span class="text-xs text-gray-500 ml-2">
+                            {% if item.size < 1024 %}
+                                {{ item.size }} B
+                            {% elif item.size < 1048576 %}
+                                {{ item.size|divisibleby:1024|floatformat:1 }} KB
+                            {% elif item.size < 1073741824 %}
+                                {{ item.size|divisibleby:1048576|floatformat:1 }} MB
+                            {% else %}
+                                {{ item.size|divisibleby:1073741824|floatformat:1 }} GB
+                            {% endif %}
+                        </span>
+                    {% endif %}
+                    
+                    <div class="ml-auto flex space-x-1">
+                        <!-- View button -->
+                        <button 
+                            onclick="viewFile('{{ bucket_type }}', '{{ item.path }}')" 
+                            class="text-xs bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded"
+                            title="View File"
+                        >
+                            View
+                        </button>
+                        
+                        <!-- Delete button -->
+                        <button 
+                            onclick="deleteObject('{{ bucket_type }}', 'file', '{{ item.path }}')" 
+                            class="text-xs bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded"
+                            title="Delete File"
+                        >
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            {% endif %}
+        </li>
+    {% endfor %}
+</ul>
+{% else %}
+<p class="text-gray-500 italic">No files or folders found.</p>
+{% endif %} 

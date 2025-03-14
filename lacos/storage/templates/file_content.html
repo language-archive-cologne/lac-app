@@ -1,0 +1,19 @@
+<div class="file-content">
+    <div class="mb-4">
+        <h3 class="text-lg font-semibold">{{ file_path }}</h3>
+        <p class="text-sm text-gray-500">{{ content_type }}</p>
+    </div>
+    
+    {% if content_type == "application/json" %}
+        <pre class="bg-gray-100 p-4 rounded overflow-auto text-sm"><code>{{ content }}</code></pre>
+    {% elif content_type == "application/xml" or content_type == "text/xml" %}
+        <pre class="bg-gray-100 p-4 rounded overflow-auto text-sm"><code>{{ content }}</code></pre>
+    {% elif content_type.startswith("text/") %}
+        <pre class="bg-gray-100 p-4 rounded overflow-auto text-sm"><code>{{ content }}</code></pre>
+    {% else %}
+        <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4">
+            <p>This file type ({{ content_type }}) may not display correctly as text.</p>
+        </div>
+        <pre class="bg-gray-100 p-4 rounded overflow-auto text-sm"><code>{{ content }}</code></pre>
+    {% endif %}
+</div> 

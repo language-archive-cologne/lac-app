@@ -62,5 +62,20 @@ if env("USE_DOCKER") == "yes":
 # https://django-extensions.readthedocs.io/en/latest/installation_instructions.html#configuration
 INSTALLED_APPS += ["django_extensions"]
 
+# S3/MinIO Settings for Local Development
+# ------------------------------------------------------------------------------
+USE_MINIO = env.bool("USE_MINIO", default=True)
+AWS_S3_ENDPOINT_URL = env("AWS_S3_ENDPOINT_URL", default="http://minio:9000")
+AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID", default="minioadmin")
+AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY", default="minioadmin")
+# Bucket for ingesting data
+AWS_STORAGE_BUCKET_NAME = env("AWS_STORAGE_BUCKET_NAME", default="lacos-ingest")
+# Bucket for production/published data
+AWS_PRODUCTION_BUCKET_NAME = env("AWS_PRODUCTION_BUCKET_NAME", default="lacos-production")
+AWS_S3_REGION_NAME = env("AWS_S3_REGION_NAME", default="us-east-1")
+
+# Ensure the buckets exist on startup
+# This is handled by the BucketService in the storage app
+
 # Your stuff...
 # ------------------------------------------------------------------------------
