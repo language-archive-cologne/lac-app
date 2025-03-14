@@ -60,7 +60,11 @@ if env("USE_DOCKER") == "yes":
 # django-extensions
 # ------------------------------------------------------------------------------
 # https://django-extensions.readthedocs.io/en/latest/installation_instructions.html#configuration
-INSTALLED_APPS += ["django_extensions"]
+INSTALLED_APPS += ["django_extensions", 
+                   "tailwind",
+                   "django_browser_reload"]
+
+MIDDLEWARE += ["django_browser_reload.middleware.BrowserReloadMiddleware"]
 
 # S3/MinIO Settings for Local Development
 # ------------------------------------------------------------------------------
@@ -79,3 +83,10 @@ AWS_S3_REGION_NAME = env("AWS_S3_REGION_NAME", default="us-east-1")
 
 # Your stuff...
 # ------------------------------------------------------------------------------
+# tailwind
+INTERNAL_IPS = [
+  "127.0.0.1",
+]
+TAILWIND_DEV_MODE = True
+#Node.js
+NPM_BIN_PATH = "/usr/bin/npm"

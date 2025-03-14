@@ -35,3 +35,6 @@ django-coverage-plugin==3.1.0  # https://github.com/nedbat/django_coverage_plugi
 pytest-django==4.10.0  # https://github.com/pytest-dev/pytest-django
 #moto
 moto==5.1.1 # https://github.com/spulec/moto
+
+#django-tailwind
+django-tailwind[reload]==3.8.0 # https://github.com/timonweb/django-tailwind

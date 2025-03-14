@@ -52,6 +52,11 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
   wait-for-it \
   # Translations dependencies
   gettext \
+  # Node.js and npm for django-tailwind
+  curl \
+  gnupg \
+  && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+  && apt-get install -y nodejs \
   # cleaning up unused files
   && apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false \
   && rm -rf /var/lib/apt/lists/*

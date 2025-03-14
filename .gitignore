@@ -278,3 +278,19 @@ lacos/media/
 
 #data
 data/*
+
+
+# .gitignore additions for django-tailwind
+
+# Node modules (not needed in production)
+lacos/theme/node_modules/
+lacos/theme/static/css/dist/
+lacos/node_modules/
+
+# NPM logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Built CSS is tracked (unless you build during CI/CD)
+# !lacos/theme/static/css/dist/styles.css

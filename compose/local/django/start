@@ -5,5 +5,11 @@ set -o pipefail
 set -o nounset
 
 
+# Start Tailwind CSS compiler in the background
+python manage.py tailwind start &
+
+# Run migrations
 python manage.py migrate
+
+# Start the Django development server
 exec uvicorn config.asgi:application --host 0.0.0.0 --reload --reload-include '*.html'
