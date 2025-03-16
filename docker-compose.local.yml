@@ -11,6 +11,7 @@ services:
       dockerfile: ./compose/local/django/Dockerfile
     image: lacos_local_django
     container_name: lacos_local_django
+    restart: unless-stopped
     depends_on:
       - postgres
     volumes:
@@ -34,8 +35,6 @@ services:
     env_file:
       - ./.envs/.local/.postgres
 
-
-
   minio:
     image: minio/minio
     ports:
@@ -54,3 +53,14 @@ services:
       retries: 3
 
 
+
+  node:
+    image: node:latest
+    container_name: node_tailwind_builder
+    depends_on:
+      - django
+    working_dir: /app/theme/static_src 
+    volumes:
+      - .:/app:z
+    command: /bin/sh -c "npm install && npm run dev"
+    tty: true

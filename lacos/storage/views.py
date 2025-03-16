@@ -116,7 +116,7 @@ def archivist_dashboard(request):
     
     return render(
         request,
-        "storage/archivist_dashboard.html",
+        "archivist_dashboard.html",
         {
             "ingest_structure": ingest_structure,
             "production_structure": production_structure,

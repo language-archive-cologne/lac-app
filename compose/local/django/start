@@ -4,10 +4,6 @@ set -o errexit
 set -o pipefail
 set -o nounset
 
-
-# Start Tailwind CSS compiler in the background
-python manage.py tailwind start &
-
 # Run migrations
 python manage.py migrate
 

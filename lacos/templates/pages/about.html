@@ -1,3 +1,65 @@
 {% extends "base.html" %}
+{% load static %}
+
+{% block title %}About{% endblock %}
+
+{% block content %}
+<div class="bg-white shadow rounded-lg p-6">
+  <h1 class="text-2xl font-bold text-gray-800 mb-4">About Language Archive Cologne</h1>
+  
+  <div class="prose max-w-none text-gray-600">
+    <p class="mb-4">
+      The Language Archive Cologne (LAC) is a digital archive for language resources. 
+      It hosts collections of primary language data, such as audio and video recordings, 
+      as well as linguistic analyses, such as transcriptions, translations, and other annotations.
+    </p>
+    
+    <p class="mb-4">
+      Our mission is to preserve and provide access to language resources for research, 
+      education, and cultural heritage purposes. We work with researchers, language communities, 
+      and other stakeholders to ensure that language resources are properly documented, 
+      archived, and made accessible.
+    </p>
+    
+    <h2 class="text-xl font-semibold text-gray-700 mt-6 mb-3">Our Team</h2>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-4">
+      <!-- Team member 1 -->
+      <div class="flex flex-col items-center">
+        <div class="w-32 h-32 bg-gray-200 rounded-full mb-4"></div>
+        <h3 class="text-lg font-medium text-gray-800">Team Member 1</h3>
+        <p class="text-gray-600">Position</p>
+      </div>
+      
+      <!-- Team member 2 -->
+      <div class="flex flex-col items-center">
+        <div class="w-32 h-32 bg-gray-200 rounded-full mb-4"></div>
+        <h3 class="text-lg font-medium text-gray-800">Team Member 2</h3>
+        <p class="text-gray-600">Position</p>
+      </div>
+      
+      <!-- Team member 3 -->
+      <div class="flex flex-col items-center">
+        <div class="w-32 h-32 bg-gray-200 rounded-full mb-4"></div>
+        <h3 class="text-lg font-medium text-gray-800">Team Member 3</h3>
+        <p class="text-gray-600">Position</p>
+      </div>
+    </div>
+    
+    <h2 class="text-xl font-semibold text-gray-700 mt-6 mb-3">Contact Us</h2>
+    
+    <p class="mb-4">
+      If you have any questions or would like to learn more about the Language Archive Cologne, 
+      please don't hesitate to contact us.
+    </p>
+    
+    <div class="bg-gray-50 p-4 rounded-lg">
+      <p class="mb-1"><strong>Email:</strong> contact@example.com</p>
+      <p class="mb-1"><strong>Phone:</strong> +49 123 456789</p>
+      <p><strong>Address:</strong> University of Cologne, Department of Linguistics, 50923 Cologne, Germany</p>
+    </div>
+  </div>
+</div>
+{% endblock %}
 
 

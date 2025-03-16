@@ -32,11 +32,6 @@ urlpatterns = [
 if settings.DEBUG:
     # Static file serving when using Gunicorn + Uvicorn for local web socket development
     urlpatterns += staticfiles_urlpatterns()
-    
-    # Browser reload URLs - only included in DEBUG mode
-    urlpatterns += [
-        path("__reload__/", include("django_browser_reload.urls")),
-    ]
 
 # API URLS
 urlpatterns += [

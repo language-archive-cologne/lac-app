@@ -1,0 +1,14 @@
+{
+  "name": "lacos-theme",
+  "version": "1.0.0",
+  "description": "Tailwind CSS for Lacos project",
+  "scripts": {
+    "dev": "tailwindcss -i ./css/input.css -o ../static/css/output.css --watch",
+    "build": "tailwindcss -i ./css/input.css -o ../static/css/output.css --minify"
+  },
+  "dependencies": {
+    "tailwindcss": "^3.3.3",
+    "autoprefixer": "^10.4.14",
+    "postcss": "^8.4.24"
+  }
+}

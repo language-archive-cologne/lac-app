@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+    font-family: 'Albert Sans';
+    src: url('../../static/fonts/albert_sans/AlbertSans-VariableFont_wght.woff2') format('woff2 supports variations'),
+         url('../../static/fonts/albert_sans/AlbertSans-VariableFont_wght.woff2') format('woff2-variations');
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+  }
+  
+  @font-face {
+    font-family: 'Albert Sans';
+    src: url('../../static/fonts/albert_sans/AlbertSans-Italic-VariableFont_wght.woff2') format('woff2 supports variations'),
+         url('../../static/fonts/albert_sans/AlbertSans-Italic-VariableFont_wght.woff2') format('woff2-variations');
+    font-weight: 100 900;
+    font-style: italic;
+    font-display: swap;
+  }
