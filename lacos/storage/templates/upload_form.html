@@ -111,11 +111,20 @@ function updateFileList() {
         const filesByDir = {};
         let totalSize = 0;
         
+        // Store file paths in a global variable for later use during form submission
+        window.filePaths = [];
+        
         for (let i = 0; i < input.files.length; i++) {
             const file = input.files[i];
             const path = file.webkitRelativePath;
             const parts = path.split('/');
             totalSize += file.size;
+            
+            // Store the path in our global array
+            if (path) {
+                window.filePaths.push(path);
+                console.log(`Stored path for file ${i}: ${file.name} → ${path}`);
+            }
             
             // Skip the root folder (which is the selected folder name)
             if (parts.length > 1) {
@@ -237,6 +246,25 @@ function handleDrop(e) {
 }
 
 // HTMX event handlers
+document.body.addEventListener('htmx:configRequest', function(evt) {
+    // Check if this is our upload form
+    const form = evt.detail.elt.closest('form');
+    if (form && form.querySelector('#files')) {
+        // Add path information to the request
+        if (window.filePaths && window.filePaths.length > 0) {
+            console.log(`Adding ${window.filePaths.length} file paths to the request`);
+            
+            // Add the file paths as a JSON array
+            evt.detail.parameters['file_paths_json'] = JSON.stringify(window.filePaths);
+            
+            // For debugging, add a count
+            evt.detail.parameters['file_paths_count'] = window.filePaths.length;
+        } else {
+            console.warn('No file paths available for upload');
+        }
+    }
+});
+
 document.body.addEventListener('htmx:beforeSend', function(evt) {
     // Validate form before sending
     const form = evt.detail.elt.closest('form');

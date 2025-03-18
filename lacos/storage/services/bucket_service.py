@@ -379,12 +379,38 @@ class BucketService:
             logger.info(
                 f"Listing contents of bucket: '{bucket_name}' with prefix: '{prefix}'"
             )
+            
+            # Ensure prefix ends with / if it's not empty to avoid partial matches
+            if prefix and not prefix.endswith('/'):
+                prefix = prefix + '/'
+                logger.info(f"Adjusted prefix to: '{prefix}'")
+                
             response = self.s3_client.list_objects_v2(
                 Bucket=bucket_name, Prefix=prefix, Delimiter="/"
             )
+            
+            # Log the raw response for debugging
+            logger.info(f"DEBUG: S3 list_objects_v2 raw response:")
+            if 'Contents' in response:
+                logger.info(f"  Contents: {len(response['Contents'])} items")
+            else:
+                logger.info(f"  Contents: 0 items")
+                
+            if 'CommonPrefixes' in response:
+                logger.info(f"  CommonPrefixes: {len(response['CommonPrefixes'])} items")
+                for cp in response.get('CommonPrefixes', []):
+                    logger.info(f"    Prefix: {cp.get('Prefix')}")
+            else:
+                logger.info(f"  CommonPrefixes: 0 items")
+            
             contents = []
 
             for obj in response.get("Contents", []):
+                # Skip the directory marker itself if listing a directory
+                if prefix and obj["Key"] == prefix:
+                    logger.info(f"Skipping directory marker: {obj['Key']}")
+                    continue
+                    
                 item = {
                     "name": os.path.basename(obj["Key"]),
                     "path": obj["Key"],
@@ -395,10 +421,14 @@ class BucketService:
                 contents.append(item)
                 logger.info(f"Found file: {item}")
 
-            for prefix in response.get("CommonPrefixes", []):
+            for prefix_obj in response.get("CommonPrefixes", []):
+                # Extract the folder name from the prefix
+                prefix_str = prefix_obj["Prefix"]
+                name = os.path.basename(prefix_str.rstrip("/")) 
+                
                 item = {
-                    "name": os.path.basename(prefix["Prefix"].rstrip("/")),
-                    "path": prefix["Prefix"],
+                    "name": name,
+                    "path": prefix_str,
                     "is_dir": True,
                 }
                 contents.append(item)
@@ -432,6 +462,11 @@ class BucketService:
         try:
             contents = self.list_bucket_contents(bucket_name, prefix)
             
+            # Debug log the contents
+            logger.info(f"DEBUG: Bucket contents for '{bucket_name}' with prefix '{prefix}':")
+            for item in contents:
+                logger.info(f"  {item.get('name')} - type: {item.get('is_dir', False)}")
+            
             # Create the root folder
             root_name = bucket_name if not prefix else os.path.basename(prefix.rstrip('/'))
             structure = {
@@ -457,7 +492,15 @@ class BucketService:
                         "last_modified": item.get("last_modified", None)
                     })
             
-            logger.info(f"Folder structure for '{bucket_name}' with prefix '{prefix}' has {len(structure['children'])} items")
+            # Debug log the structure
+            logger.info(f"DEBUG: Folder structure for '{bucket_name}' with prefix '{prefix}':")
+            logger.info(f"  Type: {structure['type']}, Name: {structure['name']}, Path: {structure['path']}")
+            logger.info(f"  Children: {len(structure['children'])}")
+            for child in structure['children']:
+                logger.info(f"    {child.get('name')} - type: {child.get('type')}")
+                if child.get('type') == 'folder' and 'children' in child:
+                    logger.info(f"      Contains: {len(child.get('children', []))} items")
+            
             return structure
             
         except Exception as e:
@@ -758,12 +801,24 @@ class BucketService:
             logger.error(f"Error deleting {object_path}: {str(e)}")
             return {"success": False, "error": str(e)}
     
-    def upload_files_directly(self, files, folder_name: str, bucket_name: str = None) -> Dict[str, Any]:
+    def upload_files_directly(self, files, folder_name: str, bucket_name: str = None, file_paths: dict = None) -> Dict[str, Any]:
         if bucket_name is None:
             bucket_name = self.ingest_bucket
         
+        # Initialize file_paths if not provided
+        if file_paths is None:
+            file_paths = {}
+            
         logger.info(f"Starting direct upload process for folder '{folder_name}' to bucket '{bucket_name}'")
         logger.info(f"Total number of files to process: {len(files)}")
+        logger.info(f"Path information available for {len(file_paths)} files")
+        
+        # Debug: Log all file_paths to verify what we received
+        logger.info("=" * 50)
+        logger.info("DEBUG - RECEIVED FILE PATHS:")
+        for filename, path in file_paths.items():
+            logger.info(f"  File: {filename} → Path: {path}")
+        logger.info("=" * 50)
         
         # Ensure the bucket exists
         if not self.ensure_bucket_exists(bucket_name):
@@ -798,6 +853,9 @@ class BucketService:
             prefix = f"{folder_name}/"
             logger.info(f"Starting upload of {len(files)} files to {bucket_name}/{prefix}")
             
+            # Track all used S3 keys to visualize the resulting structure
+            s3_keys_structure = {}
+            
             for index, file in enumerate(files, 1):
                 file_path = file.name
                 
@@ -806,7 +864,39 @@ class BucketService:
                     continue
                 
                 try:
-                    s3_key = f"{prefix}{file_path}"
+                    # Determine the S3 key based on the file's relative path if available
+                    if file_path in file_paths:
+                        # Use the webkitRelativePath to construct the S3 key
+                        # The first part of the path is the root folder name, which we replace with our folder_name
+                        relative_path = file_paths[file_path]
+                        path_parts = relative_path.split('/')
+                        
+                        # Log detailed path processing for debugging
+                        logger.info(f"[DEBUG] Processing file: {file_path}")
+                        logger.info(f"[DEBUG] Relative path: {relative_path}")
+                        logger.info(f"[DEBUG] Path parts: {path_parts}")
+                        
+                        # If there are subdirectories, preserve them in the S3 key
+                        if len(path_parts) > 1:
+                            # Skip the first part (the root folder) and keep the rest of the path
+                            subpath = '/'.join(path_parts[1:])
+                            s3_key = f"{prefix}{subpath}"
+                            logger.info(f"[DEBUG] Using subfolder path: {subpath}")
+                        else:
+                            # If it's directly in the root folder, just use the file name
+                            s3_key = f"{prefix}{file_path}"
+                            logger.info(f"[DEBUG] No subfolder, using file name directly")
+                        
+                        logger.info(f"Using path information for {file_path}: {relative_path} -> {s3_key}")
+                    else:
+                        # Fallback to flat structure if no path information is available
+                        s3_key = f"{prefix}{file_path}"
+                        logger.info(f"[DEBUG] No path info found for {file_path}, fallback to flat structure")
+                        logger.info(f"No path information for {file_path}, using flat structure: {s3_key}")
+                    
+                    # Track the S3 key in our structure visualization
+                    s3_keys_structure[s3_key] = {'file': file_path, 'size': file.size}
+                    
                     file_size = file.size
                     total_size += file_size
                     
@@ -870,6 +960,42 @@ class BucketService:
                         "name": file_path,
                         "error": str(e)
                     })
+            
+            # Log the resulting S3 structure for visualization
+            logger.info("=" * 50)
+            logger.info("RESULTING S3 STRUCTURE:")
+            
+            # Group by folder path for visualization
+            folder_structure = {}
+            for s3_key in s3_keys_structure.keys():
+                parts = s3_key.split('/')
+                current = folder_structure
+                # Build nested structure
+                for i, part in enumerate(parts[:-1]):  # Skip the last part (filename)
+                    if part not in current:
+                        current[part] = {}
+                    current = current[part]
+                # Add the file at the end
+                current[parts[-1]] = "FILE"
+            
+            # Helper function to print the structure
+            def print_structure(structure, indent=0):
+                lines = []
+                for key, value in structure.items():
+                    prefix = "  " * indent
+                    if value == "FILE":
+                        lines.append(f"{prefix}📄 {key}")
+                    else:
+                        lines.append(f"{prefix}📁 {key}")
+                        child_lines = print_structure(value, indent + 1)
+                        lines.extend(child_lines)
+                return lines
+            
+            structure_lines = print_structure(folder_structure)
+            for line in structure_lines:
+                logger.info(line)
+            
+            logger.info("=" * 50)
             
             # Calculate and log upload statistics
             end_time = time.time()

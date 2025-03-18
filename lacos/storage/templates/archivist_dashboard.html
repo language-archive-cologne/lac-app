@@ -89,6 +89,39 @@
     .modal-container[data-viewer-type="default"] #modalContent {
         height: 70vh;
     }
+
+    /* Additional folder structure styles */
+    .folder-tree {
+        list-style-type: none;
+        padding: 0;
+    }
+    
+    .folder-item {
+        margin-bottom: 0.5rem;
+    }
+    
+    .folder-contents {
+        transition: all 0.3s ease;
+    }
+    
+    .folder-contents:not(.hidden) {
+        display: block !important;
+        opacity: 1;
+        max-height: 9999px;
+    }
+    
+    /* Debug styles to highlight nested structure */
+    .folder-tree > .folder-item > .folder-contents {
+        border-left: 2px solid rgba(59, 130, 246, 0.5);
+    }
+    
+    .folder-tree > .folder-item > .folder-contents > .folder-item > .folder-contents {
+        border-left: 2px solid rgba(245, 158, 11, 0.5);
+    }
+    
+    .folder-tree > .folder-item > .folder-contents > .folder-item > .folder-contents > .folder-item > .folder-contents {
+        border-left: 2px solid rgba(16, 185, 129, 0.5);
+    }
 </style>
 
 
@@ -116,6 +149,25 @@ import { toggleFolder } from '/static/js/folder-manager.js';
 
 // Make toggleFolder available globally since it's used in HTML onclick attributes
 window.toggleFolder = toggleFolder;
+
+// Add helper to expand all folders for debugging
+window.expandAllFolders = function() {
+    document.querySelectorAll('.folder-toggle').forEach(button => {
+        const folderContents = button.closest('.folder-item').querySelector('.folder-contents');
+        if (folderContents.classList.contains('hidden')) {
+            toggleFolder(button);
+        }
+    });
+    console.log('All folders expanded');
+};
+
+// Log the folder structure on page load
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Page loaded, folder structure:', {
+        ingest: document.querySelector('#ingest-structure'),
+        production: document.querySelector('#production-structure')
+    });
+});
 </script>
 
 <script>

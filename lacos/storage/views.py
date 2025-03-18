@@ -56,9 +56,48 @@ def upload_folder(request):
     
     logger.info(f"Received upload request for folder: {folder_name} with {len(files)} files")
     
+    # Log all POST data for debugging
+    logger.info("="*50)
+    logger.info("DEBUG - REQUEST POST DATA:")
+    for key in request.POST:
+        if key.startswith('file_paths') or key == 'folder_name':
+            logger.info(f"  {key}: {request.POST[key]}")
+    logger.info("="*50)
+    
+    # Log all files information
+    logger.info("DEBUG - FILES INFORMATION:")
+    for i, file in enumerate(files):
+        logger.info(f"  File {i}: name={file.name}, size={file.size}, content_type={file.content_type}")
+    logger.info("="*50)
+    
+    # Extract file paths from the request - now using JSON array
+    file_paths = {}
+    file_paths_json = request.POST.get('file_paths_json')
+    
+    if file_paths_json:
+        try:
+            import json
+            paths_list = json.loads(file_paths_json)
+            logger.info(f"Parsed JSON paths list with {len(paths_list)} items")
+            
+            # Associate paths with files by index
+            for i, file in enumerate(files):
+                if i < len(paths_list):
+                    file_paths[file.name] = paths_list[i]
+                    logger.info(f"Mapped file {file.name} to path {paths_list[i]}")
+                else:
+                    logger.warning(f"No path information found for file {file.name} (index {i} out of range)")
+        except json.JSONDecodeError as e:
+            logger.error(f"Error parsing file_paths_json: {e}")
+    else:
+        logger.warning("No file_paths_json found in request")
+    
+    # Log summary of file paths
+    logger.info(f"Extracted path information for {len(file_paths)}/{len(files)} files")
+    
     # Upload files directly to S3 without saving to disk first
     bucket_service = BucketService()
-    result = bucket_service.upload_files_directly(files, folder_name)
+    result = bucket_service.upload_files_directly(files, folder_name, file_paths=file_paths)
     
     if result["success"]:
         logger.info(f"Successfully uploaded folder {folder_name} to ingest bucket")
