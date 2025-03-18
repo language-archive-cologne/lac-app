@@ -265,37 +265,48 @@ def delete_object(request, bucket_type, object_type, object_path):
         messages.success(request, message)
         
         if is_htmx:
-            # For HTMX, return a response that will trigger a refresh of the appropriate section
-            # Instead of redirecting, we'll return the updated structure
-            bucket_service = BucketService()
-            
-            # Get updated folder structure for the affected bucket
-            if bucket_type == "ingest":
-                structure = bucket_service.get_folder_structure(bucket_service.ingest_bucket)
-                target_id = "ingest-structure"
+            # When deleting files, we want a targeted response (empty for replacement)
+            if not is_directory:
+                # For single file deletion, just return empty content to remove the element
+                response = HttpResponse('', status=200)
+                response['HX-Trigger'] = json.dumps({
+                    "showMessage": {
+                        "level": "success",
+                        "message": message
+                    }
+                })
+                return response
             else:
-                structure = bucket_service.get_folder_structure(bucket_service.production_bucket)
-                target_id = "production-structure"
+                # For directories, return the updated structure as before
+                bucket_service = BucketService()
                 
-            # Render the updated structure
-            response = render(
-                request,
-                "folder_structure_partial.html",
-                {
-                    "structure": structure,
-                    "bucket_type": bucket_type
-                }
-            )
-            
-            # Set HTMX headers to target the correct container
-            response['HX-Trigger'] = json.dumps({
-                "showMessage": {
-                    "level": "success",
-                    "message": message
-                }
-            })
-            
-            return response
+                # Get updated folder structure for the affected bucket
+                if bucket_type == "ingest":
+                    structure = bucket_service.get_folder_structure(bucket_service.ingest_bucket)
+                    target_id = "ingest-structure"
+                else:
+                    structure = bucket_service.get_folder_structure(bucket_service.production_bucket)
+                    target_id = "production-structure"
+                    
+                # Render the updated structure
+                response = render(
+                    request,
+                    "folder_structure_partial.html",
+                    {
+                        "structure": structure,
+                        "bucket_type": bucket_type
+                    }
+                )
+                
+                # Set HTMX headers to target the correct container
+                response['HX-Trigger'] = json.dumps({
+                    "showMessage": {
+                        "level": "success",
+                        "message": message
+                    }
+                })
+                
+                return response
         else:
             return redirect("storage:archivist_dashboard")
     else:
