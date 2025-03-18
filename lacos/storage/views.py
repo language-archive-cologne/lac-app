@@ -262,6 +262,8 @@ def delete_object(request, bucket_type, object_type, object_path):
     
     if result["success"]:
         message = result["message"]
+        
+        # Store message in Django's message framework for page reloads
         messages.success(request, message)
         
         if is_htmx:
@@ -269,6 +271,7 @@ def delete_object(request, bucket_type, object_type, object_path):
             if not is_directory:
                 # For single file deletion, just return empty content to remove the element
                 response = HttpResponse('', status=200)
+                # Explicitly trigger the message display without waiting for page reload
                 response['HX-Trigger'] = json.dumps({
                     "showMessage": {
                         "level": "success",
@@ -298,7 +301,7 @@ def delete_object(request, bucket_type, object_type, object_path):
                     }
                 )
                 
-                # Set HTMX headers to target the correct container
+                # Set HTMX headers to trigger the message display
                 response['HX-Trigger'] = json.dumps({
                     "showMessage": {
                         "level": "success",

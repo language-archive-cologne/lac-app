@@ -197,6 +197,36 @@ document.body.addEventListener('htmx:beforeSend', function (event) {
             // Show the message container
             messageContainer.classList.remove('hidden');
             
+            // Scroll to the top to make sure the message is visible
+            window.scrollTo({top: 0, behavior: 'smooth'});
+            
+            // Optionally auto-hide the message after a delay
+            setTimeout(function() {
+                messageContainer.classList.add('hidden');
+            }, 5000);
+        }
+    });
+    
+    // Add direct event handler for showing messages
+    document.addEventListener('showMessage', function(event) {
+        if (event.detail) {
+            const messageContainer = document.getElementById('message-container');
+            const messageContent = document.getElementById('message-content');
+            
+            // Set the message
+            messageContent.textContent = event.detail.message;
+            
+            // Set the appropriate classes based on message level
+            messageContent.className = event.detail.level === 'error' 
+                ? 'bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative'
+                : 'bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative';
+            
+            // Show the message container
+            messageContainer.classList.remove('hidden');
+            
+            // Scroll to the top to make sure the message is visible
+            window.scrollTo({top: 0, behavior: 'smooth'});
+            
             // Optionally auto-hide the message after a delay
             setTimeout(function() {
                 messageContainer.classList.add('hidden');
