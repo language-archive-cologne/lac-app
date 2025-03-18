@@ -4,11 +4,13 @@ import os
 import tempfile
 import shutil
 from pathlib import Path
+import json
 
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
 
 from .services.bucket_service import BucketService
 
@@ -216,9 +218,60 @@ def delete_object(request, bucket_type, object_type, object_path):
     is_directory = object_type == "folder"
     result = bucket_service.delete_object(bucket_name, object_path, is_directory)
     
+    # Check if this is an HTMX request
+    is_htmx = request.headers.get('HX-Request') == 'true'
+    
     if result["success"]:
-        messages.success(request, result["message"])
-        return redirect("storage:archivist_dashboard")
+        message = result["message"]
+        messages.success(request, message)
+        
+        if is_htmx:
+            # For HTMX, return a response that will trigger a refresh of the appropriate section
+            # Instead of redirecting, we'll return the updated structure
+            bucket_service = BucketService()
+            
+            # Get updated folder structure for the affected bucket
+            if bucket_type == "ingest":
+                structure = bucket_service.get_folder_structure(bucket_service.ingest_bucket)
+                target_id = "ingest-structure"
+            else:
+                structure = bucket_service.get_folder_structure(bucket_service.production_bucket)
+                target_id = "production-structure"
+                
+            # Render the updated structure
+            response = render(
+                request,
+                "folder_structure_partial.html",
+                {
+                    "structure": structure,
+                    "bucket_type": bucket_type
+                }
+            )
+            
+            # Set HTMX headers to target the correct container
+            response['HX-Trigger'] = json.dumps({
+                "showMessage": {
+                    "level": "success",
+                    "message": message
+                }
+            })
+            
+            return response
+        else:
+            return redirect("storage:archivist_dashboard")
     else:
-        messages.error(request, f"Error: {result['error']}")
-        return redirect("storage:archivist_dashboard")
+        error_message = f"Error: {result['error']}"
+        messages.error(request, error_message)
+        
+        if is_htmx:
+            # For errors, we can just return a message that will be displayed
+            response = HttpResponse(error_message, status=400)
+            response['HX-Trigger'] = json.dumps({
+                "showMessage": {
+                    "level": "error",
+                    "message": error_message
+                }
+            })
+            return response
+        else:
+            return redirect("storage:archivist_dashboard")

@@ -25,6 +25,8 @@
                             {% endif %}
                             
                             <button hx-delete="{% url 'storage:delete_object' bucket_type=bucket_type object_type='folder' object_path=item.path %}"
+                                    hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                                    hx-target="{% if bucket_type == 'ingest' %}#ingest-structure{% else %}#production-structure{% endif %}"
                                     hx-confirm="Are you sure you want to delete this folder and all its contents? This cannot be undone."
                                     class="text-red-500 hover:text-red-700" title="Delete Folder">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -49,6 +51,8 @@
                                             
                                             <div class="ml-auto flex items-center space-x-2">
                                                 <button hx-delete="{% url 'storage:delete_object' bucket_type=bucket_type object_type='folder' object_path=child.path %}"
+                                                        hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                                                        hx-target="{% if bucket_type == 'ingest' %}#ingest-structure{% else %}#production-structure{% endif %}"
                                                         hx-confirm="Are you sure you want to delete this folder and all its contents? This cannot be undone."
                                                         class="text-red-500 hover:text-red-700" title="Delete Folder">
                                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -81,6 +85,8 @@
                                                                     </button>
                                                                     
                                                                     <button hx-delete="{% url 'storage:delete_object' bucket_type=bucket_type object_type='file' object_path=grandchild.path %}"
+                                                                            hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                                                                            hx-target="{% if bucket_type == 'ingest' %}#ingest-structure{% else %}#production-structure{% endif %}"
                                                                             hx-confirm="Are you sure you want to delete this file? This cannot be undone."
                                                                             class="text-red-500 hover:text-red-700" title="Delete File">
                                                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -117,6 +123,8 @@
                                                 </button>
                                                 
                                                 <button hx-delete="{% url 'storage:delete_object' bucket_type=bucket_type object_type='file' object_path=child.path %}"
+                                                        hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                                                        hx-target="{% if bucket_type == 'ingest' %}#ingest-structure{% else %}#production-structure{% endif %}"
                                                         hx-confirm="Are you sure you want to delete this file? This cannot be undone."
                                                         class="text-red-500 hover:text-red-700" title="Delete File">
                                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -153,6 +161,8 @@
                             </button>
                             
                             <button hx-delete="{% url 'storage:delete_object' bucket_type=bucket_type object_type='file' object_path=item.path %}"
+                                    hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                                    hx-target="{% if bucket_type == 'ingest' %}#ingest-structure{% else %}#production-structure{% endif %}"
                                     hx-confirm="Are you sure you want to delete this file? This cannot be undone."
                                     class="text-red-500 hover:text-red-700" title="Delete File">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

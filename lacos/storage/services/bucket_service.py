@@ -723,16 +723,21 @@ class BucketService:
                         objects_to_delete.append({"Key": obj["Key"]})
                 
                 if objects_to_delete:
-                    # Delete the objects
-                    self.s3_client.delete_objects(
-                        Bucket=bucket_name,
-                        Delete={"Objects": objects_to_delete}
-                    )
+                    # Some S3-compatible services (like MinIO) require Content-MD5 for DeleteObjects
+                    # We'll delete each object individually to avoid this issue
+                    logger.info(f"Deleting {len(objects_to_delete)} objects from {bucket_name}/{object_path}")
+                    deleted_count = 0
+                    for obj in objects_to_delete:
+                        try:
+                            self.s3_client.delete_object(Bucket=bucket_name, Key=obj["Key"])
+                            deleted_count += 1
+                        except Exception as obj_error:
+                            logger.error(f"Error deleting object {obj['Key']}: {str(obj_error)}")
                     
                     return {
-                        "success": True,
-                        "message": f"Successfully deleted directory {object_path} with {len(objects_to_delete)} objects",
-                        "deleted_objects": len(objects_to_delete)
+                        "success": deleted_count > 0,
+                        "message": f"Successfully deleted directory {object_path} with {deleted_count} objects",
+                        "deleted_objects": deleted_count
                     }
                 else:
                     return {

@@ -18,23 +18,23 @@
         </a>
     </div>
     
-    <!-- Display success message if present -->
-    {% if message %}
-    <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-6" role="alert">
-        <span class="block sm:inline">{{ message }}</span>
+    <!-- Update the message display section to handle dynamic messages -->
+    <div id="message-container" class="mb-6 {% if not message %}hidden{% endif %}">
+        <div id="message-content" class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative">
+            <span class="block sm:inline">{{ message }}</span>
+        </div>
     </div>
-    {% endif %}
     
     <div class="flex flex-col md:flex-row gap-8">
         <div class="w-full md:w-1/2">
-            <h2 class="text-2xl font-semibold mb-4 text-gray-700">Staging Bucket</h2>
-            <div id="staging-structure" class="bg-white rounded-lg shadow-md p-4">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-700">Ingest Bucket</h2>
+            <div id="ingest-structure" class="bg-white rounded-lg shadow-md p-4">
                 {% include "folder_structure_partial.html" with structure=ingest_structure bucket_type="ingest" %}
             </div>
         </div>
         <div class="w-full md:w-1/2">
-            <h2 class="text-2xl font-semibold mb-4 text-gray-700">OCFL Bucket</h2>
-            <div id="ocfl-structure" class="bg-white rounded-lg shadow-md p-4">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-700">Production Bucket</h2>
+            <div id="production-structure" class="bg-white rounded-lg shadow-md p-4">
                 {% include "folder_structure_partial.html" with structure=production_structure bucket_type="production" %}
             </div>
         </div>
@@ -123,6 +123,34 @@ window.toggleFolder = toggleFolder;
 document.body.addEventListener('htmx:beforeSend', function (event) {
     event.detail.xhr.setRequestHeader('X-HTMX-Indicator', 'none');
 });
+</script>
+
+<!-- Add HTMX-specific event handler for message display -->
+<script>
+    document.body.addEventListener('htmx:afterOnLoad', function(evt) {
+        // This script handles custom message events triggered by HTMX responses
+        if (evt.detail && evt.detail.triggerSpec && evt.detail.triggerSpec.showMessage) {
+            const messageData = evt.detail.triggerSpec.showMessage;
+            const messageContainer = document.getElementById('message-container');
+            const messageContent = document.getElementById('message-content');
+            
+            // Set the message
+            messageContent.textContent = messageData.message;
+            
+            // Set the appropriate classes based on message level
+            messageContent.className = messageData.level === 'error' 
+                ? 'bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative'
+                : 'bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative';
+            
+            // Show the message container
+            messageContainer.classList.remove('hidden');
+            
+            // Optionally auto-hide the message after a delay
+            setTimeout(function() {
+                messageContainer.classList.add('hidden');
+            }, 5000);
+        }
+    });
 </script>
 
 {% endblock %}
