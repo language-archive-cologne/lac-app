@@ -1,14 +1,16 @@
-import os
 import shutil
-import json
 import boto3
 from pathlib import Path
 from datetime import datetime
 from botocore.exceptions import ClientError
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 from django.conf import settings
 from urllib.parse import urlparse
+from lacos.storage.services.bucket_service import BucketService
+from lacos.storage.services.ocfl_service import OCFLService
+import logging
 
+logger = logging.getLogger(__name__)
 
 def is_collection(directory):
     """
@@ -235,378 +237,50 @@ class PathHandler:
 
 
 class Command(BaseCommand):
-    help = 'Standardize OCFL directory structure for collections and bundles'
+    help = 'Standardize OCFL structure for a folder in the ingest bucket'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.bucket_service = BucketService()
+        self.ocfl_service = OCFLService(self.bucket_service)
 
     def add_arguments(self, parser):
-        parser.add_argument('path', type=str, help='Path to process in ingest bucket')
-        parser.add_argument('--dry-run', action='store_true', 
-                          help='Show what would be done without making changes')
-        parser.add_argument('--ingest-bucket', type=str,
-                          help='Path to ingest bucket (local path or s3:// URL)')
-        parser.add_argument('--production-bucket', type=str,
-                          help='Path to production bucket (local path or s3:// URL)')
-        parser.add_argument('--force', action='store_true', 
-                          help='Force operation even if validation fails')
-
-    def validate_structure(self, directory):
-        """Validate the basic OCFL structure of a directory"""
-        try:
-            path_handler = PathHandler(directory)
-            if not path_handler.is_dir():
-                return False, "Not a directory"
-            
-            # Check OCFL version marker
-            if not any(path_handler.glob("0=ocfl_object_*")):
-                return False, "No OCFL version marker found"
-            
-            # Check v1/content structure
-            content_path = f"{directory.rstrip('/')}/v1/content"
-            content_handler = PathHandler(content_path)
-            if not content_handler.is_dir():
-                return False, "No v1/content directory found"
-            
-            # Check for XML file
-            if not any(content_handler.glob("*.xml")):
-                return False, "No XML file found in content directory"
-            
-            return True, "Valid OCFL structure"
-        except Exception as e:
-            return False, str(e)
-
-    def copy_to_production(self, source_path, production_bucket, dry_run=False):
-        """Copy directory from ingest to production bucket"""
-        try:
-            source_handler = PathHandler(source_path)
-            
-            # Convert to string if it's a Path object
-            source_path_str = str(source_path)
-            
-            # Extract the relative path components
-            path_parts = source_path_str.rstrip('/').split('/')
-            if len(path_parts) >= 2:
-                relative_path = path_parts[-2]  # e.g., 'algerien'
-                target_path = f"{production_bucket.rstrip('/')}/{relative_path}/{path_parts[-1]}"
-            else:
-                # Handle case where there's no parent directory
-                target_path = f"{production_bucket.rstrip('/')}/{path_parts[-1]}"
-            
-            if dry_run:
-                self.stdout.write(f"Would copy {source_path} to {target_path}")
-                return True, target_path
-            
-            # Create parent directory (if needed for local paths)
-            target_handler = PathHandler(target_path)
-            if not target_handler.is_s3:
-                target_handler.path.parent.mkdir(parents=True, exist_ok=True)
-            
-            # Copy the directory
-            source_handler.copy_to(target_path, recursive=True)
-            self.stdout.write(f"Copied {source_path} to {target_path}")
-            
-            return True, target_path
-        except Exception as e:
-            return False, str(e)
-
-    def transform_structure(self, path, dry_run=False):
-        """Transform the structure with added safety checks"""
-        try:
-            path_handler = PathHandler(path)
-            path_str = str(path_handler)
-            dir_name = path_str.rstrip('/').split('/')[-1]
-            
-            # Create content path
-            content_path = f"{path_str.rstrip('/')}/v1/content"
-            content_handler = PathHandler(content_path)
-            
-            # Determine if it's a collection
-            is_collection_dir = is_collection(path_str)
-            
-            if dry_run:
-                self.stdout.write(f"Would process {'collection' if is_collection_dir else 'bundle'}: {dir_name}")
-                return True
-            
-            # Create metadata directory
-            metadata_path = f"{content_path}/metadata"
-            metadata_handler = PathHandler(metadata_path)
-            metadata_handler.mkdir(parents=True, exist_ok=True)
-            self.stdout.write(f"Created metadata directory: {metadata_path}")
-            
-            # Move XML files to metadata
-            xml_files = list(content_handler.glob('*.xml'))  # Convert to list to avoid iterator invalidation
-            for xml_file in xml_files:
-                if dry_run:
-                    self.stdout.write(f"Would move {xml_file} to metadata directory")
-                else:
-                    xml_handler = PathHandler(xml_file)
-                    new_path = f"{metadata_path}/{xml_file.split('/')[-1]}"
-                    if new_path != xml_file:  # Only move if source and destination are different
-                        xml_handler.move(new_path)
-                        self.stdout.write(f"Moved {xml_file} to metadata directory")
-            
-            # Move acl.json to metadata if it exists
-            acl_path = f"{path_str.rstrip('/')}/acl.json"
-            acl_handler = PathHandler(acl_path)
-            if acl_handler.exists():
-                if dry_run:
-                    self.stdout.write(f"Would move acl.json to metadata directory")
-                else:
-                    new_acl_path = f"{metadata_path}/acl.json"
-                    if new_acl_path != acl_path:  # Only move if source and destination are different
-                        acl_handler.move(new_acl_path)
-                        self.stdout.write(f"Moved acl.json to metadata directory")
-            
-            # Check for Resources directory in both collections and bundles
-            resources_path = f"{content_path}/Resources"
-            resources_handler = PathHandler(resources_path)
-            
-            # For S3, we need to check if Resources directory exists by listing objects
-            resources_exists = False
-            if resources_handler.is_s3:
-                try:
-                    response = resources_handler.s3_client.list_objects_v2(
-                        Bucket=resources_handler.bucket_name,
-                        Prefix=resources_handler.key.rstrip('/') + '/'
-                    )
-                    resources_exists = 'Contents' in response and len(response.get('Contents', [])) > 0
-                except Exception as e:
-                    self.stdout.write(self.style.WARNING(f"Error checking Resources directory: {str(e)}"))
-            else:
-                resources_exists = resources_handler.exists()
-            
-            # Handle Resources directory
-            if resources_exists:
-                # Check if Resources directory is empty
-                is_empty = True
-                if resources_handler.is_s3:
-                    try:
-                        response = resources_handler.s3_client.list_objects_v2(
-                            Bucket=resources_handler.bucket_name,
-                            Prefix=resources_handler.key.rstrip('/') + '/'
-                        )
-                        # Check if there are any non-directory objects
-                        for obj in response.get('Contents', []):
-                            if not obj['Key'].endswith('/'):
-                                is_empty = False
-                                break
-                    except Exception as e:
-                        self.stdout.write(self.style.WARNING(f"Error checking if Resources directory is empty: {str(e)}"))
-                else:
-                    # For local filesystem
-                    is_empty = not any(resources_handler.path.iterdir()) if resources_handler.path.exists() else True
-                
-                if is_empty:
-                    # If Resources directory is empty, just remove it
-                    if dry_run:
-                        self.stdout.write(f"Would remove empty Resources directory")
-                    else:
-                        resources_handler.remove()
-                        self.stdout.write(f"Removed empty Resources directory")
-                elif not is_collection_dir:
-                    # For bundles with content, rename Resources to data
-                    data_path = f"{content_path}/data"
-                    data_handler = PathHandler(data_path)
-                    
-                    if data_handler.exists():
-                        self.stdout.write(self.style.WARNING(f"Warning: {data_path} already exists"))
-                    else:
-                        if dry_run:
-                            self.stdout.write(f"Would rename Resources directory to data")
-                        else:
-                            # Create data directory
-                            data_handler.mkdir(parents=True, exist_ok=True)
-                            
-                            # For S3, we need special handling
-                            if resources_handler.is_s3:
-                                # Create a directory marker for S3
-                                if data_handler.is_s3:
-                                    # Ensure we create a proper directory marker
-                                    data_handler.s3_client.put_object(
-                                        Bucket=data_handler.bucket_name,
-                                        Key=data_handler.key.rstrip('/') + '/',
-                                        Body=''
-                                    )
-                                    self.stdout.write(f"Created data directory: {data_path}")
-                                
-                                # List all objects under Resources prefix
-                                response = resources_handler.s3_client.list_objects_v2(
-                                    Bucket=resources_handler.bucket_name,
-                                    Prefix=resources_handler.key.rstrip('/') + '/'
-                                )
-                                
-                                # Move each object to the data directory
-                                for obj in response.get('Contents', []):
-                                    source_key = obj['Key']
-                                    # Skip if this is just the directory marker
-                                    if source_key.endswith('/'):
-                                        continue
-                                        
-                                    # Get the filename from the key
-                                    filename = source_key.split('/')[-1]
-                                    # Create the new path in the data directory
-                                    new_key = f"{data_handler.key.rstrip('/')}/{filename}"
-                                    
-                                    # Copy the object to the new location
-                                    data_handler.s3_client.copy_object(
-                                        Bucket=data_handler.bucket_name,
-                                        CopySource={'Bucket': resources_handler.bucket_name, 'Key': source_key},
-                                        Key=new_key
-                                    )
-                                    
-                                    # Delete the original object
-                                    resources_handler.s3_client.delete_object(
-                                        Bucket=resources_handler.bucket_name,
-                                        Key=source_key
-                                    )
-                                
-                                # Delete the Resources directory marker if it exists
-                                try:
-                                    resources_handler.s3_client.delete_object(
-                                        Bucket=resources_handler.bucket_name,
-                                        Key=resources_handler.key.rstrip('/') + '/'
-                                    )
-                                except:
-                                    pass
-                                
-                                self.stdout.write(f"Renamed Resources directory to data")
-                            else:
-                                # For local files, use the original approach
-                                resource_files = list(resources_handler.glob('*'))
-                                for resource in resource_files:
-                                    resource_handler = PathHandler(resource)
-                                    new_path = f"{data_path}/{resource.split('/')[-1]}"
-                                    if new_path != resource:  # Only move if source and destination are different
-                                        resource_handler.move(new_path)
-                                resources_handler.remove()  # Remove empty Resources directory
-                                self.stdout.write(f"Renamed Resources directory to data")
-                elif is_collection_dir:
-                    # For collections with non-empty Resources, move contents to data
-                    data_path = f"{content_path}/data"
-                    data_handler = PathHandler(data_path)
-                    
-                    if dry_run:
-                        self.stdout.write(f"Would move Resources contents to data directory for collection")
-                    else:
-                        # Create data directory
-                        data_handler.mkdir(parents=True, exist_ok=True)
-                        
-                        # For S3, we need special handling
-                        if resources_handler.is_s3:
-                            # Create a directory marker for S3
-                            if data_handler.is_s3:
-                                # Ensure we create a proper directory marker
-                                data_handler.s3_client.put_object(
-                                    Bucket=data_handler.bucket_name,
-                                    Key=data_handler.key.rstrip('/') + '/',
-                                    Body=''
-                                )
-                                self.stdout.write(f"Created data directory: {data_path}")
-                            
-                            # List all objects under Resources prefix
-                            response = resources_handler.s3_client.list_objects_v2(
-                                Bucket=resources_handler.bucket_name,
-                                Prefix=resources_handler.key.rstrip('/') + '/'
-                            )
-                            
-                            # Move each object to the data directory
-                            for obj in response.get('Contents', []):
-                                source_key = obj['Key']
-                                # Skip if this is just the directory marker
-                                if source_key.endswith('/'):
-                                    continue
-                                    
-                                # Get the filename from the key
-                                filename = source_key.split('/')[-1]
-                                # Create the new path in the data directory
-                                new_key = f"{data_handler.key.rstrip('/')}/{filename}"
-                                
-                                # Copy the object to the new location
-                                data_handler.s3_client.copy_object(
-                                    Bucket=data_handler.bucket_name,
-                                    CopySource={'Bucket': resources_handler.bucket_name, 'Key': source_key},
-                                    Key=new_key
-                                )
-                                
-                                # Delete the original object
-                                resources_handler.s3_client.delete_object(
-                                    Bucket=resources_handler.bucket_name,
-                                    Key=source_key
-                                )
-                            
-                            # Delete the Resources directory marker if it exists
-                            try:
-                                resources_handler.s3_client.delete_object(
-                                    Bucket=resources_handler.bucket_name,
-                                    Key=resources_handler.key.rstrip('/') + '/'
-                                )
-                            except:
-                                pass
-                            
-                            self.stdout.write(f"Moved Resources contents to data directory for collection")
-                        else:
-                            # For local files, use the original approach
-                            resource_files = list(resources_handler.glob('*'))
-                            for resource in resource_files:
-                                resource_handler = PathHandler(resource)
-                                new_path = f"{data_path}/{resource.split('/')[-1]}"
-                                if new_path != resource:  # Only move if source and destination are different
-                                    resource_handler.move(new_path)
-                            resources_handler.remove()  # Remove empty Resources directory
-                            self.stdout.write(f"Moved Resources contents to data directory for collection")
-            
-            return True
-            
-        except Exception as e:
-            self.stdout.write(self.style.ERROR(f"Error transforming directory {path}: {str(e)}"))
-            return False
+        parser.add_argument('source_prefix', type=str, help='The path in the ingest bucket to process')
+        parser.add_argument('--validate-only', action='store_true', help='Only validate the structure without transforming')
+        parser.add_argument('--transform-only', action='store_true', help='Only transform the structure without validating')
 
     def handle(self, *args, **options):
-        path = options['path']
-        dry_run = options.get('dry_run', False)
-        force = options.get('force', False)
-        
-        # Get bucket paths from options or settings
-        ingest_bucket = options.get('ingest_bucket') or getattr(settings, 'INGEST_BUCKET', None)
-        production_bucket = options.get('production_bucket') or getattr(settings, 'PRODUCTION_BUCKET', None)
-        
-        if not ingest_bucket or not production_bucket:
-            raise CommandError("Ingest and production bucket paths must be specified either in settings or command line")
+        source_prefix = options['source_prefix']
+        validate_only = options.get('validate_only', False)
+        transform_only = options.get('transform_only', False)
 
         try:
-            # Resolve full path in ingest bucket
-            ingest_path = Path(ingest_bucket) / path
-            if not ingest_path.exists():
-                raise CommandError(f"Path {ingest_path} not found in ingest bucket")
-            
-            # Validate structure
-            is_valid, message = self.validate_structure(ingest_path)
-            if not is_valid and not force:
-                raise CommandError(f"Invalid directory structure: {message}. Use --force to override.")
-
-            # Copy to production bucket
-            copy_success, production_path = self.copy_to_production(ingest_path, production_bucket, dry_run)
-            if not copy_success:
-                raise CommandError(f"Failed to copy to production bucket: {production_path}")
-
-            if not dry_run:
-                # Verify the copy
-                is_valid, message = self.validate_structure(production_path)
-                if not is_valid:
-                    # Clean up failed copy and raise error
-                    shutil.rmtree(production_path)
-                    raise CommandError(f"Copied directory failed validation: {message}")
-
-            # Transform the structure in production
-            if self.transform_structure(production_path, dry_run):
-                if dry_run:
-                    self.stdout.write(self.style.SUCCESS("Dry run completed successfully"))
+            if validate_only:
+                # Only validate the structure
+                result = self.ocfl_service.validate_structure(source_prefix)
+                if result['success']:
+                    self.stdout.write(self.style.SUCCESS('Valid OCFL structure found'))
                 else:
-                    self.stdout.write(self.style.SUCCESS(
-                        f"Successfully copied to production and transformed: {production_path}"))
+                    self.stdout.write(self.style.WARNING(f"Invalid OCFL structure: {result['error']}"))
+                    if result.get('needs_transform', False):
+                        self.stdout.write(self.style.WARNING('Structure needs transformation'))
+
+            elif transform_only:
+                # Only transform the structure
+                result = self.ocfl_service.transform_structure(source_prefix)
+                if result['success']:
+                    self.stdout.write(self.style.SUCCESS('Successfully transformed structure'))
+                else:
+                    self.stdout.write(self.style.ERROR(f"Failed to transform structure: {result['error']}"))
+
             else:
-                if not dry_run:
-                    # Clean up failed transformation
-                    shutil.rmtree(production_path)
-                raise CommandError("Transformation failed")
+                # Full move to production process
+                result = self.ocfl_service.move_to_production(source_prefix)
+                if result['success']:
+                    self.stdout.write(self.style.SUCCESS(result['message']))
+                else:
+                    self.stdout.write(self.style.ERROR(f"Failed to move to production: {result['error']}"))
 
         except Exception as e:
-            raise CommandError(str(e))
+            logger.error(f"Error in standardize_ocfl_structure command: {str(e)}")
+            self.stdout.write(self.style.ERROR(f"Error: {str(e)}"))

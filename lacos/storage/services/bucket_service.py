@@ -9,6 +9,11 @@ import time
 from botocore.exceptions import ClientError
 from django.conf import settings
 import boto3
+from django.core.management import call_command
+from io import StringIO
+import sys
+
+from .ocfl_service import OCFLService
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +49,9 @@ class BucketService:
         # Create S3 client
         logger.info(f"Creating S3 client with endpoint URL: {self.endpoint_url}")
         self.s3_client = self._create_s3_client()
+        
+        # Initialize OCFL service
+        self.ocfl_service = OCFLService(self)
         
         logger.info(f"BucketService initialized with {'MinIO' if self.is_minio else 'S3'}")
         logger.info(f"Using endpoint: {self.endpoint_url or 'default S3 endpoint'}")
@@ -603,50 +611,17 @@ class BucketService:
     
     def move_to_production(self, source_prefix: str) -> Dict[str, Any]:
         """
-        Move an OCFL object from the ingest bucket to the production bucket.
-        This involves standardizing the OCFL structure according to the requirements.
+        Move a folder from the ingest bucket to the production bucket
+        using the OCFL service.
         
         Args:
-            source_prefix (str): The prefix (path) of the OCFL object in the ingest bucket
+            source_prefix (str): The path in the ingest bucket to move
             
         Returns:
-            Dict[str, Any]: A dictionary containing the result of the operation
+            Dict[str, Any]: Result of the operation
         """
-        # Check if the source is an OCFL object
-        if not self.is_ocfl_object(self.ingest_bucket, source_prefix):
-            return {
-                "success": False, 
-                "error": f"Source {source_prefix} is not an OCFL object"
-            }
-        
-        try:
-            # Create a temporary directory to download the object
-            with tempfile.TemporaryDirectory() as temp_dir:
-                # Download the object
-                self._download_directory(self.ingest_bucket, source_prefix, temp_dir)
-                
-                # Standardize the OCFL structure
-                # This would typically call a function similar to standardize_ocfl_structure
-                # For now, we'll just upload the object as-is to the production bucket
-                result = self._upload_directory(temp_dir, self.production_bucket, source_prefix)
-                
-                if result["success"]:
-                    return {
-                        "success": True,
-                        "message": f"Successfully moved {source_prefix} to production bucket",
-                        "source_bucket": self.ingest_bucket,
-                        "source_prefix": source_prefix,
-                        "target_bucket": self.production_bucket,
-                        "target_prefix": source_prefix,
-                    }
-                else:
-                    return {
-                        "success": False,
-                        "error": f"Failed to upload to production bucket: {result.get('error', 'Unknown error')}",
-                    }
-        except Exception as e:
-            logger.error(f"Error moving {source_prefix} to production: {str(e)}")
-            return {"success": False, "error": str(e)}
+        logger.info(f"Starting move to production for {source_prefix}")
+        return self.ocfl_service.move_to_production(source_prefix)
     
     def _download_directory(self, bucket_name: str, prefix: str, local_dir: str) -> None:
         """
