@@ -41,6 +41,13 @@
           </svg>
           User Guide
         </a>
+        <a href="{% url 'storage:archivist_dashboard' %}" 
+          class="flex items-center px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 rounded-md transition-colors">
+          <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804v10a7.968 7.968 0 00-2 0v-10zM15.5 3a9.975 9.975 0 00-4.5 1.073V3a1 1 0 012 0v.073zm-9 0a9.975 9.975 0 014.5 1.073V3a1 1 0 00-2 0v.073z" />
+          </svg>
+          Archivist
+        </a>
         {% if request.user.is_staff %}
         <a href="{% url 'admin:index' %}" 
           class="flex items-center px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 rounded-md transition-colors">
@@ -106,6 +113,7 @@
       <a href="{% url 'home' %}" class="block px-3 py-2 rounded-md text-base font-medium text-white hover:bg-blue-700">Home</a>
       <a href="{% url 'about' %}" class="block px-3 py-2 rounded-md text-base font-medium text-white hover:bg-blue-700">About</a>
       <a href="#" class="block px-3 py-2 rounded-md text-base font-medium text-white hover:bg-blue-700">User Guide</a>
+      <a href="{% url 'storage:archivist_dashboard' %}" class="block px-3 py-2 rounded-md text-base font-medium text-white hover:bg-blue-700">Archivist</a>
       {% if request.user.is_staff %}
       <a href="{% url 'admin:index' %}" class="block px-3 py-2 rounded-md text-base font-medium text-white hover:bg-blue-700">Admin</a>
       {% endif %}

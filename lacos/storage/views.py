@@ -29,65 +29,63 @@ def upload_folder(request):
     """
     Handle the upload of multiple files maintaining their folder structure to the ingest bucket.
     """
-    if request.method == "POST":
-        folder_name = request.POST.get("folder_name")
-        files = request.FILES.getlist("files")
-        
-        if not folder_name:
-            messages.error(request, "Folder name is required")
-            return redirect("storage:upload_form")
-        
-        if not files:
-            messages.error(request, "No files selected")
-            return redirect("storage:upload_form")
-        
-        logger.info(f"Received upload request for folder: {folder_name} with {len(files)} files")
-        
-        # Create a temporary directory to store the uploaded files
-        with tempfile.TemporaryDirectory() as temp_dir:
-            folder_path = os.path.join(temp_dir, folder_name)
-            os.makedirs(folder_path, exist_ok=True)
-            
-            # Process each uploaded file
-            for file in files:
-                # Extract the relative path from the filename
-                file_path = file.name
-                
-                if not file_path:
-                    continue
-                    
-                # Create the full path for the file
-                full_path = os.path.join(folder_path, file_path)
-                
-                # Create directories if they don't exist
-                os.makedirs(os.path.dirname(full_path), exist_ok=True)
-                
-                # Save the file
-                with open(full_path, "wb") as f:
-                    for chunk in file.chunks():
-                        f.write(chunk)
-                
-                logger.info(f"Saved file {file_path} to {full_path}")
-            
-            # Upload the folder to the ingest bucket
-            bucket_service = BucketService()
-            result = bucket_service.upload_folder_to_bucket(folder_path)
-            
-            if result["success"]:
-                logger.info(f"Successfully uploaded folder {folder_name} to ingest bucket")
-                messages.success(
-                    request, 
-                    f"Successfully uploaded {result['total_files']} files "
-                    f"({result['total_size_formatted']}) to {result['target_bucket']}/{result['target_prefix']}"
-                )
-                return redirect("storage:upload_success")
-            else:
-                logger.error(f"Failed to upload folder: {result.get('error', 'Unknown error')}")
-                messages.error(request, f"Failed to upload folder: {result.get('error', 'Unknown error')}")
-                return redirect("storage:upload_form")
+    folder_name = request.POST.get("folder_name")
+    files = request.FILES.getlist("files")
     
-    # Should not reach here, but just in case
-    return redirect("storage:upload_form")
+    is_htmx = request.headers.get('HX-Request') == 'true'
+    
+    if not folder_name:
+        messages.error(request, "Folder name is required")
+        if is_htmx:
+            return render(request, "upload_status.html", {
+                "success": False,
+                "message": "Folder name is required"
+            })
+        return redirect("storage:upload_form")
+    
+    if not files:
+        messages.error(request, "No files selected")
+        if is_htmx:
+            return render(request, "upload_status.html", {
+                "success": False,
+                "message": "No files selected"
+            })
+        return redirect("storage:upload_form")
+    
+    logger.info(f"Received upload request for folder: {folder_name} with {len(files)} files")
+    
+    # Upload files directly to S3 without saving to disk first
+    bucket_service = BucketService()
+    result = bucket_service.upload_files_directly(files, folder_name)
+    
+    if result["success"]:
+        logger.info(f"Successfully uploaded folder {folder_name} to ingest bucket")
+        success_message = (
+            f"Successfully uploaded {result['total_files']} files "
+            f"({result['total_size_formatted']}) to {result['target_bucket']}/{result['target_prefix']}"
+        )
+        messages.success(request, success_message)
+        
+        if is_htmx:
+            response = render(request, "upload_status.html", {
+                "success": True,
+                "message": success_message,
+                "result": result
+            })
+            response['HX-Redirect'] = request.build_absolute_uri('/storage/dashboard/')
+            return response
+        return redirect("storage:upload_success")
+    else:
+        error_message = f"Failed to upload folder: {result.get('error', 'Unknown error')}"
+        logger.error(error_message)
+        messages.error(request, error_message)
+        
+        if is_htmx:
+            return render(request, "upload_status.html", {
+                "success": False,
+                "message": error_message
+            })
+        return redirect("storage:upload_form")
 
 
 @login_required
@@ -95,7 +93,7 @@ def upload_success(request):
     """
     Render the upload success page.
     """
-    return render(request, "storage/upload_success.html")
+    return render(request, "upload_success.html")
 
 
 @login_required
@@ -142,10 +140,10 @@ def move_to_production(request, folder_path):
     
     if result["success"]:
         messages.success(request, result["message"])
-        return redirect(f"/storage/dashboard?message={result['message']}")
+        return redirect("storage:archivist_dashboard")
     else:
         messages.error(request, result["error"])
-        return redirect("/storage/dashboard")
+        return redirect("storage:archivist_dashboard")
 
 
 @login_required
@@ -167,7 +165,7 @@ def file_content(request, bucket_type, file_path):
     if "error" in file_data:
         return render(
             request,
-            "storage/file_error.html",
+            "file_error.html",
             {"error": file_data["error"]},
         )
     
@@ -179,7 +177,7 @@ def file_content(request, bucket_type, file_path):
         # For text files, render the content directly
         return render(
             request,
-            "storage/file_content.html",
+            "file_content.html",
             {
                 "file_path": file_path,
                 "content": file_data["content"].decode("utf-8"),
@@ -191,7 +189,7 @@ def file_content(request, bucket_type, file_path):
         # For binary files, provide a download link
         return render(
             request,
-            "storage/file_download.html",
+            "file_download.html",
             {
                 "file_path": file_path,
                 "content_type": content_type,
@@ -219,6 +217,8 @@ def delete_object(request, bucket_type, object_type, object_path):
     result = bucket_service.delete_object(bucket_name, object_path, is_directory)
     
     if result["success"]:
-        return redirect(f"/storage/dashboard?message={result['message']}")
+        messages.success(request, result["message"])
+        return redirect("storage:archivist_dashboard")
     else:
-        return redirect(f"/storage/dashboard?message=Error: {result['error']}")
+        messages.error(request, f"Error: {result['error']}")
+        return redirect("storage:archivist_dashboard")

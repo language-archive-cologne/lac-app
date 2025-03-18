@@ -18,4 +18,54 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('Folder structure updated');
         }
     });
+
+    // Show loading indicator for HTMX requests
+    document.body.addEventListener('htmx:beforeSend', function(event) {
+        // Show the indicator if it exists and isn't explicitly disabled
+        const indicator = document.getElementById('indicator');
+        if (indicator && !event.detail.xhr.getRequestHeader('X-HTMX-Indicator')) {
+            indicator.classList.remove('hidden');
+        }
+    });
+
+    // Hide loading indicator after HTMX requests
+    document.body.addEventListener('htmx:afterRequest', function(event) {
+        // Hide the indicator
+        const indicator = document.getElementById('indicator');
+        if (indicator) {
+            indicator.classList.add('hidden');
+        }
+        
+        // Handle delete operations
+        if (event.detail.successful && event.detail.xhr.status === 200 && event.detail.requestConfig.verb === 'delete') {
+            // If the parent element is a list item, remove it
+            const listItem = event.detail.elt.closest('li');
+            if (listItem) {
+                listItem.remove();
+            }
+        }
+    });
+
+    // Handle HTMX errors
+    document.body.addEventListener('htmx:responseError', function(event) {
+        console.error('HTMX request failed:', event.detail);
+        
+        // Hide the indicator
+        const indicator = document.getElementById('indicator');
+        if (indicator) {
+            indicator.classList.add('hidden');
+        }
+        
+        // Show an error message
+        const errorMessage = event.detail.xhr.responseText || 'An error occurred while processing your request.';
+        alert('Error: ' + errorMessage);
+    });
+
+    // Handle HTMX swapping
+    document.body.addEventListener('htmx:afterSwap', function(event) {
+        // If the swap target is the upload status, scroll to it
+        if (event.detail.target.id === 'upload-status') {
+            event.detail.target.scrollIntoView({ behavior: 'smooth' });
+        }
+    });
 });

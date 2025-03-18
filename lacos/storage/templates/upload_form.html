@@ -1,0 +1,334 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold mb-8 text-center text-gray-800">Upload to Ingest Bucket</h1>
+    
+    <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-6">
+        <form hx-encoding="multipart/form-data" 
+              hx-post="{% url 'storage:upload_folder' %}" 
+              hx-indicator="#upload-indicator"
+              hx-target="#upload-status">
+            {% csrf_token %}
+            
+            <div class="mb-6">
+                <label for="folder_name" class="block text-gray-700 text-sm font-bold mb-2">Folder Name:</label>
+                <input type="text" id="folder_name" name="folder_name" required
+                       class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                <p class="text-gray-600 text-xs mt-1">This will be the name of the folder in the ingest bucket.</p>
+            </div>
+            
+            <div class="mb-6">
+                <label class="block text-gray-700 text-sm font-bold mb-2">Files:</label>
+                <div id="file-upload-container" class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                    <input type="file" id="files" name="files" multiple webkitdirectory directory
+                           class="hidden" onchange="updateFileList()">
+                    <label for="files" class="cursor-pointer">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                            <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" 
+                                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                        <p class="mt-1 text-sm text-gray-600">
+                            <span class="font-medium text-blue-600 hover:text-blue-500">
+                                Click to select folder
+                            </span> or drag and drop
+                        </p>
+                        <p class="mt-1 text-xs text-gray-500">
+                            Select a folder containing all files you want to upload
+                        </p>
+                    </label>
+                </div>
+                <div id="file-list" class="mt-4 max-h-60 overflow-y-auto hidden">
+                    <h3 class="font-medium text-gray-700 mb-2">Selected Files:</h3>
+                    <ul id="selected-files" class="text-sm text-gray-600 pl-5 list-disc"></ul>
+                    <div id="file-stats" class="mt-2 text-sm text-gray-600">
+                        <p id="file-count"></p>
+                        <p id="file-size"></p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Upload progress indicator -->
+            <div id="upload-indicator" class="htmx-indicator mb-4">
+                <div class="flex items-center mb-2">
+                    <div class="mr-2">
+                        <svg class="animate-spin h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </div>
+                    <div class="w-full">
+                        <div class="flex justify-between mb-1">
+                            <span class="text-sm font-medium text-blue-700">Uploading files...</span>
+                            <span class="text-sm font-medium text-blue-700" id="progress-text">0%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5">
+                            <div class="bg-blue-600 h-2.5 rounded-full w-0" id="progress-bar"></div>
+                        </div>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">
+                    Large folders may take several minutes to upload. Please don't close this page.
+                    <br>Files are being uploaded directly to storage with multipart uploads for better performance.
+                </p>
+            </div>
+            
+            <!-- Upload status area -->
+            <div id="upload-status"></div>
+            
+            <div class="flex items-center justify-between">
+                <a href="{% url 'storage:archivist_dashboard' %}" 
+                   class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+                    Cancel
+                </a>
+                <button id="upload-button" type="submit" 
+                        class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled>
+                    Upload Folder
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function updateFileList() {
+    const input = document.getElementById('files');
+    const fileList = document.getElementById('file-list');
+    const selectedFiles = document.getElementById('selected-files');
+    const fileCount = document.getElementById('file-count');
+    const fileSize = document.getElementById('file-size');
+    const uploadButton = document.getElementById('upload-button');
+    
+    // Clear previous list
+    selectedFiles.innerHTML = '';
+    
+    if (input.files.length > 0) {
+        fileList.classList.remove('hidden');
+        uploadButton.disabled = false;
+        
+        // Group files by directory
+        const filesByDir = {};
+        let totalSize = 0;
+        
+        for (let i = 0; i < input.files.length; i++) {
+            const file = input.files[i];
+            const path = file.webkitRelativePath;
+            const parts = path.split('/');
+            totalSize += file.size;
+            
+            // Skip the root folder (which is the selected folder name)
+            if (parts.length > 1) {
+                const dirPath = parts.slice(0, parts.length - 1).join('/');
+                if (!filesByDir[dirPath]) {
+                    filesByDir[dirPath] = [];
+                }
+                filesByDir[dirPath].push(file);
+            }
+        }
+        
+        // Format size
+        const formattedSize = formatFileSize(totalSize);
+        
+        // Display directories and file counts
+        for (const dir in filesByDir) {
+            // Calculate directory size
+            let dirSize = 0;
+            filesByDir[dir].forEach(file => dirSize += file.size);
+            
+            const li = document.createElement('li');
+            li.className = 'mb-1';
+            
+            // Create folder icon + name
+            const folderSpan = document.createElement('span');
+            folderSpan.className = 'inline-flex items-center';
+            folderSpan.innerHTML = `
+                <svg class="w-4 h-4 mr-1 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                </svg>
+                ${dir} (${filesByDir[dir].length} files, ${formatFileSize(dirSize)})
+            `;
+            
+            li.appendChild(folderSpan);
+            selectedFiles.appendChild(li);
+        }
+        
+        fileCount.textContent = `Total: ${input.files.length} files`;
+        fileSize.textContent = `Size: ${formattedSize}`;
+        
+        // Set the folder name input to the root folder name if it's empty
+        const folderNameInput = document.getElementById('folder_name');
+        if (folderNameInput.value === '' && input.files.length > 0) {
+            const rootFolder = input.files[0].webkitRelativePath.split('/')[0];
+            folderNameInput.value = rootFolder;
+        }
+
+        // Show warning for large uploads
+        if (totalSize > 100 * 1024 * 1024) { // 100 MB
+            const warningDiv = document.createElement('div');
+            warningDiv.className = 'mt-3 text-sm text-amber-700 bg-amber-50 p-2 rounded border border-amber-200';
+            warningDiv.innerHTML = `
+                <div class="flex">
+                    <svg class="w-5 h-5 mr-2 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <span>
+                        Large upload detected (${formattedSize}). This may take some time and use significant system resources.
+                    </span>
+                </div>
+            `;
+            fileList.appendChild(warningDiv);
+        }
+    } else {
+        fileList.classList.add('hidden');
+        uploadButton.disabled = true;
+    }
+}
+
+// Helper to format file size
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    
+    return parseFloat((bytes / Math.pow(1024, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Add drag and drop functionality
+const dropArea = document.getElementById('file-upload-container');
+
+['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    dropArea.addEventListener(eventName, preventDefaults, false);
+});
+
+function preventDefaults(e) {
+    e.preventDefault();
+    e.stopPropagation();
+}
+
+['dragenter', 'dragover'].forEach(eventName => {
+    dropArea.addEventListener(eventName, highlight, false);
+});
+
+['dragleave', 'drop'].forEach(eventName => {
+    dropArea.addEventListener(eventName, unhighlight, false);
+});
+
+function highlight() {
+    dropArea.classList.add('border-blue-500', 'bg-blue-50');
+}
+
+function unhighlight() {
+    dropArea.classList.remove('border-blue-500', 'bg-blue-50');
+}
+
+dropArea.addEventListener('drop', handleDrop, false);
+
+function handleDrop(e) {
+    const dt = e.dataTransfer;
+    const files = dt.items;
+    
+    if (files.length > 0) {
+        // We can't directly access dropped folders, so we prompt the user to use the file input
+        alert('Please use the file selector to choose a folder. Drag and drop of folders is not fully supported in all browsers.');
+        document.getElementById('files').click();
+    }
+}
+
+// HTMX event handlers
+document.body.addEventListener('htmx:beforeSend', function(evt) {
+    // Validate form before sending
+    const form = evt.detail.elt.closest('form');
+    if (form) {
+        const folderName = form.querySelector('#folder_name').value;
+        const files = form.querySelector('#files').files;
+        
+        if (!folderName) {
+            alert('Please enter a folder name');
+            evt.preventDefault();
+            return;
+        }
+        
+        if (files.length === 0) {
+            alert('Please select files to upload');
+            evt.preventDefault();
+            return;
+        }
+        
+        // Start the upload timer for the progress bar simulation
+        startUploadTimer(files.length, getTotalFileSize(files));
+    }
+});
+
+document.body.addEventListener('htmx:afterRequest', function(evt) {
+    // Stop the progress bar simulation
+    stopUploadTimer();
+    
+    if (evt.detail.successful && evt.detail.xhr.status === 200) {
+        // Complete the progress bar
+        document.getElementById('progress-bar').style.width = '100%';
+        document.getElementById('progress-text').textContent = '100%';
+        
+        // If the response contains a redirect URL, navigate to it
+        const redirectUrl = evt.detail.xhr.getResponseHeader('HX-Redirect');
+        if (redirectUrl) {
+            window.location.href = redirectUrl;
+        }
+    } else {
+        // Reset the progress bar on error
+        document.getElementById('progress-bar').style.width = '0%';
+        document.getElementById('progress-text').textContent = '0%';
+    }
+});
+
+// Upload progress simulation
+let uploadTimer;
+let uploadStartTime;
+let estimatedTotalTime;
+function startUploadTimer(fileCount, totalSize) {
+    uploadStartTime = Date.now();
+    
+    // Estimate total time based on file count and size
+    // This is a heuristic - adjust based on your typical upload speeds
+    const baseTime = 2000; // 2 seconds base time
+    const timePerFile = 200; // 200ms per file overhead
+    const timePerMB = 100; // 100ms per MB (assumes 10MB/s)
+    const sizeMB = totalSize / (1024 * 1024);
+    
+    estimatedTotalTime = baseTime + (fileCount * timePerFile) + (sizeMB * timePerMB);
+    
+    // Cap it to something reasonable
+    if (estimatedTotalTime > 300000) { // 5 minutes
+        estimatedTotalTime = 300000;
+    }
+    
+    const progressBar = document.getElementById('progress-bar');
+    const progressText = document.getElementById('progress-text');
+    
+    // Update every 100ms
+    uploadTimer = setInterval(() => {
+        const elapsed = Date.now() - uploadStartTime;
+        const progress = Math.min(elapsed / estimatedTotalTime, 0.95); // Cap at 95% until done
+        
+        progressBar.style.width = `${progress * 100}%`;
+        progressText.textContent = `${Math.round(progress * 100)}%`;
+    }, 100);
+}
+
+function stopUploadTimer() {
+    if (uploadTimer) {
+        clearInterval(uploadTimer);
+        uploadTimer = null;
+    }
+}
+
+function getTotalFileSize(files) {
+    let totalSize = 0;
+    for (let i = 0; i < files.length; i++) {
+        totalSize += files[i].size;
+    }
+    return totalSize;
+}
+</script>
+{% endblock %} 

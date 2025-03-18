@@ -1,15 +1,22 @@
-export function toggleFolder(element) {
-    const contents = element.closest('div').nextElementSibling;
-    const iconPaths = {
-        open: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />',
-        closed: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />'
-    };
-
-    if (contents.classList.contains('hidden')) {
-        contents.classList.remove('hidden');
-        element.querySelector('svg').innerHTML = iconPaths.open;
+/**
+ * Toggle the visibility of a folder's contents
+ * @param {HTMLElement} button - The button element that was clicked
+ */
+export function toggleFolder(button) {
+    // Find the folder contents element (next sibling after the div containing the button)
+    const folderItem = button.closest('.folder-item');
+    const folderContents = folderItem.querySelector('.folder-contents');
+    
+    // Toggle the visibility
+    if (folderContents.classList.contains('hidden')) {
+        // Show the folder contents
+        folderContents.classList.remove('hidden');
+        // Rotate the arrow icon
+        button.querySelector('svg').classList.add('rotate-90');
     } else {
-        contents.classList.add('hidden');
-        element.querySelector('svg').innerHTML = iconPaths.closed;
+        // Hide the folder contents
+        folderContents.classList.add('hidden');
+        // Reset the arrow icon
+        button.querySelector('svg').classList.remove('rotate-90');
     }
 }

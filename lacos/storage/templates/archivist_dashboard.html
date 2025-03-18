@@ -2,9 +2,11 @@
 
 {% block content %}
 {% load static %}
+{# Instead of using 'from', we'll include the template and define a variable for the bucket type #}
 
 <div class="container mx-auto px-4 py-8">
     <h1 class="text-3xl font-bold mb-8 text-center text-gray-800">Archivist Dashboard</h1>
+    <div id="indicator" class="hidden fixed top-0 left-0 w-full h-1 bg-blue-500"></div>
     
     <!-- Add upload button -->
     <div class="mb-6 flex justify-center">
@@ -25,27 +27,27 @@
     
     <div class="flex flex-col md:flex-row gap-8">
         <div class="w-full md:w-1/2">
-            <h2 class="text-2xl font-semibold mb-4 text-gray-700">Ingest Bucket</h2>
-            <div id="ingest-structure" class="bg-white rounded-lg shadow-md p-4">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-700">Staging Bucket</h2>
+            <div id="staging-structure" class="bg-white rounded-lg shadow-md p-4">
                 {% include "folder_structure_partial.html" with structure=ingest_structure bucket_type="ingest" %}
             </div>
         </div>
         <div class="w-full md:w-1/2">
-            <h2 class="text-2xl font-semibold mb-4 text-gray-700">Production Bucket</h2>
-            <div id="production-structure" class="bg-white rounded-lg shadow-md p-4">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-700">OCFL Bucket</h2>
+            <div id="ocfl-structure" class="bg-white rounded-lg shadow-md p-4">
                 {% include "folder_structure_partial.html" with structure=production_structure bucket_type="production" %}
             </div>
         </div>
     </div>
 </div>
 
-<!-- Modal for file viewing -->
-<div id="fileModal" class="modal hidden fixed w-full h-full top-0 left-0 flex items-center justify-center z-50">
+<!-- Modal -->
+<div id="fileModal" class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-50">
     <!-- Overlay -->
     <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50"></div>
 
     <!-- Modal Container -->
-    <div class="modal-container bg-white mx-auto rounded shadow-lg z-50 overflow-hidden max-w-4xl w-11/12">
+    <div class="modal-container bg-white mx-auto rounded shadow-lg z-50 overflow-hidden">
         <!-- Modal Header -->
         <div class="flex justify-between items-center p-4 border-b">
             <p id="modalTitle" class="text-2xl font-bold"></p>
@@ -57,101 +59,70 @@
         </div>
 
         <!-- Modal Content -->
-        <div id="modalContent" class="overflow-auto p-4 max-h-[70vh]">
+        <div id="modalContent" class="overflow-auto">
             <!-- Content will be injected here -->
         </div>
     </div>
 </div>
 
-{% block extra_js %}
-<script>
-    // Toggle folder expansion
-    function toggleFolder(element) {
-        const folderContent = element.nextElementSibling;
-        if (folderContent.classList.contains('hidden')) {
-            folderContent.classList.remove('hidden');
-            element.querySelector('.folder-icon').classList.add('transform', 'rotate-90');
-        } else {
-            folderContent.classList.add('hidden');
-            element.querySelector('.folder-icon').classList.remove('transform', 'rotate-90');
-        }
+<!-- Update modal styles -->
+<style>
+    /* Content area with adaptive height */
+    #modalContent {
+        max-height: calc(90vh - 8rem); /* Subtract header height */
     }
-    
-    // Modal functionality
-    const modal = document.getElementById('fileModal');
-    const modalTitle = document.getElementById('modalTitle');
-    const modalContent = document.getElementById('modalContent');
-    const modalOverlay = document.querySelector('.modal-overlay');
-    const modalClose = document.querySelector('.modal-close');
-    
-    // Close modal when clicking the close button or overlay
-    modalClose.addEventListener('click', closeModal);
-    modalOverlay.addEventListener('click', closeModal);
-    
-    function closeModal() {
-        modal.classList.add('hidden');
-    }
-    
-    // Open modal with file content
-    function openFileModal(title, content) {
-        modalTitle.textContent = title;
-        modalContent.innerHTML = content;
-        modal.classList.remove('hidden');
-    }
-    
-    // View file content
-    function viewFile(bucket, path) {
-        fetch(`/storage/file-content/${bucket}/${path}`)
-            .then(response => response.text())
-            .then(html => {
-                openFileModal(path.split('/').pop(), html);
-            })
-            .catch(error => {
-                console.error('Error fetching file content:', error);
-                openFileModal('Error', `<div class="text-red-500">Failed to load file content: ${error.message}</div>`);
-            });
-    }
-    
-    // Delete file or folder
-    function deleteObject(bucket, type, path) {
-        if (confirm(`Are you sure you want to delete this ${type}?`)) {
-            fetch(`/storage/delete/${bucket}/${type}/${path}`, {
-                method: 'DELETE',
-            })
-            .then(response => {
-                if (response.ok) {
-                    window.location.reload();
-                } else {
-                    alert('Failed to delete object');
-                }
-            })
-            .catch(error => {
-                console.error('Error deleting object:', error);
-                alert(`Error: ${error.message}`);
-            });
-        }
-    }
-    
-    // Move to production
-    function moveToProduction(path) {
-        if (confirm('Are you sure you want to move this folder to production?')) {
-            fetch(`/storage/move-to-production/${path}`, {
-                method: 'POST',
-            })
-            .then(response => {
-                if (response.ok) {
-                    window.location.reload();
-                } else {
-                    alert('Failed to move folder to production');
-                }
-            })
-            .catch(error => {
-                console.error('Error moving folder to production:', error);
-                alert(`Error: ${error.message}`);
-            });
-        }
-    }
-</script>
-{% endblock %}
 
-{% endblock %} 
+    /* Viewer-specific styles */
+    .modal-container[data-viewer-type="audio"] #modalContent {
+        max-height: fit-content;
+        min-height: 200px;
+    }
+
+    .modal-container[data-viewer-type="video"] #modalContent {
+        max-height: fit-content;
+        min-height: 400px;
+    }
+
+    .modal-container[data-viewer-type="elan"] #modalContent,
+    .modal-container[data-viewer-type="xml"] #modalContent,
+    .modal-container[data-viewer-type="json"] #modalContent,
+    .modal-container[data-viewer-type="default"] #modalContent {
+        height: 70vh;
+    }
+</style>
+
+
+<script type="module">
+import { modalManager } from '/static/js/modal.js';
+import { handleFileViewRequest } from '/static/js/file-viewer/file-viewer-handler.js';
+
+// Make them available globally if needed
+window.modalManager = modalManager;
+window.handleFileViewRequest = handleFileViewRequest;
+
+document.body.addEventListener('htmx:afterRequest', function (event) {
+    if (event.detail.elt.classList.contains('view-icon')) {
+        handleFileViewRequest(event);
+    }
+});
+</script>
+
+<script type="module">
+import '/static/js/events.js';
+</script>
+
+<script type="module">
+import { toggleFolder } from '/static/js/folder-manager.js';
+
+// Make toggleFolder available globally since it's used in HTML onclick attributes
+window.toggleFolder = toggleFolder;
+</script>
+
+<script>
+// Instead, add this event listener to prevent any default loading indicators
+document.body.addEventListener('htmx:beforeSend', function (event) {
+    event.detail.xhr.setRequestHeader('X-HTMX-Indicator', 'none');
+});
+</script>
+
+{% endblock %}
