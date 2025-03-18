@@ -113,7 +113,11 @@ class OCFLService:
                 # Download source to temp directory
                 self.bucket_service._download_directory(self.ingest_bucket, source_prefix, temp_dir)
                 
-                # Create OCFL structure
+                # Log the directory structure for debugging
+                logger.info(f"Downloaded content to {temp_dir}")
+                self._log_directory_structure(temp_dir)
+                
+                # Create OCFL structure in a new directory
                 ocfl_dir = os.path.join(temp_dir, "ocfl_object")
                 os.makedirs(ocfl_dir, exist_ok=True)
                 
@@ -122,35 +126,32 @@ class OCFLService:
                 with open(os.path.join(ocfl_dir, version_marker), "w") as f:
                     f.write("")
                 
-                # Create v1 directory
+                # Create v1 directory and content/metadata subdirectories
                 v1_dir = os.path.join(ocfl_dir, "v1")
-                os.makedirs(v1_dir, exist_ok=True)
+                content_dir = os.path.join(v1_dir, "content")
+                metadata_dir = os.path.join(v1_dir, "content", "metadata")
+                os.makedirs(metadata_dir, exist_ok=True)
                 
-                # Move files to appropriate locations
-                source_dir = os.path.join(temp_dir, os.path.basename(source_prefix))
-                if os.path.exists(source_dir):
-                    # Move XML files to metadata
-                    metadata_dir = os.path.join(v1_dir, "metadata")
-                    os.makedirs(metadata_dir, exist_ok=True)
+                # Find the actual source directory - search for it rather than assuming a fixed path
+                source_dir = self._find_source_directory(temp_dir, source_prefix)
+                
+                if source_dir and os.path.exists(source_dir):
+                    logger.info(f"Found source directory at {source_dir}")
                     
-                    for root, _, files in os.walk(source_dir):
-                        for file in files:
-                            if file.endswith(".xml"):
-                                src = os.path.join(root, file)
-                                dst = os.path.join(metadata_dir, file)
-                                shutil.move(src, dst)
+                    # Find and move XML files to metadata
+                    self._move_xml_files(source_dir, metadata_dir)
                     
-                    # Move acl.json if exists
-                    acl_file = os.path.join(source_dir, "acl.json")
-                    if os.path.exists(acl_file):
-                        shutil.move(acl_file, os.path.join(metadata_dir, "acl.json"))
+                    # Find and move acl.json if it exists
+                    self._move_acl_file(source_dir, metadata_dir)
                     
-                    # Handle Resources directory
-                    resources_dir = os.path.join(source_dir, "Resources")
-                    if os.path.exists(resources_dir):
-                        content_dir = os.path.join(v1_dir, "content")
-                        os.makedirs(content_dir, exist_ok=True)
-                        shutil.move(resources_dir, content_dir)
+                    # Handle Resources directory if it exists
+                    resources_dir = self._find_resources_directory(source_dir)
+                    if resources_dir and os.path.exists(resources_dir):
+                        logger.info(f"Found Resources directory at {resources_dir}")
+                        dest_resources = os.path.join(content_dir, "Resources")
+                        shutil.copytree(resources_dir, dest_resources)
+                else:
+                    logger.warning(f"Could not find source directory in {temp_dir}")
                 
                 # Upload transformed structure to production
                 result = self.bucket_service._upload_directory(
@@ -179,6 +180,123 @@ class OCFLService:
                 "error": str(e)
             }
     
+    def _log_directory_structure(self, directory: str) -> None:
+        """Log the directory structure for debugging purposes"""
+        logger.info(f"Directory structure of {directory}:")
+        for root, dirs, files in os.walk(directory):
+            rel_path = os.path.relpath(root, directory)
+            if rel_path == ".":
+                rel_path = ""
+            logger.info(f"  Directory: {rel_path}")
+            for file in files:
+                logger.info(f"    File: {os.path.join(rel_path, file)}")
+    
+    def _find_source_directory(self, temp_dir: str, source_prefix: str) -> str:
+        """
+        Find the actual source directory based on the source_prefix.
+        This handles cases where parent/child directory names might be identical.
+        """
+        # Extract the last part of the source_prefix
+        parts = source_prefix.rstrip('/').split('/')
+        if not parts:
+            return temp_dir
+            
+        last_part = parts[-1]
+        
+        # First try direct path
+        direct_path = os.path.join(temp_dir, last_part)
+        if os.path.isdir(direct_path):
+            return direct_path
+            
+        # If that doesn't work, try to find the directory by walking the temp_dir
+        for root, dirs, _ in os.walk(temp_dir):
+            if last_part in dirs:
+                return os.path.join(root, last_part)
+                
+        # If all else fails, return the temp_dir itself
+        return temp_dir
+    
+    def _move_xml_files(self, source_dir: str, metadata_dir: str) -> None:
+        """Find and move all XML files to the metadata directory"""
+        xml_files_moved = 0
+        
+        # First get the absolute path of the metadata directory to avoid processing it
+        abs_metadata_dir = os.path.abspath(metadata_dir)
+        
+        for root, _, files in os.walk(source_dir):
+            # Skip the metadata directory itself to avoid copying files to themselves
+            if os.path.abspath(root).startswith(abs_metadata_dir):
+                logger.info(f"Skipping metadata directory: {root}")
+                continue
+                
+            for file in files:
+                if file.endswith(".xml"):
+                    src = os.path.join(root, file)
+                    dst = os.path.join(metadata_dir, file)
+                    
+                    # Skip if destination already exists or source and destination are the same
+                    if os.path.exists(dst) and os.path.samefile(src, dst):
+                        logger.info(f"Skipping file that would copy to itself: {src}")
+                        continue
+                        
+                    logger.info(f"Moving XML file from {src} to {dst}")
+                    shutil.copy2(src, dst)
+                    xml_files_moved += 1
+                    
+        logger.info(f"Moved {xml_files_moved} XML files to metadata directory")
+    
+    def _move_acl_file(self, source_dir: str, metadata_dir: str) -> None:
+        """Find and move acl.json file to the metadata directory"""
+        # Get the destination path
+        dest_acl_file = os.path.join(metadata_dir, "acl.json")
+        
+        # First check if acl.json exists directly in the source directory
+        acl_file = os.path.join(source_dir, "acl.json")
+        if os.path.exists(acl_file):
+            # Skip if source and destination are the same
+            if os.path.exists(dest_acl_file) and os.path.samefile(acl_file, dest_acl_file):
+                logger.info(f"Skipping acl.json that would copy to itself: {acl_file}")
+            else:
+                logger.info(f"Moving acl.json from {acl_file} to metadata directory")
+                shutil.copy2(acl_file, dest_acl_file)
+            return
+            
+        # Get the absolute path of the metadata directory to avoid processing it
+        abs_metadata_dir = os.path.abspath(metadata_dir)
+            
+        # If not found, search for it recursively
+        for root, _, files in os.walk(source_dir):
+            # Skip the metadata directory itself
+            if os.path.abspath(root).startswith(abs_metadata_dir):
+                continue
+                
+            if "acl.json" in files:
+                acl_file = os.path.join(root, "acl.json")
+                
+                # Skip if source and destination are the same
+                if os.path.exists(dest_acl_file) and os.path.samefile(acl_file, dest_acl_file):
+                    logger.info(f"Skipping acl.json that would copy to itself: {acl_file}")
+                else:
+                    logger.info(f"Found acl.json at {acl_file}, moving to metadata directory")
+                    shutil.copy2(acl_file, dest_acl_file)
+                return
+                
+        logger.warning("acl.json not found in source directory")
+    
+    def _find_resources_directory(self, source_dir: str) -> Optional[str]:
+        """Find the Resources directory in the source directory"""
+        # First check if Resources exists directly in the source directory
+        resources_dir = os.path.join(source_dir, "Resources")
+        if os.path.isdir(resources_dir):
+            return resources_dir
+            
+        # If not found, search for it recursively
+        for root, dirs, _ in os.walk(source_dir):
+            if "Resources" in dirs:
+                return os.path.join(root, "Resources")
+                
+        return None
+    
     def move_to_production(self, source_prefix: str) -> Dict[str, Any]:
         """
         Move a folder from ingest to production, ensuring OCFL structure.
@@ -198,12 +316,17 @@ class OCFLService:
             if not validation_result["success"]:
                 if validation_result.get("needs_transform", False):
                     # Structure needs transformation
+                    logger.info(f"Structure needs transformation, transforming {source_prefix}")
                     return self.transform_structure(source_prefix)
                 else:
+                    logger.error(f"Validation failed: {validation_result.get('error', 'Unknown error')}")
                     return validation_result
             
             # Structure is valid, copy directly
             try:
+                logger.info(f"Structure is valid, copying {source_prefix} directly to production")
+                copied_files = 0
+                
                 # List all objects in the source
                 paginator = self.bucket_service.s3_client.get_paginator("list_objects_v2")
                 
@@ -215,18 +338,19 @@ class OCFLService:
                             Bucket=self.production_bucket,
                             Key=obj["Key"]
                         )
+                        copied_files += 1
                 
+                logger.info(f"Successfully copied {copied_files} files from {source_prefix} to production bucket")
                 return {
                     "success": True,
-                    "message": f"Successfully moved {source_prefix} to production bucket"
+                    "message": f"Successfully moved {source_prefix} to production bucket ({copied_files} files copied)"
                 }
                 
             except Exception as copy_error:
                 logger.error(f"Error copying to production: {str(copy_error)}")
-                return {
-                    "success": False,
-                    "error": f"Failed to copy to production: {str(copy_error)}"
-                }
+                # If direct copy failed, try transformation as a fallback
+                logger.info(f"Direct copy failed, trying transformation as fallback")
+                return self.transform_structure(source_prefix)
                 
         except Exception as e:
             logger.error(f"Error in move_to_production: {str(e)}")

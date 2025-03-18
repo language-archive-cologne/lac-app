@@ -531,6 +531,68 @@ def test_ocfl_transform_structure(mock_s3_bucket, mock_bucket_service, ocfl_serv
                 ocfl_service.validate_structure = original_validate
 
 
+def test_ocfl_transform_collection_structure(mock_s3_bucket, mock_bucket_service, ocfl_service):
+    """Test transforming a collection-like structure (parent/child dir with same name)"""
+    # Create a collection-like structure where parent and child dirs have the same name
+    s3 = boto3.client(
+        's3',
+        aws_access_key_id='testing',
+        aws_secret_access_key='testing',
+        region_name='us-east-1'
+    )
+    collection_name = "algerien"
+    collection_path = f"{collection_name}/{collection_name}"  # Identical parent/child names
+    
+    with mock_aws():
+        # Create collection structure without OCFL markers
+        s3.put_object(
+            Bucket=TEST_BUCKET_NAME,
+            Key=f"{collection_path}/acl.json",
+            Body=json.dumps({"permissions": []})
+        )
+        
+        s3.put_object(
+            Bucket=TEST_BUCKET_NAME,
+            Key=f"{collection_path}/{collection_name}.xml",
+            Body="<collection>Test Collection</collection>"
+        )
+        
+        s3.put_object(
+            Bucket=TEST_BUCKET_NAME,
+            Key=f"{collection_path}/another_metadata.xml",
+            Body="<metadata>Additional metadata</metadata>"
+        )
+        
+        # Test the transform_structure method
+        result = ocfl_service.transform_structure(collection_path)
+        assert result["success"], f"Transform failed: {result.get('error', 'Unknown error')}"
+        
+        # Verify the structure by listing objects in the production bucket
+        response = s3.list_objects_v2(
+            Bucket=TEST_BUCKET_NAME,
+            Prefix=collection_path
+        )
+        
+        # Extract all keys
+        all_keys = [obj["Key"] for obj in response.get("Contents", [])]
+        
+        # Check for OCFL marker
+        ocfl_marker_exists = any(key.endswith("0=ocfl_object_1.0") for key in all_keys)
+        assert ocfl_marker_exists, "OCFL marker not found after transformation"
+        
+        # Check for correct metadata structure
+        metadata_dir_exists = any("/v1/content/metadata/" in key for key in all_keys)
+        assert metadata_dir_exists, "Metadata directory not found after transformation"
+        
+        # Check for acl.json in metadata
+        acl_exists = any(key.endswith("/v1/content/metadata/acl.json") for key in all_keys)
+        assert acl_exists, "acl.json not found in metadata directory after transformation"
+        
+        # Check for XML files in metadata
+        xml_files_in_metadata = [key for key in all_keys if "/v1/content/metadata/" in key and key.endswith(".xml")]
+        assert len(xml_files_in_metadata) >= 2, "XML files not found in metadata directory after transformation"
+
+
 def test_ocfl_move_to_production(mock_s3_bundle, mock_bucket_service, ocfl_service):
     """Test moving to production with OCFLService"""
     # Set up a more realistic test where ingest and production buckets are different
