@@ -286,6 +286,8 @@ data/*
 lacos/theme/node_modules/
 lacos/theme/static/css/dist/
 lacos/node_modules/
+# Ignore compiled CSS output files
+lacos/theme/static/css/output.css
 
 # NPM logs
 npm-debug.log*
