@@ -41,9 +41,6 @@ class BucketService(BaseStorageService):
         self.set_client_and_buckets(self.collection_service)
         self.set_client_and_buckets(self.upload_service)
         
-        # Ensure upload service's collection service is also configured
-        self.upload_service.set_client_and_buckets(self.upload_service.collection_service)
-        
         # Initialize OCFL service after other services are ready
         self.ocfl_service = OCFLService(self)
         # OCFL service uses this instance's bucket references, so just set the client

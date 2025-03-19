@@ -113,17 +113,22 @@ function updateFileList() {
         
         // Store file paths in a global variable for later use during form submission
         window.filePaths = [];
+        window.fileNames = [];
         
+        console.log('Processing ' + input.files.length + ' files');
         for (let i = 0; i < input.files.length; i++) {
             const file = input.files[i];
             const path = file.webkitRelativePath;
             const parts = path.split('/');
             totalSize += file.size;
             
-            // Store the path in our global array
+            // Store the path and filename for debugging
             if (path) {
                 window.filePaths.push(path);
+                window.fileNames.push(file.name);
                 console.log(`Stored path for file ${i}: ${file.name} → ${path}`);
+            } else {
+                console.warn(`No relative path for file: ${file.name}`);
             }
             
             // Skip the root folder (which is the selected folder name)
@@ -254,11 +259,34 @@ document.body.addEventListener('htmx:configRequest', function(evt) {
         if (window.filePaths && window.filePaths.length > 0) {
             console.log(`Adding ${window.filePaths.length} file paths to the request`);
             
+            // Create a map to ensure unique mappings even with duplicate filenames
+            const uniquePathMap = {};
+            for (let i = 0; i < window.filePaths.length; i++) {
+                const path = window.filePaths[i];
+                const fileName = window.fileNames[i];
+                uniquePathMap[path] = fileName;
+                
+                // Log for debugging
+                console.log(`Mapping ${fileName} to ${path}`);
+            }
+            
             // Add the file paths as a JSON array
             evt.detail.parameters['file_paths_json'] = JSON.stringify(window.filePaths);
             
-            // For debugging, add a count
+            // Also add the file names for better debugging
+            if (window.fileNames && window.fileNames.length > 0) {
+                evt.detail.parameters['file_names_json'] = JSON.stringify(window.fileNames);
+            }
+            
+            // For debugging, add counts
             evt.detail.parameters['file_paths_count'] = window.filePaths.length;
+            evt.detail.parameters['file_count'] = document.getElementById('files').files.length;
+            
+            // Log the first 5 paths for debugging
+            console.log("Sample paths:");
+            for (let i = 0; i < Math.min(5, window.filePaths.length); i++) {
+                console.log(`  ${i+1}. ${window.filePaths[i]}`);
+            }
         } else {
             console.warn('No file paths available for upload');
         }
@@ -293,6 +321,8 @@ document.body.addEventListener('htmx:afterRequest', function(evt) {
     // Stop the progress bar simulation
     stopUploadTimer();
     
+    console.log('HTMX afterRequest event triggered', evt.detail);
+    
     if (evt.detail.successful && evt.detail.xhr.status === 200) {
         // Complete the progress bar
         document.getElementById('progress-bar').style.width = '100%';
@@ -300,13 +330,33 @@ document.body.addEventListener('htmx:afterRequest', function(evt) {
         
         // If the response contains a redirect URL, navigate to it
         const redirectUrl = evt.detail.xhr.getResponseHeader('HX-Redirect');
+        console.log('Redirect URL from header:', redirectUrl);
+        
         if (redirectUrl) {
-            window.location.href = redirectUrl;
+            console.log('Redirecting to:', redirectUrl);
+            setTimeout(() => {
+                window.location.href = redirectUrl;
+            }, 500); // Short delay to ensure the user sees the success message
+        } else {
+            // Fallback redirect if the header is missing
+            console.log('No redirect header found, using fallback redirect');
+            setTimeout(() => {
+                window.location.href = '/storage/dashboard/';
+            }, 1000);
         }
     } else {
         // Reset the progress bar on error
         document.getElementById('progress-bar').style.width = '0%';
         document.getElementById('progress-text').textContent = '0%';
+    }
+});
+
+// Custom event for redirect triggered via HX-Trigger
+document.body.addEventListener('redirectNow', function(evt) {
+    console.log('Received redirectNow event:', evt.detail);
+    if (evt.detail && evt.detail.url) {
+        console.log('Redirecting to URL from event:', evt.detail.url);
+        window.location.href = evt.detail.url;
     }
 });
 

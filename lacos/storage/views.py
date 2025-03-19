@@ -35,6 +35,7 @@ def upload_folder(request):
     files = request.FILES.getlist("files")
     
     is_htmx = request.headers.get('HX-Request') == 'true'
+    logger.info(f"HTMX request detected: {is_htmx}")
     
     if not folder_name:
         messages.error(request, "Folder name is required")
@@ -73,24 +74,52 @@ def upload_folder(request):
     # Extract file paths from the request - now using JSON array
     file_paths = {}
     file_paths_json = request.POST.get('file_paths_json')
+    file_names_json = request.POST.get('file_names_json')
     
-    if file_paths_json:
+    if file_paths_json and file_names_json:
         try:
             import json
             paths_list = json.loads(file_paths_json)
-            logger.info(f"Parsed JSON paths list with {len(paths_list)} items")
+            names_list = json.loads(file_names_json)
             
-            # Associate paths with files by index
-            for i, file in enumerate(files):
-                if i < len(paths_list):
-                    file_paths[file.name] = paths_list[i]
-                    logger.info(f"Mapped file {file.name} to path {paths_list[i]}")
-                else:
-                    logger.warning(f"No path information found for file {file.name} (index {i} out of range)")
+            logger.info(f"Parsed JSON paths list with {len(paths_list)} items")
+            logger.info(f"Parsed JSON names list with {len(names_list)} items")
+            
+            # First, create a mapping between Django's file names and the original file names
+            # Django might add suffixes like '_2' to disambiguate files with the same name
+            django_file_map = {}
+            original_name_map = {}
+            
+            # Create a list of all uploaded original filenames (from names_list)
+            # and all the Django-modified filenames (from files list)
+            django_filenames = [f.name for f in files]
+            
+            logger.info("Django received filenames: " + str(django_filenames))
+            logger.info("Original filenames: " + str(names_list))
+            
+            # Match original filenames with Django filenames
+            for i, original_name in enumerate(names_list):
+                if i < len(django_filenames):
+                    django_name = django_filenames[i]
+                    django_file_map[original_name] = django_name
+                    original_name_map[django_name] = original_name
+                    logger.info(f"Mapped original name '{original_name}' to Django name '{django_name}'")
+            
+            # Now create the file paths using the correct Django filenames
+            for i, path in enumerate(paths_list):
+                if i < len(names_list):
+                    original_name = names_list[i]
+                    if original_name in django_file_map:
+                        django_name = django_file_map[original_name]
+                        file_paths[path] = django_name
+                        logger.info(f"Mapped path '{path}' to Django file '{django_name}' (original: '{original_name}')")
+                    else:
+                        logger.warning(f"Could not find Django filename for original name '{original_name}'")
+            
         except json.JSONDecodeError as e:
-            logger.error(f"Error parsing file_paths_json: {e}")
+            logger.error(f"Error parsing JSON data: {e}")
     else:
-        logger.warning("No file_paths_json found in request")
+        logger.warning("Missing file_paths_json or file_names_json in request")
     
     # Log summary of file paths
     logger.info(f"Extracted path information for {len(file_paths)}/{len(files)} files")
@@ -101,21 +130,45 @@ def upload_folder(request):
     
     if result["success"]:
         logger.info(f"Successfully uploaded folder {folder_name} to ingest bucket")
+        
+        # Build the success message, making sure all expected keys are available
+        target_prefix = result.get('target_prefix', folder_name + '/')
         success_message = (
             f"Successfully uploaded {result['total_files']} files "
-            f"({result['total_size_formatted']}) to {result['target_bucket']}/{result['target_prefix']}"
+            f"({result['total_size_formatted']}) to {result['target_bucket']}/{target_prefix}"
         )
         messages.success(request, success_message)
         
         if is_htmx:
+            # Prepare redirect URL
+            dashboard_url = request.build_absolute_uri('/storage/dashboard/')
+            logger.info(f"Setting redirect URL: {dashboard_url}")
+            
+            # Render the success template
             response = render(request, "upload_status.html", {
                 "success": True,
                 "message": success_message,
-                "result": result
+                "result": result,
+                "redirect_url": dashboard_url  # Add this for template use if needed
             })
-            response['HX-Redirect'] = request.build_absolute_uri('/storage/dashboard/')
+            
+            # Set HTMX headers for client-side redirection
+            response['HX-Redirect'] = dashboard_url
+            logger.info("HX-Redirect header set, expecting client redirect")
+            
+            # Also set a trigger for display of messages
+            response['HX-Trigger'] = json.dumps({
+                'showMessage': {
+                    'level': 'success',
+                    'message': success_message
+                },
+                'redirectNow': {
+                    'url': dashboard_url
+                }
+            })
+            
             return response
-        return redirect("storage:upload_success")
+        return redirect("storage:archivist_dashboard")
     else:
         error_message = f"Failed to upload folder: {result.get('error', 'Unknown error')}"
         logger.error(error_message)
