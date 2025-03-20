@@ -81,7 +81,7 @@ Recursive folder structure template that supports unlimited nesting
                                         </div>
                                         
                                         <ul class="folder-contents pl-6 mt-1 hidden">
-                                            {% include "folder_structure_partial.html" with structure=child bucket_type=bucket_type %}
+                                            {% include "dashboard/folder_structure_partial.html" with structure=child bucket_type=bucket_type %}
                                         </ul>
                                     </li>
                                 {% elif child.type == 'file' %}
