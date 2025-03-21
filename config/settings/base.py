@@ -88,8 +88,7 @@ LOCAL_APPS = [
     "lacos.users",
     "lacos.blam",
     "lacos.storage",
-    #tailwind
-   #"lacos.theme",
+    "lacos.rest",
 ]
 # https://docs.djangoproject.com/en/dev/ref/settings/#installed-apps
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
