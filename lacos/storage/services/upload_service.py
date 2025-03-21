@@ -221,7 +221,27 @@ class UploadService(BaseStorageService):
                 part_count=part_count
             )
             
+            # Validate the result has all required fields
             if result['success']:
+                # Extra validation to ensure presigned_post is properly structured
+                if 'presigned_post' not in result:
+                    logger.error(f"Missing presigned_post in result for {file_name}")
+                    failures.append({
+                        'file_meta': file_meta,
+                        'error': "Missing presigned_post in server response"
+                    })
+                    continue
+                    
+                # Validate that presigned_post has url and fields
+                presigned_post = result['presigned_post']
+                if not isinstance(presigned_post, dict) or 'url' not in presigned_post or 'fields' not in presigned_post:
+                    logger.error(f"Invalid presigned_post structure for {file_name}: {presigned_post}")
+                    failures.append({
+                        'file_meta': file_meta,
+                        'error': f"Invalid presigned_post format. Keys: {list(presigned_post.keys()) if isinstance(presigned_post, dict) else 'not a dict'}"
+                    })
+                    continue
+                
                 results.append(result)
             else:
                 failures.append({

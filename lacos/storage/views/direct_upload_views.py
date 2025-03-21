@@ -38,7 +38,8 @@ def direct_upload(request):
                 result = upload_service.generate_batch_presigned_posts(
                     files_metadata=files_metadata,
                     path_prefix=folder_name,
-                    expiration=3600
+                    expiration=3600,
+                    use_multipart=False  # Explicitly use single-part uploads
                 )
                 
                 # Clear the session data to prevent reuse
@@ -52,10 +53,37 @@ def direct_upload(request):
                         first_url = result["presigned_posts"][0].get("presigned_post", {}).get("url", "")
                         logger.info(f"Sample presigned URL: {first_url}")
                     
+                    # Log the fields for the first presigned post
+                    first_fields = result["presigned_posts"][0].get("presigned_post", {}).get("fields", {})
+                    logger.info(f"Sample presigned fields: {json.dumps(first_fields)}")
+                    
+                    # Transform the presigned_posts to a client-friendly format
+                    client_friendly_posts = []
+                    for post in result["presigned_posts"]:
+                        # Check if this post has the required structure
+                        if not post.get('presigned_post'):
+                            logger.warning(f"Missing presigned_post in data for {post.get('file_name')}")
+                            continue
+                        
+                        # Extract the presigned_post data and merge with the post properties
+                        presigned_post = post['presigned_post']
+                        client_post = {
+                            'file_name': post.get('file_name', ''),
+                            's3_key': post.get('s3_key', ''),
+                            'file_type': post.get('file_type', ''),
+                            'url': presigned_post.get('url', ''),
+                            'fields': presigned_post.get('fields', {}),
+                        }
+                        client_friendly_posts.append(client_post)
+                    
+                    logger.info(f"Transformed {len(client_friendly_posts)} posts to client-friendly format")
+                    if client_friendly_posts:
+                        logger.debug(f"Sample transformed post: {json.dumps(client_friendly_posts[0])}")
+                    
                     # Return the presigned URLs to the upload_stage.html template
                     return render(request, "upload/upload_stage.html", {
-                        "presigned_posts": result["presigned_posts"],
-                        "presigned_posts_json": json.dumps(result["presigned_posts"])
+                        "presigned_posts": client_friendly_posts,
+                        "presigned_posts_json": json.dumps(client_friendly_posts)
                     })
                 else:
                     error_msg = result.get('error', 'Unknown error')
@@ -129,7 +157,8 @@ def direct_upload(request):
         result = upload_service.generate_batch_presigned_posts(
             files_metadata=files_metadata,
             path_prefix=folder_name,
-            expiration=3600
+            expiration=3600,
+            use_multipart=False  # Explicitly use single-part uploads
         )
         
         if result["success"]:
@@ -143,10 +172,33 @@ def direct_upload(request):
                 first_fields = result["presigned_posts"][0].get("presigned_post", {}).get("fields", {})
                 logger.info(f"Sample presigned fields: {json.dumps(first_fields)}")
             
+            # Transform the presigned_posts to a client-friendly format
+            client_friendly_posts = []
+            for post in result["presigned_posts"]:
+                # Check if this post has the required structure
+                if not post.get('presigned_post'):
+                    logger.warning(f"Missing presigned_post in data for {post.get('file_name')}")
+                    continue
+                
+                # Extract the presigned_post data and merge with the post properties
+                presigned_post = post['presigned_post']
+                client_post = {
+                    'file_name': post.get('file_name', ''),
+                    's3_key': post.get('s3_key', ''),
+                    'file_type': post.get('file_type', ''),
+                    'url': presigned_post.get('url', ''),
+                    'fields': presigned_post.get('fields', {}),
+                }
+                client_friendly_posts.append(client_post)
+            
+            logger.info(f"Transformed {len(client_friendly_posts)} posts to client-friendly format")
+            if client_friendly_posts:
+                logger.debug(f"Sample transformed post: {json.dumps(client_friendly_posts[0])}")
+            
             # Return the presigned URLs to the upload_stage.html template
             return render(request, "upload/upload_stage.html", {
-                "presigned_posts": result["presigned_posts"],
-                "presigned_posts_json": json.dumps(result["presigned_posts"])
+                "presigned_posts": client_friendly_posts,
+                "presigned_posts_json": json.dumps(client_friendly_posts)
             })
         else:
             error_msg = result.get('error', 'Unknown error')
@@ -244,7 +296,8 @@ def process_upload(request):
         result = upload_service.generate_batch_presigned_posts(
             files_metadata=files_metadata,
             path_prefix=folder_name,
-            expiration=3600
+            expiration=3600,
+            use_multipart=False  # Explicitly use single-part uploads
         )
         
         if result["success"]:
@@ -258,10 +311,33 @@ def process_upload(request):
                 first_fields = result["presigned_posts"][0].get("presigned_post", {}).get("fields", {})
                 logger.info(f"Sample presigned fields: {json.dumps(first_fields)}")
             
+            # Transform the presigned_posts to a client-friendly format
+            client_friendly_posts = []
+            for post in result["presigned_posts"]:
+                # Check if this post has the required structure
+                if not post.get('presigned_post'):
+                    logger.warning(f"Missing presigned_post in data for {post.get('file_name')}")
+                    continue
+                
+                # Extract the presigned_post data and merge with the post properties
+                presigned_post = post['presigned_post']
+                client_post = {
+                    'file_name': post.get('file_name', ''),
+                    's3_key': post.get('s3_key', ''),
+                    'file_type': post.get('file_type', ''),
+                    'url': presigned_post.get('url', ''),
+                    'fields': presigned_post.get('fields', {}),
+                }
+                client_friendly_posts.append(client_post)
+            
+            logger.info(f"Transformed {len(client_friendly_posts)} posts to client-friendly format")
+            if client_friendly_posts:
+                logger.debug(f"Sample transformed post: {json.dumps(client_friendly_posts[0])}")
+            
             # Return the upload stage template directly
             return render(request, "upload/upload_stage.html", {
-                "presigned_posts": result["presigned_posts"],
-                "presigned_posts_json": json.dumps(result["presigned_posts"])
+                "presigned_posts": client_friendly_posts,
+                "presigned_posts_json": json.dumps(client_friendly_posts)
             })
         else:
             error_msg = result.get('error', 'Unknown error')
@@ -392,7 +468,8 @@ def debug_presigned_url(request):
     result = upload_service.generate_presigned_post(
         file_name="test.txt",
         file_type="text/plain",
-        path_prefix="debug"
+        path_prefix="debug",
+        use_multipart=False  # Explicitly use single-part uploads
     )
     
     # Log the result

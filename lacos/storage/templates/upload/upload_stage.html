@@ -55,85 +55,50 @@
   <div id="upload-status" hx-swap-oob="true"></div>
 </div>
 
+<script src="{% static 'js/s3uploader.js' %}"></script>
 <script>
   // Store the presigned posts data
   const presignedPosts = JSON.parse(document.getElementById('presigned-data').textContent);
   
+  // Debug: Log the structure of the presigned posts
+  console.log('Full presignedPosts data:', presignedPosts);
+  if (presignedPosts && presignedPosts.length > 0) {
+    console.log('First presigned post sample:', JSON.stringify(presignedPosts[0], null, 2));
+    console.log('Has presigned_post property:', presignedPosts[0].hasOwnProperty('presigned_post'));
+    console.log('Has fields property:', presignedPosts[0].hasOwnProperty('fields'));
+    // Check nested structure if it exists
+    if (presignedPosts[0].presigned_post) {
+      console.log('presigned_post.url:', presignedPosts[0].presigned_post.url);
+      console.log('presigned_post.fields:', presignedPosts[0].presigned_post.fields);
+    }
+  }
+  
   // Start uploads when page loads
   document.addEventListener('DOMContentLoaded', function() {
-    uploadFiles(presignedPosts);
-  });
-  
-  function uploadFiles(posts) {
-    let completed = 0;
-    const total = posts.length;
-    
-    posts.forEach((post, index) => {
-      const formData = new FormData();
-      
-      // Add all the fields from the presigned post
-      Object.keys(post.fields).forEach(key => {
-        formData.append(key, post.fields[key]);
-      });
-      
-      // Get the file from the original form
-      const fileInput = document.getElementById('files');
-      const file = fileInput.files[index];
-      formData.append('file', file);
-      
-      // Upload directly to S3
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', post.url);
-      
-      xhr.upload.onprogress = function(e) {
-        if (e.lengthComputable) {
-          const percentComplete = Math.round((e.loaded / e.total) * 100);
-          updateFileProgress(index + 1, percentComplete);
-        }
-      };
-      
-      xhr.onload = function() {
-        if (xhr.status === 204 || xhr.status === 200) {
-          completed++;
-          updateFileProgress(index + 1, 100);
-          updateOverallProgress(completed, total);
-          
-          if (completed === total) {
-            // All uploads complete, notify server
-            htmx.ajax('POST', '{% url "storage:upload_complete" %}', {
-              target: '#upload-status',
-              swap: 'innerHTML',
-              values: {
-                'folder_name': '{{ folder_name }}',
-                'uploaded_files': JSON.stringify(posts.map(p => ({
-                  file_name: p.file_name,
-                  s3_key: p.s3_key
-                })))
-              }
-            });
-          }
-        } else {
-          console.error('Upload failed for', post.file_name);
-        }
-      };
-      
-      xhr.send(formData);
+    // Use the S3Upload library to handle uploads
+    S3Upload.uploadFiles(presignedPosts, {
+      fileInputId: 'files',
+      progressBarId: 'progress-bar',
+      progressTextId: 'progress-text',
+      verifyEndpoint: '{% url "storage:mark_uploads_complete" %}',
+      onComplete: function(result) {
+        // Show success message
+        document.getElementById('upload-status').innerHTML = `
+          <div class="p-4 mb-4 bg-green-50 border border-green-200 text-green-800 rounded">
+            <h4 class="text-lg font-medium">Upload Successful!</h4>
+            <p>${result.total_verified} files uploaded successfully (${result.total_size_formatted})</p>
+          </div>`;
+      },
+      onError: function(error) {
+        // Show error message
+        document.getElementById('upload-status').innerHTML = `
+          <div class="p-4 mb-4 bg-red-50 border border-red-200 text-red-800 rounded">
+            <h4 class="text-lg font-medium">Upload Failed</h4>
+            <p>${error.error || 'Unknown error occurred'}</p>
+          </div>`;
+      }
     });
-  }
-  
-  function updateFileProgress(fileIndex, percent) {
-    const fileItem = document.getElementById(`file-${fileIndex}`);
-    const progressBar = fileItem.querySelector('.file-progress-bar');
-    progressBar.style.width = `${percent}%`;
-    progressBar.textContent = `${percent}%`;
-  }
-  
-  function updateOverallProgress(completed, total) {
-    const percent = Math.round((completed / total) * 100);
-    const progressBar = document.getElementById('overall-progress');
-    progressBar.style.width = `${percent}%`;
-    progressBar.textContent = `${percent}%`;
-  }
+  });
 </script>
 
 
