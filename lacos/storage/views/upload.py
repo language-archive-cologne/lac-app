@@ -6,6 +6,7 @@ from django.contrib import messages
 from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
 from lacos.storage.services.bucket_service import BucketService
+from lacos.storage.services.upload_service import UploadService
 
 logger = logging.getLogger(__name__)
 
@@ -118,8 +119,8 @@ def upload_folder(request):
     logger.info(f"Extracted path information for {len(file_paths)}/{len(files)} files")
     
     # Upload files directly to S3 without saving to disk first
-    bucket_service = BucketService()
-    result = bucket_service.upload_files_directly(files, folder_name, file_paths=file_paths)
+    upload_service = UploadService()
+    result = upload_service.upload_files_directly(files, folder_name, file_paths=file_paths)
     
     if result["success"]:
         logger.info(f"Successfully uploaded folder {folder_name} to ingest bucket")
