@@ -1,6 +1,7 @@
 import logging
 import time
 import os
+import json
 from typing import Dict, Any, List, Tuple, Set, Optional
 
 import boto3
@@ -86,30 +87,23 @@ class UploadService(BaseStorageService):
                 ExpiresIn=expiration
             )
             
-            # Log detailed information about the generated URL for debugging
+            # Log the generated URL for debugging
             logger.info(f"Generated presigned URL: {presigned_post['url']}")
-            logger.info(f"Generated presigned fields: {presigned_post['fields']}")
+            logger.info(f"Generated presigned fields: {json.dumps(presigned_post['fields'])}")
             
-            # For easier browser debugging, include formatted examples
-            curl_example = self._format_curl_example(presigned_post, file_name, file_type)
-            logger.debug(f"Example curl command: {curl_example}")
-            
-            # Return a standardized structure matching what the client expects
             return {
                 'success': True,
+                'presigned_post': presigned_post,
+                's3_key': file_key,
                 'file_name': file_name,
                 'file_type': file_type,
-                's3_key': file_key,
-                'url': presigned_post['url'],
-                'fields': presigned_post['fields']
+                'expires_in': expiration  # Add the expiration time to the result
             }
         except Exception as e:
             logger.error(f"Error generating presigned POST for {file_name}: {str(e)}")
-            logger.exception(e)  # Log the full exception with traceback
             return {
                 'success': False,
-                'error': str(e),
-                'file_name': file_name
+                'error': str(e)
             }
     
     def _format_curl_example(self, presigned_post: Dict[str, Any], file_name: str, file_type: str) -> str:
@@ -314,9 +308,270 @@ class UploadService(BaseStorageService):
             }
     
     def _format_size(self, size_bytes: int) -> str:
-        """Format bytes to human-readable size"""
-        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-            if size_bytes < 1024.0:
-                return f"{size_bytes:.2f} {unit}"
-            size_bytes /= 1024.0
-        return f"{size_bytes:.2f} PB" 
+        """
+        Format a size in bytes to a human-readable format.
+        
+        Args:
+            size_bytes (int): Size in bytes
+            
+        Returns:
+            str: Formatted size string
+        """
+        # Define size units
+        units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+        size = float(size_bytes)
+        unit_index = 0
+        
+        # Find the appropriate unit
+        while size >= 1024 and unit_index < len(units) - 1:
+            size /= 1024
+            unit_index += 1
+        
+        # Format with proper precision
+        if unit_index == 0:
+            return f"{int(size)} {units[unit_index]}"
+        else:
+            return f"{size:.2f} {units[unit_index]}"
+
+    # ----- Multipart Upload Methods -----
+
+    def initialize_multipart_upload(self, file_name: str, file_type: str, 
+                                  path_prefix: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Initialize a multipart upload to S3.
+        
+        Args:
+            file_name (str): Name of the file to upload
+            file_type (str): MIME type of the file
+            path_prefix (str, optional): Folder path to prepend to the file name
+            
+        Returns:
+            Dict[str, Any]: Dictionary containing upload ID and S3 key or error information
+        """
+        try:
+            # Generate a clean S3 key for the file
+            s3_key = self._generate_file_key(file_name, path_prefix)
+            
+            logger.info(f"Initializing multipart upload for {s3_key}")
+            
+            # Create a multipart upload
+            response = self.s3_client.create_multipart_upload(
+                Bucket=self.ingest_bucket,
+                Key=s3_key,
+                ContentType=file_type
+            )
+            
+            upload_id = response['UploadId']
+            logger.info(f"Multipart upload initialized: {upload_id}")
+            
+            return {
+                'success': True,
+                'upload_id': upload_id,
+                's3_key': s3_key,
+                'file_name': file_name,
+                'file_type': file_type
+            }
+        except Exception as e:
+            logger.error(f"Error initializing multipart upload for {file_name}: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                'file_name': file_name
+            }
+    
+    def get_upload_part_urls(self, s3_key: str, upload_id: str, 
+                           part_count: int, expiration: int = 3600) -> Dict[str, Any]:
+        """
+        Generate presigned URLs for each part of a multipart upload.
+        
+        Args:
+            s3_key (str): The S3 key for the file
+            upload_id (str): The multipart upload ID
+            part_count (int): Number of parts to generate URLs for
+            expiration (int): Time in seconds for the URLs to be valid
+            
+        Returns:
+            Dict[str, Any]: Dictionary containing presigned URLs for each part or error information
+        """
+        try:
+            presigned_urls = []
+            
+            for part_number in range(1, part_count + 1):
+                # Generate a presigned URL for this part
+                url = self.s3_client.generate_presigned_url(
+                    'upload_part',
+                    Params={
+                        'Bucket': self.ingest_bucket,
+                        'Key': s3_key,
+                        'UploadId': upload_id,
+                        'PartNumber': part_number
+                    },
+                    ExpiresIn=expiration
+                )
+                
+                presigned_urls.append({
+                    'part_number': part_number,
+                    'url': url
+                })
+            
+            logger.info(f"Generated {part_count} part upload URLs for {s3_key}")
+            
+            return {
+                'success': True,
+                'presigned_urls': presigned_urls,
+                's3_key': s3_key,
+                'upload_id': upload_id,
+                'part_count': part_count
+            }
+        except Exception as e:
+            logger.error(f"Error generating part upload URLs for {s3_key}: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                's3_key': s3_key,
+                'upload_id': upload_id
+            }
+    
+    def complete_multipart_upload(self, s3_key: str, upload_id: str, 
+                                parts: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Complete a multipart upload by assembling all parts.
+        
+        Args:
+            s3_key (str): The S3 key for the file
+            upload_id (str): The multipart upload ID
+            parts (List[Dict[str, Any]]): List of dictionaries with part_number and etag for each part
+            
+        Returns:
+            Dict[str, Any]: Dictionary containing status information or error information
+        """
+        try:
+            # Format the parts list for the API call
+            multipart_parts = [
+                {
+                    'PartNumber': part['part_number'],
+                    'ETag': part['etag']
+                }
+                for part in parts
+            ]
+            
+            # Sort parts by part number to ensure correct order
+            multipart_parts.sort(key=lambda x: x['PartNumber'])
+            
+            logger.info(f"Completing multipart upload for {s3_key} with {len(multipart_parts)} parts")
+            
+            # Complete the multipart upload
+            response = self.s3_client.complete_multipart_upload(
+                Bucket=self.ingest_bucket,
+                Key=s3_key,
+                UploadId=upload_id,
+                MultipartUpload={
+                    'Parts': multipart_parts
+                }
+            )
+            
+            logger.info(f"Multipart upload completed: {response}")
+            
+            # Check if file exists and get metadata
+            head_response = self.s3_client.head_object(
+                Bucket=self.ingest_bucket,
+                Key=s3_key
+            )
+            
+            file_size = head_response.get('ContentLength', 0)
+            
+            return {
+                'success': True,
+                's3_key': s3_key,
+                'location': response.get('Location', ''),
+                'bucket': self.ingest_bucket,
+                'key': s3_key,
+                'etag': response.get('ETag', '').strip('"'),
+                'file_size': file_size,
+                'file_size_formatted': self._format_size(file_size)
+            }
+        except Exception as e:
+            logger.error(f"Error completing multipart upload for {s3_key}: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                's3_key': s3_key,
+                'upload_id': upload_id
+            }
+    
+    def abort_multipart_upload(self, s3_key: str, upload_id: str) -> Dict[str, Any]:
+        """
+        Abort a multipart upload and clean up any uploaded parts.
+        
+        Args:
+            s3_key (str): The S3 key for the file
+            upload_id (str): The multipart upload ID
+            
+        Returns:
+            Dict[str, Any]: Dictionary containing status information or error information
+        """
+        try:
+            logger.info(f"Aborting multipart upload for {s3_key}")
+            
+            # Abort the multipart upload
+            self.s3_client.abort_multipart_upload(
+                Bucket=self.ingest_bucket,
+                Key=s3_key,
+                UploadId=upload_id
+            )
+            
+            logger.info(f"Multipart upload aborted: {upload_id}")
+            
+            return {
+                'success': True,
+                's3_key': s3_key,
+                'upload_id': upload_id
+            }
+        except Exception as e:
+            logger.error(f"Error aborting multipart upload for {s3_key}: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                's3_key': s3_key,
+                'upload_id': upload_id
+            }
+    
+    def list_multipart_uploads(self) -> Dict[str, Any]:
+        """
+        List all in-progress multipart uploads.
+        
+        Returns:
+            Dict[str, Any]: Dictionary containing list of uploads or error information
+        """
+        try:
+            logger.info(f"Listing multipart uploads for bucket {self.ingest_bucket}")
+            
+            # List multipart uploads
+            response = self.s3_client.list_multipart_uploads(
+                Bucket=self.ingest_bucket
+            )
+            
+            uploads = []
+            
+            # Extract upload information
+            for upload in response.get('Uploads', []):
+                uploads.append({
+                    's3_key': upload.get('Key', ''),
+                    'upload_id': upload.get('UploadId', ''),
+                    'initiated': upload.get('Initiated', ''),
+                    'initiator': upload.get('Initiator', {}).get('DisplayName', '')
+                })
+            
+            logger.info(f"Found {len(uploads)} in-progress multipart uploads")
+            
+            return {
+                'success': True,
+                'uploads': uploads,
+                'count': len(uploads)
+            }
+        except Exception as e:
+            logger.error(f"Error listing multipart uploads: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e)
+            } 

@@ -219,4 +219,255 @@ def mark_uploads_complete(request):
             "error": error_message,
             "total_verified": 0,
             "total_failed": len(s3_keys)
-        }) 
+        })
+
+
+# ----- Multipart Upload Views -----
+
+@login_required
+@require_http_methods(["POST"])
+def initialize_multipart_upload(request):
+    """
+    Initialize a multipart upload to S3.
+    
+    This view is called to start a multipart upload process for large files.
+    It initializes the upload in S3 and returns an upload ID that will be used
+    for subsequent part uploads.
+    """
+    try:
+        # Parse request data
+        data = json.loads(request.body)
+        file_name = data.get("file_name")
+        file_type = data.get("file_type")
+        path_prefix = data.get("path_prefix")
+        
+        # Validate required fields
+        if not file_name or not file_type:
+            error_message = "File name and type are required"
+            logger.warning(error_message)
+            return JsonResponse({"success": False, "error": error_message})
+        
+        logger.info(f"Initializing multipart upload for {file_name}")
+        
+        # Use the upload service to initialize the multipart upload
+        upload_service = UploadService()
+        result = upload_service.initialize_multipart_upload(
+            file_name=file_name,
+            file_type=file_type,
+            path_prefix=path_prefix
+        )
+        
+        if result["success"]:
+            logger.info(f"Multipart upload initialized with ID: {result['upload_id']}")
+            return JsonResponse(result)
+        else:
+            logger.error(f"Failed to initialize multipart upload: {result.get('error')}")
+            return JsonResponse(result)
+    
+    except json.JSONDecodeError:
+        error_message = "Invalid JSON data"
+        logger.warning(error_message)
+        return JsonResponse({"success": False, "error": error_message})
+    
+    except Exception as e:
+        error_message = f"Error initializing multipart upload: {str(e)}"
+        logger.error(error_message)
+        return JsonResponse({"success": False, "error": error_message})
+
+
+@login_required
+@require_http_methods(["POST"])
+def get_part_upload_urls(request):
+    """
+    Generate presigned URLs for each part of a multipart upload.
+    
+    This view is called after a multipart upload has been initialized to get
+    presigned URLs for uploading each part of the file directly to S3.
+    """
+    try:
+        # Parse request data
+        data = json.loads(request.body)
+        s3_key = data.get("s3_key")
+        upload_id = data.get("upload_id")
+        part_count = data.get("part_count")
+        expiration = data.get("expiration", 3600)  # Default to 1 hour
+        
+        # Validate required fields
+        if not s3_key or not upload_id or not part_count:
+            error_message = "S3 key, upload ID, and part count are required"
+            logger.warning(error_message)
+            return JsonResponse({"success": False, "error": error_message})
+        
+        # Validate part count
+        try:
+            part_count = int(part_count)
+            if part_count <= 0 or part_count > 10000:  # S3 allows up to 10,000 parts
+                raise ValueError("Part count must be between 1 and 10,000")
+        except (ValueError, TypeError) as e:
+            error_message = f"Invalid part count: {str(e)}"
+            logger.warning(error_message)
+            return JsonResponse({"success": False, "error": error_message})
+        
+        logger.info(f"Generating {part_count} part upload URLs for {s3_key}")
+        
+        # Use the upload service to get presigned URLs for each part
+        upload_service = UploadService()
+        result = upload_service.get_upload_part_urls(
+            s3_key=s3_key,
+            upload_id=upload_id,
+            part_count=part_count,
+            expiration=expiration
+        )
+        
+        if result["success"]:
+            logger.info(f"Generated {len(result['presigned_urls'])} part upload URLs")
+            return JsonResponse(result)
+        else:
+            logger.error(f"Failed to generate part upload URLs: {result.get('error')}")
+            return JsonResponse(result)
+    
+    except json.JSONDecodeError:
+        error_message = "Invalid JSON data"
+        logger.warning(error_message)
+        return JsonResponse({"success": False, "error": error_message})
+    
+    except Exception as e:
+        error_message = f"Error generating part upload URLs: {str(e)}"
+        logger.error(error_message)
+        return JsonResponse({"success": False, "error": error_message})
+
+
+@login_required
+@require_http_methods(["POST"])
+def complete_multipart_upload(request):
+    """
+    Complete a multipart upload by assembling all uploaded parts.
+    
+    This view is called after all parts have been uploaded to complete the
+    multipart upload process and finalize the file in S3.
+    """
+    try:
+        # Parse request data
+        data = json.loads(request.body)
+        s3_key = data.get("s3_key")
+        upload_id = data.get("upload_id")
+        parts = data.get("parts")
+        
+        # Validate required fields
+        if not s3_key or not upload_id or not parts:
+            error_message = "S3 key, upload ID, and parts are required"
+            logger.warning(error_message)
+            return JsonResponse({"success": False, "error": error_message})
+        
+        # Validate parts structure
+        if not isinstance(parts, list) or not all(
+            isinstance(part, dict) and 'part_number' in part and 'etag' in part
+            for part in parts
+        ):
+            error_message = "Parts must be a list of objects with part_number and etag properties"
+            logger.warning(error_message)
+            return JsonResponse({"success": False, "error": error_message})
+        
+        logger.info(f"Completing multipart upload for {s3_key} with {len(parts)} parts")
+        
+        # Use the upload service to complete the multipart upload
+        upload_service = UploadService()
+        result = upload_service.complete_multipart_upload(
+            s3_key=s3_key,
+            upload_id=upload_id,
+            parts=parts
+        )
+        
+        if result["success"]:
+            logger.info(f"Multipart upload completed for {s3_key}")
+            return JsonResponse(result)
+        else:
+            logger.error(f"Failed to complete multipart upload: {result.get('error')}")
+            return JsonResponse(result)
+    
+    except json.JSONDecodeError:
+        error_message = "Invalid JSON data"
+        logger.warning(error_message)
+        return JsonResponse({"success": False, "error": error_message})
+    
+    except Exception as e:
+        error_message = f"Error completing multipart upload: {str(e)}"
+        logger.error(error_message)
+        return JsonResponse({"success": False, "error": error_message})
+
+
+@login_required
+@require_http_methods(["POST"])
+def abort_multipart_upload(request):
+    """
+    Abort a multipart upload and clean up any uploaded parts.
+    
+    This view is called to cancel a multipart upload process and remove
+    any partially uploaded parts from S3.
+    """
+    try:
+        # Parse request data
+        data = json.loads(request.body)
+        s3_key = data.get("s3_key")
+        upload_id = data.get("upload_id")
+        
+        # Validate required fields
+        if not s3_key or not upload_id:
+            error_message = "S3 key and upload ID are required"
+            logger.warning(error_message)
+            return JsonResponse({"success": False, "error": error_message})
+        
+        logger.info(f"Aborting multipart upload for {s3_key}")
+        
+        # Use the upload service to abort the multipart upload
+        upload_service = UploadService()
+        result = upload_service.abort_multipart_upload(
+            s3_key=s3_key,
+            upload_id=upload_id
+        )
+        
+        if result["success"]:
+            logger.info(f"Multipart upload aborted for {s3_key}")
+            return JsonResponse(result)
+        else:
+            logger.error(f"Failed to abort multipart upload: {result.get('error')}")
+            return JsonResponse(result)
+    
+    except json.JSONDecodeError:
+        error_message = "Invalid JSON data"
+        logger.warning(error_message)
+        return JsonResponse({"success": False, "error": error_message})
+    
+    except Exception as e:
+        error_message = f"Error aborting multipart upload: {str(e)}"
+        logger.error(error_message)
+        return JsonResponse({"success": False, "error": error_message})
+
+
+@login_required
+@require_http_methods(["GET"])
+def list_multipart_uploads(request):
+    """
+    List all in-progress multipart uploads.
+    
+    This view returns a list of all multipart uploads that have been
+    initialized but not yet completed or aborted.
+    """
+    try:
+        logger.info("Listing in-progress multipart uploads")
+        
+        # Use the upload service to list multipart uploads
+        upload_service = UploadService()
+        result = upload_service.list_multipart_uploads()
+        
+        if result["success"]:
+            logger.info(f"Found {result.get('count', 0)} in-progress multipart uploads")
+            return JsonResponse(result)
+        else:
+            logger.error(f"Failed to list multipart uploads: {result.get('error')}")
+            return JsonResponse(result)
+    
+    except Exception as e:
+        error_message = f"Error listing multipart uploads: {str(e)}"
+        logger.error(error_message)
+        return JsonResponse({"success": False, "error": error_message}) 

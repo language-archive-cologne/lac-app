@@ -18,6 +18,13 @@ urlpatterns = [
     path("presigned-urls/", views.get_presigned_urls, name="get_presigned_urls"),
     path("verify-uploads/", views.mark_uploads_complete, name="mark_uploads_complete"),
     
+    # Multipart upload API endpoints
+    path("multipart/initialize/", views.initialize_multipart_upload, name="initialize_multipart_upload"),
+    path("multipart/get-part-urls/", views.get_part_upload_urls, name="get_part_upload_urls"),
+    path("multipart/complete/", views.complete_multipart_upload, name="complete_multipart_upload"),
+    path("multipart/abort/", views.abort_multipart_upload, name="abort_multipart_upload"),
+    path("multipart/list/", views.list_multipart_uploads, name="list_multipart_uploads"),
+    
     # Archivist dashboard
     path("dashboard/", views.archivist_dashboard, name="archivist_dashboard"),
     
