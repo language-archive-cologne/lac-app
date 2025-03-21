@@ -52,7 +52,7 @@ class UploadService(BaseStorageService):
         return clean_file_name
 
     def generate_presigned_post(self, file_name: str, file_type: str, path_prefix: Optional[str] = None, 
-                             expiration: int = 3600) -> Dict[str, Any]:
+                             expiration: int = 3600, use_multipart: bool = True, part_count: int = 10) -> Dict[str, Any]:
         """
         Generate a presigned URL for direct upload to S3.
         
@@ -61,6 +61,8 @@ class UploadService(BaseStorageService):
             file_type: The MIME type of the file
             path_prefix: Optional prefix for the S3 key
             expiration: Expiration time in seconds
+            use_multipart: Whether to use multipart upload (default: True)
+            part_count: Number of parts for multipart upload (default: 10)
             
         Returns:
             Dictionary with presigned post data
@@ -71,6 +73,37 @@ class UploadService(BaseStorageService):
             
             logger.info(f"Generating presigned upload URL for {file_key}")
             
+            # If multipart upload is requested, use that flow
+            if use_multipart:
+                # Initialize multipart upload
+                init_result = self.initialize_multipart_upload(
+                    file_name=file_name,
+                    file_type=file_type,
+                    path_prefix=path_prefix
+                )
+                
+                if init_result['success']:
+                    # Get presigned URLs for parts
+                    parts_result = self.get_upload_part_urls(
+                        s3_key=init_result['s3_key'],
+                        upload_id=init_result['upload_id'],
+                        part_count=part_count,
+                        expiration=expiration
+                    )
+                    
+                    if parts_result['success']:
+                        return {
+                            'success': True,
+                            'file_name': file_name,
+                            's3_key': file_key,
+                            'file_type': file_type,
+                            'upload_type': 'multipart',
+                            'upload_id': init_result['upload_id'],
+                            'presigned_urls': parts_result['presigned_urls'],
+                            'expires_in': expiration
+                        }
+            
+            # Fall back to single-part upload if multipart is disabled or failed
             # Use the presigned client if available, otherwise use the regular client
             client = getattr(self, 'presigned_client', self.s3_client)
             
@@ -97,7 +130,8 @@ class UploadService(BaseStorageService):
                 's3_key': file_key,
                 'file_name': file_name,
                 'file_type': file_type,
-                'expires_in': expiration  # Add the expiration time to the result
+                'upload_type': 'single',
+                'expires_in': expiration
             }
         except Exception as e:
             logger.error(f"Error generating presigned POST for {file_name}: {str(e)}")
@@ -136,7 +170,9 @@ class UploadService(BaseStorageService):
     
     def generate_batch_presigned_posts(self, files_metadata: List[Dict[str, str]], 
                                     path_prefix: Optional[str] = None,
-                                    expiration: int = 3600) -> Dict[str, Any]:
+                                    expiration: int = 3600,
+                                    use_multipart: bool = True,
+                                    part_count: int = 10) -> Dict[str, Any]:
         """
         Generate multiple presigned URLs for direct upload to S3.
         
@@ -145,6 +181,8 @@ class UploadService(BaseStorageService):
                            May include 'path' to specify a file-specific path.
             path_prefix (str, optional): Folder path to prepend to all file paths
             expiration (int): Time in seconds for the URLs to be valid (default 1 hour)
+            use_multipart (bool): Whether to use multipart upload (default: True)
+            part_count (int): Number of parts for multipart upload (default: 10)
             
         Returns:
             Dict[str, Any]: Dictionary containing the presigned URL data for all files or error information
@@ -178,7 +216,9 @@ class UploadService(BaseStorageService):
                 file_name=file_name,
                 file_type=file_type,
                 path_prefix=effective_path_prefix,
-                expiration=expiration
+                expiration=expiration,
+                use_multipart=use_multipart,
+                part_count=part_count
             )
             
             if result['success']:
