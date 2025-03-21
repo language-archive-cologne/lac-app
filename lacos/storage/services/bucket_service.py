@@ -88,6 +88,21 @@ class BucketService(BaseStorageService):
         """Delegate to collection service to get folder structure."""
         return self.collection_service.get_folder_structure(bucket_name, prefix)
     
+    
+    # OCFL-related methods
+    def move_to_production(self, source_prefix: str) -> Dict[str, Any]:
+        """Move a folder from the ingest bucket to the production bucket using the OCFL service."""
+        logger.info(f"Starting move to production for {source_prefix}")
+        return self.ocfl_service.move_to_production(source_prefix)
+        
+    def _format_size(self, size_bytes: int) -> str:
+        """Format bytes to human-readable size"""
+        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+            if size_bytes < 1024.0:
+                return f"{size_bytes:.2f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.2f} PB"
+
     # Upload-related methods
     def upload_folder_to_bucket(self, local_folder_path: str, bucket_name: str = None, target_prefix: str = "") -> Dict[str, Any]:
         """Delegate to upload service to upload a folder to a bucket."""
@@ -100,9 +115,3 @@ class BucketService(BaseStorageService):
         if bucket_name is None:
             bucket_name = self.ingest_bucket
         return self.upload_service.upload_files_directly(files, folder_name, bucket_name, file_paths)
-    
-    # OCFL-related methods
-    def move_to_production(self, source_prefix: str) -> Dict[str, Any]:
-        """Move a folder from the ingest bucket to the production bucket using the OCFL service."""
-        logger.info(f"Starting move to production for {source_prefix}")
-        return self.ocfl_service.move_to_production(source_prefix)

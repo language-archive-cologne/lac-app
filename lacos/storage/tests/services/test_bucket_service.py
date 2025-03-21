@@ -51,13 +51,10 @@ def mock_bucket_service(mock_s3):
     service.collection_service.ingest_bucket = TEST_BUCKET_NAME
     service.collection_service.production_bucket = TEST_BUCKET_NAME
     
-    # Upload service and its collection service
+    # Upload service
     service.upload_service.s3_client = mock_s3
     service.upload_service.ingest_bucket = TEST_BUCKET_NAME
     service.upload_service.production_bucket = TEST_BUCKET_NAME
-    service.upload_service.collection_service.s3_client = mock_s3
-    service.upload_service.collection_service.ingest_bucket = TEST_BUCKET_NAME
-    service.upload_service.collection_service.production_bucket = TEST_BUCKET_NAME
     
     # OCFL service
     service.ocfl_service.s3_client = mock_s3
@@ -69,7 +66,6 @@ def mock_bucket_service(mock_s3):
     assert service.ingest_bucket == TEST_BUCKET_NAME
     assert service.collection_service.s3_client == mock_s3
     assert service.upload_service.s3_client == mock_s3
-    assert service.upload_service.collection_service.s3_client == mock_s3
     assert service.ocfl_service.s3_client == mock_s3
     
     return service
@@ -200,13 +196,34 @@ def test_direct_upload_and_collection_recognition(mock_s3, mock_bucket_service):
         from django.core.files.uploadedfile import SimpleUploadedFile
         name = file_info["name"]
         content = file_info["content"]
+        
+        # Create the file object
         upload_file = SimpleUploadedFile(
             name=name,
             content=content.encode() if isinstance(content, str) else content,
             content_type="text/plain"
         )
+        
+        # Add it to the list of files to upload
         uploaded_files.append(upload_file)
+        
+        # Set the subcollection path (this will be used for the test file)
         file_paths[name] = f"{collection_name}/{collection_name}/{name}"
+        
+        # For OCFL marker and acl.json, create copies to upload to parent level too
+        if name in ["0=ocfl_object_1.0", "acl.json"]:
+            # Create a second file object with the same content
+            parent_file = SimpleUploadedFile(
+                name=f"parent_{name}",  # Give it a different name to avoid conflict
+                content=content.encode() if isinstance(content, str) else content,
+                content_type="text/plain"
+            )
+            
+            # Add it to the list
+            uploaded_files.append(parent_file)
+            
+            # Set the parent path
+            file_paths[f"parent_{name}"] = f"{collection_name}/{name}"
     
     # Override bucket settings for the upload service as well
     mock_bucket_service.upload_service.s3_client = mock_s3
@@ -273,7 +290,6 @@ def test_service_configuration_consistency(mock_s3, mock_bucket_service):
     assert mock_bucket_service.s3_client == mock_s3
     assert mock_bucket_service.collection_service.s3_client == mock_s3
     assert mock_bucket_service.upload_service.s3_client == mock_s3
-    assert mock_bucket_service.upload_service.collection_service.s3_client == mock_s3
     assert mock_bucket_service.ocfl_service.s3_client == mock_s3
     
     # All services should use the same bucket names
@@ -283,7 +299,5 @@ def test_service_configuration_consistency(mock_s3, mock_bucket_service):
     assert mock_bucket_service.collection_service.production_bucket == TEST_BUCKET_NAME
     assert mock_bucket_service.upload_service.ingest_bucket == TEST_BUCKET_NAME
     assert mock_bucket_service.upload_service.production_bucket == TEST_BUCKET_NAME
-    assert mock_bucket_service.upload_service.collection_service.ingest_bucket == TEST_BUCKET_NAME
-    assert mock_bucket_service.upload_service.collection_service.production_bucket == TEST_BUCKET_NAME
     assert mock_bucket_service.ocfl_service.ingest_bucket == TEST_BUCKET_NAME
     assert mock_bucket_service.ocfl_service.production_bucket == TEST_BUCKET_NAME

@@ -1,10 +1,9 @@
 import logging
 import time
-from typing import Dict, Any, List, Tuple, Set
+import os
+from typing import Dict, Any, List, Tuple, Set, Optional
 
 import boto3
-# Import TransferConfig directly from boto3.s3.transfer
-from boto3.s3.transfer import TransferConfig
 
 from .base_storage_service import BaseStorageService
 
@@ -14,7 +13,9 @@ class UploadService(BaseStorageService):
     """
     Service for handling file uploads to S3/MinIO buckets.
     
-    This simplified service focuses solely on uploading files directly from browser requests.
+    This service focuses on core S3 operations for uploads, completely independent of
+    web frameworks or HTTP concepts. It provides pure business logic that can be used
+    by any presentation layer (REST API, web UI, CLI, etc).
     """
     
     def __init__(self):
@@ -22,393 +23,454 @@ class UploadService(BaseStorageService):
         super().__init__()
         logger.info("UploadService initialized")
 
-    def _configure_transfer(self) -> TransferConfig:
+    def generate_presigned_post(self, file_name: str, file_type: str, path_prefix: Optional[str] = None, 
+                             expiration: int = 3600) -> Dict[str, Any]:
         """
-        Configure S3 transfer parameters for multipart uploads.
-        
-        Returns:
-            TransferConfig: Configured transfer settings for S3 uploads
-        """
-        # Configure multipart upload with optimized settings
-        multipart_threshold = 8 * 1024 * 1024  # 8 MB
-        max_concurrency = 5
-        
-        transfer_config = TransferConfig(
-            multipart_threshold=multipart_threshold,
-            max_concurrency=max_concurrency,
-            multipart_chunksize=multipart_threshold,
-            use_threads=True
-        )
-        
-        logger.info(f"Transfer configuration: threshold={self._format_size(multipart_threshold)}, "
-                  f"max_concurrency={max_concurrency}, chunk_size={self._format_size(multipart_threshold)}")
-        
-        return transfer_config
-    
-    def _upload_single_file(self, file, file_name: str, file_size: int, bucket_name: str, 
-                          relative_path: str, transfer_config) -> Dict[str, Any]:
-        """
-        Upload a single file to S3.
+        Generate a presigned URL for direct upload to S3.
         
         Args:
-            file: The file object to upload
-            file_name: Name of the file
-            file_size: Size of the file in bytes
-            bucket_name: Name of the S3 bucket
-            relative_path: Path where the file will be stored in S3
-            transfer_config: S3 transfer configuration
+            file_name (str): Name of the file to upload
+            file_type (str): MIME type of the file
+            path_prefix (str, optional): Folder path to prepend to the file name
+            expiration (int): Time in seconds for the URL to be valid (default 1 hour)
             
         Returns:
-            Dict containing upload details or error information
+            Dict[str, Any]: Dictionary containing the presigned URL data or error information
         """
         try:
-            logger.info(f"Uploading file: {file_name} → {relative_path}")
+            # Sanitize the file name to work with S3
+            clean_file_name = file_name.replace(' ', '_')
             
-            # Create a buffered copy of the file content to prevent "seek of closed file" errors
-            # when the same file is uploaded to multiple paths
-            try:
-                # First try to read the content (this may fail if file is already closed)
-                file.seek(0)
-                content = file.read()
-                from io import BytesIO
-                file_buffer = BytesIO(content)
-            except (ValueError, AttributeError) as e:
-                # If the file is already closed or doesn't support seek/read, log it
-                logger.warning(f"Could not read file {file_name} - creating empty buffer: {str(e)}")
-                # Create an empty file with the same name as a fallback
-                from io import BytesIO
-                file_buffer = BytesIO(b"")
-                
-            # Upload the file to the exact path provided using the buffer instead of original file
-            self.s3_client.upload_fileobj(
-                file_buffer,
-                bucket_name,
-                relative_path,
-                Config=transfer_config
+            # Build the full S3 key (path)
+            s3_key = clean_file_name
+            if path_prefix:
+                # Ensure the path has a trailing slash but no leading slash
+                path_prefix = path_prefix.strip('/')
+                if path_prefix:
+                    s3_key = f"{path_prefix}/{clean_file_name}"
+            
+            logger.info(f"Generating presigned upload URL for {s3_key}")
+            
+            # Generate the presigned post data
+            presigned_post = self.s3_client.generate_presigned_post(
+                Bucket=self.ingest_bucket,
+                Key=s3_key,
+                Fields={
+                    'Content-Type': file_type
+                },
+                Conditions=[
+                    {'Content-Type': file_type}
+                ],
+                ExpiresIn=expiration
             )
             
-            logger.info(f"✅ Successfully uploaded {file_name} to {bucket_name}/{relative_path}")
-            
             return {
-                "success": True,
-                "name": file_name,
-                "s3_key": relative_path,
-                "size": file_size,
-                "size_formatted": self._format_size(file_size)
+                'success': True,
+                'file_name': file_name,
+                's3_key': s3_key,
+                'url': presigned_post['url'],
+                'fields': presigned_post['fields'],
+                'expires_in': expiration
             }
             
         except Exception as e:
-            logger.error(f"❌ Error uploading {file_name}: {str(e)}")
-            logger.error("Full stack trace:", exc_info=True)
-            
+            logger.error(f"Error generating presigned post for {file_name}: {str(e)}")
             return {
-                "success": False,
-                "name": file_name,
-                "error": str(e)
+                'success': False,
+                'error': str(e),
+                'file_name': file_name
             }
     
-    def _visualize_structure(self, s3_keys_structure: Dict[str, Dict]) -> None:
+    def generate_batch_presigned_posts(self, files_metadata: List[Dict[str, str]], 
+                                    path_prefix: Optional[str] = None,
+                                    expiration: int = 3600) -> Dict[str, Any]:
         """
-        Visualize the structure of files uploaded to S3.
+        Generate multiple presigned URLs for direct upload to S3.
         
         Args:
-            s3_keys_structure: Dictionary mapping S3 keys to file info
+            files_metadata (List[Dict[str, str]]): List of dictionaries with file_name and file_type for each file.
+                           May include 'path' to specify a file-specific path.
+            path_prefix (str, optional): Folder path to prepend to all file paths
+            expiration (int): Time in seconds for the URLs to be valid (default 1 hour)
+            
+        Returns:
+            Dict[str, Any]: Dictionary containing the presigned URL data for all files or error information
         """
-        logger.info("=" * 50)
-        logger.info("RESULTING S3 STRUCTURE:")
+        results = []
+        failures = []
         
-        # Group by folder path for visualization
-        folder_structure = {}
-        for s3_key in s3_keys_structure.keys():
-            parts = s3_key.split('/')
-            current = folder_structure
-            # Build nested structure
-            for i, part in enumerate(parts[:-1]):  # Skip the last part (filename)
-                if part not in current:
-                    current[part] = {}
-                current = current[part]
-            # Add the file at the end
-            current[parts[-1]] = "FILE"
-        
-        # Helper function to print the structure
-        def print_structure(structure, indent=0):
-            lines = []
-            for key, value in structure.items():
-                prefix = "  " * indent
-                if value == "FILE":
-                    lines.append(f"{prefix}📄 {key}")
+        for file_meta in files_metadata:
+            file_name = file_meta.get('file_name')
+            file_type = file_meta.get('file_type')
+            file_path = file_meta.get('path')  # Get the optional file-specific path
+            
+            if not file_name or not file_type:
+                logger.warning(f"Skipping invalid file metadata: {file_meta}")
+                failures.append({
+                    'file_meta': file_meta,
+                    'error': 'Missing file_name or file_type'
+                })
+                continue
+            
+            # Create effective path prefix by combining the overall prefix with file-specific path
+            effective_path_prefix = path_prefix
+            if file_path:
+                if effective_path_prefix:
+                    effective_path_prefix = f"{effective_path_prefix}/{file_path}"
                 else:
-                    lines.append(f"{prefix}📁 {key}")
-                    child_lines = print_structure(value, indent + 1)
-                    lines.extend(child_lines)
-            return lines
+                    effective_path_prefix = file_path
+            
+            # Generate the presigned post for this file
+            result = self.generate_presigned_post(
+                file_name=file_name,
+                file_type=file_type,
+                path_prefix=effective_path_prefix,
+                expiration=expiration
+            )
+            
+            if result['success']:
+                results.append(result)
+            else:
+                failures.append({
+                    'file_meta': file_meta,
+                    'error': result.get('error', 'Unknown error')
+                })
         
-        structure_lines = print_structure(folder_structure)
-        for line in structure_lines:
-            logger.info(line)
-        
-        logger.info("=" * 50)
+        return {
+            'success': len(failures) == 0,
+            'presigned_posts': results,
+            'failures': failures,
+            'total_urls': len(results),
+            'total_failures': len(failures)
+        }
     
-    def _log_upload_stats(self, uploaded_files: List[Dict], failed_files: List[Dict], 
-                        total_size: int, duration: float) -> None:
+    def get_upload_url_with_acceleration(self, file_name: str, file_type: str, 
+                                      path_prefix: Optional[str] = None,
+                                      expiration: int = 3600) -> Dict[str, Any]:
         """
-        Log statistics about the upload operation.
+        Generate a presigned URL with S3 Transfer Acceleration for maximum upload speed.
         
         Args:
-            uploaded_files: List of successfully uploaded files
-            failed_files: List of files that failed to upload
-            total_size: Total size of uploaded files in bytes
-            duration: Duration of the upload operation in seconds
-        """
-        avg_speed = total_size / duration if duration > 0 else 0
-        
-        logger.info(f"Upload process completed:")
-        logger.info(f"- Total files uploaded: {len(uploaded_files)}")
-        logger.info(f"- Failed uploads: {len(failed_files)}")
-        
-        if len(failed_files) > 0:
-            logger.warning(f"Failed files (first 5): {[f['name'] for f in failed_files[:5]]}")
-        
-        logger.info(f"- Total size: {self._format_size(total_size)}")
-        logger.info(f"- Duration: {duration:.2f} seconds")
-        logger.info(f"- Average speed: {self._format_size(avg_speed)}/s")
-        
-        return avg_speed
-    
-    def _process_file_paths(self, file_paths: Dict[str, str]) -> Dict[str, str]:
-        """
-        Process and organize file paths.
-        
-        Args:
-            file_paths: Dictionary mapping paths to file names or file names to paths
-                        (depending on how the data was provided from the frontend)
+            file_name (str): Name of the file to upload
+            file_type (str): MIME type of the file
+            path_prefix (str, optional): Folder path to prepend to the file name
+            expiration (int): Time in seconds for the URL to be valid (default 1 hour)
             
         Returns:
-            Dictionary mapping full paths to file names
+            Dict[str, Any]: Dictionary containing the presigned URL data with acceleration enabled or error information
         """
-        # The expected format we need is a dict with paths as keys and filenames as values
-        
-        # First, detect the input format
-        if not file_paths:
-            logger.warning("No file paths provided")
-            return {}
+        try:
+            # Sanitize the file name to work with S3
+            clean_file_name = file_name.replace(' ', '_')
             
-        # Take the first key to determine the format
-        first_key = next(iter(file_paths.keys()))
-        first_value = file_paths[first_key]
-        
-        # If the key contains a slash (path-like) and the value doesn't, 
-        # we already have the correct format: path -> filename
-        if "/" in first_key and "/" not in first_value:
-            logger.info("File paths are already in correct format (paths as keys)")
-            return file_paths
-        
-        # If the key doesn't contain a slash but the value does,
-        # we need to invert: filename -> path becomes path -> filename
-        elif "/" not in first_key and "/" in first_value:
-            inverted_paths = {}
-            for filename, path in file_paths.items():
-                inverted_paths[path] = filename
-                
-            logger.info(f"Inverted file paths from filename->path to path->filename format")
-            return inverted_paths
-        
-        # If both key and value have slashes or neither do, log a warning and try to infer
-        else:
-            logger.warning(f"Ambiguous file path format. Keys and values both have or don't have path separators.")
-            # Default to using the input as-is with a warning
-            return file_paths
+            # Build the full S3 key (path)
+            s3_key = clean_file_name
+            if path_prefix:
+                # Ensure the path has a trailing slash but no leading slash
+                path_prefix = path_prefix.strip('/')
+                if path_prefix:
+                    s3_key = f"{path_prefix}/{clean_file_name}"
+            
+            logger.info(f"Generating accelerated upload URL for {s3_key}")
+            
+            # Create a special client with acceleration enabled
+            s3_client_accelerated = boto3.client(
+                's3',
+                region_name=self.region,
+                endpoint_url=self.endpoint_url,
+                aws_access_key_id=self.access_key,
+                aws_secret_access_key=self.secret_key,
+                config=boto3.session.Config(s3={'use_accelerate_endpoint': True})
+            )
+            
+            # Generate the presigned post data with acceleration
+            presigned_post = s3_client_accelerated.generate_presigned_post(
+                Bucket=self.ingest_bucket,
+                Key=s3_key,
+                Fields={
+                    'Content-Type': file_type
+                },
+                Conditions=[
+                    {'Content-Type': file_type}
+                ],
+                ExpiresIn=expiration
+            )
+            
+            return {
+                'success': True,
+                'file_name': file_name,
+                's3_key': s3_key,
+                'url': presigned_post['url'],
+                'fields': presigned_post['fields'],
+                'expires_in': expiration,
+                'acceleration_enabled': True
+            }
+            
+        except Exception as e:
+            logger.error(f"Error generating accelerated upload URL for {file_name}: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                'file_name': file_name
+            }
     
-    def _debug_file_paths(self, file_paths: Dict[str, str]) -> None:
+    def mark_upload_complete(self, s3_key: str) -> Dict[str, Any]:
         """
-        Log file path information for debugging purposes.
+        Mark an S3 upload as complete and verify the file exists.
         
         Args:
-            file_paths: Dictionary mapping either file names to paths or paths to file names
-        """
-        logger.info("=" * 50)
-        logger.info("DEBUG - RECEIVED FILE PATHS:")
-        if file_paths:
-            for key, value in file_paths.items():
-                if "/" in key:  # path -> filename format
-                    logger.info(f"  Path: {key} → File: {value}")
-                else:  # filename -> path format
-                    logger.info(f"  File: {key} → Path: {value}")
-        logger.info("=" * 50)
-    
-    def upload_files_directly(self, files, folder_name: str, bucket_name: str = None, file_paths: dict = None) -> Dict[str, Any]:
-        """
-        Upload files directly from a request to an S3 bucket.
-        
-        This method is designed to handle uploads from a browser, where the files are
-        provided as Django UploadedFile objects, along with a structure of file paths
-        typically provided via webkitRelativePath in the browser.
-        
-        Args:
-            files: List of UploadedFile objects, typically from request.FILES
-            folder_name (str): The name of the folder to upload to in the bucket
-            bucket_name (str, optional): The name of the S3 bucket to upload to. Defaults to ingest bucket.
-            file_paths (dict, optional): Dictionary mapping file names to their relative paths
+            s3_key (str): The S3 key for the uploaded file
             
         Returns:
-            Dict[str, Any]: A dictionary containing the upload results
+            Dict[str, Any]: Dictionary containing verification information or error information
         """
-        # Set default bucket and validate inputs
+        try:
+            # Check if the file exists in S3
+            response = self.s3_client.head_object(
+                Bucket=self.ingest_bucket,
+                Key=s3_key
+            )
+            
+            file_size = response.get('ContentLength', 0)
+            content_type = response.get('ContentType', 'application/octet-stream')
+            last_modified = response.get('LastModified', None)
+            
+            return {
+                'success': True,
+                's3_key': s3_key,
+                'exists': True,
+                'file_size': file_size,
+                'file_size_formatted': self._format_size(file_size),
+                'content_type': content_type,
+                'last_modified': last_modified.isoformat() if last_modified else None
+            }
+            
+        except Exception as e:
+            logger.error(f"Error verifying uploaded file {s3_key}: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                's3_key': s3_key,
+                'exists': False
+            }
+    
+    def copy_object(self, source_key: str, dest_key: str, 
+                 source_bucket: Optional[str] = None, 
+                 dest_bucket: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Copy an object from one location to another within S3.
+        
+        Args:
+            source_key (str): Source object key (path)
+            dest_key (str): Destination object key (path)
+            source_bucket (str, optional): Source bucket name (defaults to ingest bucket)
+            dest_bucket (str, optional): Destination bucket name (defaults to production bucket)
+            
+        Returns:
+            Dict[str, Any]: Dictionary with copy information or error information
+        """
+        source_bucket = source_bucket or self.ingest_bucket
+        dest_bucket = dest_bucket or self.production_bucket
+        
+        try:
+            logger.info(f"Copying object from {source_bucket}/{source_key} to {dest_bucket}/{dest_key}")
+            
+            copy_source = {'Bucket': source_bucket, 'Key': source_key}
+            response = self.s3_client.copy_object(
+                CopySource=copy_source,
+                Bucket=dest_bucket,
+                Key=dest_key
+            )
+            
+            return {
+                'success': True,
+                'source_key': source_key,
+                'dest_key': dest_key,
+                'source_bucket': source_bucket,
+                'dest_bucket': dest_bucket,
+                'copy_time': response.get('CopyObjectResult', {}).get('LastModified', 'Unknown')
+            }
+            
+        except Exception as e:
+            logger.error(f"Error copying object {source_key} to {dest_key}: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                'source_key': source_key,
+                'dest_key': dest_key
+            }
+    
+    def upload_folder_to_bucket(self, local_folder_path: str, bucket_name: str = None, target_prefix: str = "") -> Dict[str, Any]:
+        """
+        Upload a local folder and all its contents to the specified S3 bucket.
+        
+        Args:
+            local_folder_path (str): The local path to the folder to upload
+            bucket_name (str, optional): The name of the bucket to upload to 
+            target_prefix (str, optional): The prefix (path) in the bucket where the folder should be uploaded
+            
+        Returns:
+            Dict[str, Any]: Dictionary containing the upload results
+        """
         if bucket_name is None:
             bucket_name = self.ingest_bucket
-        
-        if not files:
-            return {"success": False, "error": "No files provided for upload"}
             
-        if not folder_name:
-            return {"success": False, "error": "No folder name provided for upload"}
+        if not os.path.exists(local_folder_path):
+            return {"success": False, "error": f"Local folder does not exist: {local_folder_path}"}
             
-        file_paths = file_paths or {}
-        
-        # Log initial information
-        logger.info(f"Starting direct upload process for folder '{folder_name}' to bucket '{bucket_name}'")
-        logger.info(f"Total number of files to process: {len(files)}")
-        
-        if file_paths:
-            logger.info(f"Path information available for {len(file_paths)} files")
-            self._debug_file_paths(file_paths)
-        
-        # Ensure the bucket exists
-        if not self.ensure_bucket_exists(bucket_name):
-            return {"success": False, "error": f"Failed to ensure bucket exists: {bucket_name}"}
-        
-        # Configure multipart upload
-        transfer_config = self._configure_transfer()
+        if not os.path.isdir(local_folder_path):
+            return {"success": False, "error": f"Path is not a directory: {local_folder_path}"}
         
         try:
             uploaded_files = []
             failed_files = []
             total_size = 0
-            start_time = time.time()
             
-            logger.info(f"Starting upload of {len(files)} files to {bucket_name}")
+            # Get the base folder name
+            base_folder_name = os.path.basename(os.path.normpath(local_folder_path))
             
-            # Track all used S3 keys to visualize the resulting structure
-            s3_keys_structure = {}
+            # Create the target prefix including the base folder name
+            if target_prefix:
+                full_prefix = f"{target_prefix.rstrip('/')}/{base_folder_name}/"
+            else:
+                full_prefix = f"{base_folder_name}/"
+                
+            logger.info(f"Uploading folder {local_folder_path} to {bucket_name} with prefix {full_prefix}")
             
-            # Process paths to handle duplicate filenames by using full paths as keys
-            path_to_file = self._process_file_paths(file_paths)
-            
-            # Create a map of files by name for easy access
-            file_map = {file.name: file for file in files}
-            
-            # Create a map to track file usage - some files may be used in multiple paths
-            # For each filename, this tracks how many paths use it and how many times it's been processed
-            file_usage = {}
-            for full_path, file_name in path_to_file.items():
-                if file_name in file_usage:
-                    file_usage[file_name]["total_paths"] += 1
+            # Walk through the directory and upload all files
+            for root, dirs, files in os.walk(local_folder_path):
+                # Calculate the relative path from the local_folder_path
+                relative_path = os.path.relpath(root, local_folder_path)
+                
+                # Skip the root directory itself
+                if relative_path == ".":
+                    s3_prefix = full_prefix
                 else:
-                    file_usage[file_name] = {
-                        "total_paths": 1,
-                        "processed_paths": 0
-                    }
+                    s3_prefix = f"{full_prefix}{relative_path}/"
+                
+                # Upload each file in the current directory
+                for file in files:
+                    local_file_path = os.path.join(root, file)
+                    s3_key = f"{s3_prefix}{file}"
+                    
+                    try:
+                        # Get file size for reporting
+                        file_size = os.path.getsize(local_file_path)
+                        total_size += file_size
+                        
+                        # Upload the file
+                        self.s3_client.upload_file(local_file_path, bucket_name, s3_key)
+                        uploaded_files.append({
+                            "local_path": local_file_path,
+                            "s3_key": s3_key,
+                            "size": file_size
+                        })
+                        logger.info(f"Uploaded {local_file_path} to {s3_key}")
+                    except Exception as e:
+                        logger.error(f"Failed to upload {local_file_path}: {str(e)}")
+                        failed_files.append({
+                            "local_path": local_file_path,
+                            "error": str(e)
+                        })
             
-            # Log file usage information for debugging
-            for file_name, usage in file_usage.items():
-                if usage["total_paths"] > 1:
-                    logger.info(f"File {file_name} will be used in {usage['total_paths']} different paths")
+            return {
+                "success": True,
+                "uploaded_files": uploaded_files,
+                "failed_files": failed_files,
+                "total_files": len(uploaded_files),
+                "failed_count": len(failed_files),
+                "total_size": total_size,
+                "total_size_formatted": self._format_size(total_size),
+                "target_bucket": bucket_name,
+                "target_prefix": full_prefix
+            }
             
-            # Track which files were successfully processed to avoid duplicate checking
-            processed_files = set()
-            processed_paths = set()  # Track by path which is more reliable for duplicates
+        except Exception as e:
+            logger.error(f"Error uploading folder {local_folder_path} to bucket {bucket_name}: {str(e)}")
+            return {"success": False, "error": str(e)}
+    
+    def upload_files_directly(self, files, folder_name: str, bucket_name: str = None, file_paths: dict = None) -> Dict[str, Any]:
+        """
+        Upload files directly from a request to S3.
+        
+        Args:
+            files: List of files to upload (Django InMemoryUploadedFile or similar)
+            folder_name (str): The folder name to use as prefix
+            bucket_name (str, optional): The target bucket name
+            file_paths (dict, optional): Dictionary mapping file names to custom S3 paths
             
-            # Process each full path
-            missing_files = []
-            for full_path, file_name in path_to_file.items():
-                # Check if we have the file in our files collection
-                if file_name not in file_map:
-                    logger.warning(f"Skipping path {full_path}: File {file_name} not found in uploaded files")
-                    missing_files.append({
-                        "name": file_name,
-                        "path": full_path,
-                        "error": "File not found in uploaded files"
-                    })
-                    continue
+        Returns:
+            Dict[str, Any]: Dictionary containing the upload results
+        """
+        if bucket_name is None:
+            bucket_name = self.ingest_bucket
+        
+        try:
+            uploaded_files = []
+            failed_files = []
+            total_size = 0
+            
+            # Process each file
+            for f in files:
+                file_name = f.name
+                content_type = getattr(f, 'content_type', 'application/octet-stream')
                 
-                # If we've already processed this exact path, skip it
-                if full_path in processed_paths:
-                    logger.warning(f"Skipping duplicate path: {full_path}")
-                    continue
+                # Determine the S3 key (path)
+                if file_paths and file_name in file_paths:
+                    # Use the custom path if provided
+                    s3_key = file_paths[file_name]
+                else:
+                    # Otherwise construct a path with the folder name
+                    s3_key = f"{folder_name}/{file_name}"
                 
-                # Get the file and its size
-                file = file_map[file_name]
-                file_size = file.size
-                
-                # Upload the file using the full path
-                result = self._upload_single_file(
-                    file, file_name, file_size, bucket_name, full_path, transfer_config
-                )
-                
-                # Track usage for this file
-                if file_name in file_usage:
-                    file_usage[file_name]["processed_paths"] += 1
-                
-                if result["success"]:
+                try:
+                    # Upload the file
+                    self.s3_client.upload_fileobj(
+                        f, 
+                        bucket_name, 
+                        s3_key,
+                        ExtraArgs={'ContentType': content_type}
+                    )
+                    
+                    # Get the file size
+                    file_size = f.size if hasattr(f, 'size') else 0
                     total_size += file_size
-                    uploaded_files.append(result)
-                    s3_keys_structure[full_path] = {'file': file_name, 'size': file_size}
-                else:
-                    failed_files.append(result)
+                    
+                    uploaded_files.append({
+                        "file_name": file_name,
+                        "s3_key": s3_key,
+                        "size": file_size,
+                        "content_type": content_type
+                    })
+                    logger.info(f"Directly uploaded {file_name} to {s3_key}")
                 
-                # Mark this path as processed regardless of success/failure
-                processed_paths.add(full_path)
-                
-                # Only mark the file as fully processed if we've used it for all its paths
-                if file_name in file_usage and file_usage[file_name]["processed_paths"] >= file_usage[file_name]["total_paths"]:
-                    processed_files.add(file_name)
-                    logger.info(f"File {file_name} has been used in all {file_usage[file_name]['total_paths']} paths")
+                except Exception as e:
+                    logger.error(f"Failed to directly upload {file_name}: {str(e)}")
+                    failed_files.append({
+                        "file_name": file_name,
+                        "error": str(e)
+                    })
             
-            # Check for files that had no path information
-            for file_name, file in file_map.items():
-                # Skip files we've already processed
-                if file_name in processed_files:
-                    continue
-                
-                # If the file wasn't processed (not in our processed_files set)
-                logger.warning(f"Skipping file {file_name}: No path information available")
-                failed_files.append({
-                    "name": file_name,
-                    "error": "Missing path information"
-                })
-            
-            # Add any missing files to the failed files list
-            failed_files.extend(missing_files)
-            
-            # Visualize the resulting structure
-            self._visualize_structure(s3_keys_structure)
-            
-            # Log statistics and calculate results
-            end_time = time.time()
-            duration = end_time - start_time
-            avg_speed = self._log_upload_stats(uploaded_files, failed_files, total_size, duration)
-            
-            # Return the results
             return {
                 "success": len(failed_files) == 0,
                 "uploaded_files": uploaded_files,
                 "failed_files": failed_files,
                 "total_files": len(uploaded_files),
-                "total_failed": len(failed_files),
+                "failed_count": len(failed_files),
                 "total_size": total_size,
                 "total_size_formatted": self._format_size(total_size),
                 "target_bucket": bucket_name,
-                "target_prefix": folder_name + "/",  # Keep this for view compatibility
-                "duration": duration,
-                "avg_speed": avg_speed,
-                "avg_speed_formatted": self._format_size(avg_speed) + "/s"
+                "folder_name": folder_name
             }
+            
         except Exception as e:
-            logger.error(f"Error in upload process: {str(e)}")
-            logger.error("Full stack trace:", exc_info=True)
-            return {
-                "success": False,
-                "error": str(e),
-                "uploaded_files": uploaded_files,
-                "failed_files": failed_files
-            } 
+            logger.error(f"Error directly uploading files to {bucket_name}/{folder_name}: {str(e)}")
+            return {"success": False, "error": str(e)}
+        
+    def _format_size(self, size_bytes: int) -> str:
+        """Format bytes to human-readable size"""
+        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+            if size_bytes < 1024.0:
+                return f"{size_bytes:.2f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.2f} PB" 

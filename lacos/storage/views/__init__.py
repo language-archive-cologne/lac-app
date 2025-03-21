@@ -1,2 +1,2 @@
-from .upload import *
-from .dashboard import *
+from .upload_view import *
+from .dashboard_view import *
