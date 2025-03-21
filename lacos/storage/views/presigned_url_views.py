@@ -21,13 +21,25 @@ def get_presigned_urls(request):
     
     This view directly uses the UploadService to generate presigned URLs.
     """
-    folder_name = request.POST.get("folder_name")
-    files_json = request.POST.get("files_metadata")
+    # Check if we're receiving JSON data
+    if request.content_type == 'application/json':
+        try:
+            data = json.loads(request.body)
+            folder_name = data.get('folder_name')
+            files_metadata = data.get('files_metadata')
+            files_json = json.dumps(files_metadata) if files_metadata else None
+        except json.JSONDecodeError:
+            return JsonResponse({"success": False, "error": "Invalid JSON format"}, status=400)
+    else:
+        # Get from regular form data
+        folder_name = request.POST.get("folder_name")
+        files_json = request.POST.get("files_metadata")
     
     is_htmx = request.headers.get('HX-Request') == 'true'
     logger.info(f"HTMX request detected: {is_htmx}")
+    logger.info(f"Content type: {request.content_type}")
     
-    # Validate request parameters
+    # Validate required parameters
     if not folder_name:
         error_message = "Folder name is required"
         logger.warning(error_message)
@@ -132,8 +144,21 @@ def mark_uploads_complete(request):
     
     # Parse and validate request body
     try:
-        data = json.loads(request.body)
+        if request.content_type == 'application/json':
+            data = json.loads(request.body)
+        else:
+            # Try to parse from POST data
+            uploaded_files_json = request.POST.get('uploaded_files')
+            if uploaded_files_json:
+                data = {'s3_keys': json.loads(uploaded_files_json)}
+            else:
+                return JsonResponse({"success": False, "error": "No uploaded_files provided"})
+                
         s3_keys = data.get("s3_keys", [])
+        
+        logger.info(f"Received verification request with content type: {request.content_type}")
+        logger.info(f"S3 keys to verify: {len(s3_keys)}")
+        
     except json.JSONDecodeError:
         logger.warning("Invalid JSON in mark_uploads_complete request")
         return JsonResponse({"success": False, "error": "Invalid JSON"})

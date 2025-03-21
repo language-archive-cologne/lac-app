@@ -1,311 +1,237 @@
 /**
- * Minimal S3 Direct Upload Utility
+ * S3 Upload Utility
+ * Handles uploads to S3 using presigned URLs
  */
 console.log('S3Uploader script loaded!');
 
-const S3Upload = {
-    /**
-     * Start uploading files to S3 using presigned URLs
-     * @param {Array} presignedData - Array of presigned URL data
-     * @param {Object} options - Configuration options
-     */
-    uploadFiles: function(presignedData, options = {}) {
-        console.log(`S3Upload.uploadFiles called with ${presignedData ? presignedData.length : 0} items`);
-        
-        const fileInput = document.getElementById(options.fileInputId || 'files');
-        if (!fileInput) {
-            console.error('File input element not found with ID:', options.fileInputId || 'files');
-            if (options.onError) options.onError({ error: 'File input element not found' });
-            return;
-        }
-        
-        console.log(`File input has ${fileInput.files ? fileInput.files.length : 0} files`);
-        
-        // Debug file paths
-        if (fileInput.files && fileInput.files.length > 0) {
-            console.log('Available files in input:');
-            for (let i = 0; i < fileInput.files.length; i++) {
-                const file = fileInput.files[i];
-                console.log(`- ${file.name} (${file.size} bytes) [webkitRelativePath: ${file.webkitRelativePath || 'N/A'}]`);
-            }
-        }
-        
-        const progressBar = document.getElementById(options.progressBarId || 'progress-bar');
-        const progressText = document.getElementById(options.progressTextId || 'progress-text');
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
-        const verifyEndpoint = options.verifyEndpoint || '/storage/upload/complete/';
-        const debugEndpoint = options.debugEndpoint || '/storage/upload/debug-error/';
-        
-        let completed = 0;
-        let errors = 0;
-        const total = presignedData.length;
-        const s3Keys = [];
-        const errorDetails = [];
-        
-        console.log(`Starting upload of ${total} files to S3`);
-        
-        // Upload each file
-        presignedData.forEach(async (post) => {
-            try {
-                console.log(`Looking for file: ${post.file_name}`);
-                
-                // Find the file in the input
-                let file = null;
-                console.log(`Looking for file matching: ${post.file_name}`);
-                
-                // Log all available files for debugging
-                console.log(`Available files (${fileInput.files.length}):`);
-                for (let i = 0; i < fileInput.files.length; i++) {
-                    const inputFile = fileInput.files[i];
-                    const relativePath = inputFile.webkitRelativePath || '';
-                    console.log(`${i}: ${inputFile.name} (${relativePath})`);
-                }
-                
-                // Try various ways to match the file
-                for (let i = 0; i < fileInput.files.length; i++) {
-                    const inputFile = fileInput.files[i];
-                    const relativePath = inputFile.webkitRelativePath || '';
-                    const fileNameOnly = post.file_name.split('/').pop(); // Get just the filename without path
-                    
-                    // Try to match by exact filename
-                    if (inputFile.name === post.file_name) {
-                        console.log(`✅ Found exact match for ${post.file_name}`);
-                        file = inputFile;
-                        break;
-                    }
-                    // Try to match by end of relative path
-                    else if (relativePath.endsWith(post.file_name)) {
-                        console.log(`✅ Found path-end match for ${post.file_name}`);
-                        file = inputFile;
-                        break;
-                    }
-                    // Try to match relative path exactly
-                    else if (relativePath === post.file_name) {
-                        console.log(`✅ Found exact path match for ${post.file_name}`);
-                        file = inputFile;
-                        break;
-                    }
-                    // Try to match the last part of the file name (for cases like "0=ocfl_object_1.0")
-                    else if (inputFile.name === fileNameOnly) {
-                        console.log(`✅ Found match by filename (without path) for ${post.file_name} -> ${fileNameOnly}`);
-                        file = inputFile;
-                        break;
-                    }
-                    // For special cases like "0=ocfl_object_1.0"
-                    else if (post.file_name.includes("=") && inputFile.name === post.file_name.split("=")[1]) {
-                        console.log(`✅ Found special match for ${post.file_name} -> ${post.file_name.split("=")[1]}`);
-                        file = inputFile;
-                        break;
-                    }
-                    // Final fallback for "0=ocfl_object_1.0" special case
-                    else if (post.file_name === "0=ocfl_object_1.0" && inputFile.name === "ocfl_object_1.0") {
-                        console.log(`✅ Found hardcoded match for special OCFL file`);
-                        file = inputFile;
-                        break;
-                    }
-                }
-                
-                if (!file) {
-                    console.error(`❌ File not found: ${post.file_name}`);
-                    const error = {
-                        file_name: post.file_name,
-                        s3_key: post.s3_key, 
-                        error: 'File not found in input'
-                    };
-                    errorDetails.push(error);
-                    reportErrorToServer(error);
-                    updateProgress();
-                    return;
-                }
-                
-                // Prepare form data
-                console.log(`Preparing presigned POST for: ${post.file_name} → ${post.s3_key}`);
-                
-                // Log the complete post object structure for debugging
-                console.log('Complete post object:', JSON.stringify(post, null, 2));
-                
-                // The server returns presigned_post which contains url and fields
-                if (!post.presigned_post && !post.url) {
-                    console.error(`Missing presigned_post or url property for ${post.file_name}`);
-                    const error = {
-                        file_name: post.file_name,
-                        s3_key: post.s3_key, 
-                        error: `Missing presigned_post or url property in data. Keys available: ${Object.keys(post).join(", ")}`
-                    };
-                    errorDetails.push(error);
-                    reportErrorToServer(error);
-                    updateProgress();
-                    return;
-                }
-                
-                // Get the url and fields from either presigned_post or directly from post
-                const url = post.presigned_post ? post.presigned_post.url : post.url;
-                const fields = post.presigned_post ? post.presigned_post.fields : post.fields;
-                
-                console.log(`URL: ${url}`);
-                console.log(`Fields:`, fields);
-                
-                if (!fields) {
-                    console.error(`Missing fields property for ${post.file_name}`);
-                    const error = {
-                        file_name: post.file_name,
-                        s3_key: post.s3_key, 
-                        error: `Missing fields property in presigned data. Data structure: ${JSON.stringify(post)}`
-                    };
-                    errorDetails.push(error);
-                    reportErrorToServer(error);
-                    updateProgress();
-                    return;
-                }
-                
-                const formData = new FormData();
-                Object.entries(fields).forEach(([key, value]) => {
-                    formData.append(key, value);
-                });
-                formData.append('file', file);
-                
-                // Upload to S3
-                console.log(`Sending POST request to S3 for ${post.file_name}`);
-                try {
-                    const response = await fetch(url, {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    if (response.ok) {
-                        console.log(`✅ Uploaded: ${post.file_name} → ${post.s3_key}, Status: ${response.status}`);
-                        s3Keys.push(post.s3_key);
-                    } else {
-                        const responseText = await response.text();
-                        console.error(`❌ Failed to upload: ${post.file_name}, Status: ${response.status}`);
-                        console.error(`Response: ${responseText}`);
-                        
-                        const error = {
-                            file_name: post.file_name,
-                            s3_key: post.s3_key,
-                            error: `HTTP ${response.status}: ${responseText}`
-                        };
-                        errorDetails.push(error);
-                        reportErrorToServer(error);
-                        errors++;
-                    }
-                } catch (fetchError) {
-                    console.error(`❌ Fetch error for ${post.file_name}:`, fetchError);
-                    
-                    const error = {
-                        file_name: post.file_name,
-                        s3_key: post.s3_key,
-                        error: `Fetch error: ${fetchError.message}`
-                    };
-                    errorDetails.push(error);
-                    reportErrorToServer(error);
-                    errors++;
-                }
-            } catch (error) {
-                console.error(`Error processing ${post.file_name}:`, error);
-                
-                const errorDetail = {
-                    file_name: post.file_name,
-                    s3_key: post.s3_key || 'unknown',
-                    error: `Processing error: ${error.message}`
-                };
-                errorDetails.push(errorDetail);
-                reportErrorToServer(errorDetail);
-                errors++;
-            }
-            
-            updateProgress();
-        });
-        
-        // Report errors to server for debugging
-        async function reportErrorToServer(errorDetail) {
-            try {
-                await fetch(debugEndpoint, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': csrfToken
-                    },
-                    body: JSON.stringify(errorDetail)
-                });
-            } catch (e) {
-                console.error('Failed to report error to server:', e);
-            }
-        }
-        
-        // Update progress and verify when done
-        function updateProgress() {
-            completed++;
-            
-            // Update progress UI
-            if (progressBar) {
-                const percent = (completed / total) * 100;
-                progressBar.style.width = `${percent}%`;
-                if (progressText) progressText.textContent = `${Math.round(percent)}%`;
-            }
-            
-            // When all uploads complete, verify with server
-            if (completed === total) {
-                console.log(`All ${completed} uploads processed, ${s3Keys.length} successful, ${errors} failed`);
-                
-                if (errors > 0) {
-                    console.error('Some files failed to upload:', errorDetails);
-                }
-                
-                if (s3Keys.length > 0) {
-                    verifyUploads(s3Keys);
-                } else {
-                    const errorMsg = {
-                        error: 'No files were successfully uploaded',
-                        details: errorDetails
-                    };
-                    console.error(errorMsg.error, errorDetails);
-                    if (options.onError) options.onError(errorMsg);
-                    
-                    // Also send to the server for better debugging
-                    reportErrorToServer({
-                        file_name: 'all_files',
-                        s3_key: 'none',
-                        error: errorMsg.error,
-                        details: errorDetails
-                    });
-                }
-            }
-        }
-        
-        // Verify uploads with server
-        async function verifyUploads(keys) {
-            try {
-                console.log(`Verifying ${keys.length} uploaded files with server: ${verifyEndpoint}`);
-                console.log('S3 Keys:', keys);
-                
-                const response = await fetch(verifyEndpoint, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': csrfToken
-                    },
-                    body: JSON.stringify({ s3_keys: keys })
-                });
-                
-                console.log(`Verification response status: ${response.status}`);
-                const result = await response.json();
-                console.log('Verification result:', result);
-                
-                if (result.success) {
-                    console.log(`Verified ${result.total_verified} files (${result.total_size_formatted})`);
-                    if (options.onComplete) options.onComplete(result);
-                } else {
-                    console.error('Verification failed:', result.error);
-                    if (options.onError) options.onError(result);
-                }
-            } catch (error) {
-                console.error('Error verifying uploads:', error);
-                if (options.onError) options.onError({ error: error.message });
-            }
-        }
+// S3FolderUpload for File System API uploads
+const S3FolderUpload = {
+  /**
+   * Upload files to S3 using presigned URLs and File System API
+   * @param {Array} presignedPosts - Array of presigned URL data
+   * @param {DirectoryHandle} rootDirHandle - Root directory handle from File System API
+   * @param {Object} options - Configuration options
+   */
+  uploadFiles: async function(presignedPosts, rootDirHandle, options = {}) {
+    let completed = 0;
+    let errors = 0;
+    const total = presignedPosts.length;
+    const processed_files = [];
+    const failed_files = [];
+    
+    console.log(`Starting upload of ${total} files to S3 using File System API`);
+    console.debug('First URL sample:', presignedPosts[0]);
+    
+    // Create a map to track which files we need to find
+    const fileMap = new Map();
+    
+    // Organize presigned posts by path for easier lookup
+    for (const post of presignedPosts) {
+      // Extract the filename from the path
+      const pathParts = post.file_name.split('/');
+      const fileName = pathParts.pop();
+      const dirPath = pathParts.join('/');
+      
+      // Store in map with the directory path and filename as key
+      fileMap.set(`${dirPath}/${fileName}`, post);
+      fileMap.set(post.file_name, post); // Also store with the full path as key
     }
+    
+    console.log(`Organized ${fileMap.size} files for upload`);
+    
+    // Function to recursively process directories
+    const processDirectory = async (dirHandle, currentPath = '') => {
+      console.log(`Processing directory: ${currentPath || 'root'}`);
+      
+      for await (const entry of dirHandle.values()) {
+        const entryPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+        
+        if (entry.kind === 'file') {
+          try {
+            // Look up the presigned post for this file
+            const post = fileMap.get(entryPath);
+            
+            if (!post) {
+              console.warn(`No presigned URL found for file: ${entryPath}`);
+              continue;
+            }
+            
+            // Get the file
+            const file = await entry.getFile();
+            console.log(`Uploading file (${completed + 1}/${total}): ${entryPath} (${file.size} bytes)`);
+            
+            // Upload to S3
+            const success = await this.uploadFileToS3(file, post);
+            
+            if (success) {
+              // Determine the S3 key - it could be in different places depending on the response format
+              const s3Key = post.s3_key || (post.fields && post.fields.key) || post.key || '';
+              
+              processed_files.push({
+                file_name: post.file_name,
+                s3_key: s3Key
+              });
+              completed++;
+              
+              // Report progress
+              if (options.onProgress) {
+                options.onProgress(completed, total);
+              }
+            } else {
+              errors++;
+              failed_files.push({
+                file_name: post.file_name,
+                error: 'Upload failed'
+              });
+            }
+          } catch (error) {
+            console.error(`Error uploading file ${entryPath}:`, error);
+            errors++;
+            failed_files.push({
+              file_name: entryPath,
+              error: error.message || 'Unknown error'
+            });
+          }
+        } else if (entry.kind === 'directory') {
+          // Process subdirectory
+          await processDirectory(entry, entryPath);
+        }
+      }
+    };
+    
+    try {
+      // Start processing from the root directory
+      await processDirectory(rootDirHandle);
+      
+      console.log(`Upload complete. ${completed} successful, ${errors} failed.`);
+      
+      return {
+        successful: completed,
+        failed: errors,
+        total: total,
+        processed_files: processed_files,
+        failed_files: failed_files
+      };
+    } catch (error) {
+      console.error('Error in uploadFiles:', error);
+      throw error;
+    }
+  },
+  
+  // Upload a single file to S3
+  uploadFileToS3: async function(file, post) {
+    try {
+      // Handle different response formats
+      let url, fields;
+      
+      if (post.url && post.fields) {
+        // Standard presigned post format
+        url = post.url;
+        fields = post.fields;
+      } else if (post.presigned_url) {
+        // Alternative format with presigned_url
+        url = post.presigned_url;
+        fields = post.fields || {};
+      } else {
+        console.error('Unrecognized presigned URL format:', post);
+        throw new Error('Invalid presigned URL format');
+      }
+      
+      if (!url) {
+        console.error('Missing URL in presigned post data', post);
+        throw new Error('Invalid presigned post data: missing URL');
+      }
+      
+      // Create form data with all required fields
+      const formData = new FormData();
+      if (fields) {
+        Object.entries(fields).forEach(([key, value]) => {
+          formData.append(key, value);
+        });
+      }
+      
+      // Add the file as the last field
+      formData.append('file', file);
+      
+      // Upload to S3
+      console.debug(`Uploading to ${url}`);
+      const response = await fetch(url, {
+        method: 'POST',
+        body: formData
+      });
+      
+      // Check response
+      if (!response.ok) {
+        let responseText = '';
+        try {
+          responseText = await response.text();
+        } catch (e) {
+          responseText = 'Could not read response text';
+        }
+        
+        console.error(`S3 upload failed with status ${response.status}:`, responseText);
+        throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
+      }
+      
+      console.debug(`Successfully uploaded ${post.file_name}`);
+      return true;
+    } catch (error) {
+      console.error(`Error uploading file ${post.file_name}:`, error);
+      return false;
+    }
+  },
+  
+  // Verify uploads with server
+  verifyUploads: async function(s3Keys, verifyEndpoint, csrfToken) {
+    try {
+      console.log(`Verifying ${s3Keys.length} uploaded files with server`);
+      
+      const response = await fetch(verifyEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({ s3_keys: s3Keys })
+      });
+      
+      const result = await response.json();
+      console.log('Verification result:', result);
+      
+      return result;
+    } catch (error) {
+      console.error('Error verifying uploads:', error);
+      throw error;
+    }
+  },
+  
+  // Helper function to report errors to server
+  reportErrorToServer: async function(errorDetail, endpoint, csrfToken) {
+    try {
+      console.debug('Reporting error to server:', errorDetail);
+      
+      await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify(errorDetail)
+      });
+    } catch (e) {
+      console.error('Failed to report error to server:', e);
+    }
+  }
 };
 
-// Make it globally available
-window.S3Upload = S3Upload;
+// Make globally available
+window.S3FolderUpload = S3FolderUpload;
+
+// For backward compatibility, create S3Upload alias
+window.S3Upload = {
+  uploadFiles: function(presignedData, options = {}) {
+    console.warn('S3Upload.uploadFiles is deprecated. Using S3FolderUpload instead');
+    // Convert method is dummy - this is just for compatibility
+    return { error: 'Use S3FolderUpload directly' };
+  }
+};

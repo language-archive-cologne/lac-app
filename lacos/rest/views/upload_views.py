@@ -196,95 +196,91 @@ def mark_upload_complete(request):
 @permission_classes([IsAuthenticated])
 def get_folder_upload_urls(request):
     """
-    Generate presigned URLs for a folder structure uploaded via the File System Access API.
+    Generate presigned URLs for a folder upload.
     
     Request should include:
-    - folder_name: Name of the folder being uploaded
-    - folder_structure: List of file metadata objects with:
-        - filename: Name of the file
-        - content_type: MIME type of the file
-        - path: Relative path within the folder
-        - size: File size in bytes
+    - folder_name: Name of the folder
+    - folder_structure or files_metadata: List of file metadata objects with file_name, file_type, path, and size
     
     Returns:
-        A Response object with presigned URLs for each file in the folder structure
+        A Response object with presigned URLs and status code
     """
-    data = request.data
-    
-    # Extract and validate parameters
-    folder_name = data.get('folder_name')
-    folder_structure = data.get('folder_structure', [])
-    
-    logger.info(f"Folder upload request for {folder_name} with {len(folder_structure)} files from user: {request.user.username}")
-    
-    # Validate required parameters
-    if not folder_name:
-        logger.warning("Missing folder_name parameter for folder upload")
-        return Response(
-            {"success": False, "error": "Missing required parameter: folder_name"},
-            status=status.HTTP_400_BAD_REQUEST
+    try:
+        data = request.data
+        
+        # Extract and validate parameters
+        folder_name = data.get('folder_name')
+        
+        # Accept either folder_structure or files_metadata for compatibility
+        files_metadata = data.get('folder_structure') or data.get('files_metadata', [])
+        
+        logger.info(f"Folder upload request received for '{folder_name}' with {len(files_metadata)} files")
+        
+        # Validate required parameters
+        if not folder_name:
+            logger.warning("Missing folder_name parameter for folder upload")
+            return Response(
+                {"success": False, "error": "Missing folder_name parameter"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not files_metadata or not isinstance(files_metadata, list):
+            logger.warning("Missing or invalid file metadata parameter for folder upload")
+            return Response(
+                {"success": False, "error": "Missing or invalid folder_structure parameter. Expected a list of file metadata."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Log some sample files for debugging
+        if files_metadata:
+            logger.debug(f"Sample file metadata: {files_metadata[0]}")
+        
+        # Call service layer
+        service = UploadService()
+        result = service.generate_batch_presigned_posts(
+            files_metadata=files_metadata,
+            path_prefix=folder_name,
+            expiration=3600,
+            use_multipart=False  # Use single-part uploads for folder uploads
         )
         
-    if not folder_structure or not isinstance(folder_structure, list):
-        logger.warning("Missing or invalid folder_structure parameter for folder upload")
-        return Response(
-            {"success": False, "error": "Missing or invalid folder_structure parameter. Expected a list of file metadata."},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-    
-    # Transform folder structure to the format expected by the service
-    files_metadata = []
-    for file_info in folder_structure:
-        files_metadata.append({
-            "file_name": file_info.get('filename'),
-            "file_type": file_info.get('content_type', 'application/octet-stream'),
-            "path": file_info.get('path', ''),
-            "size": file_info.get('size', 0)
-        })
-    
-    # Call service layer
-    service = UploadService()
-    result = service.generate_batch_presigned_posts(
-        files_metadata=files_metadata,
-        path_prefix=folder_name,
-        expiration=3600,
-        use_multipart=False  # Use single-part uploads for folder uploads
-    )
-    
-    # Handle service result
-    if result.get('total_urls', 0) == 0:
-        logger.warning(f"No valid presigned URLs generated from {len(folder_structure)} files")
-        if result.get('total_failures', 0) > 0:
-            return Response(result, status=status.HTTP_207_MULTI_STATUS)
-    
-    if result.get('success') is False:
-        logger.error(f"Failed to generate folder upload URLs: {len(result.get('failures', []))} failures")
-        return Response(result, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    # Transform to a client-friendly format with original paths
-    client_friendly_posts = []
-    for post in result.get('presigned_posts', []):
-        if not post.get('presigned_post'):
-            continue
+        # Handle service result
+        if result.get('total_urls', 0) == 0:
+            logger.warning(f"No valid presigned URLs generated from {len(files_metadata)} files")
+            if result.get('total_failures', 0) > 0:
+                return Response(result, status=status.HTTP_207_MULTI_STATUS)
+        
+        if result.get('success') is False:
+            logger.error(f"Failed to generate folder upload URLs: {len(result.get('failures', []))} failures")
+            return Response(result, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # Transform to a client-friendly format with original paths
+        client_friendly_posts = []
+        for post in result.get('presigned_posts', []):
+            if not post.get('presigned_post'):
+                continue
             
-        presigned_post = post['presigned_post']
-        original_path = f"{post.get('path', '')}/{post.get('file_name', '')}"
-        original_path = original_path.lstrip('/')
+            presigned_post = post['presigned_post']
+            original_path = f"{post.get('path', '')}/{post.get('file_name', '')}"
+            original_path = original_path.lstrip('/')
+            
+            client_post = {
+                'original_path': original_path,
+                'file_name': post.get('file_name', ''),
+                's3_key': post.get('s3_key', ''),
+                'url': presigned_post.get('url', ''),
+                'fields': presigned_post.get('fields', {})
+            }
+            client_friendly_posts.append(client_post)
         
-        client_post = {
-            'original_path': original_path,
-            'file_name': post.get('file_name', ''),
-            's3_key': post.get('s3_key', ''),
-            'url': presigned_post.get('url', ''),
-            'fields': presigned_post.get('fields', {})
-        }
-        client_friendly_posts.append(client_post)
-    
-    logger.info(f"Successfully generated {len(client_friendly_posts)} presigned URLs for folder upload")
-    
-    return Response({
-        'success': True,
-        'urls': client_friendly_posts,
-        'total_urls': len(client_friendly_posts),
-        'folder_name': folder_name
-    }) 
+        logger.info(f"Successfully generated {len(client_friendly_posts)} presigned URLs for folder upload")
+        
+        return Response({
+            'success': True,
+            'urls': client_friendly_posts,
+            'total_urls': len(client_friendly_posts),
+            'folder_name': folder_name
+        })
+    except Exception as e:
+        logger.error(f"Error generating folder upload URLs: {str(e)}")
+        return Response({"success": False, "error": "An error occurred while generating folder upload URLs"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR) 

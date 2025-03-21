@@ -6,10 +6,7 @@
     <h1 class="text-3xl font-bold mb-8 text-center text-gray-800">Upload to Ingest Bucket</h1>
     
     <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-6">
-        <form hx-post="{% url 'storage:process_upload' %}" 
-              hx-target="#upload-container"
-              hx-swap="innerHTML"
-              enctype="multipart/form-data">
+        <form id="upload-form">
             {% csrf_token %}
             
             <div class="mb-6">
@@ -20,11 +17,9 @@
             </div>
             
             <div class="mb-6">
-                <label class="block text-gray-700 text-sm font-bold mb-2">Files:</label>
+                <label class="block text-gray-700 text-sm font-bold mb-2">Select Folder:</label>
                 <div id="file-upload-container" class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                    <input type="file" id="files" name="files" multiple webkitdirectory directory
-                           class="hidden" onchange="updateFileList()">
-                    <label for="files" class="cursor-pointer">
+                    <div class="cursor-pointer" id="folder-select-button">
                         <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
                             <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" 
                                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -32,16 +27,29 @@
                         <p class="mt-1 text-sm text-gray-600">
                             <span class="font-medium text-blue-600 hover:text-blue-500">
                                 Click to select folder
-                            </span> or drag and drop
+                            </span>
                         </p>
                         <p class="mt-1 text-xs text-gray-500">
                             Select a folder containing all files you want to upload
                         </p>
-                    </label>
+                    </div>
+                    
+                    <!-- Browser compatibility warning -->
+                    <div class="mt-4 text-xs text-amber-700 bg-amber-50 p-2 rounded border border-amber-200">
+                        <div class="flex">
+                            <svg class="w-4 h-4 mr-1 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            <span>
+                                This feature requires a modern browser. Chrome, Edge, or other Chromium-based browsers are recommended.
+                            </span>
+                        </div>
+                    </div>
                 </div>
+                
+                <!-- Selected folder info -->
                 <div id="file-list" class="mt-4 max-h-60 overflow-y-auto hidden">
-                    <h3 class="font-medium text-gray-700 mb-2">Selected Files:</h3>
-                    <ul id="selected-files" class="text-sm text-gray-600 pl-5 list-disc"></ul>
+                    <h3 class="font-medium text-gray-700 mb-2">Selected Folder: <span id="selected-folder-name" class="font-bold"></span></h3>
                     <div id="file-stats" class="mt-2 text-sm text-gray-600">
                         <p id="file-count"></p>
                         <p id="file-size"></p>
@@ -50,33 +58,26 @@
             </div>
             
             <!-- Upload progress indicator -->
-            <div id="upload-indicator" class="htmx-indicator mb-4">
+            <div id="upload-progress" class="mb-6 hidden">
                 <div class="flex items-center mb-2">
-                    <div class="mr-2">
-                        <svg class="animate-spin h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                    </div>
                     <div class="w-full">
                         <div class="flex justify-between mb-1">
-                            <span class="text-sm font-medium text-blue-700">Uploading files...</span>
-                            <span class="text-sm font-medium text-blue-700" id="progress-text">0%</span>
+                            <span class="text-sm font-medium text-blue-700" id="progress-text">Preparing...</span>
+                            <span class="text-sm font-medium text-blue-700" id="progress-percentage">0%</span>
                         </div>
                         <div class="w-full bg-gray-200 rounded-full h-2.5">
-                            <div class="bg-blue-600 h-2.5 rounded-full w-0" id="progress-bar"></div>
+                            <div class="bg-blue-600 h-2.5 rounded-full" id="progress-bar" style="width: 0%"></div>
                         </div>
                     </div>
                 </div>
                 <p class="text-xs text-gray-500 mt-1">
                     Large folders may take several minutes to upload. Please don't close this page.
-                    <br>Files are being uploaded directly to storage with multipart uploads for better performance.
                 </p>
             </div>
             
             <!-- Upload status area -->
-            <div id="upload-container">
-                <!-- This div will be replaced with presigned URL info -->
+            <div id="upload-status" class="mb-6">
+                <!-- This will be populated with status messages -->
             </div>
             
             <div class="flex items-center justify-between">
@@ -84,141 +85,44 @@
                    class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
                     Cancel
                 </a>
-                <button id="upload-button" type="submit" 
-                        class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled>
-                    Prepare Upload
+                <button id="upload-button" type="button" 
+                        class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+                    Upload Folder
                 </button>
             </div>
         </form>
     </div>
 </div>
 
-<!-- Include the S3 uploader script here instead of in the extra_head block -->
+<!-- Include the S3 uploader script -->
 <script src="{% static 'js/s3uploader.js' %}"></script>
 
+<!-- Include the folder scanner script -->
+<script src="{% static 'js/folder-scanner.js' %}"></script>
+
 <script>
-function updateFileList() {
-    const input = document.getElementById('files');
-    const fileList = document.getElementById('file-list');
-    const selectedFiles = document.getElementById('selected-files');
-    const fileCount = document.getElementById('file-count');
-    const fileSize = document.getElementById('file-size');
-    const uploadButton = document.getElementById('upload-button');
+// Update progress bar and text
+window.updateUploadProgress = function(message, percentage) {
+    const progressBar = document.getElementById('progress-bar');
+    const progressText = document.getElementById('progress-text');
+    const progressPercentage = document.getElementById('progress-percentage');
+    const progressContainer = document.getElementById('upload-progress');
     
-    // Clear previous list
-    selectedFiles.innerHTML = '';
-    
-    if (input.files.length > 0) {
-        fileList.classList.remove('hidden');
-        uploadButton.disabled = false;
-        
-        // Group files by directory
-        const filesByDir = {};
-        let totalSize = 0;
-        
-        // Store file paths in a global variable for later use during form submission
-        window.filePaths = [];
-        window.fileNames = [];
-        
-        console.log('Processing ' + input.files.length + ' files');
-        for (let i = 0; i < input.files.length; i++) {
-            const file = input.files[i];
-            const path = file.webkitRelativePath;
-            const parts = path.split('/');
-            totalSize += file.size;
-            
-            // Store the path and filename for debugging
-            if (path) {
-                window.filePaths.push(path);
-                window.fileNames.push(file.name);
-                console.log(`Stored path for file ${i}: ${file.name} → ${path}`);
-            } else {
-                console.warn(`No relative path for file: ${file.name}`);
-            }
-            
-            // Skip the root folder (which is the selected folder name)
-            if (parts.length > 1) {
-                const dirPath = parts.slice(0, parts.length - 1).join('/');
-                if (!filesByDir[dirPath]) {
-                    filesByDir[dirPath] = [];
-                }
-                filesByDir[dirPath].push(file);
-            }
-        }
-        
-        // Format size
-        const formattedSize = formatFileSize(totalSize);
-        
-        // Display directories and file counts
-        for (const dir in filesByDir) {
-            // Calculate directory size
-            let dirSize = 0;
-            filesByDir[dir].forEach(file => dirSize += file.size);
-            
-            const li = document.createElement('li');
-            li.className = 'mb-1';
-            
-            // Create folder icon + name
-            const folderSpan = document.createElement('span');
-            folderSpan.className = 'inline-flex items-center';
-            folderSpan.innerHTML = `
-                <svg class="w-4 h-4 mr-1 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                </svg>
-                ${dir} (${filesByDir[dir].length} files, ${formatFileSize(dirSize)})
-            `;
-            
-            li.appendChild(folderSpan);
-            selectedFiles.appendChild(li);
-        }
-        
-        fileCount.textContent = `Total: ${input.files.length} files`;
-        fileSize.textContent = `Size: ${formattedSize}`;
-        
-        // Set the folder name input to the root folder name if it's empty
-        const folderNameInput = document.getElementById('folder_name');
-        if (folderNameInput.value === '' && input.files.length > 0) {
-            const rootFolder = input.files[0].webkitRelativePath.split('/')[0];
-            folderNameInput.value = rootFolder;
-        }
+    progressContainer.classList.remove('hidden');
+    progressBar.style.width = `${percentage}%`;
+    progressText.textContent = message;
+    progressPercentage.textContent = `${percentage}%`;
+};
 
-        // Show warning for large uploads
-        if (totalSize > 100 * 1024 * 1024) { // 100 MB
-            const warningDiv = document.createElement('div');
-            warningDiv.className = 'mt-3 text-sm text-amber-700 bg-amber-50 p-2 rounded border border-amber-200';
-            warningDiv.innerHTML = `
-                <div class="flex">
-                    <svg class="w-5 h-5 mr-2 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                    <span>
-                        Large upload detected (${formattedSize}). This may take some time and use significant system resources.
-                    </span>
-                </div>
-            `;
-            fileList.appendChild(warningDiv);
-        }
+// Update folder info display
+window.updateFolderInfo = function(folderName, fileCount, totalSize) {
+    document.getElementById('selected-folder-name').textContent = folderName;
+    document.getElementById('file-count').textContent = `Files: ${fileCount}`;
+    document.getElementById('file-size').textContent = `Total size: ${formatFileSize(totalSize)}`;
+    document.getElementById('file-list').classList.remove('hidden');
+};
 
-        // HTMX request configuration
-        document.body.addEventListener('htmx:configRequest', function(evt) {
-            // Check if this is our upload form
-            const form = evt.detail.elt.closest('form');
-            if (form && form.querySelector('#files')) {
-                // Add path information to the request
-                if (window.filePaths && window.filePaths.length > 0) {
-                    evt.detail.parameters['file_paths_json'] = JSON.stringify(window.filePaths);
-                    evt.detail.parameters['file_names_json'] = JSON.stringify(window.fileNames);
-                }
-            }
-        });
-    } else {
-        fileList.classList.add('hidden');
-        uploadButton.disabled = true;
-    }
-}
-
-// Helper to format file size
+// Helper function to format file size
 function formatFileSize(bytes) {
     if (bytes === 0) return '0 Bytes';
     
@@ -228,143 +132,66 @@ function formatFileSize(bytes) {
     return parseFloat((bytes / Math.pow(1024, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-// Add drag and drop functionality
-const dropArea = document.getElementById('file-upload-container');
-
-['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-    dropArea.addEventListener(eventName, preventDefaults, false);
+// Add event listener for the folder select button
+document.getElementById('folder-select-button').addEventListener('click', function() {
+    scanFolder();
 });
 
-function preventDefaults(e) {
-    e.preventDefault();
-    e.stopPropagation();
-}
-
-['dragenter', 'dragover'].forEach(eventName => {
-    dropArea.addEventListener(eventName, highlight, false);
-});
-
-['dragleave', 'drop'].forEach(eventName => {
-    dropArea.addEventListener(eventName, unhighlight, false);
-});
-
-function highlight() {
-    dropArea.classList.add('border-blue-500', 'bg-blue-50');
-}
-
-function unhighlight() {
-    dropArea.classList.remove('border-blue-500', 'bg-blue-50');
-}
-
-dropArea.addEventListener('drop', handleDrop, false);
-
-function handleDrop(e) {
-    const dt = e.dataTransfer;
-    const files = dt.items;
-    
-    if (files.length > 0) {
-        // We can't directly access dropped folders, so we prompt the user to use the file input
-        alert('Please use the file selector to choose a folder. Drag and drop of folders is not fully supported in all browsers.');
-        document.getElementById('files').click();
+// Add event listener for the upload button
+document.getElementById('upload-button').addEventListener('click', async function() {
+    const folderName = document.getElementById('folder_name').value.trim();
+    if (!folderName) {
+        alert('Please enter a folder name first');
+        return;
     }
-}
-
-// Add an event listener for when HTMX loads content
-document.addEventListener('htmx:afterSwap', function(event) {
-    // Check if the target is our upload-stage div
-    if (event.detail.target.id === 'upload-container') {
-        // Check if we have the start trigger div
-        const triggerDiv = document.getElementById('start-uploads-trigger');
-        if (triggerDiv) {
-            console.log('Upload stage content loaded, starting upload process');
-            
-            try {
-                // Get the presigned URL data
-                const presignedDataElem = document.getElementById('presigned-data');
-                if (!presignedDataElem) {
-                    console.error('Presigned data element not found');
-                    return;
-                }
-                
-                const presignedData = JSON.parse(presignedDataElem.textContent);
-                console.log('Parsed presigned data:', presignedData);
-                
-                // Get the verification endpoint
-                const verifyEndpoint = triggerDiv.getAttribute('data-verify-endpoint');
-                
-                // Start uploads
-                console.log('Starting S3 uploads...');
-                S3Upload.uploadFiles(presignedData, {
-                    verifyEndpoint: verifyEndpoint,
-                    onComplete: function(result) {
-                        console.log('Upload complete callback:', result);
-                        // Show success message
-                        document.getElementById('upload-status').innerHTML = `
-                            <div class="p-4 bg-green-50 text-green-700 rounded border border-green-200 mt-4">
-                                <h3 class="font-medium mb-2">Upload Successful!</h3>
-                                <p>Verified ${result.total_verified} files (${result.total_size_formatted})</p>
-                                <div class="mt-3">
-                                    <a href="{% url 'storage:archivist_dashboard' %}" 
-                                       class="inline-block bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
-                                        Go to Dashboard
-                                    </a>
-                                </div>
-                            </div>
-                        `;
-                    },
-                    onError: function(result) {
-                        console.error('Upload error callback:', result);
-                        // Show error message
-                        document.getElementById('upload-status').innerHTML = `
-                            <div class="p-4 bg-red-50 text-red-700 rounded border border-red-200 mt-4">
-                                <h3 class="font-medium mb-2">Upload Issues</h3>
-                                <p>${result.error || 'Some files could not be verified'}</p>
-                                <div class="mt-3">
-                                    <a href="{% url 'storage:upload_form' %}" 
-                                       class="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-                                        Try Again
-                                    </a>
-                                </div>
-                            </div>
-                        `;
-                    }
-                });
-            } catch (error) {
-                console.error('Error during upload initialization:', error);
-                document.getElementById('upload-status').innerHTML = `
-                    <div class="p-4 bg-red-50 text-red-700 rounded border border-red-200 mt-4">
-                        <h3 class="font-medium mb-2">Upload Error</h3>
-                        <p>Error initializing upload: ${error.message}</p>
-                        <div class="mt-3">
-                            <a href="{% url 'storage:upload_form' %}" 
-                               class="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-                                Try Again
-                            </a>
-                        </div>
-                    </div>
-                `;
-            }
-        }
+    
+    try {
+        // Show progress indicator
+        window.updateUploadProgress('Preparing upload...', 10);
+        
+        // Scan the folder using the folder scanner
+        await scanFolder();
+    } catch (error) {
+        console.error('Error during upload:', error);
+        window.showErrorMessage({
+            message: `Upload failed: ${error.message || 'Unknown error'}`
+        });
+        
+        // Log additional details to help with debugging
+        console.error('Error details:', error);
     }
 });
 
-function prepareFileMetadata() {
-    const fileInput = document.getElementById('files');
-    const files = fileInput.files;
-    
-    const filePaths = [];
-    const fileNames = [];
-    
-    for (let i = 0; i < files.length; i++) {
-        filePaths.push(files[i].webkitRelativePath || files[i].name);
-        fileNames.push(files[i].name);
-    }
-    
-    document.getElementById('file_paths_json').value = JSON.stringify(filePaths);
-    document.getElementById('file_names_json').value = JSON.stringify(fileNames);
-    
-    // Submit the form via HTMX
-    htmx.trigger('#file_paths_json', 'change');
-}
+// Show success message
+window.showSuccessMessage = function(result) {
+    document.getElementById('upload-status').innerHTML = `
+        <div class="p-4 bg-green-50 text-green-700 rounded border border-green-200">
+            <h3 class="font-medium mb-2">Upload Successful!</h3>
+            <p>Uploaded ${result.successful} files</p>
+            <div class="mt-3">
+                <a href="{% url 'storage:archivist_dashboard' %}" 
+                   class="inline-block bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
+                    Go to Dashboard
+                </a>
+            </div>
+        </div>
+    `;
+};
+
+// Show error message
+window.showErrorMessage = function(error) {
+    document.getElementById('upload-status').innerHTML = `
+        <div class="p-4 bg-red-50 text-red-700 rounded border border-red-200">
+            <h3 class="font-medium mb-2">Upload Error</h3>
+            <p>${error.message || error.error || 'An unknown error occurred'}</p>
+            <div class="mt-3">
+                <button onclick="location.reload()" 
+                   class="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                    Try Again
+                </button>
+            </div>
+        </div>
+    `;
+};
 </script>
 {% endblock %} 
