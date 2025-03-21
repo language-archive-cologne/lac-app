@@ -1,7 +1,7 @@
 from django.db import models
 from lacos.blam.models.base_model import BaseModel       
-from lacos.storage.models import S3ResourceLocation, ACFLPermissions
-
+from lacos.storage.models import S3ResourceLocation
+from lacos.storage.models import ACLPermissions
 class Repository(BaseModel):
     """
     Abstract base model for repository information
@@ -88,23 +88,23 @@ class Repository(BaseModel):
         try:
             from django.contrib.contenttypes.models import ContentType
             ct = ContentType.objects.get_for_model(self)
-            permissions = ACFLPermissions.objects.get(
+            permissions = ACLPermissions.objects.get(
                 content_type=ct,
                 object_id=self.id
             )
             return permissions
-        except ACFLPermissions.DoesNotExist:
+        except ACLPermissions.DoesNotExist:
             return None
             
     def refresh_acfl_permissions(self):
-        """Refresh ACFL permissions from S3"""
-        from lacos.storage.services import ACFLService
-        return ACFLService.refresh_permissions(self)
+        """Refresh ACL permissions from S3"""
+        from lacos.storage.services import ACLService
+        return ACLService.refresh_permissions(self)
         
     def check_permission(self, user, permission_type='read'):
         """Check if a user has permission on this repository"""
-        from lacos.storage.services import ACFLService
-        return ACFLService.check_permission(user, self, permission_type)
+        from lacos.storage.services import ACLService
+        return ACLService.check_permission(user, self, permission_type)
 
     def register_s3_location(self, bucket, key, pid_url=None):
         """Register S3 location for this repository"""
@@ -112,16 +112,16 @@ class Repository(BaseModel):
         return S3Service.register_s3_location(self, bucket, key, pid_url)
         
     def register_acfl_file(self, bucket, key):
-        """Register ACFL file location for this repository"""
+        """Register ACL file location for this repository"""
         from django.contrib.contenttypes.models import ContentType
         ct = ContentType.objects.get_for_model(self)
         
-        acfl, created = ACFLPermissions.objects.update_or_create(
+        acfl, created = ACLPermissions.objects.update_or_create(
             content_type=ct,
             object_id=self.id,
             defaults={
-                'acfl_file_bucket': bucket,
-                'acfl_file_key': key
+                'acl_file_bucket': bucket,
+                'acl_file_key': key
             }
         )
         return acfl

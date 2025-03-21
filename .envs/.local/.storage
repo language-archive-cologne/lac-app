@@ -2,6 +2,8 @@
 # ------------------------------------------------------------------------------
 USE_MINIO=true
 AWS_S3_ENDPOINT_URL=http://minio:9000
+# This is the URL that browsers will use to connect to MinIO
+AWS_S3_BROWSER_ENDPOINT_URL=http://localhost:9000
 AWS_ACCESS_KEY_ID=minioadmin
 AWS_SECRET_ACCESS_KEY=minioadmin
 AWS_STORAGE_BUCKET_NAME=lacos-ingest

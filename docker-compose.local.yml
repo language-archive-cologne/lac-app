@@ -2,7 +2,10 @@ volumes:
   lacos_local_postgres_data: {}
   lacos_local_postgres_data_backups: {}
   minio_data: {}
-  
+
+networks:
+  lacos_network:
+    driver: bridge
 
 services:
   django:
@@ -14,14 +17,18 @@ services:
     restart: unless-stopped
     depends_on:
       - postgres
+      - minio
     volumes:
       - .:/app:z
     env_file:
       - ./.envs/.local/.django
       - ./.envs/.local/.postgres
+      - ./.envs/.local/.storage
     ports:
       - '8000:8000'
     command: /start
+    networks:
+      - lacos_network
 
   postgres:
     build:
@@ -34,9 +41,12 @@ services:
       - lacos_local_postgres_data_backups:/backups
     env_file:
       - ./.envs/.local/.postgres
+    networks:
+      - lacos_network
 
   minio:
     image: minio/minio
+    container_name: lacos_minio
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -45,14 +55,19 @@ services:
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_API_ALLOW_CORS_ORIGIN: "*"
+      MINIO_BROWSER_REDIRECT_URL: "http://localhost:9001"
+      MINIO_DOMAIN_NAME: "localhost:9000"
+      MINIO_LOGGER: "console"
+      MINIO_LOGGER_LEVEL: "debug"
     command: server /data --console-address ":9001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 30s
       timeout: 20s
       retries: 3
-
-
+    networks:
+      - lacos_network
 
   node:
     image: node:latest
@@ -64,3 +79,5 @@ services:
       - .:/app:z
     command: /bin/sh -c "npm install && npm run dev"
     tty: true
+    networks:
+      - lacos_network

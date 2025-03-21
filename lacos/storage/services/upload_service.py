@@ -1,10 +1,10 @@
 import logging
 import time
-from typing import Dict, Any, List, Tuple, Set
+import os
+import json
+from typing import Dict, Any, List, Tuple, Set, Optional
 
 import boto3
-# Import TransferConfig directly from boto3.s3.transfer
-from boto3.s3.transfer import TransferConfig
 
 from .base_storage_service import BaseStorageService
 
@@ -14,7 +14,12 @@ class UploadService(BaseStorageService):
     """
     Service for handling file uploads to S3/MinIO buckets.
     
-    This simplified service focuses solely on uploading files directly from browser requests.
+    This service focuses on core S3 operations for uploads, completely independent of
+    web frameworks or HTTP concepts. It provides pure business logic that can be used
+    by any presentation layer (REST API, web UI, CLI, etc).
+    
+    The service implements the presigned URL pattern for browser-to-S3 direct uploads,
+    allowing clients to upload directly to S3 without server intermediation.
     """
     
     def __init__(self):
@@ -22,393 +27,611 @@ class UploadService(BaseStorageService):
         super().__init__()
         logger.info("UploadService initialized")
 
-    def _configure_transfer(self) -> TransferConfig:
+    def _generate_file_key(self, file_name: str, path_prefix: Optional[str] = None) -> str:
         """
-        Configure S3 transfer parameters for multipart uploads.
-        
-        Returns:
-            TransferConfig: Configured transfer settings for S3 uploads
-        """
-        # Configure multipart upload with optimized settings
-        multipart_threshold = 8 * 1024 * 1024  # 8 MB
-        max_concurrency = 5
-        
-        transfer_config = TransferConfig(
-            multipart_threshold=multipart_threshold,
-            max_concurrency=max_concurrency,
-            multipart_chunksize=multipart_threshold,
-            use_threads=True
-        )
-        
-        logger.info(f"Transfer configuration: threshold={self._format_size(multipart_threshold)}, "
-                  f"max_concurrency={max_concurrency}, chunk_size={self._format_size(multipart_threshold)}")
-        
-        return transfer_config
-    
-    def _upload_single_file(self, file, file_name: str, file_size: int, bucket_name: str, 
-                          relative_path: str, transfer_config) -> Dict[str, Any]:
-        """
-        Upload a single file to S3.
+        Generate a clean S3 key (path) for a file.
         
         Args:
-            file: The file object to upload
-            file_name: Name of the file
-            file_size: Size of the file in bytes
-            bucket_name: Name of the S3 bucket
-            relative_path: Path where the file will be stored in S3
-            transfer_config: S3 transfer configuration
+            file_name (str): The name of the file
+            path_prefix (str, optional): Path prefix to prepend to the file name
             
         Returns:
-            Dict containing upload details or error information
+            str: The generated S3 key
+        """
+        # Sanitize the file name to work with S3 (replace spaces with underscores)
+        clean_file_name = file_name.replace(' ', '_')
+        
+        # Build the full S3 key (path)
+        if path_prefix:
+            # Ensure the path has no leading or trailing slashes
+            clean_prefix = path_prefix.strip('/')
+            if clean_prefix:
+                return f"{clean_prefix}/{clean_file_name}"
+        
+        # Just return the clean file name if no prefix
+        return clean_file_name
+
+    def generate_presigned_post(self, file_name: str, file_type: str, path_prefix: Optional[str] = None, 
+                             expiration: int = 3600, use_multipart: bool = True, part_count: int = 10) -> Dict[str, Any]:
+        """
+        Generate a presigned URL for direct upload to S3.
+        
+        Args:
+            file_name: The name of the file to upload
+            file_type: The MIME type of the file
+            path_prefix: Optional prefix for the S3 key
+            expiration: Expiration time in seconds
+            use_multipart: Whether to use multipart upload (default: True)
+            part_count: Number of parts for multipart upload (default: 10)
+            
+        Returns:
+            Dictionary with presigned post data
         """
         try:
-            logger.info(f"Uploading file: {file_name} → {relative_path}")
+            # Generate a unique key for the file
+            file_key = self._generate_file_key(file_name, path_prefix)
             
-            # Create a buffered copy of the file content to prevent "seek of closed file" errors
-            # when the same file is uploaded to multiple paths
-            try:
-                # First try to read the content (this may fail if file is already closed)
-                file.seek(0)
-                content = file.read()
-                from io import BytesIO
-                file_buffer = BytesIO(content)
-            except (ValueError, AttributeError) as e:
-                # If the file is already closed or doesn't support seek/read, log it
-                logger.warning(f"Could not read file {file_name} - creating empty buffer: {str(e)}")
-                # Create an empty file with the same name as a fallback
-                from io import BytesIO
-                file_buffer = BytesIO(b"")
+            logger.info(f"Generating presigned upload URL for {file_key}")
+            
+            # If multipart upload is requested, use that flow
+            if use_multipart:
+                # Initialize multipart upload
+                init_result = self.initialize_multipart_upload(
+                    file_name=file_name,
+                    file_type=file_type,
+                    path_prefix=path_prefix
+                )
                 
-            # Upload the file to the exact path provided using the buffer instead of original file
-            self.s3_client.upload_fileobj(
-                file_buffer,
-                bucket_name,
-                relative_path,
-                Config=transfer_config
+                if init_result['success']:
+                    # Get presigned URLs for parts
+                    parts_result = self.get_upload_part_urls(
+                        s3_key=init_result['s3_key'],
+                        upload_id=init_result['upload_id'],
+                        part_count=part_count,
+                        expiration=expiration
+                    )
+                    
+                    if parts_result['success']:
+                        return {
+                            'success': True,
+                            'file_name': file_name,
+                            's3_key': file_key,
+                            'file_type': file_type,
+                            'upload_type': 'multipart',
+                            'upload_id': init_result['upload_id'],
+                            'presigned_urls': parts_result['presigned_urls'],
+                            'expires_in': expiration
+                        }
+            
+            # Fall back to single-part upload if multipart is disabled or failed
+            # Use the presigned client if available, otherwise use the regular client
+            client = getattr(self, 'presigned_client', self.s3_client)
+            
+            # Generate the presigned POST data
+            presigned_post = client.generate_presigned_post(
+                Bucket=self.ingest_bucket,
+                Key=file_key,
+                Fields={
+                    'Content-Type': file_type
+                },
+                Conditions=[
+                    {'Content-Type': file_type}
+                ],
+                ExpiresIn=expiration
             )
             
-            logger.info(f"✅ Successfully uploaded {file_name} to {bucket_name}/{relative_path}")
+            # Log the generated URL for debugging
+            logger.info(f"Generated presigned URL: {presigned_post['url']}")
+            logger.info(f"Generated presigned fields: {json.dumps(presigned_post['fields'])}")
             
             return {
-                "success": True,
-                "name": file_name,
-                "s3_key": relative_path,
-                "size": file_size,
-                "size_formatted": self._format_size(file_size)
+                'success': True,
+                'presigned_post': presigned_post,
+                's3_key': file_key,
+                'file_name': file_name,
+                'file_type': file_type,
+                'upload_type': 'single',
+                'expires_in': expiration
             }
-            
         except Exception as e:
-            logger.error(f"❌ Error uploading {file_name}: {str(e)}")
-            logger.error("Full stack trace:", exc_info=True)
-            
+            logger.error(f"Error generating presigned POST for {file_name}: {str(e)}")
             return {
-                "success": False,
-                "name": file_name,
-                "error": str(e)
+                'success': False,
+                'error': str(e)
             }
     
-    def _visualize_structure(self, s3_keys_structure: Dict[str, Dict]) -> None:
+    def _format_curl_example(self, presigned_post: Dict[str, Any], file_name: str, file_type: str) -> str:
         """
-        Visualize the structure of files uploaded to S3.
+        Format a curl command example for testing the presigned URL.
         
         Args:
-            s3_keys_structure: Dictionary mapping S3 keys to file info
-        """
-        logger.info("=" * 50)
-        logger.info("RESULTING S3 STRUCTURE:")
-        
-        # Group by folder path for visualization
-        folder_structure = {}
-        for s3_key in s3_keys_structure.keys():
-            parts = s3_key.split('/')
-            current = folder_structure
-            # Build nested structure
-            for i, part in enumerate(parts[:-1]):  # Skip the last part (filename)
-                if part not in current:
-                    current[part] = {}
-                current = current[part]
-            # Add the file at the end
-            current[parts[-1]] = "FILE"
-        
-        # Helper function to print the structure
-        def print_structure(structure, indent=0):
-            lines = []
-            for key, value in structure.items():
-                prefix = "  " * indent
-                if value == "FILE":
-                    lines.append(f"{prefix}📄 {key}")
-                else:
-                    lines.append(f"{prefix}📁 {key}")
-                    child_lines = print_structure(value, indent + 1)
-                    lines.extend(child_lines)
-            return lines
-        
-        structure_lines = print_structure(folder_structure)
-        for line in structure_lines:
-            logger.info(line)
-        
-        logger.info("=" * 50)
-    
-    def _log_upload_stats(self, uploaded_files: List[Dict], failed_files: List[Dict], 
-                        total_size: int, duration: float) -> None:
-        """
-        Log statistics about the upload operation.
-        
-        Args:
-            uploaded_files: List of successfully uploaded files
-            failed_files: List of files that failed to upload
-            total_size: Total size of uploaded files in bytes
-            duration: Duration of the upload operation in seconds
-        """
-        avg_speed = total_size / duration if duration > 0 else 0
-        
-        logger.info(f"Upload process completed:")
-        logger.info(f"- Total files uploaded: {len(uploaded_files)}")
-        logger.info(f"- Failed uploads: {len(failed_files)}")
-        
-        if len(failed_files) > 0:
-            logger.warning(f"Failed files (first 5): {[f['name'] for f in failed_files[:5]]}")
-        
-        logger.info(f"- Total size: {self._format_size(total_size)}")
-        logger.info(f"- Duration: {duration:.2f} seconds")
-        logger.info(f"- Average speed: {self._format_size(avg_speed)}/s")
-        
-        return avg_speed
-    
-    def _process_file_paths(self, file_paths: Dict[str, str]) -> Dict[str, str]:
-        """
-        Process and organize file paths.
-        
-        Args:
-            file_paths: Dictionary mapping paths to file names or file names to paths
-                        (depending on how the data was provided from the frontend)
+            presigned_post: The presigned post data from boto3
+            file_name: The name of the file
+            file_type: The MIME type of the file
             
         Returns:
-            Dictionary mapping full paths to file names
+            str: A curl command that can be used to test the upload
         """
-        # The expected format we need is a dict with paths as keys and filenames as values
+        # Start building the curl command
+        curl_cmd = ['curl -v']
         
-        # First, detect the input format
-        if not file_paths:
-            logger.warning("No file paths provided")
-            return {}
-            
-        # Take the first key to determine the format
-        first_key = next(iter(file_paths.keys()))
-        first_value = file_paths[first_key]
+        # Add the URL
+        curl_cmd.append(f"-X POST '{presigned_post['url']}'")
         
-        # If the key contains a slash (path-like) and the value doesn't, 
-        # we already have the correct format: path -> filename
-        if "/" in first_key and "/" not in first_value:
-            logger.info("File paths are already in correct format (paths as keys)")
-            return file_paths
+        # Add all the fields
+        for key, value in presigned_post['fields'].items():
+            curl_cmd.append(f"-F '{key}={value}'")
         
-        # If the key doesn't contain a slash but the value does,
-        # we need to invert: filename -> path becomes path -> filename
-        elif "/" not in first_key and "/" in first_value:
-            inverted_paths = {}
-            for filename, path in file_paths.items():
-                inverted_paths[path] = filename
-                
-            logger.info(f"Inverted file paths from filename->path to path->filename format")
-            return inverted_paths
+        # Add the file field
+        curl_cmd.append(f"-F 'file=@/path/to/{file_name};type={file_type}'")
         
-        # If both key and value have slashes or neither do, log a warning and try to infer
-        else:
-            logger.warning(f"Ambiguous file path format. Keys and values both have or don't have path separators.")
-            # Default to using the input as-is with a warning
-            return file_paths
+        # Join everything together
+        return " \\\n  ".join(curl_cmd)
     
-    def _debug_file_paths(self, file_paths: Dict[str, str]) -> None:
+    def generate_batch_presigned_posts(self, files_metadata: List[Dict[str, str]], 
+                                    path_prefix: Optional[str] = None,
+                                    expiration: int = 3600,
+                                    use_multipart: bool = True,
+                                    part_count: int = 10) -> Dict[str, Any]:
         """
-        Log file path information for debugging purposes.
+        Generate multiple presigned URLs for direct upload to S3.
         
         Args:
-            file_paths: Dictionary mapping either file names to paths or paths to file names
-        """
-        logger.info("=" * 50)
-        logger.info("DEBUG - RECEIVED FILE PATHS:")
-        if file_paths:
-            for key, value in file_paths.items():
-                if "/" in key:  # path -> filename format
-                    logger.info(f"  Path: {key} → File: {value}")
-                else:  # filename -> path format
-                    logger.info(f"  File: {key} → Path: {value}")
-        logger.info("=" * 50)
-    
-    def upload_files_directly(self, files, folder_name: str, bucket_name: str = None, file_paths: dict = None) -> Dict[str, Any]:
-        """
-        Upload files directly from a request to an S3 bucket.
-        
-        This method is designed to handle uploads from a browser, where the files are
-        provided as Django UploadedFile objects, along with a structure of file paths
-        typically provided via webkitRelativePath in the browser.
-        
-        Args:
-            files: List of UploadedFile objects, typically from request.FILES
-            folder_name (str): The name of the folder to upload to in the bucket
-            bucket_name (str, optional): The name of the S3 bucket to upload to. Defaults to ingest bucket.
-            file_paths (dict, optional): Dictionary mapping file names to their relative paths
+            files_metadata (List[Dict[str, str]]): List of dictionaries with file_name and file_type for each file.
+                           May include 'path' to specify a file-specific path.
+            path_prefix (str, optional): Folder path to prepend to all file paths
+            expiration (int): Time in seconds for the URLs to be valid (default 1 hour)
+            use_multipart (bool): Whether to use multipart upload (default: True)
+            part_count (int): Number of parts for multipart upload (default: 10)
             
         Returns:
-            Dict[str, Any]: A dictionary containing the upload results
+            Dict[str, Any]: Dictionary containing the presigned URL data for all files or error information
         """
-        # Set default bucket and validate inputs
-        if bucket_name is None:
-            bucket_name = self.ingest_bucket
+        results = []
+        failures = []
         
-        if not files:
-            return {"success": False, "error": "No files provided for upload"}
+        for file_meta in files_metadata:
+            file_name = file_meta.get('file_name')
+            file_type = file_meta.get('file_type')
+            file_path = file_meta.get('path')  # Get the optional file-specific path
             
-        if not folder_name:
-            return {"success": False, "error": "No folder name provided for upload"}
+            if not file_name or not file_type:
+                logger.warning(f"Skipping invalid file metadata: {file_meta}")
+                failures.append({
+                    'file_meta': file_meta,
+                    'error': 'Missing file_name or file_type'
+                })
+                continue
             
-        file_paths = file_paths or {}
-        
-        # Log initial information
-        logger.info(f"Starting direct upload process for folder '{folder_name}' to bucket '{bucket_name}'")
-        logger.info(f"Total number of files to process: {len(files)}")
-        
-        if file_paths:
-            logger.info(f"Path information available for {len(file_paths)} files")
-            self._debug_file_paths(file_paths)
-        
-        # Ensure the bucket exists
-        if not self.ensure_bucket_exists(bucket_name):
-            return {"success": False, "error": f"Failed to ensure bucket exists: {bucket_name}"}
-        
-        # Configure multipart upload
-        transfer_config = self._configure_transfer()
-        
-        try:
-            uploaded_files = []
-            failed_files = []
-            total_size = 0
-            start_time = time.time()
-            
-            logger.info(f"Starting upload of {len(files)} files to {bucket_name}")
-            
-            # Track all used S3 keys to visualize the resulting structure
-            s3_keys_structure = {}
-            
-            # Process paths to handle duplicate filenames by using full paths as keys
-            path_to_file = self._process_file_paths(file_paths)
-            
-            # Create a map of files by name for easy access
-            file_map = {file.name: file for file in files}
-            
-            # Create a map to track file usage - some files may be used in multiple paths
-            # For each filename, this tracks how many paths use it and how many times it's been processed
-            file_usage = {}
-            for full_path, file_name in path_to_file.items():
-                if file_name in file_usage:
-                    file_usage[file_name]["total_paths"] += 1
+            # Create effective path prefix by combining the overall prefix with file-specific path
+            effective_path_prefix = path_prefix
+            if file_path:
+                if effective_path_prefix:
+                    effective_path_prefix = f"{effective_path_prefix}/{file_path}"
                 else:
-                    file_usage[file_name] = {
-                        "total_paths": 1,
-                        "processed_paths": 0
-                    }
+                    effective_path_prefix = file_path
             
-            # Log file usage information for debugging
-            for file_name, usage in file_usage.items():
-                if usage["total_paths"] > 1:
-                    logger.info(f"File {file_name} will be used in {usage['total_paths']} different paths")
+            # Generate the presigned post for this file
+            result = self.generate_presigned_post(
+                file_name=file_name,
+                file_type=file_type,
+                path_prefix=effective_path_prefix,
+                expiration=expiration,
+                use_multipart=use_multipart,
+                part_count=part_count
+            )
             
-            # Track which files were successfully processed to avoid duplicate checking
-            processed_files = set()
-            processed_paths = set()  # Track by path which is more reliable for duplicates
-            
-            # Process each full path
-            missing_files = []
-            for full_path, file_name in path_to_file.items():
-                # Check if we have the file in our files collection
-                if file_name not in file_map:
-                    logger.warning(f"Skipping path {full_path}: File {file_name} not found in uploaded files")
-                    missing_files.append({
-                        "name": file_name,
-                        "path": full_path,
-                        "error": "File not found in uploaded files"
+            # Validate the result has all required fields
+            if result['success']:
+                # Extra validation to ensure presigned_post is properly structured
+                if 'presigned_post' not in result:
+                    logger.error(f"Missing presigned_post in result for {file_name}")
+                    failures.append({
+                        'file_meta': file_meta,
+                        'error': "Missing presigned_post in server response"
+                    })
+                    continue
+                    
+                # Validate that presigned_post has url and fields
+                presigned_post = result['presigned_post']
+                if not isinstance(presigned_post, dict) or 'url' not in presigned_post or 'fields' not in presigned_post:
+                    logger.error(f"Invalid presigned_post structure for {file_name}: {presigned_post}")
+                    failures.append({
+                        'file_meta': file_meta,
+                        'error': f"Invalid presigned_post format. Keys: {list(presigned_post.keys()) if isinstance(presigned_post, dict) else 'not a dict'}"
                     })
                     continue
                 
-                # If we've already processed this exact path, skip it
-                if full_path in processed_paths:
-                    logger.warning(f"Skipping duplicate path: {full_path}")
-                    continue
-                
-                # Get the file and its size
-                file = file_map[file_name]
-                file_size = file.size
-                
-                # Upload the file using the full path
-                result = self._upload_single_file(
-                    file, file_name, file_size, bucket_name, full_path, transfer_config
-                )
-                
-                # Track usage for this file
-                if file_name in file_usage:
-                    file_usage[file_name]["processed_paths"] += 1
-                
-                if result["success"]:
-                    total_size += file_size
-                    uploaded_files.append(result)
-                    s3_keys_structure[full_path] = {'file': file_name, 'size': file_size}
-                else:
-                    failed_files.append(result)
-                
-                # Mark this path as processed regardless of success/failure
-                processed_paths.add(full_path)
-                
-                # Only mark the file as fully processed if we've used it for all its paths
-                if file_name in file_usage and file_usage[file_name]["processed_paths"] >= file_usage[file_name]["total_paths"]:
-                    processed_files.add(file_name)
-                    logger.info(f"File {file_name} has been used in all {file_usage[file_name]['total_paths']} paths")
-            
-            # Check for files that had no path information
-            for file_name, file in file_map.items():
-                # Skip files we've already processed
-                if file_name in processed_files:
-                    continue
-                
-                # If the file wasn't processed (not in our processed_files set)
-                logger.warning(f"Skipping file {file_name}: No path information available")
-                failed_files.append({
-                    "name": file_name,
-                    "error": "Missing path information"
+                results.append(result)
+            else:
+                failures.append({
+                    'file_meta': file_meta,
+                    'error': result.get('error', 'Unknown error')
                 })
+        
+        return {
+            'success': len(failures) == 0,
+            'presigned_posts': results,
+            'failures': failures,
+            'total_urls': len(results),
+            'total_failures': len(failures)
+        }
+    
+    def get_upload_url_with_acceleration(self, file_name: str, file_type: str, 
+                                      path_prefix: Optional[str] = None,
+                                      expiration: int = 3600) -> Dict[str, Any]:
+        """
+        Generate a presigned URL with S3 Transfer Acceleration for maximum upload speed.
+        
+        Args:
+            file_name (str): Name of the file to upload
+            file_type (str): MIME type of the file
+            path_prefix (str, optional): Folder path to prepend to the file name
+            expiration (int): Time in seconds for the URL to be valid (default 1 hour)
             
-            # Add any missing files to the failed files list
-            failed_files.extend(missing_files)
+        Returns:
+            Dict[str, Any]: Dictionary containing the presigned URL data with acceleration enabled or error information
+        """
+        try:
+            # Sanitize the file name to work with S3
+            clean_file_name = file_name.replace(' ', '_')
             
-            # Visualize the resulting structure
-            self._visualize_structure(s3_keys_structure)
+            # Build the full S3 key (path)
+            s3_key = clean_file_name
+            if path_prefix:
+                # Ensure the path has a trailing slash but no leading slash
+                path_prefix = path_prefix.strip('/')
+                if path_prefix:
+                    s3_key = f"{path_prefix}/{clean_file_name}"
             
-            # Log statistics and calculate results
-            end_time = time.time()
-            duration = end_time - start_time
-            avg_speed = self._log_upload_stats(uploaded_files, failed_files, total_size, duration)
+            logger.info(f"Generating accelerated upload URL for {s3_key}")
             
-            # Return the results
+            # Create a special client with acceleration enabled
+            s3_client_accelerated = boto3.client(
+                's3',
+                region_name=self.region,
+                endpoint_url=self.endpoint_url,
+                aws_access_key_id=self.access_key,
+                aws_secret_access_key=self.secret_key,
+                config=boto3.session.Config(s3={'use_accelerate_endpoint': True})
+            )
+            
+            # Generate the presigned post data with acceleration
+            presigned_post = s3_client_accelerated.generate_presigned_post(
+                Bucket=self.ingest_bucket,
+                Key=s3_key,
+                Fields={
+                    'Content-Type': file_type
+                },
+                Conditions=[
+                    {'Content-Type': file_type}
+                ],
+                ExpiresIn=expiration
+            )
+            
             return {
-                "success": len(failed_files) == 0,
-                "uploaded_files": uploaded_files,
-                "failed_files": failed_files,
-                "total_files": len(uploaded_files),
-                "total_failed": len(failed_files),
-                "total_size": total_size,
-                "total_size_formatted": self._format_size(total_size),
-                "target_bucket": bucket_name,
-                "target_prefix": folder_name + "/",  # Keep this for view compatibility
-                "duration": duration,
-                "avg_speed": avg_speed,
-                "avg_speed_formatted": self._format_size(avg_speed) + "/s"
+                'success': True,
+                'file_name': file_name,
+                's3_key': s3_key,
+                'url': presigned_post['url'],
+                'fields': presigned_post['fields'],
+                'expires_in': expiration,
+                'acceleration_enabled': True
+            }
+            
+        except Exception as e:
+            logger.error(f"Error generating accelerated upload URL for {file_name}: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                'file_name': file_name
+            }
+    
+    def mark_upload_complete(self, s3_key: str) -> Dict[str, Any]:
+        """
+        Mark an S3 upload as complete and verify the file exists.
+        
+        Args:
+            s3_key (str): The S3 key for the uploaded file
+            
+        Returns:
+            Dict[str, Any]: Dictionary containing verification information or error information
+        """
+        try:
+            # Check if the file exists in S3
+            response = self.s3_client.head_object(
+                Bucket=self.ingest_bucket,
+                Key=s3_key
+            )
+            
+            file_size = response.get('ContentLength', 0)
+            content_type = response.get('ContentType', 'application/octet-stream')
+            last_modified = response.get('LastModified', None)
+            
+            return {
+                'success': True,
+                's3_key': s3_key,
+                'exists': True,
+                'file_size': file_size,
+                'file_size_formatted': self._format_size(file_size),
+                'content_type': content_type,
+                'last_modified': last_modified.isoformat() if last_modified else None
+            }
+            
+        except Exception as e:
+            logger.error(f"Error verifying uploaded file {s3_key}: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                's3_key': s3_key,
+                'exists': False
+            }
+    
+    def _format_size(self, size_bytes: int) -> str:
+        """
+        Format a size in bytes to a human-readable format.
+        
+        Args:
+            size_bytes (int): Size in bytes
+            
+        Returns:
+            str: Formatted size string
+        """
+        # Define size units
+        units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+        size = float(size_bytes)
+        unit_index = 0
+        
+        # Find the appropriate unit
+        while size >= 1024 and unit_index < len(units) - 1:
+            size /= 1024
+            unit_index += 1
+        
+        # Format with proper precision
+        if unit_index == 0:
+            return f"{int(size)} {units[unit_index]}"
+        else:
+            return f"{size:.2f} {units[unit_index]}"
+
+    # ----- Multipart Upload Methods -----
+
+    def initialize_multipart_upload(self, file_name: str, file_type: str, 
+                                  path_prefix: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Initialize a multipart upload to S3.
+        
+        Args:
+            file_name (str): Name of the file to upload
+            file_type (str): MIME type of the file
+            path_prefix (str, optional): Folder path to prepend to the file name
+            
+        Returns:
+            Dict[str, Any]: Dictionary containing upload ID and S3 key or error information
+        """
+        try:
+            # Generate a clean S3 key for the file
+            s3_key = self._generate_file_key(file_name, path_prefix)
+            
+            logger.info(f"Initializing multipart upload for {s3_key}")
+            
+            # Create a multipart upload
+            response = self.s3_client.create_multipart_upload(
+                Bucket=self.ingest_bucket,
+                Key=s3_key,
+                ContentType=file_type
+            )
+            
+            upload_id = response['UploadId']
+            logger.info(f"Multipart upload initialized: {upload_id}")
+            
+            return {
+                'success': True,
+                'upload_id': upload_id,
+                's3_key': s3_key,
+                'file_name': file_name,
+                'file_type': file_type
             }
         except Exception as e:
-            logger.error(f"Error in upload process: {str(e)}")
-            logger.error("Full stack trace:", exc_info=True)
+            logger.error(f"Error initializing multipart upload for {file_name}: {str(e)}")
             return {
-                "success": False,
-                "error": str(e),
-                "uploaded_files": uploaded_files,
-                "failed_files": failed_files
+                'success': False,
+                'error': str(e),
+                'file_name': file_name
+            }
+    
+    def get_upload_part_urls(self, s3_key: str, upload_id: str, 
+                           part_count: int, expiration: int = 3600) -> Dict[str, Any]:
+        """
+        Generate presigned URLs for each part of a multipart upload.
+        
+        Args:
+            s3_key (str): The S3 key for the file
+            upload_id (str): The multipart upload ID
+            part_count (int): Number of parts to generate URLs for
+            expiration (int): Time in seconds for the URLs to be valid
+            
+        Returns:
+            Dict[str, Any]: Dictionary containing presigned URLs for each part or error information
+        """
+        try:
+            presigned_urls = []
+            
+            for part_number in range(1, part_count + 1):
+                # Generate a presigned URL for this part
+                url = self.s3_client.generate_presigned_url(
+                    'upload_part',
+                    Params={
+                        'Bucket': self.ingest_bucket,
+                        'Key': s3_key,
+                        'UploadId': upload_id,
+                        'PartNumber': part_number
+                    },
+                    ExpiresIn=expiration
+                )
+                
+                presigned_urls.append({
+                    'part_number': part_number,
+                    'url': url
+                })
+            
+            logger.info(f"Generated {part_count} part upload URLs for {s3_key}")
+            
+            return {
+                'success': True,
+                'presigned_urls': presigned_urls,
+                's3_key': s3_key,
+                'upload_id': upload_id,
+                'part_count': part_count
+            }
+        except Exception as e:
+            logger.error(f"Error generating part upload URLs for {s3_key}: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                's3_key': s3_key,
+                'upload_id': upload_id
+            }
+    
+    def complete_multipart_upload(self, s3_key: str, upload_id: str, 
+                                parts: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Complete a multipart upload by assembling all parts.
+        
+        Args:
+            s3_key (str): The S3 key for the file
+            upload_id (str): The multipart upload ID
+            parts (List[Dict[str, Any]]): List of dictionaries with part_number and etag for each part
+            
+        Returns:
+            Dict[str, Any]: Dictionary containing status information or error information
+        """
+        try:
+            # Format the parts list for the API call
+            multipart_parts = [
+                {
+                    'PartNumber': part['part_number'],
+                    'ETag': part['etag']
+                }
+                for part in parts
+            ]
+            
+            # Sort parts by part number to ensure correct order
+            multipart_parts.sort(key=lambda x: x['PartNumber'])
+            
+            logger.info(f"Completing multipart upload for {s3_key} with {len(multipart_parts)} parts")
+            
+            # Complete the multipart upload
+            response = self.s3_client.complete_multipart_upload(
+                Bucket=self.ingest_bucket,
+                Key=s3_key,
+                UploadId=upload_id,
+                MultipartUpload={
+                    'Parts': multipart_parts
+                }
+            )
+            
+            logger.info(f"Multipart upload completed: {response}")
+            
+            # Check if file exists and get metadata
+            head_response = self.s3_client.head_object(
+                Bucket=self.ingest_bucket,
+                Key=s3_key
+            )
+            
+            file_size = head_response.get('ContentLength', 0)
+            
+            return {
+                'success': True,
+                's3_key': s3_key,
+                'location': response.get('Location', ''),
+                'bucket': self.ingest_bucket,
+                'key': s3_key,
+                'etag': response.get('ETag', '').strip('"'),
+                'file_size': file_size,
+                'file_size_formatted': self._format_size(file_size)
+            }
+        except Exception as e:
+            logger.error(f"Error completing multipart upload for {s3_key}: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                's3_key': s3_key,
+                'upload_id': upload_id
+            }
+    
+    def abort_multipart_upload(self, s3_key: str, upload_id: str) -> Dict[str, Any]:
+        """
+        Abort a multipart upload and clean up any uploaded parts.
+        
+        Args:
+            s3_key (str): The S3 key for the file
+            upload_id (str): The multipart upload ID
+            
+        Returns:
+            Dict[str, Any]: Dictionary containing status information or error information
+        """
+        try:
+            logger.info(f"Aborting multipart upload for {s3_key}")
+            
+            # Abort the multipart upload
+            self.s3_client.abort_multipart_upload(
+                Bucket=self.ingest_bucket,
+                Key=s3_key,
+                UploadId=upload_id
+            )
+            
+            logger.info(f"Multipart upload aborted: {upload_id}")
+            
+            return {
+                'success': True,
+                's3_key': s3_key,
+                'upload_id': upload_id
+            }
+        except Exception as e:
+            logger.error(f"Error aborting multipart upload for {s3_key}: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                's3_key': s3_key,
+                'upload_id': upload_id
+            }
+    
+    def list_multipart_uploads(self) -> Dict[str, Any]:
+        """
+        List all in-progress multipart uploads.
+        
+        Returns:
+            Dict[str, Any]: Dictionary containing list of uploads or error information
+        """
+        try:
+            logger.info(f"Listing multipart uploads for bucket {self.ingest_bucket}")
+            
+            # List multipart uploads
+            response = self.s3_client.list_multipart_uploads(
+                Bucket=self.ingest_bucket
+            )
+            
+            uploads = []
+            
+            # Extract upload information
+            for upload in response.get('Uploads', []):
+                uploads.append({
+                    's3_key': upload.get('Key', ''),
+                    'upload_id': upload.get('UploadId', ''),
+                    'initiated': upload.get('Initiated', ''),
+                    'initiator': upload.get('Initiator', {}).get('DisplayName', '')
+                })
+            
+            logger.info(f"Found {len(uploads)} in-progress multipart uploads")
+            
+            return {
+                'success': True,
+                'uploads': uploads,
+                'count': len(uploads)
+            }
+        except Exception as e:
+            logger.error(f"Error listing multipart uploads: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e)
             } 
