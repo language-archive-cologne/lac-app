@@ -51,16 +51,55 @@ const S3Upload = {
                 
                 // Find the file in the input
                 let file = null;
+                console.log(`Looking for file matching: ${post.file_name}`);
+                
+                // Log all available files for debugging
+                console.log(`Available files (${fileInput.files.length}):`);
                 for (let i = 0; i < fileInput.files.length; i++) {
                     const inputFile = fileInput.files[i];
                     const relativePath = inputFile.webkitRelativePath || '';
+                    console.log(`${i}: ${inputFile.name} (${relativePath})`);
+                }
+                
+                // Try various ways to match the file
+                for (let i = 0; i < fileInput.files.length; i++) {
+                    const inputFile = fileInput.files[i];
+                    const relativePath = inputFile.webkitRelativePath || '';
+                    const fileNameOnly = post.file_name.split('/').pop(); // Get just the filename without path
                     
-                    console.log(`Comparing input file ${i}: ${inputFile.name} [path: ${relativePath}] with ${post.file_name}`);
-                    
-                    if (inputFile.name === post.file_name || 
-                        relativePath.endsWith(post.file_name) ||
-                        relativePath === post.file_name) {
-                        console.log(`✅ Found match for ${post.file_name}`);
+                    // Try to match by exact filename
+                    if (inputFile.name === post.file_name) {
+                        console.log(`✅ Found exact match for ${post.file_name}`);
+                        file = inputFile;
+                        break;
+                    }
+                    // Try to match by end of relative path
+                    else if (relativePath.endsWith(post.file_name)) {
+                        console.log(`✅ Found path-end match for ${post.file_name}`);
+                        file = inputFile;
+                        break;
+                    }
+                    // Try to match relative path exactly
+                    else if (relativePath === post.file_name) {
+                        console.log(`✅ Found exact path match for ${post.file_name}`);
+                        file = inputFile;
+                        break;
+                    }
+                    // Try to match the last part of the file name (for cases like "0=ocfl_object_1.0")
+                    else if (inputFile.name === fileNameOnly) {
+                        console.log(`✅ Found match by filename (without path) for ${post.file_name} -> ${fileNameOnly}`);
+                        file = inputFile;
+                        break;
+                    }
+                    // For special cases like "0=ocfl_object_1.0"
+                    else if (post.file_name.includes("=") && inputFile.name === post.file_name.split("=")[1]) {
+                        console.log(`✅ Found special match for ${post.file_name} -> ${post.file_name.split("=")[1]}`);
+                        file = inputFile;
+                        break;
+                    }
+                    // Final fallback for "0=ocfl_object_1.0" special case
+                    else if (post.file_name === "0=ocfl_object_1.0" && inputFile.name === "ocfl_object_1.0") {
+                        console.log(`✅ Found hardcoded match for special OCFL file`);
                         file = inputFile;
                         break;
                     }
@@ -81,11 +120,46 @@ const S3Upload = {
                 
                 // Prepare form data
                 console.log(`Preparing presigned POST for: ${post.file_name} → ${post.s3_key}`);
-                console.log(`URL: ${post.url}`);
-                console.log(`Fields:`, post.fields);
+                
+                // Log the complete post object structure for debugging
+                console.log('Complete post object:', JSON.stringify(post, null, 2));
+                
+                // The server returns presigned_post which contains url and fields
+                if (!post.presigned_post && !post.url) {
+                    console.error(`Missing presigned_post or url property for ${post.file_name}`);
+                    const error = {
+                        file_name: post.file_name,
+                        s3_key: post.s3_key, 
+                        error: `Missing presigned_post or url property in data. Keys available: ${Object.keys(post).join(", ")}`
+                    };
+                    errorDetails.push(error);
+                    reportErrorToServer(error);
+                    updateProgress();
+                    return;
+                }
+                
+                // Get the url and fields from either presigned_post or directly from post
+                const url = post.presigned_post ? post.presigned_post.url : post.url;
+                const fields = post.presigned_post ? post.presigned_post.fields : post.fields;
+                
+                console.log(`URL: ${url}`);
+                console.log(`Fields:`, fields);
+                
+                if (!fields) {
+                    console.error(`Missing fields property for ${post.file_name}`);
+                    const error = {
+                        file_name: post.file_name,
+                        s3_key: post.s3_key, 
+                        error: `Missing fields property in presigned data. Data structure: ${JSON.stringify(post)}`
+                    };
+                    errorDetails.push(error);
+                    reportErrorToServer(error);
+                    updateProgress();
+                    return;
+                }
                 
                 const formData = new FormData();
-                Object.entries(post.fields).forEach(([key, value]) => {
+                Object.entries(fields).forEach(([key, value]) => {
                     formData.append(key, value);
                 });
                 formData.append('file', file);
@@ -93,7 +167,7 @@ const S3Upload = {
                 // Upload to S3
                 console.log(`Sending POST request to S3 for ${post.file_name}`);
                 try {
-                    const response = await fetch(post.url, {
+                    const response = await fetch(url, {
                         method: 'POST',
                         body: formData
                     });
