@@ -28,7 +28,7 @@ Recursive folder structure template that supports unlimited nesting
                                 </form>
                             {% endif %}
                             
-                            <button hx-delete="{% url 'storage:delete_object' bucket_type=bucket_type object_type='folder' object_path=item.path %}"
+                            <button hx-post="{% url 'storage:delete_object' bucket_type=bucket_type object_type='folder' object_path=item.path %}"
                                     hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
                                     hx-target="closest li"
                                     hx-swap="outerHTML"
@@ -67,7 +67,7 @@ Recursive folder structure template that supports unlimited nesting
                                                     </form>
                                                 {% endif %}
                                                 
-                                                <button hx-delete="{% url 'storage:delete_object' bucket_type=bucket_type object_type='folder' object_path=child.path %}"
+                                                <button hx-post="{% url 'storage:delete_object' bucket_type=bucket_type object_type='folder' object_path=child.path %}"
                                                         hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
                                                         hx-target="closest li"
                                                         hx-swap="outerHTML"
@@ -103,7 +103,7 @@ Recursive folder structure template that supports unlimited nesting
                                                     </svg>
                                                 </button>
                                                 
-                                                <button hx-delete="{% url 'storage:delete_object' bucket_type=bucket_type object_type='file' object_path=child.path %}"
+                                                <button hx-post="{% url 'storage:delete_object' bucket_type=bucket_type object_type='file' object_path=child.path %}"
                                                         hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
                                                         hx-target="closest li"
                                                         hx-swap="outerHTML"
@@ -142,7 +142,7 @@ Recursive folder structure template that supports unlimited nesting
                                 </svg>
                             </button>
                             
-                            <button hx-delete="{% url 'storage:delete_object' bucket_type=bucket_type object_type='file' object_path=item.path %}"
+                            <button hx-post="{% url 'storage:delete_object' bucket_type=bucket_type object_type='file' object_path=item.path %}"
                                     hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
                                     hx-target="closest li"
                                     hx-swap="outerHTML"

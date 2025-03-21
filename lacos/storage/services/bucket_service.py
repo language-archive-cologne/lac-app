@@ -103,3 +103,29 @@ class BucketService(BaseStorageService):
             size_bytes /= 1024.0
         return f"{size_bytes:.2f} PB"
 
+    def delete_folder(self, bucket_name, folder_path):
+        """
+        Delete a folder and all its contents from the specified bucket.
+        
+        Args:
+            bucket_name: The name of the bucket
+            folder_path: Path to the folder to delete
+        
+        Returns:
+            dict: Result of the operation with success flag and error message if applicable
+        """
+        return self.delete_object(bucket_name, folder_path, is_directory=True)
+        
+    def delete_file(self, bucket_name, file_path):
+        """
+        Delete a single file from the specified bucket.
+        
+        Args:
+            bucket_name: The name of the bucket
+            file_path: Path to the file to delete
+        
+        Returns:
+            dict: Result of the operation with success flag and error message if applicable
+        """
+        return self.delete_object(bucket_name, file_path, is_directory=False)
+

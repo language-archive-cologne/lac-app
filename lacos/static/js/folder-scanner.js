@@ -130,8 +130,8 @@ async function scanFolder() {
       
       // Notify the server that upload is complete
       console.log('Notifying server that upload is complete...');
-      const completeResult = await notifyUploadComplete(folderNameInput.value.trim() || folderName, uploadResult);
-      console.log('Complete notification result:', completeResult);
+      const notificationResult = await notifyUploadComplete(folderName, uploadResult.processed_files);
+      console.log('Complete notification result:', notificationResult);
       
       if (window.updateUploadProgress) {
         window.updateUploadProgress('Upload complete!', 100);
@@ -201,49 +201,39 @@ async function scanFolder() {
   }
   
   // Function to notify server that upload is complete
-  async function notifyUploadComplete(folderName, uploadResult) {
+  async function notifyUploadComplete(folderName, uploadedFiles) {
+    console.log(`Notifying server about ${uploadedFiles.length} uploaded files in folder ${folderName}`);
+    
     try {
-      const processedFiles = uploadResult.processed_files || [];
-      console.log(`Notifying server about ${processedFiles.length} uploaded files in folder ${folderName}`);
-      
-      if (processedFiles.length === 0) {
-        console.warn('No files were successfully processed, skipping server notification');
-        return {
-          success: false,
-          error: 'No files were successfully processed'
+        // Make sure we're sending the required parameters
+        const data = {
+            folder_name: folderName,
+            uploaded_files: uploadedFiles
         };
-      }
-      
-      console.debug('First 5 processed files:', processedFiles.slice(0, 5));
-      
-      // Format the data as expected by the server
-      const s3Keys = processedFiles.map(file => file.s3_key);
-      
-      const response = await fetch('/api/mark-upload-complete/', {
-        method: 'POST',
-        body: JSON.stringify({
-          folder_name: folderName,
-          s3_keys: s3Keys  // Changed from uploaded_files to s3_keys
-        }),
-        headers: { 
-          'Content-Type': 'application/json',
-          'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-        }
-      });
-      
-      const result = await response.json();
-      console.log('Processing result:', result);
-      
-      if (result.failed_files && result.failed_files.length > 0) {
-        console.warn(`${result.failed_files.length} files failed processing`);
-        console.debug('First 5 failed files:', result.failed_files.slice(0, 5));
-      }
-      
-      return result;
+        
+        // Send the notification to the server
+        const response = await fetch('/api/mark-upload-complete/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        console.log('Processing result:', result);
+        return result;
     } catch (error) {
-      console.error('Failed to notify server of upload completion:', error);
-      throw error;
+        console.error('Error notifying server about upload completion:', error);
+        return { success: false, error: error.message };
     }
+  }
+  
+  // Helper function to get CSRF token
+  function getCsrfToken() {
+    return document.querySelector('input[name="csrfmiddlewaretoken"]')?.value || 
+           document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
   }
   
   // Helper function to get content type from file extension

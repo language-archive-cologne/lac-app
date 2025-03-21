@@ -23,7 +23,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.addEventListener('htmx:beforeSend', function(event) {
         // Show the indicator if it exists and isn't explicitly disabled
         const indicator = document.getElementById('indicator');
-        if (indicator && !event.detail.xhr.getRequestHeader('X-HTMX-Indicator')) {
+        // Check if the indicator should be shown based on request headers
+        const headers = event.detail.requestConfig.headers || {};
+        if (indicator && headers['X-HTMX-Indicator'] !== 'none') {
             indicator.classList.remove('hidden');
         }
     });
@@ -37,7 +39,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Handle delete operations
-        if (event.detail.successful && event.detail.xhr.status === 200 && event.detail.requestConfig.verb === 'delete') {
+        if (event.detail.successful && 
+            (event.detail.xhr.status === 200 || event.detail.xhr.status === 204) && 
+            (event.detail.requestConfig.verb === 'delete' || 
+             (event.detail.requestConfig.verb === 'post' && 
+              event.detail.requestConfig.path.includes('/delete/')))) {
             // If the parent element is a list item, remove it
             const listItem = event.detail.elt.closest('li');
             if (listItem) {

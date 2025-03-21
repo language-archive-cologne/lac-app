@@ -109,15 +109,15 @@ def delete_object(request, bucket_type, object_type, object_path):
         bucket_service = BucketService()
         
         # Determine which bucket to use
-        bucket = bucket_service.ingest_bucket
+        bucket_name = bucket_service.ingest_bucket
         if bucket_type == "production":
-            bucket = bucket_service.production_bucket
+            bucket_name = bucket_service.production_bucket
         
         # Delete the object based on its type
         if object_type == "folder":
-            result = bucket_service.delete_folder(bucket, object_path)
+            result = bucket_service.delete_folder(bucket_name, object_path)
         else:  # file
-            result = bucket_service.delete_file(bucket, object_path)
+            result = bucket_service.delete_file(bucket_name, object_path)
         
         if result.get("success", False):
             success_message = f"Successfully deleted {object_type} '{object_path}'"
@@ -125,7 +125,8 @@ def delete_object(request, bucket_type, object_type, object_path):
             messages.success(request, success_message)
             
             if request.headers.get('HX-Request') == 'true':
-                return HttpResponse(status=204)  # No content response for HTMX
+                # Return an empty response with 200 OK instead of 204 No Content
+                return HttpResponse("", status=200)  # Empty string but status 200
             
             return JsonResponse({"success": True, "message": success_message})
         else:
