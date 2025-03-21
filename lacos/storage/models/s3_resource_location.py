@@ -2,7 +2,9 @@ from django.db import models
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 
-# Create your models here.
+# Import the new models
+from .upload_sessions import UploadSession
+from .s3_file_objects import S3FileObject
 
 class S3ResourceLocation(models.Model):
     """
@@ -60,62 +62,4 @@ class S3ResourceLocation(models.Model):
         ]
     
     def __str__(self):
-        return f"{self.resource_pid} -> s3://{self.s3_bucket}/{self.s3_key}"
-    
-    def get_s3_url(self):
-        """Generate the S3 URL for this resource"""
-        return f"s3://{self.s3_bucket}/{self.s3_key}"
-
-
-class ACFLPermissions(models.Model):
-    """
-    Stores ACFL permission information for collections and bundles.
-    """
-    # Generic foreign key to link to Collection or Bundle
-    content_type = models.ForeignKey(
-        ContentType,
-        on_delete=models.CASCADE,
-        help_text="Type of the object (Collection or Bundle)"
-    )
-    object_id = models.PositiveIntegerField(
-        help_text="ID of the object"
-    )
-    content_object = GenericForeignKey('content_type', 'object_id')
-    
-    # S3 location of the ACFL file
-    acfl_file_bucket = models.CharField(
-        max_length=255,
-        null=True,
-        blank=True,
-        help_text="S3 bucket containing the ACFL file"
-    )
-    acfl_file_key = models.CharField(
-        max_length=1024,
-        null=True,
-        blank=True,
-        help_text="S3 key for the ACFL file"
-    )
-    
-    # Parsed permissions data
-    permissions_data = models.JSONField(
-        null=True,
-        blank=True,
-        help_text="Parsed ACFL permissions data"
-    )
-    
-    # Tracking fields
-    last_synced = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="When the permissions were last synced from S3"
-    )
-    
-    class Meta:
-        verbose_name = "ACFL Permissions"
-        verbose_name_plural = "ACFL Permissions"
-        indexes = [
-            models.Index(fields=['content_type', 'object_id']),
-        ]
-    
-    def __str__(self):
-        return f"ACFL Permissions for {self.content_object}"
+        return f"{self.resource_pid} -> {self.s3_bucket}/{self.s3_key}"
