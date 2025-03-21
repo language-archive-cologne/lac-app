@@ -327,3 +327,132 @@ class TestUploadViews:
         assert response.data['success'] is False
         assert response.data['s3_key'] == 'folder/missing.jpg'
         assert response.data['exists'] is False
+
+    @patch('lacos.rest.views.UploadService')
+    def test_process_uploaded_files_success(self, mock_upload_service, request_factory):
+        """Test successful processing of uploaded files."""
+        # Configure the mock
+        mock_instance = MagicMock()
+        mock_upload_service.return_value = mock_instance
+        mock_instance.check_file_exists.return_value = True
+        mock_instance.get_object_content.return_value = "<xml>test content</xml>"
+        
+        # Create a user for authentication
+        user = MagicMock()
+        user.is_authenticated = True
+        
+        # Make the request
+        uploaded_files = [
+            {'s3_key': 'folder/test.xml', 'file_name': 'test.xml'},
+            {'s3_key': 'folder/test.jpg', 'file_name': 'test.jpg'}
+        ]
+        request = request_factory.post(
+            '/api/s3/process-uploads/',
+            data={
+                'folder_name': 'folder',
+                'uploaded_files': uploaded_files
+            },
+            content_type='application/json'
+        )
+        force_authenticate(request, user=user)
+        response = views.process_uploaded_files(request)
+        
+        # Assert response
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['success'] is True
+        assert len(response.data['processed_files']) == 2
+        assert len(response.data['failed_files']) == 0
+        
+        # Verify the service was called correctly
+        assert mock_instance.check_file_exists.call_count == 2
+        mock_instance.get_object_content.assert_called_once_with('folder/test.xml')
+
+    @patch('lacos.rest.views.UploadService')
+    def test_process_uploaded_files_missing_params(self, mock_upload_service, request_factory):
+        """Test processing uploaded files with missing parameters."""
+        # Create a user for authentication
+        user = MagicMock()
+        user.is_authenticated = True
+        
+        # Make the request without required parameters
+        request = request_factory.post(
+            '/api/s3/process-uploads/',
+            data={},
+            content_type='application/json'
+        )
+        force_authenticate(request, user=user)
+        response = views.process_uploaded_files(request)
+        
+        # Assert response
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data['success'] is False
+        assert 'error' in response.data
+        assert 'Missing required parameters' in response.data['error']
+        
+        # Make sure the service was not called
+        mock_instance = mock_upload_service.return_value
+        mock_instance.check_file_exists.assert_not_called()
+        mock_instance.get_object_content.assert_not_called()
+
+    @patch('lacos.rest.views.UploadService')
+    def test_process_uploaded_files_file_not_found(self, mock_upload_service, request_factory):
+        """Test processing uploaded files when a file is not found in S3."""
+        # Configure the mock
+        mock_instance = MagicMock()
+        mock_upload_service.return_value = mock_instance
+        mock_instance.check_file_exists.return_value = False
+        
+        # Create a user for authentication
+        user = MagicMock()
+        user.is_authenticated = True
+        
+        # Make the request
+        uploaded_files = [
+            {'s3_key': 'folder/missing.xml', 'file_name': 'missing.xml'}
+        ]
+        request = request_factory.post(
+            '/api/s3/process-uploads/',
+            data={
+                'folder_name': 'folder',
+                'uploaded_files': uploaded_files
+            },
+            content_type='application/json'
+        )
+        force_authenticate(request, user=user)
+        response = views.process_uploaded_files(request)
+        
+        # Assert response
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['success'] is False
+        assert len(response.data['processed_files']) == 0
+        assert len(response.data['failed_files']) == 1
+        assert response.data['failed_files'][0]['error'] == 'File not found in S3'
+        
+        # Verify the service was called correctly
+        mock_instance.check_file_exists.assert_called_once_with('folder/missing.xml')
+        mock_instance.get_object_content.assert_not_called()
+
+    @patch('lacos.rest.views.UploadService')
+    def test_process_uploaded_files_invalid_json(self, mock_upload_service, request_factory):
+        """Test processing uploaded files with invalid JSON."""
+        # Create a user for authentication
+        user = MagicMock()
+        user.is_authenticated = True
+        
+        # Make the request with invalid JSON
+        request = request_factory.post(
+            '/api/s3/process-uploads/',
+            data={
+                'folder_name': 'folder',
+                'uploaded_files': '{"invalid": json}'
+            },
+            content_type='application/json'
+        )
+        force_authenticate(request, user=user)
+        response = views.process_uploaded_files(request)
+        
+        # Assert response
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data['success'] is False
+        assert 'error' in response.data
+        assert 'Invalid uploaded_files JSON format' in response.data['error']

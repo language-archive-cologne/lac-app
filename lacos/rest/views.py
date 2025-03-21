@@ -3,7 +3,11 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework import status
-
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_http_methods
+from django.http import JsonResponse
+import json
+import os
 
 from lacos.storage.services.upload_service import UploadService
 
@@ -240,3 +244,116 @@ def copy_object(request):
     
     logger.info(f"Successfully copied object from {source_key} to {dest_key}")
     return Response(result)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def process_uploaded_files(request):
+    """
+    Process files that have been successfully uploaded to S3.
+    
+    This endpoint is called after files have been uploaded to S3 to trigger
+    any necessary processing (like importing data from XML files).
+    
+    Expected POST parameters:
+    - folder_name: The folder name in S3 where files were uploaded
+    - uploaded_files: JSON array of objects with s3_key and file_name properties
+    """
+    try:
+        # Get the uploaded files information
+        folder_name = request.data.get('folder_name')
+        uploaded_files_json = request.data.get('uploaded_files')
+        
+        if not folder_name or not uploaded_files_json:
+            logger.warning("Missing required parameters for processing uploaded files")
+            return Response({
+                'success': False,
+                'error': 'Missing required parameters: folder_name and uploaded_files'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Parse the uploaded files JSON
+        try:
+            uploaded_files = json.loads(uploaded_files_json) if isinstance(uploaded_files_json, str) else uploaded_files_json
+        except json.JSONDecodeError:
+            logger.warning("Invalid uploaded_files JSON format")
+            return Response({
+                'success': False,
+                'error': 'Invalid uploaded_files JSON format'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Process each file based on its type
+        processed_files = []
+        failed_files = []
+        
+        for file_info in uploaded_files:
+            s3_key = file_info.get('s3_key')
+            file_name = file_info.get('file_name')
+            
+            if not s3_key:
+                failed_files.append({
+                    'file_name': file_name,
+                    'error': 'Missing S3 key'
+                })
+                continue
+            
+            # Check if the file exists in S3
+            upload_service = UploadService()
+            if not upload_service.check_file_exists(s3_key):
+                failed_files.append({
+                    'file_name': file_name,
+                    's3_key': s3_key,
+                    'error': 'File not found in S3'
+                })
+                continue
+            
+            # Process the file based on its extension
+            _, ext = os.path.splitext(file_name)
+            ext = ext.lower()
+            
+            try:
+                # Example: Process XML files
+                if ext == '.xml':
+                    # Get the file content
+                    file_content = upload_service.get_object_content(s3_key)
+                    
+                    # Process the XML content (implement your specific logic here)
+                    # For example, you might call your bundle importer
+                    # result = process_xml_file(file_content)
+                    
+                    processed_files.append({
+                        'file_name': file_name,
+                        's3_key': s3_key,
+                        'status': 'Processed as XML'
+                    })
+                
+                # Add more file type handlers as needed
+                else:
+                    # For other file types, just mark as stored
+                    processed_files.append({
+                        'file_name': file_name,
+                        's3_key': s3_key,
+                        'status': 'Stored in S3'
+                    })
+            
+            except Exception as e:
+                logger.exception(f"Error processing file {file_name}: {str(e)}")
+                failed_files.append({
+                    'file_name': file_name,
+                    's3_key': s3_key,
+                    'error': str(e)
+                })
+        
+        # Return the processing results
+        return Response({
+            'success': len(processed_files) > 0,
+            'processed_files': processed_files,
+            'failed_files': failed_files,
+            'folder_name': folder_name
+        })
+    
+    except Exception as e:
+        logger.exception(f"Error in process_uploaded_files: {str(e)}")
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

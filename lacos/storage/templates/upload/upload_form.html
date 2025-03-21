@@ -1,14 +1,15 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block content %}
 <div class="container mx-auto px-4 py-8">
     <h1 class="text-3xl font-bold mb-8 text-center text-gray-800">Upload to Ingest Bucket</h1>
     
     <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-6">
-        <form hx-encoding="multipart/form-data" 
-              hx-post="{% url 'storage:upload_folder' %}" 
-              hx-indicator="#upload-indicator"
-              hx-target="#upload-status">
+        <form hx-post="{% url 'storage:process_upload' %}" 
+              hx-target="#upload-container"
+              hx-swap="innerHTML"
+              enctype="multipart/form-data">
             {% csrf_token %}
             
             <div class="mb-6">
@@ -74,7 +75,9 @@
             </div>
             
             <!-- Upload status area -->
-            <div id="upload-status"></div>
+            <div id="upload-container">
+                <!-- This div will be replaced with presigned URL info -->
+            </div>
             
             <div class="flex items-center justify-between">
                 <a href="{% url 'storage:archivist_dashboard' %}" 
@@ -84,12 +87,15 @@
                 <button id="upload-button" type="submit" 
                         class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled>
-                    Upload Folder
+                    Prepare Upload
                 </button>
             </div>
         </form>
     </div>
 </div>
+
+<!-- Include the S3 uploader script here instead of in the extra_head block -->
+<script src="{% static 'js/s3uploader.js' %}"></script>
 
 <script>
 function updateFileList() {
@@ -193,6 +199,19 @@ function updateFileList() {
             `;
             fileList.appendChild(warningDiv);
         }
+
+        // HTMX request configuration
+        document.body.addEventListener('htmx:configRequest', function(evt) {
+            // Check if this is our upload form
+            const form = evt.detail.elt.closest('form');
+            if (form && form.querySelector('#files')) {
+                // Add path information to the request
+                if (window.filePaths && window.filePaths.length > 0) {
+                    evt.detail.parameters['file_paths_json'] = JSON.stringify(window.filePaths);
+                    evt.detail.parameters['file_names_json'] = JSON.stringify(window.fileNames);
+                }
+            }
+        });
     } else {
         fileList.classList.add('hidden');
         uploadButton.disabled = true;
@@ -250,163 +269,102 @@ function handleDrop(e) {
     }
 }
 
-// HTMX event handlers
-document.body.addEventListener('htmx:configRequest', function(evt) {
-    // Check if this is our upload form
-    const form = evt.detail.elt.closest('form');
-    if (form && form.querySelector('#files')) {
-        // Add path information to the request
-        if (window.filePaths && window.filePaths.length > 0) {
-            console.log(`Adding ${window.filePaths.length} file paths to the request`);
+// Add an event listener for when HTMX loads content
+document.addEventListener('htmx:afterSwap', function(event) {
+    // Check if the target is our upload-stage div
+    if (event.detail.target.id === 'upload-container') {
+        // Check if we have the start trigger div
+        const triggerDiv = document.getElementById('start-uploads-trigger');
+        if (triggerDiv) {
+            console.log('Upload stage content loaded, starting upload process');
             
-            // Create a map to ensure unique mappings even with duplicate filenames
-            const uniquePathMap = {};
-            for (let i = 0; i < window.filePaths.length; i++) {
-                const path = window.filePaths[i];
-                const fileName = window.fileNames[i];
-                uniquePathMap[path] = fileName;
+            try {
+                // Get the presigned URL data
+                const presignedDataElem = document.getElementById('presigned-data');
+                if (!presignedDataElem) {
+                    console.error('Presigned data element not found');
+                    return;
+                }
                 
-                // Log for debugging
-                console.log(`Mapping ${fileName} to ${path}`);
+                const presignedData = JSON.parse(presignedDataElem.textContent);
+                console.log('Parsed presigned data:', presignedData);
+                
+                // Get the verification endpoint
+                const verifyEndpoint = triggerDiv.getAttribute('data-verify-endpoint');
+                
+                // Start uploads
+                console.log('Starting S3 uploads...');
+                S3Upload.uploadFiles(presignedData, {
+                    verifyEndpoint: verifyEndpoint,
+                    onComplete: function(result) {
+                        console.log('Upload complete callback:', result);
+                        // Show success message
+                        document.getElementById('upload-status').innerHTML = `
+                            <div class="p-4 bg-green-50 text-green-700 rounded border border-green-200 mt-4">
+                                <h3 class="font-medium mb-2">Upload Successful!</h3>
+                                <p>Verified ${result.total_verified} files (${result.total_size_formatted})</p>
+                                <div class="mt-3">
+                                    <a href="{% url 'storage:archivist_dashboard' %}" 
+                                       class="inline-block bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
+                                        Go to Dashboard
+                                    </a>
+                                </div>
+                            </div>
+                        `;
+                    },
+                    onError: function(result) {
+                        console.error('Upload error callback:', result);
+                        // Show error message
+                        document.getElementById('upload-status').innerHTML = `
+                            <div class="p-4 bg-red-50 text-red-700 rounded border border-red-200 mt-4">
+                                <h3 class="font-medium mb-2">Upload Issues</h3>
+                                <p>${result.error || 'Some files could not be verified'}</p>
+                                <div class="mt-3">
+                                    <a href="{% url 'storage:upload_form' %}" 
+                                       class="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                                        Try Again
+                                    </a>
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+            } catch (error) {
+                console.error('Error during upload initialization:', error);
+                document.getElementById('upload-status').innerHTML = `
+                    <div class="p-4 bg-red-50 text-red-700 rounded border border-red-200 mt-4">
+                        <h3 class="font-medium mb-2">Upload Error</h3>
+                        <p>Error initializing upload: ${error.message}</p>
+                        <div class="mt-3">
+                            <a href="{% url 'storage:upload_form' %}" 
+                               class="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                                Try Again
+                            </a>
+                        </div>
+                    </div>
+                `;
             }
-            
-            // Add the file paths as a JSON array
-            evt.detail.parameters['file_paths_json'] = JSON.stringify(window.filePaths);
-            
-            // Also add the file names for better debugging
-            if (window.fileNames && window.fileNames.length > 0) {
-                evt.detail.parameters['file_names_json'] = JSON.stringify(window.fileNames);
-            }
-            
-            // For debugging, add counts
-            evt.detail.parameters['file_paths_count'] = window.filePaths.length;
-            evt.detail.parameters['file_count'] = document.getElementById('files').files.length;
-            
-            // Log the first 5 paths for debugging
-            console.log("Sample paths:");
-            for (let i = 0; i < Math.min(5, window.filePaths.length); i++) {
-                console.log(`  ${i+1}. ${window.filePaths[i]}`);
-            }
-        } else {
-            console.warn('No file paths available for upload');
         }
     }
 });
 
-document.body.addEventListener('htmx:beforeSend', function(evt) {
-    // Validate form before sending
-    const form = evt.detail.elt.closest('form');
-    if (form) {
-        const folderName = form.querySelector('#folder_name').value;
-        const files = form.querySelector('#files').files;
-        
-        if (!folderName) {
-            alert('Please enter a folder name');
-            evt.preventDefault();
-            return;
-        }
-        
-        if (files.length === 0) {
-            alert('Please select files to upload');
-            evt.preventDefault();
-            return;
-        }
-        
-        // Start the upload timer for the progress bar simulation
-        startUploadTimer(files.length, getTotalFileSize(files));
-    }
-});
-
-document.body.addEventListener('htmx:afterRequest', function(evt) {
-    // Stop the progress bar simulation
-    stopUploadTimer();
+function prepareFileMetadata() {
+    const fileInput = document.getElementById('files');
+    const files = fileInput.files;
     
-    console.log('HTMX afterRequest event triggered', evt.detail);
+    const filePaths = [];
+    const fileNames = [];
     
-    if (evt.detail.successful && evt.detail.xhr.status === 200) {
-        // Complete the progress bar
-        document.getElementById('progress-bar').style.width = '100%';
-        document.getElementById('progress-text').textContent = '100%';
-        
-        // If the response contains a redirect URL, navigate to it
-        const redirectUrl = evt.detail.xhr.getResponseHeader('HX-Redirect');
-        console.log('Redirect URL from header:', redirectUrl);
-        
-        if (redirectUrl) {
-            console.log('Redirecting to:', redirectUrl);
-            setTimeout(() => {
-                window.location.href = redirectUrl;
-            }, 500); // Short delay to ensure the user sees the success message
-        } else {
-            // Fallback redirect if the header is missing
-            console.log('No redirect header found, using fallback redirect');
-            setTimeout(() => {
-                window.location.href = '/storage/dashboard/';
-            }, 1000);
-        }
-    } else {
-        // Reset the progress bar on error
-        document.getElementById('progress-bar').style.width = '0%';
-        document.getElementById('progress-text').textContent = '0%';
-    }
-});
-
-// Custom event for redirect triggered via HX-Trigger
-document.body.addEventListener('redirectNow', function(evt) {
-    console.log('Received redirectNow event:', evt.detail);
-    if (evt.detail && evt.detail.url) {
-        console.log('Redirecting to URL from event:', evt.detail.url);
-        window.location.href = evt.detail.url;
-    }
-});
-
-// Upload progress simulation
-let uploadTimer;
-let uploadStartTime;
-let estimatedTotalTime;
-function startUploadTimer(fileCount, totalSize) {
-    uploadStartTime = Date.now();
-    
-    // Estimate total time based on file count and size
-    // This is a heuristic - adjust based on your typical upload speeds
-    const baseTime = 2000; // 2 seconds base time
-    const timePerFile = 200; // 200ms per file overhead
-    const timePerMB = 100; // 100ms per MB (assumes 10MB/s)
-    const sizeMB = totalSize / (1024 * 1024);
-    
-    estimatedTotalTime = baseTime + (fileCount * timePerFile) + (sizeMB * timePerMB);
-    
-    // Cap it to something reasonable
-    if (estimatedTotalTime > 300000) { // 5 minutes
-        estimatedTotalTime = 300000;
-    }
-    
-    const progressBar = document.getElementById('progress-bar');
-    const progressText = document.getElementById('progress-text');
-    
-    // Update every 100ms
-    uploadTimer = setInterval(() => {
-        const elapsed = Date.now() - uploadStartTime;
-        const progress = Math.min(elapsed / estimatedTotalTime, 0.95); // Cap at 95% until done
-        
-        progressBar.style.width = `${progress * 100}%`;
-        progressText.textContent = `${Math.round(progress * 100)}%`;
-    }, 100);
-}
-
-function stopUploadTimer() {
-    if (uploadTimer) {
-        clearInterval(uploadTimer);
-        uploadTimer = null;
-    }
-}
-
-function getTotalFileSize(files) {
-    let totalSize = 0;
     for (let i = 0; i < files.length; i++) {
-        totalSize += files[i].size;
+        filePaths.push(files[i].webkitRelativePath || files[i].name);
+        fileNames.push(files[i].name);
     }
-    return totalSize;
+    
+    document.getElementById('file_paths_json').value = JSON.stringify(filePaths);
+    document.getElementById('file_names_json').value = JSON.stringify(fileNames);
+    
+    // Submit the form via HTMX
+    htmx.trigger('#file_paths_json', 'change');
 }
 </script>
 {% endblock %} 

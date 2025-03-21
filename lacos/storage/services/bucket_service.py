@@ -103,15 +103,3 @@ class BucketService(BaseStorageService):
             size_bytes /= 1024.0
         return f"{size_bytes:.2f} PB"
 
-    # Upload-related methods
-    def upload_folder_to_bucket(self, local_folder_path: str, bucket_name: str = None, target_prefix: str = "") -> Dict[str, Any]:
-        """Delegate to upload service to upload a folder to a bucket."""
-        if bucket_name is None:
-            bucket_name = self.ingest_bucket
-        return self.upload_service.upload_folder_to_bucket(local_folder_path, bucket_name, target_prefix)
-    
-    def upload_files_directly(self, files, folder_name: str, bucket_name: str = None, file_paths: dict = None) -> Dict[str, Any]:
-        """Delegate to upload service to upload files directly from a request."""
-        if bucket_name is None:
-            bucket_name = self.ingest_bucket
-        return self.upload_service.upload_files_directly(files, folder_name, bucket_name, file_paths)

@@ -31,6 +31,10 @@ class BaseStorageService:
         self.secret_key = self._get_secret_key()
         self.region = self._get_region()
         
+        # Determine if we're running inside a container
+        # This helps us decide how to handle URLs for browser access
+        self.in_container = self._is_running_in_container()
+        
         # Initialize both buckets
         self.ingest_bucket = self._get_ingest_bucket_name()
         self.production_bucket = self._get_production_bucket_name()
@@ -44,6 +48,23 @@ class BaseStorageService:
         logger.info(f"Using region: {self.region}")
         logger.info(f"Using ingest bucket: {self.ingest_bucket}")
         logger.info(f"Using production bucket: {self.production_bucket}")
+        
+        # Ensure buckets exist
+        logger.info("Ensuring buckets exist...")
+        ingest_bucket_exists = self.ensure_bucket_exists(self.ingest_bucket)
+        production_bucket_exists = self.ensure_bucket_exists(self.production_bucket)
+        
+        # Ensure CORS is configured for the ingest bucket (needed for direct uploads)
+        if ingest_bucket_exists:
+            logger.info("Ensuring CORS is configured for ingest bucket...")
+            cors_result = self.ensure_cors_enabled(self.ingest_bucket)
+            if cors_result["success"]:
+                if cors_result.get("updated", False):
+                    logger.info("✅ CORS configuration for ingest bucket has been updated")
+                else:
+                    logger.info("✅ CORS configuration for ingest bucket is already correct")
+            else:
+                logger.warning(f"⚠️ Failed to configure CORS for ingest bucket: {cors_result.get('error', 'Unknown error')}")
     
     def set_client_and_buckets(self, service):
         """
@@ -204,18 +225,69 @@ class BaseStorageService:
         return 'lacos-production'
     
     def _create_s3_client(self):
-        """Create an S3 client based on the settings."""
-        session = boto3.Session(
-            aws_access_key_id=self.access_key,
-            aws_secret_access_key=self.secret_key,
-            region_name=self.region,
-        )
-
-        return session.client(
-            "s3",
-            endpoint_url=self.endpoint_url if self.is_minio else None,
-            use_ssl=not self.is_minio,
-        )
+        """
+        Create an S3 client configured for the current environment.
+        
+        Returns:
+            boto3.client: Configured S3 client
+        """
+        # Basic client configuration
+        client_kwargs = {
+            'service_name': 's3',
+            'aws_access_key_id': self.access_key,
+            'aws_secret_access_key': self.secret_key,
+        }
+        
+        # Add region if specified
+        if self.region:
+            client_kwargs['region_name'] = self.region
+        
+        # Add endpoint URL for MinIO or custom S3 endpoints
+        if self.endpoint_url:
+            # For server-side operations, use the original endpoint URL
+            server_endpoint = self.endpoint_url
+            client_kwargs['endpoint_url'] = server_endpoint
+            
+            # For MinIO in local development, we need special handling for presigned URLs
+            if self.is_minio:
+                # Create a config that tells boto3 to use path-style addressing
+                # This is required for MinIO
+                client_kwargs['config'] = boto3.session.Config(
+                    signature_version='s3v4',
+                    s3={'addressing_style': 'path'}
+                )
+                
+                # For presigned URLs that will be used by the browser,
+                # we need to use a browser-accessible URL
+                browser_endpoint = os.environ.get('AWS_S3_BROWSER_ENDPOINT_URL', None)
+                
+                if browser_endpoint:
+                    logger.info(f"Using browser endpoint URL from environment: {browser_endpoint}")
+                elif 'minio:9000' in self.endpoint_url:
+                    # Default fallback for local development
+                    browser_endpoint = self.endpoint_url.replace('minio:9000', 'localhost:9000')
+                    logger.info(f"MinIO detected at {self.endpoint_url}, will use {browser_endpoint} for presigned URLs")
+                else:
+                    # If no specific browser endpoint is provided, use the same as server
+                    browser_endpoint = self.endpoint_url
+                    logger.info(f"Using server endpoint for presigned URLs: {browser_endpoint}")
+                
+                # Create a separate client for generating presigned URLs
+                self.presigned_client = boto3.client(
+                    's3',
+                    aws_access_key_id=self.access_key,
+                    aws_secret_access_key=self.secret_key,
+                    region_name=self.region if self.region else None,
+                    endpoint_url=browser_endpoint,
+                    config=boto3.session.Config(
+                        signature_version='s3v4',
+                        s3={'addressing_style': 'path'}
+                    )
+                )
+                logger.info(f"Created separate client for presigned URLs with endpoint: {browser_endpoint}")
+        
+        # Create and return the client
+        return boto3.client(**client_kwargs)
     
     def _format_size(self, size_bytes: int) -> str:
         """Format bytes to human-readable size"""
@@ -365,4 +437,121 @@ class BaseStorageService:
                 }
         except ClientError as e:
             logger.error(f"Error deleting {object_path}: {str(e)}")
-            return {"success": False, "error": str(e)} 
+            return {"success": False, "error": str(e)}
+    
+    def ensure_cors_enabled(self, bucket_name: str = None) -> Dict[str, Any]:
+        """
+        Ensure CORS is properly configured for the specified bucket.
+        
+        This is required for browser-based uploads to work properly.
+        
+        Args:
+            bucket_name (str, optional): Name of the bucket to configure. 
+                                         Defaults to ingest bucket.
+        
+        Returns:
+            Dict[str, Any]: Result of the operation
+        """
+        if bucket_name is None:
+            bucket_name = self.ingest_bucket
+        
+        logger.info(f"Checking CORS configuration for bucket: {bucket_name}")
+        
+        try:
+            # Define the required CORS rule - using the exact minimal configuration provided
+            required_rule = {
+                'AllowedHeaders': ['*'],
+                'AllowedMethods': ['POST'],
+                'AllowedOrigins': ['*'],
+                'ExposeHeaders': []
+            }
+            
+            # Check if CORS is already configured
+            try:
+                cors_config = self.s3_client.get_bucket_cors(Bucket=bucket_name)
+                current_rules = cors_config.get('CORSRules', [])
+                logger.info(f"Found existing CORS configuration with {len(current_rules)} rules")
+                
+                # Check if our required rule already exists
+                rule_exists = False
+                for rule in current_rules:
+                    # Check if all required keys are in the existing rule
+                    if (set(rule.get('AllowedHeaders', [])) >= set(required_rule['AllowedHeaders']) and
+                        set(rule.get('AllowedMethods', [])) >= set(required_rule['AllowedMethods']) and
+                        set(rule.get('AllowedOrigins', [])) >= set(required_rule['AllowedOrigins'])):
+                        rule_exists = True
+                        logger.info("✅ Required CORS rule already exists")
+                        break
+                
+                # If the rule doesn't exist, add it
+                if not rule_exists:
+                    logger.info("🔄 Required CORS rule not found, updating configuration...")
+                    
+                    # Use existing rules if any, otherwise create a new configuration
+                    new_rules = current_rules.copy() if current_rules else []
+                    new_rules.append(required_rule)
+                    
+                    # Apply the updated CORS configuration
+                    self.s3_client.put_bucket_cors(
+                        Bucket=bucket_name,
+                        CORSConfiguration={'CORSRules': new_rules}
+                    )
+                    logger.info("✅ CORS configuration updated successfully")
+                    return {"success": True, "message": "CORS configuration updated", "updated": True}
+                
+                return {"success": True, "message": "CORS already properly configured", "updated": False}
+                
+            except ClientError as e:
+                error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+                error_message = e.response.get('Error', {}).get('Message', str(e))
+                
+                # If no CORS configuration exists, create one
+                if error_code == 'NoSuchCORSConfiguration':
+                    logger.info("No existing CORS configuration found, creating new configuration...")
+                    
+                    # Create a new CORS configuration with our required rule
+                    self.s3_client.put_bucket_cors(
+                        Bucket=bucket_name,
+                        CORSConfiguration={'CORSRules': [required_rule]}
+                    )
+                    logger.info("✅ CORS configuration created successfully")
+                    return {"success": True, "message": "CORS configuration created", "updated": True}
+                else:
+                    # Some other error occurred
+                    logger.error(f"❌ Error getting CORS configuration: {error_code} - {error_message}")
+                    return {"success": False, "error": f"{error_code}: {error_message}"}
+        
+        except Exception as e:
+            logger.error(f"❌ Error ensuring CORS configuration: {str(e)}")
+            
+            # For MinIO, CORS might not be fully supported, but uploads might still work
+            if self.is_minio:
+                logger.warning("⚠️ CORS configuration failed, but this is expected with some MinIO versions")
+                logger.warning("⚠️ Browser uploads may still work despite this error")
+                return {"success": True, "message": "CORS configuration skipped for MinIO", "updated": False}
+            
+            return {"success": False, "error": str(e)}
+
+    def _is_running_in_container(self):
+        """
+        Determine if we're running inside a Docker container.
+        
+        Returns:
+            bool: True if running in a container, False otherwise
+        """
+        # Check for the RUNNING_IN_CONTAINER environment variable
+        if os.environ.get('RUNNING_IN_CONTAINER'):
+            return True
+        
+        # Check for .dockerenv file
+        if os.path.exists('/.dockerenv'):
+            return True
+        
+        # Check cgroup
+        try:
+            with open('/proc/1/cgroup', 'r') as f:
+                return 'docker' in f.read() or 'kubepods' in f.read()
+        except:
+            pass
+        
+        return False 
