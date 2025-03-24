@@ -1,3 +1,6 @@
+// Debug logging
+console.log('folder-manager.js loaded');
+
 /**
  * Toggle the visibility of a folder's contents
  * @param {HTMLElement} button - The button element that was clicked
@@ -91,3 +94,5 @@ export function collapseAllFolders(containerId = null) {
     
     console.log('All folders collapsed');
 }
+
+console.log('folder-manager.js initialization complete');
