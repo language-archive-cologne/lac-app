@@ -27,6 +27,7 @@ urlpatterns = [
     
     # Archivist dashboard
     path("dashboard/", views.archivist_dashboard, name="archivist_dashboard"),
+    path("dashboard/folder-contents/<str:bucket_type>/<path:folder_path>/", views.load_folder_contents, name="load_folder_contents"),
     
     # File operations
     path("move-to-production/<path:folder_path>/", views.move_to_production, name="move_to_production"),

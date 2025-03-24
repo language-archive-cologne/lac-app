@@ -14,9 +14,14 @@ class CollectionService(BaseStorageService):
     for working with collections, which have specific directory structure requirements.
     """
     
-    def __init__(self):
-        """Initialize the CollectionService with base storage configuration."""
-        super().__init__()
+    def __init__(self, skip_bucket_check=False):
+        """
+        Initialize the CollectionService with base storage configuration.
+        
+        Args:
+            skip_bucket_check (bool): If True, skip bucket existence check
+        """
+        super().__init__(skip_bucket_check=skip_bucket_check)
         logger.info("CollectionService initialized")
     
     def is_ocfl_object(self, bucket_name: str, prefix: str) -> bool:

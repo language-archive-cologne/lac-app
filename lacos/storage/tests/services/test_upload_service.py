@@ -33,6 +33,35 @@ def mock_s3():
         )
         # Create test bucket
         s3.create_bucket(Bucket=TEST_BUCKET_NAME)
+        
+        # Configure bucket policy to allow all operations
+        bucket_policy = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Sid": "PublicReadGetObject",
+                    "Effect": "Allow",
+                    "Principal": "*",
+                    "Action": "s3:*",
+                    "Resource": [
+                        f"arn:aws:s3:::{TEST_BUCKET_NAME}",
+                        f"arn:aws:s3:::{TEST_BUCKET_NAME}/*"
+                    ]
+                }
+            ]
+        }
+        s3.put_bucket_policy(Bucket=TEST_BUCKET_NAME, Policy=json.dumps(bucket_policy))
+        
+        # Configure CORS
+        cors_configuration = {
+            'CORSRules': [{
+                'AllowedHeaders': ['*'],
+                'AllowedMethods': ['GET', 'PUT', 'POST', 'DELETE'],
+                'AllowedOrigins': ['*'],
+                'ExposeHeaders': ['ETag']
+            }]
+        }
+        s3.put_bucket_cors(Bucket=TEST_BUCKET_NAME, CORSConfiguration=cors_configuration)
         yield s3
 
 @pytest.fixture
@@ -45,7 +74,7 @@ def temp_dir():
 @pytest.fixture
 def mock_upload_service(mock_s3):
     """Create an UploadService instance with mock settings"""
-    service = UploadService()
+    service = UploadService(skip_bucket_check=True)
     # Override the bucket names for testing
     service.ingest_bucket = TEST_BUCKET_NAME
     service.production_bucket = TEST_BUCKET_NAME

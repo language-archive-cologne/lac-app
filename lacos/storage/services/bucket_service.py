@@ -29,13 +29,18 @@ class BucketService(BaseStorageService):
     while providing a unified interface for the application.
     """
     
-    def __init__(self):
-        """Initialize the BucketService with all required sub-services."""
-        super().__init__()
+    def __init__(self, skip_bucket_check=False):
+        """
+        Initialize the BucketService with all required sub-services.
         
-        # Initialize the specialized services
-        self.collection_service = CollectionService()
-        self.upload_service = UploadService()
+        Args:
+            skip_bucket_check (bool): If True, skip bucket existence check
+        """
+        super().__init__(skip_bucket_check=skip_bucket_check)
+        
+        # Initialize the specialized services with skip_bucket_check=True
+        self.collection_service = CollectionService(skip_bucket_check=True)
+        self.upload_service = UploadService(skip_bucket_check=True)
         
         # Configure child services with consistent settings
         self.set_client_and_buckets(self.collection_service)
@@ -47,21 +52,71 @@ class BucketService(BaseStorageService):
         if hasattr(self.ocfl_service, 's3_client'):
             self.ocfl_service.s3_client = self.s3_client
         
-        # Ensure both buckets exist
-        logger.info("Ensuring buckets exist...")
-        ingest_result = self.ensure_bucket_exists(self.ingest_bucket)
-        production_result = self.ensure_bucket_exists(self.production_bucket)
-        
-        if ingest_result and production_result:
-            logger.info("✅ All buckets are ready")
-        else:
-            logger.warning("⚠️ Some buckets could not be created or accessed")
-            if not ingest_result:
-                logger.warning(f"⚠️ Ingest bucket '{self.ingest_bucket}' is not available")
-            if not production_result:
-                logger.warning(f"⚠️ Production bucket '{self.production_bucket}' is not available")
-        
         logger.info("BucketService initialized")
+    
+    def get_root_level_items(self, bucket_name: str) -> Dict[str, Any]:
+        """
+        Get only the root level items (files and folders) from a bucket.
+        This is optimized for the initial dashboard load.
+        
+        Args:
+            bucket_name (str): The name of the bucket to list
+            
+        Returns:
+            Dict[str, Any]: Dictionary containing root level items
+        """
+        try:
+            contents = self.collection_service.list_bucket_contents(bucket_name)
+            
+            # Transform the contents into the expected structure
+            return {
+                "type": "folder",
+                "name": bucket_name,
+                "path": "",
+                "children": [
+                    {
+                        "type": "folder" if item["is_dir"] else "file",
+                        "name": item["name"],
+                        "path": item["path"],
+                        "size": item.get("size"),
+                        "last_modified": item.get("last_modified"),
+                    }
+                    for item in contents
+                ]
+            }
+        except Exception as e:
+            logger.error(f"Error getting root level items for bucket '{bucket_name}': {str(e)}")
+            return {"type": "folder", "name": bucket_name, "path": "", "children": []}
+    
+    def get_folder_contents(self, bucket_name: str, folder_path: str) -> List[Dict[str, Any]]:
+        """
+        Get the contents of a specific folder.
+        This is used for lazy loading folder contents.
+        
+        Args:
+            bucket_name (str): The name of the bucket
+            folder_path (str): The path to the folder
+            
+        Returns:
+            List[Dict[str, Any]]: List of items in the folder
+        """
+        try:
+            contents = self.collection_service.list_bucket_contents(bucket_name, folder_path)
+            
+            # Transform the contents into the expected structure
+            return [
+                {
+                    "type": "folder" if item["is_dir"] else "file",
+                    "name": item["name"],
+                    "path": item["path"],
+                    "size": item.get("size"),
+                    "last_modified": item.get("last_modified"),
+                }
+                for item in contents
+            ]
+        except Exception as e:
+            logger.error(f"Error getting folder contents for '{folder_path}' in bucket '{bucket_name}': {str(e)}")
+            return []
     
     # Collection-related methods
     def is_collection_path(self, path: str) -> bool:

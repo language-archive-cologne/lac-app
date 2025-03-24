@@ -1,14 +1,20 @@
 {% comment %}
-Recursive folder structure template that supports unlimited nesting
+Template for displaying root level items and folders with lazy loading
 {% endcomment %}
 
 {% if structure and structure.children %}
     <ul class="folder-tree">
         {% for item in structure.children %}
             {% if item.type == 'folder' %}
-                <li class="folder-item">
+                <li class="folder-item" data-folder-path="{{ item.path }}">
                     <div class="flex items-center">
-                        <button onclick="toggleFolder(this)" class="folder-toggle mr-1 text-gray-600 focus:outline-none">
+                        <button onclick="toggleFolder(this)" 
+                                class="folder-toggle mr-1 text-gray-600 focus:outline-none"
+                                hx-get="{% url 'storage:load_folder_contents' bucket_type=bucket_type folder_path=item.path %}"
+                                hx-target=".folder-contents[data-folder-path='{{ item.path }}']"
+                                hx-swap="innerHTML"
+                                hx-trigger="click"
+                                hx-indicator="#loading-indicator">
                             <svg class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                             </svg>
@@ -41,87 +47,13 @@ Recursive folder structure template that supports unlimited nesting
                         </div>
                     </div>
                     
-                    <ul class="folder-contents pl-6 mt-1 hidden">
-                        {% if item.children %}
-                            {% for child in item.children %}
-                                {% if child.type == 'folder' %}
-                                    <li class="folder-item">
-                                        <div class="flex items-center">
-                                            <button onclick="toggleFolder(this)" class="folder-toggle mr-1 text-gray-600 focus:outline-none">
-                                                <svg class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                                                </svg>
-                                            </button>
-                                            <span class="folder-name text-gray-800 font-medium" data-path="{{ child.path }}">{{ child.name }}</span>
-                                            
-                                            <div class="ml-auto flex items-center space-x-2">
-                                                {% if bucket_type == 'ingest' %}
-                                                    <form hx-post="{% url 'storage:move_to_production' folder_path=child.path %}" 
-                                                          hx-confirm="Are you sure you want to move this folder to production?"
-                                                          class="inline">
-                                                        <button type="submit" class="text-blue-500 hover:text-blue-700" title="Move to Production">
-                                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path>
-                                                            </svg>
-                                                        </button>
-                                                    </form>
-                                                {% endif %}
-                                                
-                                                <button hx-post="{% url 'storage:delete_object' bucket_type=bucket_type object_type='folder' object_path=child.path %}"
-                                                        hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-                                                        hx-target="closest li"
-                                                        hx-swap="outerHTML"
-                                                        hx-confirm="Are you sure you want to delete this folder and all its contents? This cannot be undone."
-                                                        class="text-red-500 hover:text-red-700" title="Delete Folder">
-                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                                    </svg>
-                                                </button>
-                                            </div>
-                                        </div>
-                                        
-                                        <ul class="folder-contents pl-6 mt-1 hidden">
-                                            {% include "dashboard/folder_structure_partial.html" with structure=child bucket_type=bucket_type %}
-                                        </ul>
-                                    </li>
-                                {% elif child.type == 'file' %}
-                                    <li class="file-item py-1">
-                                        <div class="flex items-center">
-                                            <span class="file-icon mr-1 text-gray-500">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
-                                                </svg>
-                                            </span>
-                                            <span class="file-name text-gray-700">{{ child.name }}</span>
-                                            
-                                            <div class="ml-auto flex items-center space-x-2">
-                                                <button hx-get="{% url 'storage:file_content' bucket_type=bucket_type file_path=child.path %}"
-                                                        class="view-icon text-blue-500 hover:text-blue-700" title="View File">
-                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                                                    </svg>
-                                                </button>
-                                                
-                                                <button hx-post="{% url 'storage:delete_object' bucket_type=bucket_type object_type='file' object_path=child.path %}"
-                                                        hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-                                                        hx-target="closest li"
-                                                        hx-swap="outerHTML"
-                                                        hx-confirm="Are you sure you want to delete this file? This cannot be undone."
-                                                        class="text-red-500 hover:text-red-700" title="Delete File">
-                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                                    </svg>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </li>
-                                {% endif %}
-                            {% endfor %}
-                        {% else %}
-                            <li class="empty-folder-message text-gray-500 italic py-1">Empty folder</li>
-                        {% endif %}
-                    </ul>
+                    <div class="folder-contents pl-6 mt-1 hidden" data-folder-path="{{ item.path }}">
+                        <div id="loading-indicator" class="htmx-indicator">
+                            <div class="flex items-center justify-center py-2">
+                                <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                            </div>
+                        </div>
+                    </div>
                 </li>
             {% elif item.type == 'file' %}
                 <li class="file-item py-1">

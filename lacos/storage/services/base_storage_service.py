@@ -15,12 +15,15 @@ class BaseStorageService:
     It automatically detects the environment and configures the client accordingly.
     """
     
-    def __init__(self):
+    # Class-level flag to track if buckets have been checked
+    _buckets_checked = False
+    
+    def __init__(self, skip_bucket_check=False):
         """
         Initialize the BaseStorageService with S3 client.
         
-        The service automatically detects whether to use MinIO (local development)
-        or S3 (production) based on environment settings.
+        Args:
+            skip_bucket_check (bool): If True, skip bucket existence check (for child services)
         """
         logger.info("Initializing BaseStorageService...")
         
@@ -49,22 +52,26 @@ class BaseStorageService:
         logger.info(f"Using ingest bucket: {self.ingest_bucket}")
         logger.info(f"Using production bucket: {self.production_bucket}")
         
-        # Ensure buckets exist
-        logger.info("Ensuring buckets exist...")
-        ingest_bucket_exists = self.ensure_bucket_exists(self.ingest_bucket)
-        production_bucket_exists = self.ensure_bucket_exists(self.production_bucket)
-        
-        # Ensure CORS is configured for the ingest bucket (needed for direct uploads)
-        if ingest_bucket_exists:
-            logger.info("Ensuring CORS is configured for ingest bucket...")
-            cors_result = self.ensure_cors_enabled(self.ingest_bucket)
-            if cors_result["success"]:
-                if cors_result.get("updated", False):
-                    logger.info("✅ CORS configuration for ingest bucket has been updated")
+        # Only check buckets if not skipped and not already checked
+        if not skip_bucket_check and not self._buckets_checked:
+            logger.info("Ensuring buckets exist...")
+            ingest_bucket_exists = self.ensure_bucket_exists(self.ingest_bucket)
+            production_bucket_exists = self.ensure_bucket_exists(self.production_bucket)
+            
+            # Set the class-level flag
+            self._buckets_checked = True
+            
+            # Ensure CORS is configured for the ingest bucket (needed for direct uploads)
+            if ingest_bucket_exists:
+                logger.info("Ensuring CORS is configured for ingest bucket...")
+                cors_result = self.ensure_cors_enabled(self.ingest_bucket)
+                if cors_result["success"]:
+                    if cors_result.get("updated", False):
+                        logger.info("✅ CORS configuration for ingest bucket has been updated")
+                    else:
+                        logger.info("✅ CORS configuration for ingest bucket is already correct")
                 else:
-                    logger.info("✅ CORS configuration for ingest bucket is already correct")
-            else:
-                logger.warning(f"⚠️ Failed to configure CORS for ingest bucket: {cors_result.get('error', 'Unknown error')}")
+                    logger.warning(f"⚠️ Failed to configure CORS for ingest bucket: {cors_result.get('error', 'Unknown error')}")
     
     def set_client_and_buckets(self, service):
         """

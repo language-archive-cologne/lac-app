@@ -22,9 +22,14 @@ class UploadService(BaseStorageService):
     allowing clients to upload directly to S3 without server intermediation.
     """
     
-    def __init__(self):
-        """Initialize the UploadService with base storage configuration."""
-        super().__init__()
+    def __init__(self, skip_bucket_check=False):
+        """
+        Initialize the UploadService with base storage configuration.
+        
+        Args:
+            skip_bucket_check (bool): If True, skip bucket existence check
+        """
+        super().__init__(skip_bucket_check=skip_bucket_check)
         logger.info("UploadService initialized")
 
     def _generate_file_key(self, file_name: str, path_prefix: Optional[str] = None) -> str:
@@ -92,6 +97,16 @@ class UploadService(BaseStorageService):
                     )
                     
                     if parts_result['success']:
+                        # Create a presigned post structure for multipart upload
+                        presigned_post = {
+                            'url': parts_result['presigned_urls'][0]['url'],  # Use first part's URL
+                            'fields': {
+                                'uploadId': init_result['upload_id'],
+                                'key': init_result['s3_key'],
+                                'Content-Type': file_type
+                            }
+                        }
+                        
                         return {
                             'success': True,
                             'file_name': file_name,
@@ -100,6 +115,7 @@ class UploadService(BaseStorageService):
                             'upload_type': 'multipart',
                             'upload_id': init_result['upload_id'],
                             'presigned_urls': parts_result['presigned_urls'],
+                            'presigned_post': presigned_post,  # Include presigned_post for consistency
                             'expires_in': expiration
                         }
             
