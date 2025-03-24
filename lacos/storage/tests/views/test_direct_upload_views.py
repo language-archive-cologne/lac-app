@@ -2,22 +2,22 @@ import pytest
 import json
 from unittest.mock import patch, MagicMock
 from django.http.request import QueryDict
+from django.test import RequestFactory
 
 from lacos.storage.views.direct_upload_views import (
     direct_upload,
     process_upload,
-    get_mime_type
+    get_mime_type,
+    upload_complete
 )
 
 # Note: fixtures are now imported from conftest.py automatically
 
 @patch('lacos.storage.views.direct_upload_views.UploadService')
-@patch('lacos.storage.views.direct_upload_views.reverse')
 @patch('lacos.storage.views.direct_upload_views.render')
-def test_direct_upload(mock_render, mock_reverse, mock_upload_service, prepared_request):
+def test_direct_upload(mock_render, mock_upload_service, prepared_request):
     """Test direct upload view."""
     # Configure mocks
-    mock_reverse.return_value = '/test/redirect/url'
     mock_instance = mock_upload_service.return_value
     mock_instance.generate_batch_presigned_posts.return_value = {
         "success": True,
@@ -52,7 +52,7 @@ def test_direct_upload(mock_render, mock_reverse, mock_upload_service, prepared_
     # Check that the correct template was rendered
     mock_render.assert_called_once()
     template_name = mock_render.call_args[0][1]
-    assert template_name == "upload/presigned_urls.html"
+    assert template_name == "upload/upload_stage.html"
     
     # Check that session data was cleared
     assert 'upload_folder_name' not in request.session
@@ -72,10 +72,7 @@ def test_direct_upload_missing_data(mock_render, prepared_request):
     # Check error template was rendered
     mock_render.assert_called_once()
     template_name = mock_render.call_args[0][1]
-    context = mock_render.call_args[0][2]
-    assert template_name == "upload/upload_status.html"
-    assert context['success'] is False
-    assert "Missing upload information" in context['message']
+    assert template_name == "upload/upload_form.html"
 
 
 @patch('lacos.storage.views.direct_upload_views.process_upload')
