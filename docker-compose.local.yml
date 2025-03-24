@@ -81,3 +81,13 @@ services:
     tty: true
     networks:
       - lacos_network
+
+  test-js:
+    image: node:latest
+    container_name: lacos_test_js
+    volumes:
+      - .:/app:z
+    working_dir: /app/lacos
+    command: /bin/sh -c "npm install && npm test"
+    networks:
+      - lacos_network

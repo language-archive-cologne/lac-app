@@ -4,7 +4,7 @@
  */
 
 // Function to scan a folder and collect file paths
-async function scanFolder() {
+export async function scanFolder() {
     try {
       // Check if File System Access API is supported
       if (!window.showDirectoryPicker) {
@@ -57,9 +57,9 @@ async function scanFolder() {
       
       // Transform the folder structure to match what the backend expects
       const filesMetadata = folderStructure.map(file => ({
-        file_name: file.fullPath,  // Use the full path here
+        file_name: file.filename,  // Use just the filename, not the full path
         file_type: file.content_type,
-        path: file.path,
+        path: file.path,  // This contains the correct relative path
         size: file.size
       }));
       
@@ -164,20 +164,24 @@ async function scanFolder() {
   }
   
   // Recursively traverse directories
-  async function traverseDirectory(dirHandle, path, folderStructure) {
+  export async function traverseDirectory(dirHandle, currentPath, folderStructure) {
     try {
       for await (const entry of dirHandle.values()) {
-        const entryPath = path ? `${path}/${entry.name}` : entry.name;
-        
+        // Skip the root folder name from the path
+        if (entry.name === dirHandle.name) {
+          continue;
+        }
+
         if (entry.kind === 'file') {
           try {
             const file = await entry.getFile();
             const contentType = file.type || getContentTypeFromExtension(entry.name);
             
+            // For files, use the current path as is
             folderStructure.push({
-              path: path,
+              path: currentPath,
               filename: entry.name,
-              fullPath: entryPath,  // Add the full path for easier matching later
+              fullPath: currentPath ? `${currentPath}/${entry.name}` : entry.name,
               content_type: contentType,
               size: file.size
             });
@@ -190,18 +194,18 @@ async function scanFolder() {
             console.error(`Error accessing file ${entry.name}:`, error);
           }
         } else if (entry.kind === 'directory') {
-          console.log(`Scanning subdirectory: ${entryPath}`);
-          // Recursively process subdirectories
-          await traverseDirectory(entry, entryPath, folderStructure);
+          // For directories, only append the directory name to the path
+          const newPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+          await traverseDirectory(entry, newPath, folderStructure);
         }
       }
     } catch (error) {
-      console.error(`Error traversing directory ${path}:`, error);
+      console.error(`Error traversing directory ${currentPath}:`, error);
     }
   }
   
   // Function to notify server that upload is complete
-  async function notifyUploadComplete(folderName, uploadedFiles) {
+  export async function notifyUploadComplete(folderName, uploadedFiles) {
     console.log(`Notifying server about ${uploadedFiles.length} uploaded files in folder ${folderName}`);
     
     try {
@@ -231,13 +235,13 @@ async function scanFolder() {
   }
   
   // Helper function to get CSRF token
-  function getCsrfToken() {
+  export function getCsrfToken() {
     return document.querySelector('input[name="csrfmiddlewaretoken"]')?.value || 
            document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
   }
   
   // Helper function to get content type from file extension
-  function getContentTypeFromExtension(filename) {
+  export function getContentTypeFromExtension(filename) {
     const ext = filename.split('.').pop().toLowerCase();
     const mimeTypes = {
       'txt': 'text/plain',

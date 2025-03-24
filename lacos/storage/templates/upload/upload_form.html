@@ -98,7 +98,12 @@
 <script src="{% static 'js/s3uploader.js' %}"></script>
 
 <!-- Include the folder scanner script -->
-<script src="{% static 'js/folder-scanner.js' %}"></script>
+<script type="module">
+    import { scanFolder } from "{% static 'js/folder-scanner.js' %}";
+    
+    // Make scanFolder available globally
+    window.scanFolder = scanFolder;
+</script>
 
 <script>
 // Update progress bar and text
