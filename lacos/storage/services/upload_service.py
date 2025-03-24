@@ -473,8 +473,8 @@ class UploadService(BaseStorageService):
             presigned_urls = []
             
             for part_number in range(1, part_count + 1):
-                # Generate a presigned URL for this part
-                url = self.s3_client.generate_presigned_url(
+                # Generate a presigned URL for this part using the presigned client
+                url = self.presigned_client.generate_presigned_url(
                     'upload_part',
                     Params={
                         'Bucket': self.ingest_bucket,

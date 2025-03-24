@@ -7,14 +7,16 @@ from datetime import datetime, timedelta
 class S3Service:
     @staticmethod
     def get_s3_client():
-        """Get an S3 client configured for your environment"""
-        return boto3.client(
-            's3',
-            endpoint_url=settings.S3_ENDPOINT_URL,
-            aws_access_key_id=settings.S3_ACCESS_KEY,
-            aws_secret_access_key=settings.S3_SECRET_KEY
-        )
-    
+        """Get an S3 client instance"""
+        base_service = BaseStorageService()
+        return base_service.s3_client
+
+    @staticmethod
+    def get_presigned_client():
+        """Get an S3 client instance for generating presigned URLs"""
+        base_service = BaseStorageService()
+        return base_service.presigned_client
+
     @staticmethod
     def construct_s3_path(obj):
         """
@@ -133,7 +135,7 @@ class S3Service:
     @staticmethod
     def generate_presigned_url(bucket, key, expires_in=3600):
         """Generate a presigned URL for temporary access"""
-        s3_client = S3Service.get_s3_client()
+        s3_client = S3Service.get_presigned_client()
         url = s3_client.generate_presigned_url(
             'get_object',
             Params={

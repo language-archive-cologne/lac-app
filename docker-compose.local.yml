@@ -60,6 +60,11 @@ services:
       MINIO_DOMAIN_NAME: "localhost:9000"
       MINIO_LOGGER: "console"
       MINIO_LOGGER_LEVEL: "debug"
+      MINIO_CORS_ALLOW_ORIGINS: "*"
+      MINIO_CORS_ALLOW_METHODS: "GET,PUT,POST,DELETE,OPTIONS"
+      MINIO_CORS_ALLOW_HEADERS: "*"
+      MINIO_CORS_EXPOSE_HEADERS: "ETag"
+      MINIO_CORS_MAX_AGE_SECONDS: "3600"
     command: server /data --console-address ":9001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]

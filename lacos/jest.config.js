@@ -1,14 +1,22 @@
 module.exports = {
     testEnvironment: 'jsdom',
-    setupFiles: ['./jest.setup.js'],
+    setupFiles: [
+        '<rootDir>/jest.setup.js'
+    ],
     moduleNameMapper: {
-        '^@/(.*)$': '<rootDir>/lacos/$1'
+        '^@/(.*)$': '<rootDir>/static/js/$1',
+        '^@src/(.*)$': '<rootDir>/static/js/src/$1'
     },
+    moduleDirectories: [
+        'node_modules',
+        '<rootDir>/static/js/src'
+    ],
     testMatch: [
-        '**/tests/**/*.js',
-        '**/tests/**/*.jsx'
+        '**/static/js/tests/**/*.test.js',
+        '**/static/js/src/**/*.test.js'
     ],
     transform: {
         '^.+\\.js$': 'babel-jest'
-    }
+    },
+    rootDir: '.'
 }; 
