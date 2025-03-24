@@ -22,6 +22,13 @@ class UploadService(BaseStorageService):
     allowing clients to upload directly to S3 without server intermediation.
     """
     
+    _instance = None
+    
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(UploadService, cls).__new__(cls)
+        return cls._instance
+    
     def __init__(self, skip_bucket_check=False):
         """
         Initialize the UploadService with base storage configuration.
@@ -29,8 +36,13 @@ class UploadService(BaseStorageService):
         Args:
             skip_bucket_check (bool): If True, skip bucket existence check
         """
+        # Skip initialization if already done
+        if hasattr(self, 'initialized'):
+            return
+            
         super().__init__(skip_bucket_check=skip_bucket_check)
         logger.info("UploadService initialized")
+        self.initialized = True
 
     def _generate_file_key(self, file_name: str, path_prefix: Optional[str] = None) -> str:
         """

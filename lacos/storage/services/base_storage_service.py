@@ -17,6 +17,12 @@ class BaseStorageService:
     
     # Class-level flag to track if buckets have been checked
     _buckets_checked = False
+    _instance = None
+    
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(BaseStorageService, cls).__new__(cls)
+        return cls._instance
     
     def __init__(self, skip_bucket_check=False):
         """
@@ -25,6 +31,10 @@ class BaseStorageService:
         Args:
             skip_bucket_check (bool): If True, skip bucket existence check (for child services)
         """
+        # Skip initialization if already done
+        if hasattr(self, 'initialized'):
+            return
+            
         logger.info("Initializing BaseStorageService...")
         
         # Initialize settings
@@ -72,6 +82,9 @@ class BaseStorageService:
                         logger.info("✅ CORS configuration for ingest bucket is already correct")
                 else:
                     logger.warning(f"⚠️ Failed to configure CORS for ingest bucket: {cors_result.get('error', 'Unknown error')}")
+        
+        # Mark as initialized
+        self.initialized = True
     
     def set_client_and_buckets(self, service):
         """

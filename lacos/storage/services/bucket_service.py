@@ -29,6 +29,13 @@ class BucketService(BaseStorageService):
     while providing a unified interface for the application.
     """
     
+    _instance = None
+    
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(BucketService, cls).__new__(cls)
+        return cls._instance
+    
     def __init__(self, skip_bucket_check=False):
         """
         Initialize the BucketService with all required sub-services.
@@ -36,6 +43,10 @@ class BucketService(BaseStorageService):
         Args:
             skip_bucket_check (bool): If True, skip bucket existence check
         """
+        # Skip initialization if already done
+        if hasattr(self, 'initialized'):
+            return
+            
         super().__init__(skip_bucket_check=skip_bucket_check)
         
         # Initialize the specialized services with skip_bucket_check=True
@@ -53,6 +64,7 @@ class BucketService(BaseStorageService):
             self.ocfl_service.s3_client = self.s3_client
         
         logger.info("BucketService initialized")
+        self.initialized = True
     
     def get_root_level_items(self, bucket_name: str) -> Dict[str, Any]:
         """

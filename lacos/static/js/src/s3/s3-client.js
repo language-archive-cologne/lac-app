@@ -13,6 +13,16 @@ class S3Client {
 
     async initializeMultipartUpload(fileName, folderName, fileType = 'application/octet-stream') {
         try {
+            // Construct the full S3 key path, preserving the folder structure
+            const s3Key = folderName ? `${folderName}/${fileName}` : fileName;
+
+            // Log the path construction for debugging
+            console.log('Initializing multipart upload with paths:', {
+                fileName,
+                folderName,
+                s3Key
+            });
+
             const response = await fetch('/storage/multipart/initialize/', {
                 method: 'POST',
                 headers: {
@@ -36,7 +46,7 @@ class S3Client {
                 return { success: false, error: data.error };
             }
 
-            return { success: true, uploadId: data.upload_id, s3Key: data.s3_key };
+            return { success: true, uploadId: data.upload_id, s3Key: s3Key };
         } catch (error) {
             console.error('Error initializing multipart upload:', error);
             return { success: false, error: error.message };

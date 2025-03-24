@@ -13,17 +13,32 @@ class MultipartUploadHandler {
 
     async startUpload(file, folderName) {
         try {
-            // Initialize multipart upload
-            const initResult = await this.s3Client.initializeMultipartUpload(file.name, folderName);
+            // Get the relative path of the file within the folder
+            const relativePath = file.webkitRelativePath || file.name;
+            
+            // If we have a folderName, we need to adjust the relative path
+            // to be relative to that folder, not the root
+            let adjustedPath = relativePath;
+            if (folderName) {
+                // Remove the folderName prefix from the relativePath if it exists
+                if (relativePath.startsWith(folderName + '/')) {
+                    adjustedPath = relativePath.substring(folderName.length + 1);
+                }
+            }
+
+            // Initialize multipart upload with the adjusted path
+            const initResult = await this.s3Client.initializeMultipartUpload(adjustedPath, folderName);
             if (!initResult.success) {
                 console.error('Failed to initialize multipart upload:', initResult.error);
                 return { success: false, error: initResult.error };
             }
 
             console.log('Multipart upload initialized:', {
-                fileName: file.name,
+                fileName: adjustedPath,
                 uploadId: initResult.uploadId,
-                s3Key: initResult.s3Key
+                s3Key: initResult.s3Key,
+                originalPath: relativePath,
+                adjustedPath: adjustedPath
             });
 
             // Calculate number of parts based on file size
@@ -59,7 +74,9 @@ class MultipartUploadHandler {
                 presignedUrls: urlsResult.urls,
                 parts: [],
                 folderName: folderName,
-                partSize: partSize
+                partSize: partSize,
+                relativePath: adjustedPath,
+                originalPath: relativePath
             });
 
             return { success: true };

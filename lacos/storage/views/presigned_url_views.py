@@ -6,9 +6,41 @@ from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from lacos.storage.services.upload_service import UploadService
+from lacos.storage.services.base_storage_service import BaseStorageService
+from lacos.storage.services.collection_service import CollectionService
+from lacos.storage.services.bucket_service import BucketService
 
 logger = logging.getLogger(__name__)
 
+# Singleton instances
+_upload_service = None
+_base_storage_service = None
+_collection_service = None
+_bucket_service = None
+
+def get_upload_service():
+    global _upload_service
+    if _upload_service is None:
+        _upload_service = UploadService()
+    return _upload_service
+
+def get_base_storage_service():
+    global _base_storage_service
+    if _base_storage_service is None:
+        _base_storage_service = BaseStorageService()
+    return _base_storage_service
+
+def get_collection_service():
+    global _collection_service
+    if _collection_service is None:
+        _collection_service = CollectionService()
+    return _collection_service
+
+def get_bucket_service():
+    global _bucket_service
+    if _bucket_service is None:
+        _bucket_service = BucketService()
+    return _bucket_service
 
 @login_required
 @require_http_methods(["POST"])
@@ -79,9 +111,9 @@ def get_presigned_urls(request):
     if files_metadata:
         logger.debug(f"Sample file metadata: {files_metadata[0]}")
     
-    # Directly use the UploadService to generate presigned URLs
+    # Use the singleton upload service
     try:
-        upload_service = UploadService()
+        upload_service = get_upload_service()
         result = upload_service.generate_batch_presigned_posts(
             files_metadata=files_metadata,
             path_prefix=folder_name,
@@ -171,7 +203,7 @@ def mark_uploads_complete(request):
     
     # Directly use the UploadService to verify each file
     try:
-        upload_service = UploadService()
+        upload_service = get_upload_service()
         results = []
         success = True
         total_verified = 0
@@ -275,7 +307,7 @@ def initialize_multipart_upload(request):
         logger.info(f"Initializing multipart upload for {file_name}")
         
         # Use the upload service to initialize the multipart upload
-        upload_service = UploadService()
+        upload_service = get_upload_service()
         result = upload_service.initialize_multipart_upload(
             file_name=file_name,
             file_type=file_type,
@@ -336,7 +368,7 @@ def get_part_upload_urls(request):
         logger.info(f"Generating {part_count} part upload URLs for {s3_key}")
         
         # Use the upload service to get presigned URLs for each part
-        upload_service = UploadService()
+        upload_service = get_upload_service()
         result = upload_service.get_upload_part_urls(
             s3_key=s3_key,
             upload_id=upload_id,
@@ -396,7 +428,7 @@ def complete_multipart_upload(request):
         logger.info(f"Completing multipart upload for {s3_key} with {len(parts)} parts")
         
         # Use the upload service to complete the multipart upload
-        upload_service = UploadService()
+        upload_service = get_upload_service()
         result = upload_service.complete_multipart_upload(
             s3_key=s3_key,
             upload_id=upload_id,
@@ -445,7 +477,7 @@ def abort_multipart_upload(request):
         logger.info(f"Aborting multipart upload for {s3_key}")
         
         # Use the upload service to abort the multipart upload
-        upload_service = UploadService()
+        upload_service = get_upload_service()
         result = upload_service.abort_multipart_upload(
             s3_key=s3_key,
             upload_id=upload_id
@@ -482,7 +514,7 @@ def list_multipart_uploads(request):
         logger.info("Listing in-progress multipart uploads")
         
         # Use the upload service to list multipart uploads
-        upload_service = UploadService()
+        upload_service = get_upload_service()
         result = upload_service.list_multipart_uploads()
         
         if result["success"]:
