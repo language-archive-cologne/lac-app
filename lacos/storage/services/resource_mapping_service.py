@@ -1,24 +1,45 @@
 from django.contrib.contenttypes.models import ContentType
-from .models import S3ResourceLocation, ACFLPermissions
+from lacos.storage.models.s3_resource_location import S3ResourceLocation
+from lacos.storage.models.acl_permissions import ACLPermissions
+from .base_storage_service import BaseStorageService
 import boto3
 from django.conf import settings
 from datetime import datetime, timedelta
+import logging
 
-class S3Service:
-    @staticmethod
-    def get_s3_client():
-        """Get an S3 client instance"""
-        base_service = BaseStorageService()
-        return base_service.s3_client
+logger = logging.getLogger(__name__)
 
-    @staticmethod
-    def get_presigned_client():
-        """Get an S3 client instance for generating presigned URLs"""
-        base_service = BaseStorageService()
-        return base_service.presigned_client
-
-    @staticmethod
-    def construct_s3_path(obj):
+class ResourceMappingService(BaseStorageService):
+    """
+    Service for managing the mapping between resources and their S3 storage locations.
+    
+    This service handles mapping between Django model objects (Collection, Bundle, Resources)
+    and their corresponding locations in S3 storage.
+    """
+    
+    _instance = None
+    
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(ResourceMappingService, cls).__new__(cls)
+        return cls._instance
+    
+    def __init__(self, skip_bucket_check=False):
+        """
+        Initialize the ResourceMappingService with base storage configuration.
+        
+        Args:
+            skip_bucket_check (bool): If True, skip bucket existence check
+        """
+        # Skip initialization if already done
+        if hasattr(self, 'initialized'):
+            return
+            
+        super().__init__(skip_bucket_check=skip_bucket_check)
+        logger.info("ResourceMappingService initialized")
+        self.initialized = True
+    
+    def construct_s3_path(self, obj):
         """
         Construct the appropriate S3 path for an object based on its type.
         
@@ -71,8 +92,7 @@ class S3Service:
         # Default case if we can't determine the path
         return None
     
-    @staticmethod
-    def get_s3_location(obj):
+    def get_s3_location(self, obj):
         """Get S3 location for any object (Collection, Bundle, or Resource)"""
         try:
             ct = ContentType.objects.get_for_model(obj)
@@ -84,8 +104,7 @@ class S3Service:
         except S3ResourceLocation.DoesNotExist:
             return None
     
-    @staticmethod
-    def resolve_pid_to_s3(pid_url):
+    def resolve_pid_to_s3(self, pid_url):
         """Resolve a PID URL to an S3 location"""
         try:
             location = S3ResourceLocation.objects.get(resource_pid=pid_url)
@@ -93,8 +112,7 @@ class S3Service:
         except S3ResourceLocation.DoesNotExist:
             return None
     
-    @staticmethod
-    def register_s3_location(obj, bucket, key=None, pid_url=None):
+    def register_s3_location(self, obj, bucket, key=None, pid_url=None):
         """
         Register S3 location for an object
         
@@ -112,7 +130,7 @@ class S3Service:
         
         # If no key provided, try to construct it
         if key is None:
-            key = S3Service.construct_s3_path(obj)
+            key = self.construct_s3_path(obj)
             if key is None:
                 raise ValueError(f"Could not construct S3 path for {obj}. Please provide a key.")
         
@@ -132,11 +150,9 @@ class S3Service:
         )
         return location
     
-    @staticmethod
-    def generate_presigned_url(bucket, key, expires_in=3600):
+    def generate_presigned_url(self, bucket, key, expires_in=3600):
         """Generate a presigned URL for temporary access"""
-        s3_client = S3Service.get_presigned_client()
-        url = s3_client.generate_presigned_url(
+        url = self.presigned_client.generate_presigned_url(
             'get_object',
             Params={
                 'Bucket': bucket,
@@ -146,6 +162,33 @@ class S3Service:
         )
         return url
 
+    def get_resource_url(self, resource):
+        """Get a presigned URL for a resource"""
+        location = self.get_s3_location(resource)
+        if not location:
+            raise ValueError(f"No S3 location found for resource: {resource}")
+        return self.generate_presigned_url(location.s3_bucket, location.s3_key)
+    
+    def get_resource_url_by_pid(self, pid):
+        """Get a presigned URL for a resource by its PID"""
+        location = self.resolve_pid_to_s3(pid)
+        if not location:
+            raise ValueError(f"No S3 location found for PID: {pid}")
+        return self.generate_presigned_url(location.s3_bucket, location.s3_key)
+        
+    def batch_register_resources(self, resources, bucket, base_key):
+        """Register multiple resources in a batch"""
+        for resource in resources:
+            # Extract the last part of the PID as a file name if no file_name is available
+            if hasattr(resource, 'file_pid'):
+                file_name = resource.file_pid.split('/')[-1]
+                s3_key = f"{base_key}/{file_name}"
+                self.register_s3_location(resource, bucket, s3_key)
+
+
+# For backwards compatibility, create an alias
+S3Service = ResourceMappingService
+
 
 class ACFLService:
     @staticmethod
@@ -153,13 +196,32 @@ class ACFLService:
         """Get ACFL permissions for any object (Collection or Bundle)"""
         try:
             ct = ContentType.objects.get_for_model(obj)
-            permissions = ACFLPermissions.objects.get(
+            permissions = ACLPermissions.objects.get(
                 content_type=ct,
                 object_id=obj.id
             )
             return permissions
-        except ACFLPermissions.DoesNotExist:
+        except ACLPermissions.DoesNotExist:
             return None
+    
+    @staticmethod
+    def create_permissions(obj, bucket, key, permissions_data=None):
+        """Create ACFL permissions for an object"""
+        from django.contrib.contenttypes.models import ContentType
+        ct = ContentType.objects.get_for_model(obj)
+        
+        # Create permissions
+        permissions, created = ACLPermissions.objects.update_or_create(
+            content_type=ct,
+            object_id=obj.id,
+            defaults={
+                'ACL_file_bucket': bucket,
+                'ACL_file_key': key,
+                'permissions_data': permissions_data,
+                'last_synced': datetime.now() if permissions_data else None
+            }
+        )
+        return permissions
     
     @staticmethod
     def check_permission(user, obj, permission_type='read'):
@@ -257,11 +319,13 @@ class ACFLService:
             return None
         
         # Get the ACFL file from S3
-        s3_client = S3Service.get_s3_client()
+        resource_mapping_service = ResourceMappingService()
+        s3_client = resource_mapping_service.s3_client
+        
         try:
             response = s3_client.get_object(
-                Bucket=permissions.acfl_file_bucket,
-                Key=permissions.acfl_file_key
+                Bucket=permissions.ACL_file_bucket,
+                Key=permissions.ACL_file_key
             )
             acfl_data = response['Body'].read().decode('utf-8')
             
