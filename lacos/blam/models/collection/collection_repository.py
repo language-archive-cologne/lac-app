@@ -7,7 +7,6 @@ from lacos.blam.models.collection.collection_publication_info import CollectionP
 from lacos.blam.models.collection.collection_administrative_info import CollectionAdministrativeInfo
 from lacos.blam.models.collection.collection_structural_info import CollectionStructuralInfo
 from lacos.blam.models.base_project_info import ProjectInfo
-from lacos.blam.models.collection.collection_resources import CollectionResources
 
 
 class Collection(Repository):
