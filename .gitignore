@@ -293,3 +293,6 @@ yarn-error.log*
 
 # Built CSS is tracked (unless you build during CI/CD)
 # !lacos/theme/static/css/dist/styles.css
+
+.s3_sandbox
+.s3_sandbox_config
