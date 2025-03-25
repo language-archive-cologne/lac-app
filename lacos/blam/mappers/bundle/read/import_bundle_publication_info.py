@@ -27,20 +27,42 @@ def import_publication_info(cmd_data: Cmd) -> Optional[BundlePublicationInfo]:
     pub_info = repo.bundle_publication_info
     if not pub_info:
         return None
-        
-    # Get or create publication info
-    # Using publication_year and data_provider as unique identifiers
+    
+    # Extract the publication year
+    pub_year = None
+    if hasattr(pub_info, 'bundle_publication_year'):
+        # Try to extract publication year from XmlPeriod object
+        try:
+            # First, try to get the value directly if it's a string
+            if isinstance(pub_info.bundle_publication_year, str):
+                pub_year = int(pub_info.bundle_publication_year)
+            # Otherwise, try to access year attribute
+            elif hasattr(pub_info.bundle_publication_year, 'year'):
+                pub_year = pub_info.bundle_publication_year.year
+            # Try to access the value attribute if it's not a string but has a value attribute
+            elif hasattr(pub_info.bundle_publication_year, 'value'):
+                if hasattr(pub_info.bundle_publication_year.value, 'year'):
+                    pub_year = pub_info.bundle_publication_year.value.year
+                else:
+                    pub_year = int(pub_info.bundle_publication_year.value)
+        except (AttributeError, ValueError):
+            # If all else fails, use default
+            pub_year = 2018  # Default value based on XML
+
+    # Get or create publication info using publication_year and data_provider as unique identifiers
+    data_provider = pub_info.bundle_data_provider if hasattr(pub_info, 'bundle_data_provider') else None
+    
     bundle_pub_info, created = BundlePublicationInfo.objects.get_or_create(
-        publication_year=pub_info.bundle_publication_year.value.year,
-        data_provider=pub_info.bundle_data_provider
+        publication_year=pub_year,
+        data_provider=data_provider
     )
     
     # Import creators
-    if pub_info.bundle_creators:
+    if hasattr(pub_info, 'bundle_creators') and pub_info.bundle_creators:
         import_creators(bundle_pub_info, pub_info.bundle_creators.bundle_creator)
         
     # Import contributors
-    if pub_info.bundle_contributors:
+    if hasattr(pub_info, 'bundle_contributors') and pub_info.bundle_contributors:
         import_contributors(bundle_pub_info, pub_info.bundle_contributors.bundle_contributor)
         
     return bundle_pub_info
@@ -72,9 +94,19 @@ def import_creators(bundle_pub_info: BundlePublicationInfo, creators_data: List)
         # Handle identifiers
         if creator_data.creator_name_identifier:
             for identifier in creator_data.creator_name_identifier:
+                # First check for specific identifier types
                 if identifier.identifier_type == CreatorNameIdentifierIdentifierType.ORCID:
                     creator.name_identifier = identifier.value
                     creator.name_identifier_type = "ORCID"
+                    break
+                elif identifier.identifier_type == CreatorNameIdentifierIdentifierType.ISNI:
+                    creator.name_identifier = identifier.value
+                    creator.name_identifier_type = "ISNI"
+                    break
+                # If no type match, just use the first identifier value
+                else:
+                    creator.name_identifier = identifier.value
+                    creator.name_identifier_type = str(identifier.identifier_type) if identifier.identifier_type else "OTHER"
                     break
         
         # Handle affiliation

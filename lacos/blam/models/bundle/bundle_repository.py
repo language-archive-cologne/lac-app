@@ -1,6 +1,7 @@
 from django.db import models
 from lacos.blam.models.base_repository import Repository
 from lacos.blam.models.base_project_info import ProjectInfo
+from lacos.blam.models.bundle.bundle_header import BundleHeader
 from lacos.blam.models.bundle.bundle_general_info import BundleGeneralInfo
 from lacos.blam.models.bundle.bundle_publication_info import BundlePublicationInfo
 from lacos.blam.models.bundle.bundle_administrative_info import BundleAdministrativeInfo
@@ -12,6 +13,11 @@ class Bundle(Repository):
     Concrete implementation of Repository for bundles.
     A bundle is a coherent set of data and metadata files that form a meaningful unit.
     """
+    base_header = models.ForeignKey(
+        BundleHeader,
+        on_delete=models.CASCADE,
+        related_name='bundles_header'
+    )
     general_info = models.ForeignKey(
         BundleGeneralInfo,
         on_delete=models.CASCADE,

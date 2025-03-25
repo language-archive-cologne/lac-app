@@ -23,6 +23,10 @@ class GeneralInfo(BaseModel):
     display_title = models.CharField(max_length=255, null=False)
     description = models.TextField(null=False)
     keywords = models.ManyToManyField('Keyword', blank=True)
+
+    object_languages = models.ManyToManyField('ObjectLanguage', blank=True)
+    recording_date = models.DateField(null=True, blank=True)
+    location = models.ForeignKey('Location', on_delete=models.CASCADE, related_name='general_info')
     
     # Version tracking
     version = models.CharField(max_length=50, null=False)

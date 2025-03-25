@@ -67,8 +67,8 @@ def create_bundle_general_info(bundle_info: Any, location: BundleLocation) -> Bu
             'display_title': bundle_info.bundle_display_title,
             'description': bundle_info.bundle_description,
             'version': bundle_info.bundle_version,
-            'bundle_recording_date': parse_recording_date(bundle_info.bundle_recording_date.value),
-            'bundle_location': location
+            'recording_date': parse_recording_date(bundle_info.bundle_recording_date.value),
+            'location': location
         }
     )
     return general_info
@@ -120,6 +120,14 @@ def map_identifier_type(id_type: Optional[BundleIdIdentifierType]) -> str:
         BundleIdIdentifierType.URN: IdentifierTypeChoices.URN.value,
         BundleIdIdentifierType.OTHER: IdentifierTypeChoices.OTHER.value,
     }
+    
+    # Convert string to enum if needed
+    if isinstance(id_type, str):
+        try:
+            id_type = BundleIdIdentifierType(id_type)
+        except ValueError:
+            return IdentifierTypeChoices.DOI.value
+    
     return mapping.get(id_type, IdentifierTypeChoices.DOI.value)
 
 
@@ -173,7 +181,7 @@ def import_keywords(general_info: BundleGeneralInfo, keywords: List[str]) -> Non
     """
     for keyword_value in keywords:
         keyword, created = BundleKeyword.objects.get_or_create(value=keyword_value)
-        general_info.bundle_keywords.add(keyword)
+        general_info.keywords.add(keyword)
 
 
 def import_object_languages(general_info: BundleGeneralInfo, languages: List[Any]) -> None:

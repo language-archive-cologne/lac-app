@@ -1,6 +1,5 @@
 from django.db import models
 from lacos.blam.models.base_repository import Repository
-from lacos.blam.models.base_license import MdLicense
 from lacos.blam.models.collection.collection_header import CollectionHeader
 from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo
 from lacos.blam.models.collection.collection_publication_info import CollectionPublicationInfo
@@ -20,12 +19,6 @@ class Collection(Repository):
         on_delete=models.CASCADE,
         related_name='collections_header'
     )
-    base_license = models.ForeignKey(
-        MdLicense,
-        on_delete=models.CASCADE,
-        related_name='collections_license'
-    )
-
     general_info = models.ForeignKey(
         CollectionGeneralInfo,
         on_delete=models.CASCADE,

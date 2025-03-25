@@ -11,16 +11,6 @@ class BundleStructuralInfo(StructuralInfo):
     additional_metadata_files = models.ManyToManyField('BundleAdditionalMetadataFile', blank=True)
     bundle_topics = models.ManyToManyField('BundleTopic', blank=True)
     
-    # Link to the CMDI Resources (optional, as it might be created later)
-    cmdi_resources = models.OneToOneField(
-        'blam.CmdiResources',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='bundle_structural_info',
-        help_text="CMDI Resources associated with this bundle"
-    )
-
     class Meta:
         verbose_name = "Bundle Structural Info"
         verbose_name_plural = "Bundle Structural Info"
@@ -29,17 +19,6 @@ class BundleAdditionalMetadataFile(AdditionalMetadataFile):
     """
     Concrete implementation of AdditionalMetadataFile for bundles
     """
-    
-    # Optional link to the corresponding CMDI resource
-    cmdi_resource = models.OneToOneField(
-        'blam.CmdiAdditionalMetadataFile',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='blam_resource',
-        help_text="Corresponding CMDI additional metadata file"
-    )
-    
     class Meta:
         verbose_name = "Bundle Additional Metadata File"
         verbose_name_plural = "Bundle Additional Metadata Files"
@@ -143,16 +122,6 @@ class BundleResources(models.Model):
     bundle_media_resources = models.ManyToManyField('MediaResource', blank=True)
     bundle_written_resources = models.ManyToManyField('WrittenResource', blank=True)
     bundle_other_resources = models.ManyToManyField('OtherResource', blank=True)
-    
-    # Link to the CMDI Resources (optional, as it might be created later)
-    cmdi_resources = models.OneToOneField(
-        'blam.CmdiResources',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='bundle_resources',
-        help_text="CMDI Resources associated with these bundle resources"
-    )
 
     class Meta:
         verbose_name = "Bundle Resources"
@@ -188,17 +157,7 @@ class MediaResource(models.Model):
         blank=True,
         help_text="A human readable, file specific description"
     )
-    
-    # Optional link to the corresponding CMDI resource
-    cmdi_resource = models.OneToOneField(
-        'blam.CmdiMediaResource',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='blam_resource',
-        help_text="Corresponding CMDI media resource"
-    )
-    
+
     class Meta:
         verbose_name = "Media Resource"
         verbose_name_plural = "Media Resources"
@@ -229,17 +188,7 @@ class WrittenResource(models.Model):
         blank=True,
         help_text="A human readable, file specific description"
     )
-    
-    # Optional link to the corresponding CMDI resource
-    cmdi_resource = models.OneToOneField(
-        'blam.CmdiWrittenResource',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='blam_resource',
-        help_text="Corresponding CMDI written resource"
-    )
-    
+
     class Meta:
         verbose_name = "Written Resource"
         verbose_name_plural = "Written Resources"
@@ -256,10 +205,11 @@ class WrittenResourceAnnotation(models.Model):
         help_text="Written resource that is an annotation"
     )
     is_annotation_of = models.URLField(
+        max_length=255,
         null=False,
-        help_text="PID that uniquely identifies the file annotated by this resource"
+        help_text="URI of the resource this is an annotation of"
     )
-    
+
     class Meta:
         verbose_name = "Written Resource Annotation"
         verbose_name_plural = "Written Resource Annotations"
@@ -290,17 +240,7 @@ class OtherResource(models.Model):
         blank=True,
         help_text="A human readable, file specific description"
     )
-    
-    # Optional link to the corresponding CMDI resource
-    cmdi_resource = models.OneToOneField(
-        'blam.CmdiOtherResource',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='blam_resource',
-        help_text="Corresponding CMDI other resource"
-    )
-    
+
     class Meta:
         verbose_name = "Other Resource"
         verbose_name_plural = "Other Resources"

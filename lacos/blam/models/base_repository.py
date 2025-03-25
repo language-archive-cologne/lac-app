@@ -12,37 +12,32 @@ class Repository(BaseModel):
     """
 
     base_header = models.ForeignKey(
-        'MdHeader',
+        'blam.BundleHeader',
         on_delete=models.CASCADE,
         related_name='base_header'
     )
-    base_license = models.ForeignKey(
-        'MdLicense',
-        on_delete=models.CASCADE,
-        related_name='base_license'
-    )
     general_info = models.ForeignKey(
-        'GeneralInfo',
+        'blam.BundleGeneralInfo',
         on_delete=models.CASCADE,
         related_name='base_general'
     )
     publication_info = models.ForeignKey(
-        'PublicationInfo',
+        'blam.BundlePublicationInfo',
         on_delete=models.CASCADE,
         related_name='base_publication'
     )
     project_info = models.ForeignKey(
-        'ProjectInfo',
+        'blam.ProjectInfo',
         on_delete=models.CASCADE,
         related_name='base_project'
     )
     administrative_info = models.ForeignKey(
-        'AdministrativeInfo',
+        'blam.BundleAdministrativeInfo',
         on_delete=models.CASCADE,
         related_name='base_administrative'
     )
     structural_info = models.ForeignKey(
-        'StructuralInfo',
+        'blam.BundleStructuralInfo',
         on_delete=models.CASCADE,
         related_name='base_structural'
     )

@@ -17,10 +17,9 @@ class BundleGeneralInfo(GeneralInfo):
     Extends the abstract GeneralInfo model with bundle-specific fields
     and relationships.
     """
-    bundle_keywords = models.ManyToManyField('BundleKeyword', blank=True)
-    bundle_object_languages = models.ManyToManyField('BundleObjectLanguage', blank=True)
-    bundle_recording_date = models.DateField(null=True, blank=True)
-    bundle_location = models.ForeignKey('BundleLocation', on_delete=models.CASCADE, related_name='bundle_general_info')
+    keywords = models.ManyToManyField('BundleKeyword', blank=True)
+    object_languages = models.ManyToManyField('BundleObjectLanguage', blank=True)
+    location = models.ForeignKey('BundleLocation', on_delete=models.CASCADE, related_name='bundle_general_info')
 
     class Meta:
         verbose_name = "Bundle General Information"
@@ -62,6 +61,7 @@ class BundleObjectLanguage(ObjectLanguage):
         on_delete=models.CASCADE,
         related_name='object_languages'
     )
+    alternative_names = models.ManyToManyField('BundleObjectLanguageAlternativeName', blank=True)
     
     class Meta:
         verbose_name = "Bundle Object Language"
@@ -97,6 +97,7 @@ class BundleObjectLanguageTaxonomy(ObjectLanguageTaxonomy):
         on_delete=models.CASCADE,
         related_name='taxonomy'
     )
+    language_family = models.ManyToManyField('BundleObjectLanguageLanguageFamily', blank=True)
     
     class Meta:
         verbose_name = "Bundle Object Language Taxonomy"

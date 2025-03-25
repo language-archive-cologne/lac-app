@@ -1,5 +1,6 @@
 from typing import Optional, List, Tuple
 from django.db import transaction
+from django.core.exceptions import ObjectDoesNotExist
 from lacos.blam.models.bundle.bundle_structural_info import (
     BundleStructuralInfo,
     BundleAdditionalMetadataFile,
@@ -47,7 +48,7 @@ def import_structural_info(cmd_data: Cmd, collection_identifier: str, identifier
             id_type=identifier_type
         )
         collection = Collection.objects.get(general_info=collection_general_info)
-    except (CollectionGeneralInfo.DoesNotExist, Collection.DoesNotExist):
+    except ObjectDoesNotExist:
         raise ValueError(f"Collection with identifier {collection_identifier} ({identifier_type}) does not exist")
     
     # Get or create structural info with collection reference

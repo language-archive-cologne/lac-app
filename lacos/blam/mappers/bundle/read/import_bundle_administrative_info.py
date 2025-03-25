@@ -34,15 +34,24 @@ def import_administrative_info(bundle_schema: Cmd) -> BundleAdministrativeInfo:
     # Extract the administrative info section from the schema
     admin_info_schema = bundle_schema.components.blam_bundle_repository_v1_0.bundle_administrative_info
     
-    # Create and populate the administrative info model
-    admin_info = create_base_administrative_info(admin_info_schema)
+    # Format the date for lookup
+    date_str = None
+    if admin_info_schema.availability_date:
+        date_str = f"{admin_info_schema.availability_date.year}-{admin_info_schema.availability_date.month:02d}-{admin_info_schema.availability_date.day:02d}"
     
-    # Import related objects
-    import_identical_resources(admin_info, admin_info_schema)
-    import_licenses(admin_info, admin_info_schema)
-    import_rights_holders(admin_info, admin_info_schema)
+    # Try to find an existing record with the same date
+    existing_records = BundleAdministrativeInfo.objects.filter(availability_date=date_str)
+    if existing_records.exists():
+        admin_info = existing_records.first()
+    else:
+        # Create and populate the administrative info model
+        admin_info = create_base_administrative_info(admin_info_schema)
+        
+        # Import related objects
+        import_identical_resources(admin_info, admin_info_schema)
+        import_licenses(admin_info, admin_info_schema)
+        import_rights_holders(admin_info, admin_info_schema)
     
-    admin_info.save()
     return admin_info
 
 
@@ -58,9 +67,11 @@ def create_base_administrative_info(admin_info_schema) -> BundleAdministrativeIn
     """
     admin_info = BundleAdministrativeInfo()
     
-    # Set the availability date
+    # Set the availability date (XmlDate doesn't have .value attribute)
     if admin_info_schema.availability_date:
-        admin_info.availability_date = admin_info_schema.availability_date.value
+        # Convert XmlDate to string in ISO format without timezone
+        date_str = f"{admin_info_schema.availability_date.year}-{admin_info_schema.availability_date.month:02d}-{admin_info_schema.availability_date.day:02d}"
+        admin_info.availability_date = date_str
     
     # Set the derivation URI if it exists
     if admin_info_schema.bundle_is_derivation_of:
@@ -110,9 +121,13 @@ def import_licenses(admin_info: BundleAdministrativeInfo, admin_info_schema) -> 
         access = access_mapping.get(admin_info_schema.access.value, "open")
     
     for license_schema in admin_info_schema.license:
+        # Handle None or empty values
+        license_name = license_schema.license_name or ""
+        license_identifier = license_schema.license_identifier or ""
+        
         license_model, created = BundleLicense.objects.get_or_create(
-            license_name=license_schema.license_name,
-            license_identifier=license_schema.license_identifier,
+            license_name=license_name,
+            license_identifier=license_identifier,
             defaults={'access': access}
         )
         
@@ -144,7 +159,10 @@ def import_rights_holders(admin_info: BundleAdministrativeInfo, admin_info_schem
         # Import rights holder identifiers
         for identifier_schema in rights_holder_schema.rights_holder_identifier:
             identifier, created = BundleRightsHolderIdentifier.objects.get_or_create(
-                value=identifier_schema.value
+                identifier=identifier_schema.value,
+                defaults={
+                    'identifier_type': 'ISNI'
+                }
             )
             rights_holder.rights_holder_identifiers.add(identifier)
         
