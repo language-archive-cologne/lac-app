@@ -3,14 +3,13 @@ from django.utils.dateparse import parse_date
 from lacos.blam.models.collection.collection_administrative_info import (
     CollectionAdministrativeInfo,
     CollectionIdenticalResource,
-    CollectionLicense,
     CollectionRightsHolder,
     CollectionRightsHolderIdentifier
 )
 from blam_schemas.collection.blam_collection_repository_v1_0 import (
-    Cmd,
-    SimpletypeAccess41
+    Cmd
 )
+from lacos.blam.mappers.collection.read.import_collection_license import create_collection_license
 
 
 @transaction.atomic
@@ -61,14 +60,18 @@ def create_base_administrative_info(admin_info_schema) -> CollectionAdministrati
     
     # Set the availability date
     if admin_info_schema.availability_date:
-        admin_info_data['availability_date'] = admin_info_schema.availability_date.value
+        date_obj = admin_info_schema.availability_date
+        admin_info_data['availability_date'] = f"{date_obj.year}-{date_obj.month:02d}-{date_obj.day:02d}"
     
     # Set the derivation URI if it exists
     if admin_info_schema.collection_is_derivation_of:
         admin_info_data['is_derivation_of'] = admin_info_schema.collection_is_derivation_of
     
-    # Create a new administrative info (we don't use get_or_create as admin info is typically unique per collection)
-    admin_info = CollectionAdministrativeInfo.objects.create(**admin_info_data)
+    # Get or create administrative info using availability_date as a unique field
+    admin_info, created = CollectionAdministrativeInfo.objects.get_or_create(
+        availability_date=admin_info_data['availability_date'],
+        defaults=admin_info_data
+    )
     
     return admin_info
 
@@ -82,10 +85,12 @@ def import_identical_resources(admin_info: CollectionAdministrativeInfo, admin_i
         admin_info_schema: The administrative info section of the BLAM collection repository schema.
     """
     for identical_resource_uri in admin_info_schema.collection_is_identical_to:
-        identical_resource, created = CollectionIdenticalResource.objects.get_or_create(
-            uri=identical_resource_uri
-        )
-        admin_info.is_identical_to.add(identical_resource)
+        # Skip empty URIs
+        if identical_resource_uri and identical_resource_uri.strip():
+            identical_resource, created = CollectionIdenticalResource.objects.get_or_create(
+                uri=identical_resource_uri
+            )
+            admin_info.is_identical_to.add(identical_resource)
 
 
 def import_licenses(admin_info: CollectionAdministrativeInfo, admin_info_schema) -> None:
@@ -93,36 +98,24 @@ def import_licenses(admin_info: CollectionAdministrativeInfo, admin_info_schema)
     Import licenses from the schema to the administrative info model.
     
     This function creates CollectionLicense objects for each license in the schema
-    and associates them with the administrative info model. It also maps the
-    access type from the schema to the model.
+    and associates them with the administrative info model.
     
     Args:
         admin_info: The CollectionAdministrativeInfo instance to add licenses to.
         admin_info_schema: The administrative info section of the BLAM collection repository schema.
     """
-    # Map access type from schema to model
-    access = "open"  # Default value
-    if admin_info_schema.access and admin_info_schema.access.value:
-        access_mapping = {
-            SimpletypeAccess41.OPEN: "open",
-            SimpletypeAccess41.REGISTRATION_REQUIRED: "registration_required",
-            SimpletypeAccess41.REQUEST_REQUIRED: "request_required"
-        }
-        access = access_mapping.get(admin_info_schema.access.value, "open")
+    # Clear existing licenses to avoid duplicates
+    admin_info.licenses.clear()
     
+    # Skip if no licenses
+    if not hasattr(admin_info_schema, 'license') or not admin_info_schema.license:
+        return
+    
+    # Create and add each license
     for license_schema in admin_info_schema.license:
-        license_model, created = CollectionLicense.objects.get_or_create(
-            license_name=license_schema.license_name,
-            license_identifier=license_schema.license_identifier,
-            defaults={'access': access}
-        )
-        
-        # Update access if the license already existed
-        if not created:
-            license_model.access = access
-            license_model.save()
-            
-        admin_info.licenses.add(license_model)
+        license_model = create_collection_license(admin_info_schema, license_schema)
+        if license_model:  # Only add if valid license was created
+            admin_info.licenses.add(license_model)
 
 
 def import_rights_holders(admin_info: CollectionAdministrativeInfo, admin_info_schema) -> None:
@@ -145,7 +138,8 @@ def import_rights_holders(admin_info: CollectionAdministrativeInfo, admin_info_s
         # Import rights holder identifiers
         for identifier_schema in rights_holder_schema.rights_holder_identifier:
             identifier, created = CollectionRightsHolderIdentifier.objects.get_or_create(
-                value=identifier_schema.value
+                identifier=identifier_schema.value,
+                identifier_type=identifier_schema.identifier_type.value
             )
             rights_holder.rights_holder_identifiers.add(identifier)
         

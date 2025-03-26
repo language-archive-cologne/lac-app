@@ -75,7 +75,7 @@ def extract_creator(header_data: Any) -> str:
         The creator as a string
     """
     # Get the first creator (required in schema)
-    if header_data.md_creator and len(header_data.md_creator) > 0:
+    if hasattr(header_data, 'md_creator') and header_data.md_creator and len(header_data.md_creator) > 0:
         return header_data.md_creator[0].value
     return ""
 
@@ -88,10 +88,12 @@ def extract_creation_date(header_data: Any) -> datetime.date:
         header_data: The header data from the schema
         
     Returns:
-        The creation date
+        The creation date as a datetime.date object
     """
     if hasattr(header_data, 'md_creation_date') and header_data.md_creation_date:
-        return header_data.md_creation_date.value
+        # Convert XmlDate to datetime.date
+        xml_date = header_data.md_creation_date.value
+        return datetime(xml_date.year, xml_date.month, xml_date.day).date()
     return timezone.now().date()
 
 
