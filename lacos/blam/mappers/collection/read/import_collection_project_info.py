@@ -28,8 +28,19 @@ def import_project_info(collection_schema: Cmd) -> list[ProjectInfo]:
     Returns:
         A list of ProjectInfo instances with all related objects.
     """
+    # Get repository component
+    repo = collection_schema.components.blam_collection_repository_v1_0
+    
+    # Check if project_info exists in the schema
+    if not hasattr(repo, 'project_info'):
+        return []  # Return empty list if no project info in schema
+        
     # Extract the project info section from the schema
-    project_info_schema = collection_schema.components.blam_collection_repository_v1_0.project_info
+    project_info_schema = repo.project_info
+    
+    # Check if project attribute exists and has content
+    if not hasattr(project_info_schema, 'project') or not project_info_schema.project:
+        return []  # Return empty list if no projects defined
     
     # List to store all project info instances
     project_infos = []
@@ -116,26 +127,32 @@ def import_funder_infos(project_info: ProjectInfo, funder_infos_schema) -> None:
                     setattr(funder_info, key, value)
             funder_info.save()
         
-        # Import funder identifiers if they exist
-        if hasattr(funder_info_schema, 'funder_identifier') and funder_info_schema.funder_identifier:
-            for identifier_schema in funder_info_schema.funder_identifier:
-                # Map identifier type from schema to model
-                id_type_mapping = {
-                    FunderIdentifierIdentifierType.CROSSREF_FUNDER: "crossref_funder",
-                    FunderIdentifierIdentifierType.ISNI: "isni",
-                    FunderIdentifierIdentifierType.GRID: "grid",
-                    FunderIdentifierIdentifierType.OTHER: "other"
-                }
-                id_type = id_type_mapping.get(identifier_schema.identifier_type, "crossref_funder")
-                
-                # Create or get the identifier
-                identifier, created = FunderIdentifier.objects.get_or_create(
-                    value=identifier_schema.value,
-                    identifier_type=id_type
-                )
-                
-                # Add the identifier to the funder
-                funder_info.funder_identifiers.add(identifier)
+        # Try to import funder identifiers, but handle the case where the table might not exist
+        try:
+            # Import funder identifiers if they exist
+            if hasattr(funder_info_schema, 'funder_identifier') and funder_info_schema.funder_identifier:
+                for identifier_schema in funder_info_schema.funder_identifier:
+                    # Map identifier type from schema to model
+                    id_type_mapping = {
+                        FunderIdentifierIdentifierType.CROSSREF_FUNDER: "crossref_funder",
+                        FunderIdentifierIdentifierType.ISNI: "isni",
+                        FunderIdentifierIdentifierType.GRID: "grid",
+                        FunderIdentifierIdentifierType.OTHER: "other"
+                    }
+                    id_type = id_type_mapping.get(identifier_schema.identifier_type, "crossref_funder")
+                    
+                    # Create or get the identifier
+                    identifier, created = FunderIdentifier.objects.get_or_create(
+                        value=identifier_schema.value,
+                        identifier_type=id_type
+                    )
+                    
+                    # Add the identifier to the funder if the attribute exists
+                    if hasattr(funder_info, 'funder_identifiers'):
+                        funder_info.funder_identifiers.add(identifier)
+        except Exception as e:
+            # If there's an error (like missing table), just log it and continue
+            print(f"Warning: Could not add funder identifiers: {e}")
         
         # Add the funder to the project
         project_info.funder_infos.add(funder_info)

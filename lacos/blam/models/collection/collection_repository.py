@@ -42,7 +42,9 @@ class Collection(Repository):
     structural_info = models.ForeignKey(
         CollectionStructuralInfo,
         on_delete=models.CASCADE,
-        related_name='collections_structural'
+        related_name='collections_structural',
+        null=True,  # Allow null temporarily during creation
+        help_text="Structural information about the collection"
     )
 
     class Meta:

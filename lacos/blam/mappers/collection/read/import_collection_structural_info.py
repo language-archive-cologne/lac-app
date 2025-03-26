@@ -2,17 +2,17 @@ from django.db import transaction
 from lacos.blam.models.collection.collection_structural_info import (
     CollectionStructuralInfo,
     CollectionAdditionalMetadataFile,
-    CollectionMembers,
     CollectionHasCollectionMember
 )
 from blam_schemas.collection.blam_collection_repository_v1_0 import (
     Cmd,
     CollectionHasCollectionMemberIdentifierType
 )
+from lacos.blam.models.collection.collection_repository import Collection
 
 
 @transaction.atomic
-def import_structural_info(collection_schema: Cmd) -> CollectionStructuralInfo:
+def import_structural_info(collection_schema: Cmd, collection: Collection) -> CollectionStructuralInfo:
     """
     Import structural info from a BLAM collection repository schema to Django models.
     
@@ -25,6 +25,7 @@ def import_structural_info(collection_schema: Cmd) -> CollectionStructuralInfo:
     
     Args:
         collection_schema: The BLAM collection repository schema containing structural info.
+        collection: The Collection instance to associate the structural info with.
         
     Returns:
         A fully populated CollectionStructuralInfo instance with all related objects.
@@ -32,8 +33,10 @@ def import_structural_info(collection_schema: Cmd) -> CollectionStructuralInfo:
     # Extract the structural info section from the schema
     structural_info_schema = collection_schema.components.blam_collection_repository_v1_0.collection_structural_info
     
-    # Create and populate the structural info model
-    structural_info = CollectionStructuralInfo.objects.create()
+    # Get or create the structural info model
+    structural_info, created = CollectionStructuralInfo.objects.get_or_create(
+        collection=collection
+    )
     
     # Import additional metadata files if they exist
     if hasattr(structural_info_schema, 'collection_additional_metadata_file') and structural_info_schema.collection_additional_metadata_file:
@@ -68,7 +71,7 @@ def import_additional_metadata_files(structural_info: CollectionStructuralInfo, 
         }
         
         # Set optional fields if they exist
-        if hasattr(metadata_file_schema, 'file_description') and metadata_file_schema.file_description:
+        if hasattr(metadata_file_schema, 'file_description'):
             metadata_file_data['file_description'] = metadata_file_schema.file_description
         
         # Try to find an existing metadata file with the same PID, or create a new one
@@ -91,8 +94,8 @@ def import_collection_members(structural_info: CollectionStructuralInfo, collect
     """
     Import collection members from the schema to the structural info model.
     
-    This function creates a CollectionMembers object and associated CollectionHasCollectionMember
-    objects for each member in the schema and associates them with the structural info model.
+    This function creates CollectionHasCollectionMember objects for each member in the schema
+    and associates them directly with the structural info model.
     
     The function uses a two-phase reference approach:
     1. Store the identifier information from the XML
@@ -102,9 +105,6 @@ def import_collection_members(structural_info: CollectionStructuralInfo, collect
         structural_info: The CollectionStructuralInfo instance to add members to.
         collection_members_schema: The collection members section of the structural info schema.
     """
-    # Create a collection members container
-    collection_members = CollectionMembers.objects.create()
-    
     # Process each member reference
     for i, member_schema in enumerate(collection_members_schema.collection_has_collection_member):
         # Map identifier type from schema to model
@@ -117,15 +117,14 @@ def import_collection_members(structural_info: CollectionStructuralInfo, collect
         # Create the member reference with identifier information
         # The bundle field will remain null until resolved later
         member = CollectionHasCollectionMember.objects.create(
-            collection_members=collection_members,
             identifier=member_schema.value,  # Store the identifier value
             identifier_type=id_type,         # Store the identifier type
             order=i                          # Use the index as the order
         )
         
+        # Add the member directly to the structural info
+        structural_info.members.add(member)
+        
         # Optionally try to resolve the bundle immediately
         # This is useful if the bundle already exists in the system
         member.resolve_bundle()
-    
-    # Add the collection members to the structural info
-    structural_info.collection_members.add(collection_members)

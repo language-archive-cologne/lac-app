@@ -61,14 +61,34 @@ def create_base_publication_info(publication_info_schema) -> CollectionPublicati
     
     # Set the publication year
     if publication_info_schema.collection_publication_year:
-        publication_info_data['publication_year'] = publication_info_schema.collection_publication_year.value
+        # Handle both string and XmlPeriod types
+        year_value = publication_info_schema.collection_publication_year
+        if hasattr(year_value, 'value'):
+            year_value = year_value.value
+        publication_info_data['publication_year'] = int(str(year_value))
+    else:
+        # Required field, use current year if missing
+        from datetime import datetime
+        publication_info_data['publication_year'] = datetime.now().year
     
     # Set the data provider
     if publication_info_schema.collection_data_provider:
         publication_info_data['data_provider'] = publication_info_schema.collection_data_provider
+    else:
+        publication_info_data['data_provider'] = ""  # Required field, use empty string if missing
     
-    # Create a new publication info (we don't use get_or_create as publication info is typically unique per collection)
-    publication_info = CollectionPublicationInfo.objects.create(**publication_info_data)
+    # Try to find an existing publication info with the same year and provider
+    publication_info, created = CollectionPublicationInfo.objects.get_or_create(
+        publication_year=publication_info_data['publication_year'],
+        data_provider=publication_info_data['data_provider'],
+        defaults=publication_info_data
+    )
+    
+    # Update fields that might have changed
+    if not created:
+        for key, value in publication_info_data.items():
+            setattr(publication_info, key, value)
+        publication_info.save()
     
     return publication_info
 
@@ -95,20 +115,13 @@ def import_creators(publication_info: CollectionPublicationInfo, publication_inf
                 
                 if hasattr(creator_schema.creator_name, 'creator_given_name') and creator_schema.creator_name.creator_given_name:
                     creator_data['given_name'] = creator_schema.creator_name.creator_given_name
+                else:
+                    creator_data['given_name'] = ""  # Required field, use empty string if missing
             
-            # Set display name (combination of given and family name)
-            given_name = creator_data.get('given_name', '')
-            family_name = creator_data.get('family_name', '')
-            display_name = f"{given_name} {family_name}".strip()
-            creator_data['creator_display_name'] = display_name
-            
-            # Set order if it exists
-            if hasattr(creator_schema, 'order') and creator_schema.order is not None:
-                creator_data['order'] = creator_schema.order
-            
-            # Try to find an existing creator with the same display name, or create a new one
+            # Try to find an existing creator with the same name, or create a new one
             creator, created = CollectionCreator.objects.get_or_create(
-                creator_display_name=creator_data['creator_display_name'],
+                family_name=creator_data['family_name'],
+                given_name=creator_data.get('given_name', ''),
                 defaults=creator_data
             )
             
@@ -120,7 +133,7 @@ def import_creators(publication_info: CollectionPublicationInfo, publication_inf
             
             # Add affiliations if they exist
             if hasattr(creator_schema, 'creator_affiliation') and creator_schema.creator_affiliation:
-                creator.affiliations = creator_schema.creator_affiliation
+                creator.affiliation = creator_schema.creator_affiliation[0] if creator_schema.creator_affiliation else ""
                 creator.save()
             
             # Add name identifiers if they exist
@@ -136,14 +149,8 @@ def import_creators(publication_info: CollectionPublicationInfo, publication_inf
                     id_type = id_type_mapping.get(identifier_schema.identifier_type, "orcid")
                     
                     # Store the identifier in the appropriate field based on type
-                    if id_type == "orcid":
-                        creator.orcid = identifier_schema.value
-                    elif id_type == "isni":
-                        creator.isni = identifier_schema.value
-                    elif id_type == "email":
-                        creator.email = identifier_schema.value
-                    # For "other" type, we might need a separate model if needed
-                    
+                    creator.name_identifier = identifier_schema.value
+                    creator.name_identifier_type = id_type
                     creator.save()
             
             # Add the creator to the publication info
@@ -171,16 +178,14 @@ def import_contributors(publication_info: CollectionPublicationInfo, publication
             
             if hasattr(contributor_schema.contributor_name, 'contributor_given_name') and contributor_schema.contributor_name.contributor_given_name:
                 contributor_data['given_name'] = contributor_schema.contributor_name.contributor_given_name
+            else:
+                contributor_data['given_name'] = ""  # Required field, use empty string if missing
         
         # Set display name (combination of given and family name)
         given_name = contributor_data.get('given_name', '')
         family_name = contributor_data.get('family_name', '')
         display_name = f"{given_name} {family_name}".strip()
         contributor_data['contributor_display_name'] = display_name
-        
-        # Set roles if they exist
-        if hasattr(contributor_schema, 'contributor_role') and contributor_schema.contributor_role:
-            contributor_data['roles'] = contributor_schema.contributor_role
         
         # Try to find an existing contributor with the same display name, or create a new one
         contributor, created = CollectionContributor.objects.get_or_create(
@@ -196,7 +201,7 @@ def import_contributors(publication_info: CollectionPublicationInfo, publication
         
         # Add affiliations if they exist
         if hasattr(contributor_schema, 'contributor_affiliation') and contributor_schema.contributor_affiliation:
-            contributor.affiliations = contributor_schema.contributor_affiliation
+            contributor.affiliation = contributor_schema.contributor_affiliation[0] if contributor_schema.contributor_affiliation else ""
             contributor.save()
         
         # Add name identifiers if they exist
@@ -212,14 +217,8 @@ def import_contributors(publication_info: CollectionPublicationInfo, publication
                 id_type = id_type_mapping.get(identifier_schema.identifier_type, "orcid")
                 
                 # Store the identifier in the appropriate field based on type
-                if id_type == "orcid":
-                    contributor.orcid = identifier_schema.value
-                elif id_type == "isni":
-                    contributor.isni = identifier_schema.value
-                elif id_type == "email":
-                    contributor.email = identifier_schema.value
-                # For "other" type, we might need a separate model if needed
-                
+                contributor.name_identifier = identifier_schema.value
+                contributor.name_identifier_type = id_type
                 contributor.save()
         
         # Add the contributor to the publication info

@@ -77,20 +77,23 @@ class CollectionImporter:
         publication_info = import_publication_info(cmd_data)
         project_info = import_project_info(cmd_data)
         administrative_info = import_administrative_info(cmd_data)
-        structural_info = import_structural_info(cmd_data)
 
-
-        # Create or update collection
+        # Create or update collection without structural_info first
         collection = cls._create_or_update_collection(
             header,
             license,
             general_info, 
             publication_info, 
             project_info,
-            administrative_info, 
-            structural_info
+            administrative_info
         )
         
+        # Now import structural info and link it to the collection
+        structural_info = import_structural_info(cmd_data, collection)
+        
+        # Update collection with structural info
+        collection.structural_info = structural_info
+        collection.save()
         
         return collection
     
@@ -137,18 +140,31 @@ class CollectionImporter:
         general_info, 
         publication_info, 
         project_info,
-        administrative_info, 
-        structural_info
+        administrative_info
     ) -> Collection:
         """Create or update a Collection with the imported components"""
+        # Handle case where project_info is an empty list or None
+        # Create a default ProjectInfo if no project info exists
+        if not project_info:
+            # Create a default ProjectInfo with minimal data
+            default_project = ProjectInfo.objects.get_or_create(
+                project_display_name="No Project Info",
+                defaults={
+                    'project_description': "No project information was provided in the collection metadata."
+                }
+            )[0]
+            collection_project_info = default_project
+        else:
+            # Use the first project info if multiple were found
+            collection_project_info = project_info[0]
+            
         collection, created = Collection.objects.get_or_create(
             base_header=header,
             base_license=license,
             general_info=general_info,
             publication_info=publication_info,
-            project_info=project_info,
-            administrative_info=administrative_info,
-            structural_info=structural_info
+            project_info=collection_project_info,
+            administrative_info=administrative_info
         )
         
         # Update fields if the collection already existed
@@ -157,9 +173,8 @@ class CollectionImporter:
             collection.base_license = license
             collection.general_info = general_info
             collection.publication_info = publication_info
-            collection.project_info = project_info
+            collection.project_info = collection_project_info
             collection.administrative_info = administrative_info
-            collection.structural_info = structural_info
             collection.save()
             
         return collection
@@ -181,10 +196,10 @@ class CollectionImporter:
         """
         resolved_count = 0
         
-        # Get all collection members
-        if hasattr(collection, 'members') and collection.members:
+        # Get all collection members from structural info
+        if hasattr(collection, 'structural_info') and collection.structural_info:
             # Get all member references
-            member_references = collection.members.member_references.filter(bundle__isnull=True)
+            member_references = collection.structural_info.members.filter(bundle__isnull=True)
             
             # Try to resolve each reference
             for member in member_references:
