@@ -2,6 +2,7 @@ from dataclasses import asdict
 from typing import Any, Optional, List
 from django.db import transaction
 from django.core.exceptions import ValidationError
+import logging
 
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.base_project_info import ProjectInfo
@@ -16,6 +17,8 @@ from lacos.blam.mappers.collection.read.import_collection_publication_info impor
 from lacos.blam.mappers.collection.read.import_collection_administrative_info import import_administrative_info
 from lacos.blam.mappers.collection.read.import_collection_project_info import import_project_info
 from lacos.blam.mappers.collection.read.import_collection_structural_info import import_structural_info
+
+logger = logging.getLogger(__name__)
 
 class CollectionImporter:
     """
@@ -70,30 +73,32 @@ class CollectionImporter:
         Returns:
             The created Collection instance
         """
-        # Import all components
+        # Import mandatory components
         header = import_collection_header(cmd_data)
         license = import_collection_license(cmd_data)
         general_info = import_general_info(cmd_data)
         publication_info = import_publication_info(cmd_data)
-        project_info = import_project_info(cmd_data)
         administrative_info = import_administrative_info(cmd_data)
-
-        # Create or update collection without structural_info first
+        structural_info = import_structural_info(cmd_data)
+        
+        # Import optional project info if available
+        project_info = None
+        if hasattr(cmd_data.components.blam_collection_repository_v1_0, 'project_info') and cmd_data.components.blam_collection_repository_v1_0.project_info:
+            project_info = import_project_info(cmd_data)
+            logger.info("Project info found and imported")
+        else:
+            logger.info("No project info found in XML - this is optional")
+        
+        # Create or update collection with all components
         collection = cls._create_or_update_collection(
             header,
             license,
             general_info, 
             publication_info, 
             project_info,
-            administrative_info
+            administrative_info,
+            structural_info
         )
-        
-        # Now import structural info and link it to the collection
-        structural_info = import_structural_info(cmd_data, collection)
-        
-        # Update collection with structural info
-        collection.structural_info = structural_info
-        collection.save()
         
         return collection
     
@@ -140,41 +145,34 @@ class CollectionImporter:
         general_info, 
         publication_info, 
         project_info,
-        administrative_info
+        administrative_info,
+        structural_info
     ) -> Collection:
         """Create or update a Collection with the imported components"""
-        # Handle case where project_info is an empty list or None
-        # Create a default ProjectInfo if no project info exists
-        if not project_info:
-            # Create a default ProjectInfo with minimal data
-            default_project = ProjectInfo.objects.get_or_create(
-                project_display_name="No Project Info",
-                defaults={
-                    'project_description': "No project information was provided in the collection metadata."
-                }
-            )[0]
-            collection_project_info = default_project
-        else:
-            # Use the first project info if multiple were found
-            collection_project_info = project_info[0]
+        # Create base collection data with mandatory fields only
+        collection_data = {
+            'base_header': header,
+            'license': license,
+            'general_info': general_info,
+            'publication_info': publication_info,
+            'administrative_info': administrative_info,
+            'structural_info': structural_info
+        }
+        
+        # Add project_info only if it exists and is not None
+        if project_info is not None:
+            collection_data['project_info'] = project_info[0] if isinstance(project_info, list) else project_info
             
+        # Create or update collection
         collection, created = Collection.objects.get_or_create(
             base_header=header,
-            base_license=license,
-            general_info=general_info,
-            publication_info=publication_info,
-            project_info=collection_project_info,
-            administrative_info=administrative_info
+            defaults=collection_data
         )
         
         # Update fields if the collection already existed
         if not created:
-            collection.base_header = header
-            collection.base_license = license
-            collection.general_info = general_info
-            collection.publication_info = publication_info
-            collection.project_info = collection_project_info
-            collection.administrative_info = administrative_info
+            for field, value in collection_data.items():
+                setattr(collection, field, value)
             collection.save()
             
         return collection

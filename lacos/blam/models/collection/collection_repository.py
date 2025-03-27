@@ -32,8 +32,12 @@ class Collection(Repository):
     project_info = models.ForeignKey(
         ProjectInfo,
         on_delete=models.CASCADE,
-        related_name='collections_project'
+        related_name='collections_project',
+        null=True,
+        blank=True,
+        help_text="Project information (optional)"
     )
+    
     administrative_info = models.ForeignKey(
         CollectionAdministrativeInfo,
         on_delete=models.CASCADE,
@@ -43,7 +47,6 @@ class Collection(Repository):
         CollectionStructuralInfo,
         on_delete=models.CASCADE,
         related_name='collections_structural',
-        null=True,  # Allow null temporarily during creation
         help_text="Structural information about the collection"
     )
 

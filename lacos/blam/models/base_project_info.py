@@ -64,8 +64,5 @@ class FunderInfo(BaseModel):
         blank=True,
         help_text="URI that uniquely identifies the grant and funding body"
     )
-    
-    # Add relationship to FunderIdentifier
-    funder_identifiers = models.ManyToManyField('FunderIdentifier', related_name='funders')
 
 

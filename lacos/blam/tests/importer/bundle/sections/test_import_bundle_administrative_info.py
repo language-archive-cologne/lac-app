@@ -39,7 +39,7 @@ def test_cmd_data_parsing(real_cmd_data):
     """Test that CMD data is correctly parsed from XML"""
     # Get the administrative info from CMD data
     admin_info = real_cmd_data.components.blam_bundle_repository_v1_0.bundle_administrative_info
-    
+
     # Verify basic fields
     assert admin_info.access.value.value == "open"  # Access the actual enum value
     # Format XmlDate for comparison - only YYYY-MM-DD without timezone
