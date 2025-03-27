@@ -17,22 +17,22 @@ class Collection(Repository):
     base_header = models.ForeignKey(
         CollectionHeader,
         on_delete=models.CASCADE,
-        related_name='collections_header'
+        related_name='collection_header_info'
     )
     general_info = models.ForeignKey(
         CollectionGeneralInfo,
         on_delete=models.CASCADE,
-        related_name='collections_general'
+        related_name='collection_general_info'
     )
     publication_info = models.ForeignKey(
         CollectionPublicationInfo,
         on_delete=models.CASCADE,
-        related_name='collections_publication'
+        related_name='collection_publication_info'
     )
     project_info = models.ForeignKey(
         ProjectInfo,
         on_delete=models.CASCADE,
-        related_name='collections_project',
+        related_name='collection_project_info',
         null=True,
         blank=True,
         help_text="Project information (optional)"
@@ -41,12 +41,12 @@ class Collection(Repository):
     administrative_info = models.ForeignKey(
         CollectionAdministrativeInfo,
         on_delete=models.CASCADE,
-        related_name='collections_administrative'
+        related_name='collection_administrative_info'
     )
     structural_info = models.ForeignKey(
         CollectionStructuralInfo,
         on_delete=models.CASCADE,
-        related_name='collections_structural',
+        related_name='collection_structural_info',
         help_text="Structural information about the collection"
     )
 

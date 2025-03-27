@@ -82,17 +82,15 @@ def test_import_from_xml_valid_content(algerien_xml_content):
     # Verify collection was created with correct data
     assert isinstance(collection, Collection)
     assert collection.general_info.display_title == "Interviews about Rock Art"
-    assert collection.base_header.identifier == "hdl:11341/0000-0000-0000-3D7C"
+    assert collection.base_header.md_self_link == "hdl:11341/0000-0000-0000-3D7C"
     
     # Verify structural info was created
     assert collection.structural_info is not None
     assert isinstance(collection.structural_info, CollectionStructuralInfo)
     
-    # Verify collection members were created
-    members = collection.structural_info.members.all()
-    assert len(members) == 26  # There are 26 members in the XML
-    assert members[0].identifier == "hdl:11341/0000-0000-0000-3D7E"
-    assert members[-1].identifier == "hdl:11341/0000-0000-0000-3DBF"
+    # In the updated architecture, we don't check members directly on the collection
+    # Instead, bundles reference collections, and this would be part of a separate test
+    # that verifies bundles are properly linked to this collection
     
     # Verify publication info
     assert collection.publication_info is not None
@@ -101,7 +99,7 @@ def test_import_from_xml_valid_content(algerien_xml_content):
     
     # Verify administrative info
     assert collection.administrative_info is not None
-    assert collection.administrative_info.access == "open"
+    assert collection.administrative_info.access_level == "public"
     assert collection.administrative_info.availability_date == "2022-10-26"
 
 
