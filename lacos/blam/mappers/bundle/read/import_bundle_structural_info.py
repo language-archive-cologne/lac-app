@@ -40,9 +40,8 @@ def import_structural_info(cmd_data: Cmd, collection_identifier: str, identifier
     if not struct_info:
         return None
     
-    # Verify that the collection exists by looking up its identifier
+    # Verify collection exists
     try:
-        # Find the collection by its identifier in the general_info
         collection_general_info = CollectionGeneralInfo.objects.get(
             id_value=collection_identifier,
             id_type=identifier_type
@@ -51,16 +50,15 @@ def import_structural_info(cmd_data: Cmd, collection_identifier: str, identifier
     except ObjectDoesNotExist:
         raise ValueError(f"Collection with identifier {collection_identifier} ({identifier_type}) does not exist")
     
-    # Get or create structural info with collection reference
+    # Create structural info first
     bundle_struct_info, created = BundleStructuralInfo.objects.get_or_create(
         is_member_of_collection=collection
     )
     
-    # Import additional metadata files
+    # Import optional components only if they exist
     if struct_info.bundle_additional_metadata_file:
         import_additional_metadata_files(bundle_struct_info, struct_info.bundle_additional_metadata_file)
     
-    # Import bundle resources
     if struct_info.bundle_resources:
         import_bundle_resources(bundle_struct_info, struct_info.bundle_resources)
     

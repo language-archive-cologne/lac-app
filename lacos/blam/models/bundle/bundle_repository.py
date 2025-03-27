@@ -1,6 +1,5 @@
 from django.db import models
 from lacos.blam.models.base_repository import Repository
-from lacos.blam.models.base_project_info import ProjectInfo
 from lacos.blam.models.bundle.bundle_header import BundleHeader
 from lacos.blam.models.bundle.bundle_general_info import BundleGeneralInfo
 from lacos.blam.models.bundle.bundle_publication_info import BundlePublicationInfo
@@ -16,33 +15,28 @@ class Bundle(Repository):
     base_header = models.ForeignKey(
         BundleHeader,
         on_delete=models.CASCADE,
-        related_name='bundles_header'
+        related_name='bundle_header_info'
     )
     general_info = models.ForeignKey(
         BundleGeneralInfo,
         on_delete=models.CASCADE,
-        related_name='bundles_general'
+        related_name='bundle_general_info'
     )
     publication_info = models.ForeignKey(
         BundlePublicationInfo,
         on_delete=models.CASCADE,
-        related_name='bundles_publication'
-    )
-    project_info = models.ForeignKey(
-        ProjectInfo,
-        on_delete=models.CASCADE,
-        related_name='bundles_project'
+        related_name='bundle_publication_info'
     )
 
     administrative_info = models.ForeignKey(
         BundleAdministrativeInfo,
         on_delete=models.CASCADE,
-        related_name='bundles_administrative'
+        related_name='bundle_administrative_info'
     )
     structural_info = models.ForeignKey(
         BundleStructuralInfo,
         on_delete=models.CASCADE,
-        related_name='bundles_structural'
+        related_name='bundle_structural_info'
     )
 
     class Meta:

@@ -7,7 +7,7 @@ class BundleStructuralInfo(StructuralInfo):
     """
     Concrete implementation of StructuralInfo for bundles
     """
-    is_member_of_collection = models.ForeignKey('Collection', on_delete=models.CASCADE, related_name='bundle_members')
+    is_member_of_collection = models.ForeignKey('blam.Collection', on_delete=models.CASCADE, related_name='bundle_collection')
     additional_metadata_files = models.ManyToManyField('BundleAdditionalMetadataFile', blank=True)
     bundle_topics = models.ManyToManyField('BundleTopic', blank=True)
     
@@ -56,7 +56,7 @@ class BundleTopics(models.Model):
     )
     topics = models.ManyToManyField(
         'BundleTopic',
-        related_name='bundles',
+        related_name='bundle_topics',
         help_text="Topics associated with the bundle"
     )
 
@@ -72,7 +72,7 @@ class BundleMembers(models.Model):
     bundle = models.OneToOneField(
         'Bundle',
         on_delete=models.CASCADE,
-        related_name='members',
+        related_name='bundle_members',
         help_text="Bundle that contains these members"
     )
     
@@ -90,7 +90,7 @@ class BundleHasBundleMember(models.Model):
     bundle_members = models.ForeignKey(
         'BundleMembers',
         on_delete=models.CASCADE,
-        related_name='member_references',
+        related_name='bundle_has_bundle_member',
         help_text="Bundle members component this reference belongs to"
     )
     member_uri = models.URLField(

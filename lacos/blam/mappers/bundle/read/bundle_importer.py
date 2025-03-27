@@ -2,6 +2,7 @@ from dataclasses import asdict
 from typing import Any, Optional, List
 from django.db import transaction
 from django.core.exceptions import ValidationError
+import logging
 
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.base_project_info import ProjectInfo
@@ -15,7 +16,7 @@ from lacos.blam.mappers.bundle.read.import_bundle_structural_info import import_
 from lacos.blam.mappers.bundle.read.import_bundle_administrative_info import import_administrative_info
 from lacos.blam.mappers.bundle.read.import_bundle_project_info import import_project_info
 
-
+logger = logging.getLogger(__name__)
 class BundleImporter:
     """
     Handles importing BLAM Bundle XML into Django models.
@@ -105,9 +106,15 @@ class BundleImporter:
     @classmethod
     def _import_structural_info(cls, cmd_data: Cmd, collection_id: Optional[int]):
         """Import structural info from CMD data if collection_id is provided"""
-        if collection_id:
+        if not collection_id:
+            return None
+        
+        try:
             return import_structural_info(cmd_data, collection_id)
-        return None
+        except ValueError as e:
+            # Log the error but don't fail the import
+            logger.warning(f"Failed to import structural info: {str(e)}")
+            return None
     
     @classmethod
     def _extract_metadata_license(cls, cmd_data: Cmd) -> tuple:
@@ -128,24 +135,31 @@ class BundleImporter:
         md_license_uri
     ) -> Bundle:
         """Create or update a Bundle with the imported components"""
+        # Start with required fields
+        bundle_data = {
+            'general_info': general_info,
+            'publication_info': publication_info,
+            'administrative_info': administrative_info,
+        }
+        
+        # Add optional fields only if they exist
+        if structural_info is not None:
+            bundle_data['structural_info'] = structural_info
+        if md_license is not None:
+            bundle_data['md_license'] = md_license
+        if md_license_uri is not None:
+            bundle_data['md_license_uri'] = md_license_uri
+        
+        # Create or get bundle using general_info as unique identifier
         bundle, created = Bundle.objects.get_or_create(
             general_info=general_info,
-            defaults={
-                'publication_info': publication_info,
-                'administrative_info': administrative_info,
-                'structural_info': structural_info,
-                'md_license': md_license,
-                'md_license_uri': md_license_uri
-            }
+            defaults=bundle_data
         )
         
         # Update fields if the bundle already existed
         if not created:
-            bundle.publication_info = publication_info
-            bundle.administrative_info = administrative_info
-            bundle.structural_info = structural_info
-            bundle.md_license = md_license
-            bundle.md_license_uri = md_license_uri
+            for field, value in bundle_data.items():
+                setattr(bundle, field, value)
             bundle.save()
             
         return bundle

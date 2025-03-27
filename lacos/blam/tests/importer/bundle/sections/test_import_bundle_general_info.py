@@ -229,7 +229,7 @@ def test_general_info_data_mapping(real_cmd_data):
     assert "Zaghawa language" in alt_names
     
     # Verify language taxonomy
-    taxonomy = language.taxonomy
+    taxonomy = language.bundle_object_language_taxonomy
     assert taxonomy is not None
     families = list(taxonomy.language_family.all().values_list('value', flat=True))
     assert "Saharan" in families

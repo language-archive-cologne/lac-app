@@ -57,9 +57,9 @@ class BundleObjectLanguage(ObjectLanguage):
     Links language information to specific bundles.
     """
     bundle = models.ForeignKey(
-        BundleGeneralInfo, 
+        'BundleGeneralInfo',
         on_delete=models.CASCADE,
-        related_name='object_languages'
+        related_name='bundle_object_languages'
     )
     alternative_names = models.ManyToManyField('BundleObjectLanguageAlternativeName', blank=True)
     
@@ -93,9 +93,9 @@ class BundleObjectLanguageTaxonomy(ObjectLanguageTaxonomy):
     Links language taxonomy information to specific bundle object languages.
     """
     object_language = models.OneToOneField(
-        BundleObjectLanguage,
+        'BundleObjectLanguage',
         on_delete=models.CASCADE,
-        related_name='taxonomy'
+        related_name='bundle_object_language_taxonomy'
     )
     language_family = models.ManyToManyField('BundleObjectLanguageLanguageFamily', blank=True)
     
