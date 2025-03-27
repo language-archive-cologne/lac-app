@@ -5,7 +5,6 @@ from django.core.exceptions import ValidationError
 import logging
 
 from lacos.blam.models.collection.collection_repository import Collection
-from lacos.blam.models.base_project_info import ProjectInfo
 from blam_schemas.collection.blam_collection_repository_v1_0 import Cmd
 from xsdata.formats.dataclass.parsers import XmlParser
 
@@ -75,7 +74,7 @@ class CollectionImporter:
         """
         # Import mandatory components
         header = import_collection_header(cmd_data)
-        license = import_collection_license(cmd_data)
+        # We don't need to import licenses separately as they're handled in import_administrative_info
         general_info = import_general_info(cmd_data)
         publication_info = import_publication_info(cmd_data)
         administrative_info = import_administrative_info(cmd_data)
@@ -92,7 +91,6 @@ class CollectionImporter:
         # Create or update collection with all components
         collection = cls._create_or_update_collection(
             header,
-            license,
             general_info, 
             publication_info, 
             project_info,
@@ -141,7 +139,6 @@ class CollectionImporter:
     def _create_or_update_collection(
         cls, 
         header,
-        license,
         general_info, 
         publication_info, 
         project_info,
@@ -152,7 +149,6 @@ class CollectionImporter:
         # Create base collection data with mandatory fields only
         collection_data = {
             'base_header': header,
-            'license': license,
             'general_info': general_info,
             'publication_info': publication_info,
             'administrative_info': administrative_info,
