@@ -35,4 +35,7 @@ urlpatterns = [
     path("delete/<str:bucket_type>/<str:object_type>/<path:object_path>/", views.delete_object, name="delete_object"),
     path("debug/presigned-url/", direct_upload_views.debug_presigned_url, name="debug_presigned_url"),
     path("upload/debug-error/", direct_upload_views.debug_upload_error, name="debug_upload_error"),
+
+    # Add new route for dashboard content partials
+    path("dashboard-content/<str:bucket_type>/", views.dashboard_content, name="dashboard_content"),
 ] 

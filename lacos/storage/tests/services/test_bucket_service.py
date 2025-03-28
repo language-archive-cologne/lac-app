@@ -166,3 +166,62 @@ def test_service_configuration_consistency(mock_s3, mock_bucket_service):
     assert mock_bucket_service.upload_service.production_bucket == TEST_BUCKET_NAME
     assert mock_bucket_service.ocfl_service.ingest_bucket == TEST_BUCKET_NAME
     assert mock_bucket_service.ocfl_service.production_bucket == TEST_BUCKET_NAME
+
+def test_direct_move_to_production(mock_s3, mock_bucket_service):
+    """Test direct move to production without OCFL transformation."""
+    # Create test directory structure
+    test_prefix = "test-collection/"
+    test_files = [
+        test_prefix + "file1.txt",
+        test_prefix + "file2.txt",
+        test_prefix + "subdir/file3.txt",
+        test_prefix + "subdir/file4.txt"
+    ]
+    
+    # Create separate buckets for testing
+    ingest_bucket = "test-ingest-bucket"
+    production_bucket = "test-production-bucket"
+    
+    # Create both buckets
+    mock_s3.create_bucket(Bucket=ingest_bucket)
+    mock_s3.create_bucket(Bucket=production_bucket)
+    
+    # Upload test files to ingest bucket
+    for file_path in test_files:
+        mock_s3.put_object(
+            Bucket=ingest_bucket,
+            Key=file_path,
+            Body=f"Content of {file_path}"
+        )
+    
+    # Temporarily set the bucket names
+    original_ingest_bucket = mock_bucket_service.ingest_bucket
+    original_production_bucket = mock_bucket_service.production_bucket
+    mock_bucket_service.ingest_bucket = ingest_bucket
+    mock_bucket_service.production_bucket = production_bucket
+    
+    try:
+        # Call the direct_move_to_production method
+        result = mock_bucket_service.direct_move_to_production(test_prefix)
+        
+        # Verify the result
+        assert result["success"] is True
+        assert "Successfully moved" in result["message"]
+        assert len(test_files) == int(result["message"].split("(")[1].split(" ")[0])
+        
+        # Verify files exist in production bucket with the same content
+        for file_path in test_files:
+            # Get the file content from the ingest bucket
+            response = mock_s3.get_object(Bucket=ingest_bucket, Key=file_path)
+            ingest_content = response["Body"].read().decode("utf-8")
+            
+            # Get the file content from the production bucket
+            response = mock_s3.get_object(Bucket=production_bucket, Key=file_path)
+            production_content = response["Body"].read().decode("utf-8")
+            
+            # Verify the content is the same
+            assert ingest_content == production_content
+    finally:
+        # Restore the original bucket names
+        mock_bucket_service.ingest_bucket = original_ingest_bucket
+        mock_bucket_service.production_bucket = original_production_bucket

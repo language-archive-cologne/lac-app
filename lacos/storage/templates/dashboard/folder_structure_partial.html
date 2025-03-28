@@ -8,13 +8,14 @@ Template for displaying root level items and folders with lazy loading
             {% if item.type == 'folder' %}
                 <li class="folder-item" data-folder-path="{{ item.path }}">
                     <div class="flex items-center">
-                        <button onclick="toggleFolder(this)" 
-                                class="folder-toggle mr-1 text-gray-600 focus:outline-none"
+                        <button class="folder-toggle mr-1 text-gray-600 focus:outline-none"
+                                data-folder-path="{{ item.path }}"
+                                data-folder-state="closed"
                                 hx-get="{% url 'storage:load_folder_contents' bucket_type=bucket_type folder_path=item.path %}"
-                                hx-target=".folder-contents[data-folder-path='{{ item.path }}']"
+                                hx-target=".folder-contents[data-folder-path='{{ item.path }}'][data-bucket-type='{{ bucket_type }}']"
                                 hx-swap="innerHTML"
                                 hx-trigger="click"
-                                hx-indicator="#loading-indicator">
+                                hx-indicator=".loading-indicator[data-folder-path='{{ item.path }}']">
                             <svg class="w-4 h-4 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                             </svg>
@@ -24,14 +25,31 @@ Template for displaying root level items and folders with lazy loading
                         <div class="ml-auto flex items-center space-x-2">
                             {% if bucket_type == 'ingest' %}
                                 <form hx-post="{% url 'storage:move_to_production' folder_path=item.path %}" 
-                                      hx-confirm="Are you sure you want to move this folder to production?"
+                                      hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                                      hx-confirm="Are you sure you want to move this folder to production? This will be a direct copy without any OCFL transformation."
+                                      hx-target="#production-structure"
+                                      hx-swap="innerHTML"
+                                      hx-indicator="#loading-indicator"
                                       class="inline">
-                                    <button type="submit" class="text-blue-500 hover:text-blue-700" title="Move to Production">
+                                    <button type="submit" class="text-blue-500 hover:text-blue-700" title="Move to Production (Direct Copy)">
                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path>
                                         </svg>
                                     </button>
                                 </form>
+                                
+                                {% if item.is_dir %}
+                                <button class="refresh-icon text-green-500 hover:text-green-700" 
+                                        title="Refresh folder structure"
+                                        hx-get="{% url 'storage:load_folder_contents' bucket_type=bucket_type folder_path=item.path %}"
+                                        hx-target=".folder-contents[data-folder-path='{{ item.path }}'][data-bucket-type='{{ bucket_type }}']"
+                                        hx-swap="innerHTML"
+                                        hx-indicator="#loading-indicator">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                    </svg>
+                                </button>
+                                {% endif %}
                             {% endif %}
                             
                             <button hx-post="{% url 'storage:delete_object' bucket_type=bucket_type object_type='folder' object_path=item.path %}"
@@ -47,8 +65,8 @@ Template for displaying root level items and folders with lazy loading
                         </div>
                     </div>
                     
-                    <div class="folder-contents pl-6 mt-1 hidden" data-folder-path="{{ item.path }}">
-                        <div id="loading-indicator" class="htmx-indicator">
+                    <div class="folder-contents pl-6 mt-1 hidden" data-folder-path="{{ item.path }}" data-bucket-type="{{ bucket_type }}">
+                        <div class="loading-indicator htmx-indicator" data-folder-path="{{ item.path }}">
                             <div class="flex items-center justify-center py-2">
                                 <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
                             </div>

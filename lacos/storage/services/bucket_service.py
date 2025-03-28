@@ -162,6 +162,90 @@ class BucketService(BaseStorageService):
         logger.info(f"Starting move to production for {source_prefix}")
         return self.ocfl_service.move_to_production(source_prefix)
         
+    def direct_move_to_production(self, source_prefix: str) -> Dict[str, Any]:
+        """
+        Move a folder from the ingest bucket to the production bucket directly without any transformation.
+        This bypasses the OCFL service completely and just copies the files as they are.
+        
+        Args:
+            source_prefix (str): The path in the ingest bucket to move
+            
+        Returns:
+            Dict[str, Any]: Result of the operation
+        """
+        logger.info(f"Starting direct move to production for {source_prefix}")
+        
+        try:
+            # Verify ingest and production buckets are different
+            if self.ingest_bucket == self.production_bucket:
+                error_message = "Error: Ingest and production buckets must be different"
+                logger.error(error_message)
+                return {
+                    "success": False,
+                    "error": error_message
+                }
+            
+            # Ensure source_prefix ends with a slash for proper prefix matching
+            if not source_prefix.endswith('/'):
+                source_prefix = source_prefix + '/'
+                logger.info(f"Added trailing slash for proper prefix matching: {source_prefix}")
+            
+            # List all objects in the source
+            paginator = self.s3_client.get_paginator("list_objects_v2")
+            copied_files = 0
+            
+            for page in paginator.paginate(Bucket=self.ingest_bucket, Prefix=source_prefix):
+                for obj in page.get("Contents", []):
+                    source_key = obj["Key"]
+                    
+                    # Skip if this is just the folder marker object
+                    if source_key == source_prefix:
+                        logger.info(f"Skipping folder marker object: {source_key}")
+                        continue
+                    
+                    # Copy the object to the production bucket
+                    self.s3_client.copy_object(
+                        CopySource={"Bucket": self.ingest_bucket, "Key": source_key},
+                        Bucket=self.production_bucket,
+                        Key=source_key
+                    )
+                    
+                    copied_files += 1
+                    
+                    if copied_files % 10 == 0:
+                        logger.info(f"Copied {copied_files} files so far...")
+            
+            # Add an empty directory marker if no files were found
+            if copied_files == 0:
+                logger.warning(f"No files found to copy, creating an empty directory marker: {source_prefix}")
+                self.s3_client.put_object(
+                    Bucket=self.production_bucket,
+                    Key=source_prefix,
+                    Body=''
+                )
+                copied_files = 1
+            
+            if copied_files > 0:
+                logger.info(f"Successfully copied {copied_files} files from {source_prefix} to production bucket")
+                return {
+                    "success": True,
+                    "message": f"Successfully moved {source_prefix} to production bucket ({copied_files} files copied)"
+                }
+            else:
+                # This should never happen now due to the empty directory marker
+                logger.warning(f"No files found to copy at {source_prefix}")
+                return {
+                    "success": False,
+                    "error": f"No files found to copy at {source_prefix}"
+                }
+                
+        except Exception as e:
+            logger.error(f"Error in direct_move_to_production: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+        
     def _format_size(self, size_bytes: int) -> str:
         """Format bytes to human-readable size"""
         for unit in ['B', 'KB', 'MB', 'GB', 'TB']:

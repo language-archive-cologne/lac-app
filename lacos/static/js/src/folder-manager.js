@@ -22,7 +22,7 @@ export function toggleFolder(button) {
     
     // Get folder name for debugging
     const folderName = folderItem.querySelector('.folder-name')?.textContent || 'Unknown folder';
-    const folderPath = folderItem.querySelector('.folder-name')?.dataset?.path || 'Unknown path';
+    const folderPath = button.getAttribute('data-folder-path') || folderItem.querySelector('.folder-name')?.dataset?.path || 'Unknown path';
     console.log(`Toggling folder "${folderName}" (${folderPath})`);
     
     // Log the current children before toggling
@@ -38,12 +38,20 @@ export function toggleFolder(button) {
         folderContents.classList.remove('hidden');
         // Rotate the arrow icon
         button.querySelector('svg').classList.add('rotate-90');
+        // Update folder state data attribute
+        if (button.hasAttribute('data-folder-path')) {
+            button.setAttribute('data-folder-state', 'open');
+        }
     } else {
         // Hide the folder contents
         console.log(`Hiding contents of "${folderName}"`);
         folderContents.classList.add('hidden');
         // Reset the arrow icon
         button.querySelector('svg').classList.remove('rotate-90');
+        // Update folder state data attribute
+        if (button.hasAttribute('data-folder-path')) {
+            button.setAttribute('data-folder-state', 'closed');
+        }
     }
 }
 
@@ -94,5 +102,70 @@ export function collapseAllFolders(containerId = null) {
     
     console.log('All folders collapsed');
 }
+
+/**
+ * Handle folder toggle events
+ */
+export function initializeFolderManager() {
+    // Handle before HTMX request
+    document.body.addEventListener('htmx:beforeRequest', function(evt) {
+        const button = evt.detail.elt;
+        if (button.classList.contains('folder-toggle')) {
+            console.log('Folder toggle request starting:', button);
+            const currentState = button.getAttribute('data-folder-state');
+            
+            if (currentState === 'open') {
+                // If currently open, just close it without making a request
+                const folderContents = button.closest('.folder-item').querySelector('.folder-contents');
+                folderContents.classList.add('hidden');
+                button.querySelector('svg').classList.remove('rotate-90');
+                button.setAttribute('data-folder-state', 'closed');
+                evt.preventDefault(); // Prevent the HTMX request
+            } else {
+                // If closed, show loading state and make the request
+                button.querySelector('svg').classList.add('rotate-90');
+                button.setAttribute('data-folder-state', 'loading');
+            }
+        }
+    });
+
+    // Handle after HTMX request
+    document.body.addEventListener('htmx:afterRequest', function(evt) {
+        const button = evt.detail.elt;
+        if (button.classList.contains('folder-toggle')) {
+            console.log('Folder toggle request completed:', button);
+            const folderContents = button.closest('.folder-item').querySelector('.folder-contents');
+            
+            if (evt.detail.successful) {
+                console.log('Request successful, showing contents');
+                folderContents.classList.remove('hidden');
+                button.setAttribute('data-folder-state', 'open');
+                // Keep the arrow rotated
+                button.querySelector('svg').classList.add('rotate-90');
+            } else {
+                console.error('Request failed, hiding contents');
+                folderContents.classList.add('hidden');
+                button.querySelector('svg').classList.remove('rotate-90');
+                button.setAttribute('data-folder-state', 'closed');
+            }
+        }
+    });
+
+    // Handle HTMX swap
+    document.body.addEventListener('htmx:afterSwap', function(evt) {
+        const button = evt.detail.elt;
+        if (button.classList.contains('folder-toggle')) {
+            console.log('Content swapped, updating UI');
+            const folderContents = button.closest('.folder-item').querySelector('.folder-contents');
+            if (folderContents && folderContents.children.length > 0) {
+                folderContents.classList.remove('hidden');
+                button.setAttribute('data-folder-state', 'open');
+            }
+        }
+    });
+}
+
+// Initialize when the script loads
+initializeFolderManager();
 
 console.log('folder-manager.js initialization complete');
