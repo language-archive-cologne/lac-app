@@ -24,3 +24,5 @@ drf-spectacular==0.28.0  # https://github.com/tfranzel/drf-spectacular
 xsdata==24.12 # https://github.com/xsdata/xsdata
 #boto3
 boto3==1.37.9
+#huey
+huey==2.5.3 # https://github.com/coleifer/huey

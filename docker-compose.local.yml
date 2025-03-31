@@ -86,6 +86,21 @@ services:
     tty: true
     networks:
       - lacos_network
+  huey:
+      build:
+        context: .
+        dockerfile: ./compose/local/django/Dockerfile
+      image: treeflow_local_huey
+      container_name: huey
+      depends_on:
+        - django
+        - redis
+      volumes:
+        - .:/app:z
+      env_file:
+        - ./.envs/.local/.django
+        - ./.envs/.local/.postgres
+      command: /bin/sh -c "python manage.py run_huey"
 
   #test-js:
   #  image: node:latest
