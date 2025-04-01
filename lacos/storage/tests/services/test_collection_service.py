@@ -1,76 +1,20 @@
-import os
-import tempfile
-import shutil
-import json
 import pytest
-import boto3
-from moto import mock_aws
-from pathlib import Path
 
 from lacos.storage.services.collection_service import CollectionService
 
-# Use a static bucket name for testing
-TEST_BUCKET_NAME = 'test-bucket'
+# Import constants from test_constants.py
+from .test_constants import TEST_BUCKET_NAME, TEST_INGEST_BUCKET, TEST_PRODUCTION_BUCKET
 
-@pytest.fixture
-def mock_s3():
-    """Set up mock AWS S3 environment"""
-    with mock_aws():
-        # Create S3 client with mock credentials
-        s3 = boto3.client(
-            's3',
-            aws_access_key_id='testing',
-            aws_secret_access_key='testing',
-            region_name='us-east-1'
-        )
-        # Create test bucket
-        s3.create_bucket(Bucket=TEST_BUCKET_NAME)
-        
-        # Configure bucket policy to allow all operations
-        bucket_policy = {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Sid": "PublicReadGetObject",
-                    "Effect": "Allow",
-                    "Principal": "*",
-                    "Action": "s3:*",
-                    "Resource": [
-                        f"arn:aws:s3:::{TEST_BUCKET_NAME}",
-                        f"arn:aws:s3:::{TEST_BUCKET_NAME}/*"
-                    ]
-                }
-            ]
-        }
-        s3.put_bucket_policy(Bucket=TEST_BUCKET_NAME, Policy=json.dumps(bucket_policy))
-        
-        # Configure CORS
-        cors_configuration = {
-            'CORSRules': [{
-                'AllowedHeaders': ['*'],
-                'AllowedMethods': ['GET', 'PUT', 'POST', 'DELETE'],
-                'AllowedOrigins': ['*'],
-                'ExposeHeaders': ['ETag']
-            }]
-        }
-        s3.put_bucket_cors(Bucket=TEST_BUCKET_NAME, CORSConfiguration=cors_configuration)
-        
-        yield s3
-
-@pytest.fixture
-def temp_dir():
-    """Create a temporary directory for tests and clean it up afterwards"""
-    temp_dir = tempfile.mkdtemp()
-    yield temp_dir
-    shutil.rmtree(temp_dir)
+# We can use mock_s3 and temp_dir fixtures from conftest.py
+# Only define fixtures that aren't in conftest.py
 
 @pytest.fixture
 def mock_collection_service(mock_s3):
     """Create a CollectionService instance with mock settings"""
     service = CollectionService(skip_bucket_check=True)
     # Override the bucket names for testing
-    service.ingest_bucket = TEST_BUCKET_NAME
-    service.production_bucket = TEST_BUCKET_NAME
+    service.ingest_bucket = TEST_INGEST_BUCKET
+    service.production_bucket = TEST_PRODUCTION_BUCKET
     # Override the S3 client with our mock client
     service.s3_client = mock_s3
     return service

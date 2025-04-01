@@ -1,48 +1,11 @@
 import os
-import tempfile
-import shutil
 import pytest
-import boto3
-from moto import mock_aws
-from pathlib import Path
+from botocore.exceptions import ClientError
 
-from lacos.storage.services.base_storage_service import BaseStorageService
+# Import constants from test_constants.py
+from .test_constants import TEST_BUCKET_NAME, TEST_INGEST_BUCKET, TEST_PRODUCTION_BUCKET
 
-# Use a static bucket name for testing
-TEST_BUCKET_NAME = 'test-bucket'
-
-@pytest.fixture
-def mock_s3():
-    """Set up mock AWS S3 environment"""
-    with mock_aws():
-        # Create S3 client with mock credentials
-        s3 = boto3.client(
-            's3',
-            aws_access_key_id='testing',
-            aws_secret_access_key='testing',
-            region_name='us-east-1'
-        )
-        # Create test bucket
-        s3.create_bucket(Bucket=TEST_BUCKET_NAME)
-        yield s3
-
-@pytest.fixture
-def temp_dir():
-    """Create a temporary directory for tests and clean it up afterwards"""
-    temp_dir = tempfile.mkdtemp()
-    yield temp_dir
-    shutil.rmtree(temp_dir)
-
-@pytest.fixture
-def mock_base_service(mock_s3):
-    """Create a BaseStorageService instance with mock settings"""
-    service = BaseStorageService()
-    # Override the bucket names for testing
-    service.ingest_bucket = TEST_BUCKET_NAME
-    service.production_bucket = TEST_BUCKET_NAME
-    # Override the S3 client with our mock client
-    service.s3_client = mock_s3
-    return service
+# We don't need to redefine fixtures as they're imported from conftest.py
 
 def test_ensure_bucket_exists(mock_s3, mock_base_service):
     """Test ensure_bucket_exists method"""

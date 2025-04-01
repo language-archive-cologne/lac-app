@@ -2,6 +2,10 @@ import pytest
 import json
 from unittest.mock import patch
 from django.http.request import QueryDict
+from unittest.mock import MagicMock
+
+# Import the actual service class for the spec
+from lacos.storage.services.upload_service import UploadService
 
 from lacos.storage.views.presigned_url_views import (
     get_presigned_urls,
@@ -50,11 +54,10 @@ def test_get_presigned_urls(mock_render, mock_upload_service, prepared_request):
     assert response.status_code == 200
     assert response_data['success'] is True
 
-@patch('lacos.storage.views.presigned_url_views.UploadService')
-def test_mark_uploads_complete(mock_upload_service, prepared_request):
-    """Test marking uploads as complete."""
-    # Configure mock service responses with serializable dictionaries
-    mock_instance = mock_upload_service.return_value
+@pytest.fixture
+def mock_upload_service_instance():
+    """Creates a configured mock instance of UploadService."""
+    mock_instance = MagicMock(spec=UploadService) # Use spec for better mocking
     
     # Define the mock return values that will be returned by mark_upload_complete
     mock_return_values = [
@@ -84,6 +87,17 @@ def test_mark_uploads_complete(mock_upload_service, prepared_request):
     # Ensure _format_size returns a string instead of a MagicMock
     mock_instance._format_size.return_value = "3.00 KB"
     
+    # Add bucket name attribute needed by the view logic
+    mock_instance.ingest_bucket = 'test-ingest-bucket'
+    
+    return mock_instance
+
+@patch('lacos.storage.views.presigned_url_views.get_upload_service') # Patch the getter
+def test_mark_uploads_complete(mock_get_upload_service, prepared_request, mock_upload_service_instance):
+    """Test marking uploads as complete."""
+    # Configure the mocked getter to return our specific instance
+    mock_get_upload_service.return_value = mock_upload_service_instance
+    
     # Create request with S3 keys to verify - this function expects JSON in request.body
     json_data = {"s3_keys": ["folder/test.jpg", "folder/test2.jpg"]}
     request = prepared_request(
@@ -93,14 +107,18 @@ def test_mark_uploads_complete(mock_upload_service, prepared_request):
         content_type='application/json'
     )
     
-    # Call the view
+    # Ensure the request has a properly formatted body
+    request._body = json.dumps(json_data).encode('utf-8')
+    
+    # Call the view (which will now use get_upload_service)
     response = mark_uploads_complete(request)
     
-    # Check service was called correctly
-    assert mock_instance.mark_upload_complete.call_count == 2
+    # Check service method was called correctly on our instance
+    assert mock_upload_service_instance.mark_upload_complete.call_count == 2
     
-    # Check first service call
-    mock_instance.mark_upload_complete.assert_any_call("folder/test.jpg")
+    # Check service calls
+    mock_upload_service_instance.mark_upload_complete.assert_any_call("folder/test.jpg")
+    mock_upload_service_instance.mark_upload_complete.assert_any_call("folder/test2.jpg")
     
     # Check response
     response_data = json.loads(response.content)

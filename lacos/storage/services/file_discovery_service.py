@@ -18,16 +18,23 @@ class FileDiscoveryService(BaseStorageService):
     structures to identify resources.
     """
     
-    def __init__(self):
-        """Initialize the FileDiscoveryService"""
-        # Initialize the parent class with skip_bucket_check=True
-        # We don't need to check buckets for discovery operations
-        super().__init__(skip_bucket_check=True)
+    _instance = None
+    
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(FileDiscoveryService, cls).__new__(cls)
+        return cls._instance
+    
+    def __init__(self, skip_bucket_check=False):
+        if hasattr(self, 'initialized'):
+            return
+        super().__init__(skip_bucket_check=skip_bucket_check)
         
         # Load path structure configuration from settings
         self.path_structure = self._load_path_structure()
         
         logger.info("FileDiscoveryService initialized with configured path patterns")
+        self.initialized = True
     
     def _load_path_structure(self) -> Dict[str, Any]:
         """

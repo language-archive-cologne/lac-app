@@ -1,19 +1,16 @@
 import pytest
 import os
-import boto3
-from moto import mock_aws
 from dotenv import load_dotenv
 from pathlib import Path
 
 from lacos.storage.services.file_discovery_service import FileDiscoveryService
 
+# Import constants from test_constants.py
+from .test_constants import TEST_BUCKET_NAME, TEST_INGEST_BUCKET, TEST_PRODUCTION_BUCKET
+
 # Load environment variables from .django file
 env_file_path = os.path.join('/app', '.envs/.local/.django')
 load_dotenv(env_file_path)
-
-# Test bucket names
-TEST_BUCKET_NAME = 'test-bucket'
-
 
 # Test to verify environment variables are loaded
 def test_env_vars_loaded():
@@ -40,22 +37,7 @@ def test_env_vars_loaded():
     
     print(f"Environment variables loaded: {dict((k,v) for k,v in os.environ.items() if k.endswith('_PATH') or k.endswith('_PATTERN'))}")
 
-
-@pytest.fixture
-def mock_s3():
-    """Set up mock AWS S3 environment"""
-    with mock_aws():
-        # Create S3 client with mock credentials
-        s3 = boto3.client(
-            's3',
-            aws_access_key_id='testing',
-            aws_secret_access_key='testing',
-            region_name='us-east-1'
-        )
-        # Create test bucket
-        s3.create_bucket(Bucket=TEST_BUCKET_NAME)
-        yield s3
-
+# Use mock_s3 fixture from conftest.py
 
 @pytest.fixture
 def discovery_service(mock_s3):
@@ -63,7 +45,7 @@ def discovery_service(mock_s3):
     service = FileDiscoveryService()
     # Override the bucket names for testing
     service.production_bucket = TEST_BUCKET_NAME
-    service.ingest_bucket = TEST_BUCKET_NAME
+    service.ingest_bucket = TEST_INGEST_BUCKET
     # Override the S3 client with our mock client
     service.s3_client = mock_s3
     
@@ -72,8 +54,13 @@ def discovery_service(mock_s3):
     
     return service
 
-
 # Test path pattern formatting
+def test_discovery_service_initialization(discovery_service):
+    """Test that the FileDiscoveryService initializes correctly"""
+    assert discovery_service is not None
+    assert discovery_service.path_structure is not None
+    assert discovery_service.s3_client is not None
+
 def test_collection_path(discovery_service):
     path = discovery_service.form_collection_path("algerien")
     assert path == "algerien/algerien"
@@ -123,7 +110,6 @@ def test_find_collections_s3(mock_s3, discovery_service):
     assert "algerien" in collections
     assert "alwateti" in collections
 
-
 def test_find_bundles_in_collection_s3(mock_s3, discovery_service):
     """Test finding bundles in a collection using the S3 API"""
     collection_id = "algerien"
@@ -164,7 +150,6 @@ def test_find_bundles_in_collection_s3(mock_s3, discovery_service):
     assert "bundle2" in bundles
     assert "not_bundle" not in bundles
 
-
 def test_find_resources_in_bundle_s3(mock_s3, discovery_service):
     """Test finding resources in a bundle using the S3 API"""
     collection_id = "algerien"
@@ -199,7 +184,6 @@ def test_find_resources_in_bundle_s3(mock_s3, discovery_service):
     assert len(resources) == 3
     for resource in test_resources:
         assert resource in resources
-
 
 def test_find_collection_and_bundle_xmls_s3(mock_s3, discovery_service):
     """Test finding both collection and bundle XML files using the S3 API"""
@@ -240,7 +224,6 @@ def test_find_collection_and_bundle_xmls_s3(mock_s3, discovery_service):
     assert "algerien/bundle2/v1/content/bundle2.xml" in result['potential_bundle_xmls']
     assert "alwateti/bundle3/v1/content/bundle3.xml" in result['potential_bundle_xmls']
 
-
 def test_get_collection_xml(mock_s3, discovery_service):
     """Test retrieving a collection XML file"""
     collection_id = "algerien"
@@ -261,7 +244,6 @@ def test_get_collection_xml(mock_s3, discovery_service):
     
     # Check the result
     assert result == xml_content
-
 
 def test_get_bundle_xml(mock_s3, discovery_service):
     """Test retrieving a bundle XML file"""
@@ -285,7 +267,6 @@ def test_get_bundle_xml(mock_s3, discovery_service):
     
     # Check the result
     assert result == xml_content
-
 
 def test_get_resource(mock_s3, discovery_service):
     """Test retrieving a resource file"""
@@ -312,7 +293,6 @@ def test_get_resource(mock_s3, discovery_service):
     
     # Check the result
     assert result == resource_content
-
 
 def test_get_missing_resource(mock_s3, discovery_service):
     """Test retrieving a resource that doesn't exist"""
