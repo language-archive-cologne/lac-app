@@ -80,3 +80,8 @@ AWS_S3_REGION_NAME = env("AWS_S3_REGION_NAME", default="us-east-1")
 
 # Your stuff...
 # ------------------------------------------------------------------------------
+
+# Huey configuration for development
+# ------------------------------------------------------------------------------
+# Uncomment this to use immediate mode during development
+# HUEY = {**HUEY, 'immediate': True}  # Use immediate mode in development
