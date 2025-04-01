@@ -137,9 +137,15 @@ def import_rights_holders(admin_info: CollectionAdministrativeInfo, admin_info_s
         
         # Import rights holder identifiers
         for identifier_schema in rights_holder_schema.rights_holder_identifier:
+            # Handle potentially missing identifier type
+            # Use "OTHER" as default when identifier_type is missing
+            id_type_value = "OTHER"
+            if identifier_schema.identifier_type:
+                 id_type_value = identifier_schema.identifier_type.value
+
             identifier, created = CollectionRightsHolderIdentifier.objects.get_or_create(
-                identifier=identifier_schema.value,
-                identifier_type=identifier_schema.identifier_type.value
+                identifier=identifier_schema.value or "", # Use empty string if value is None/empty
+                identifier_type=id_type_value # Use "OTHER" if type is missing
             )
             rights_holder.rights_holder_identifiers.add(identifier)
         

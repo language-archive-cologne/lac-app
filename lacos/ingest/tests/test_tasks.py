@@ -293,35 +293,47 @@ def test_map_collection_resources():
         # once for the collection and once per bundle/resource - just check it was called at least once
 
 def test_process_s3_prefix_orchestration():
-    """Test the process_s3_prefix orchestration function."""
+    """Test the process_s3_prefix orchestration function, verifying correct argument handling."""
     # Setup - patch the individual task functions
     with patch('lacos.ingest.tasks.find_s3_import_candidates') as mock_find, \
          patch('lacos.ingest.tasks.import_s3_collection') as mock_import_collection, \
          patch('lacos.ingest.tasks.import_s3_bundle') as mock_import_bundle, \
          patch('lacos.ingest.tasks.resolve_collection_bundle_links') as mock_resolve, \
          patch('lacos.ingest.tasks.map_collection_resources') as mock_map:
-        
+
+        # Define the expected paths
+        collection_xml_path = 'col1/col1/v1/content/col1.xml'
+        bundle_xml_path = 'col1/bun1/v1/content/bun1.xml'
+        expected_collection_id = 1
+        expected_bundle_id = 10
+
         # Configure the mocks
         mock_find.return_value = {
-            'potential_collection_xmls': ['col1/col1/v1/content/col1.xml'],
-            'potential_bundle_xmls': ['col1/bun1/v1/content/bun1.xml']
+            'potential_collection_xmls': [collection_xml_path], # Note: The VALUE is the list
+            'potential_bundle_xmls': [bundle_xml_path]    # Note: The VALUE is the list
         }
-        mock_import_collection.return_value = 1  # collection_id
-        mock_import_bundle.return_value = 10  # bundle_id
-        mock_resolve.return_value = 1
-        mock_map.return_value = 5
-        
-        # Call the function
-        result = ingest_tasks.process_s3_prefix('test-bucket', 'test-prefix')
-        
-        # Assertions
-        mock_find.assert_called_once_with('test-bucket', 'test-prefix')
-        mock_import_collection.assert_called_once()
-        mock_import_bundle.assert_called_once()
-        mock_resolve.assert_called_once_with(1)  # Called with collection_id
-        mock_map.assert_called_once_with(1)  # Called with collection_id
-        
+        # Return a simple integer ID (serializable)
+        mock_import_collection.return_value = expected_collection_id
+        mock_import_bundle.return_value = expected_bundle_id
+        mock_resolve.return_value = 1 # Or check this based on expected_collection_id
+        mock_map.return_value = 5 # Or check this based on expected_collection_id
 
+        # Call the function being tested
+        ingest_tasks.process_s3_prefix('test-bucket', 'test-prefix')
+
+        # --- Assertions ---
+        # Verify find_s3_import_candidates was called correctly
+        mock_find.assert_called_once_with('test-bucket', 'test-prefix')
+
+        # Verify import_s3_collection was called with the *actual path* from the list
+        mock_import_collection.assert_called_once_with('test-bucket', collection_xml_path)
+
+        # Verify import_s3_bundle was called with the *actual path* and the *serializable collection ID*
+        mock_import_bundle.assert_called_once_with('test-bucket', bundle_xml_path, expected_collection_id)
+
+        # Verify subsequent tasks are called with the correct collection ID
+        mock_resolve.assert_called_once_with(expected_collection_id)
+        mock_map.assert_called_once_with(expected_collection_id)
 
 def test_import_s3_collection_none_content(mock_file_discovery_service):
     """Test import_s3_collection when read_s3_object returns None."""

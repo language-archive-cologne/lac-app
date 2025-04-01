@@ -173,55 +173,7 @@ class CollectionImporter:
             
         return collection
     
-    @classmethod
-    def resolve_bundle_references(cls, collection: Collection) -> int:
-        """
-        Resolve bundle references for a collection.
-        
-        This method attempts to link collection member references to actual bundles
-        if they exist in the system. It uses the two-phase reference approach where
-        identifiers are stored first, and then resolved to actual bundles when available.
-        
-        Args:
-            collection: The Collection instance to resolve bundle references for.
-            
-        Returns:
-            The number of successfully resolved bundle references.
-        """
-        resolved_count = 0
-        
-        # Get all collection members from structural info
-        if hasattr(collection, 'structural_info') and collection.structural_info:
-            # Get all member references
-            member_references = collection.structural_info.members.filter(bundle__isnull=True)
-            
-            # Try to resolve each reference
-            for member in member_references:
-                if member.resolve_bundle():
-                    resolved_count += 1
-        
-        return resolved_count
-
-    @classmethod
-    def resolve_all_bundle_references(cls) -> dict:
-        """
-        Resolve all unresolved bundle references across all collections.
-        
-        This method is useful for batch processing after importing multiple bundles,
-        to establish links between collections and bundles.
-        
-        Returns:
-            A dictionary with collection IDs as keys and the number of resolved references as values.
-        """
-        from lacos.blam.models.collection.collection_repository import Collection
-        
-        results = {}
-        
-        # Process all collections
-        for collection in Collection.objects.all():
-            resolved_count = cls.resolve_bundle_references(collection)
-            if resolved_count > 0:
-                results[str(collection.id)] = resolved_count
-        
-        return results
+# The following methods (resolve_bundle_references, resolve_all_bundle_references) are being removed
+# as they seem disconnected from the actual import logic and model relationships.
+# Bundle linking is handled during bundle import via the ForeignKey from BundleStructuralInfo.
     

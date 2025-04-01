@@ -115,16 +115,18 @@ def test_find_bundles_in_collection_s3(mock_s3, discovery_service):
     collection_id = "algerien"
     
     # Create collection XML
+    collection_xml_path = discovery_service.form_collection_xml_path(collection_id)
     mock_s3.put_object(
         Bucket=TEST_BUCKET_NAME,
-        Key=f"{collection_id}/{collection_id}/v1/content/{collection_id}.xml",
+        Key=collection_xml_path,
         Body=f"<xml>Collection {collection_id}</xml>"
     )
     
     # Create test bundle folders with proper structure
-    for bundle_id in ["bundle1", "bundle2"]:
+    test_bundle_ids = ["alg_bundle_1", "alg_bundle_2"]
+    for bundle_id in test_bundle_ids:
         # Create bundle XML file
-        xml_path = f"{collection_id}/{bundle_id}/v1/content/{bundle_id}.xml"
+        xml_path = discovery_service.form_bundle_xml_path(collection_id, bundle_id)
         mock_s3.put_object(
             Bucket=TEST_BUCKET_NAME,
             Key=xml_path,
@@ -146,24 +148,29 @@ def test_find_bundles_in_collection_s3(mock_s3, discovery_service):
     
     # Check results
     assert len(bundles) == 2
-    assert "bundle1" in bundles
-    assert "bundle2" in bundles
+    assert "alg_bundle_1" in bundles
+    assert "alg_bundle_2" in bundles
     assert "not_bundle" not in bundles
 
 def test_find_resources_in_bundle_s3(mock_s3, discovery_service):
     """Test finding resources in a bundle using the S3 API"""
     collection_id = "algerien"
-    bundle_id = "bundle1"
+    bundle_id = "alg_bundle_1"
     
     # Create bundle XML
+    bundle_xml_path = discovery_service.form_bundle_xml_path(collection_id, bundle_id)
     mock_s3.put_object(
         Bucket=TEST_BUCKET_NAME,
-        Key=f"{collection_id}/{bundle_id}/v1/content/{bundle_id}.xml",
+        Key=bundle_xml_path,
         Body=f"<xml>Bundle {bundle_id}</xml>"
     )
     
     # Create test resources
-    resources_prefix = f"{collection_id}/{bundle_id}/v1/content/Resources/"
+    # Use the service to format the base resource path (excluding filename)
+    resource_pattern = discovery_service.get_resource_path_pattern()
+    prefix_pattern = resource_pattern.rsplit('{resource_filename}', 1)[0]
+    resources_prefix = prefix_pattern.format(collection_id=collection_id, bundle_id=bundle_id)
+    
     test_resources = ["audio1.mp3", "audio2.mp3", "metadata.json"]
     
     for resource in test_resources:
@@ -187,27 +194,29 @@ def test_find_resources_in_bundle_s3(mock_s3, discovery_service):
 
 def test_find_collection_and_bundle_xmls_s3(mock_s3, discovery_service):
     """Test finding both collection and bundle XML files using the S3 API"""
-    # Create test collections and bundles
+    # Create test collections and bundles with more realistic IDs
     collections = ["algerien", "alwateti"]
     bundles_by_collection = {
-        "algerien": ["bundle1", "bundle2"],
-        "alwateti": ["bundle3"]
+        "algerien": ["alg_bundle_complex_1", "alg_bundle_complex_2"],
+        "alwateti": ["alw_bundle_3"]
     }
     
     # Create the structure in S3
     for collection_id in collections:
         # Create collection XML
+        collection_xml_path = discovery_service.form_collection_xml_path(collection_id)
         mock_s3.put_object(
             Bucket=TEST_BUCKET_NAME,
-            Key=f"{collection_id}/{collection_id}/v1/content/{collection_id}.xml",
+            Key=collection_xml_path,
             Body=f"<xml>Collection {collection_id}</xml>"
         )
         
         # Create bundles for this collection
         for bundle_id in bundles_by_collection.get(collection_id, []):
+            bundle_xml_path = discovery_service.form_bundle_xml_path(collection_id, bundle_id)
             mock_s3.put_object(
                 Bucket=TEST_BUCKET_NAME,
-                Key=f"{collection_id}/{bundle_id}/v1/content/{bundle_id}.xml",
+                Key=bundle_xml_path,
                 Body=f"<xml>Bundle {bundle_id}</xml>"
             )
     
@@ -216,13 +225,13 @@ def test_find_collection_and_bundle_xmls_s3(mock_s3, discovery_service):
     
     # Check results
     assert len(result['potential_collection_xmls']) == 2
-    assert "algerien/algerien/v1/content/algerien.xml" in result['potential_collection_xmls']
-    assert "alwateti/alwateti/v1/content/alwateti.xml" in result['potential_collection_xmls']
+    assert discovery_service.form_collection_xml_path("algerien") in result['potential_collection_xmls']
+    assert discovery_service.form_collection_xml_path("alwateti") in result['potential_collection_xmls']
     
     assert len(result['potential_bundle_xmls']) == 3
-    assert "algerien/bundle1/v1/content/bundle1.xml" in result['potential_bundle_xmls']
-    assert "algerien/bundle2/v1/content/bundle2.xml" in result['potential_bundle_xmls']
-    assert "alwateti/bundle3/v1/content/bundle3.xml" in result['potential_bundle_xmls']
+    assert discovery_service.form_bundle_xml_path("algerien", "alg_bundle_complex_1") in result['potential_bundle_xmls']
+    assert discovery_service.form_bundle_xml_path("algerien", "alg_bundle_complex_2") in result['potential_bundle_xmls']
+    assert discovery_service.form_bundle_xml_path("alwateti", "alw_bundle_3") in result['potential_bundle_xmls']
 
 def test_get_collection_xml(mock_s3, discovery_service):
     """Test retrieving a collection XML file"""
@@ -230,9 +239,10 @@ def test_get_collection_xml(mock_s3, discovery_service):
     xml_content = b"<xml>Collection content</xml>"
     
     # Create the collection XML in S3
+    collection_xml_path = discovery_service.form_collection_xml_path(collection_id)
     mock_s3.put_object(
         Bucket=TEST_BUCKET_NAME,
-        Key=f"{collection_id}/{collection_id}/v1/content/{collection_id}.xml",
+        Key=collection_xml_path,
         Body=xml_content
     )
     
@@ -248,13 +258,14 @@ def test_get_collection_xml(mock_s3, discovery_service):
 def test_get_bundle_xml(mock_s3, discovery_service):
     """Test retrieving a bundle XML file"""
     collection_id = "algerien"
-    bundle_id = "bundle1"
+    bundle_id = "alg_bundle_1"
     xml_content = b"<xml>Bundle content</xml>"
     
     # Create the bundle XML in S3
+    bundle_xml_path = discovery_service.form_bundle_xml_path(collection_id, bundle_id)
     mock_s3.put_object(
         Bucket=TEST_BUCKET_NAME,
-        Key=f"{collection_id}/{bundle_id}/v1/content/{bundle_id}.xml",
+        Key=bundle_xml_path,
         Body=xml_content
     )
     
@@ -271,12 +282,12 @@ def test_get_bundle_xml(mock_s3, discovery_service):
 def test_get_resource(mock_s3, discovery_service):
     """Test retrieving a resource file"""
     collection_id = "algerien"
-    bundle_id = "bundle1"
+    bundle_id = "alg_bundle_1"
     resource_filename = "audio.mp3"
     resource_content = b"Binary audio content"
     
     # Create the resource in S3
-    resource_key = f"{collection_id}/{bundle_id}/v1/content/Resources/{resource_filename}"
+    resource_key = discovery_service.form_resource_path(collection_id, bundle_id, resource_filename)
     mock_s3.put_object(
         Bucket=TEST_BUCKET_NAME,
         Key=resource_key,
@@ -297,7 +308,7 @@ def test_get_resource(mock_s3, discovery_service):
 def test_get_missing_resource(mock_s3, discovery_service):
     """Test retrieving a resource that doesn't exist"""
     collection_id = "algerien"
-    bundle_id = "bundle1"
+    bundle_id = "alg_bundle_1"
     resource_filename = "missing.mp3"
     
     # Get the missing resource

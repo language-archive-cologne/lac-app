@@ -5,7 +5,7 @@ from django.core.exceptions import ValidationError
 import logging
 
 from lacos.blam.models.bundle.bundle_repository import Bundle
-from lacos.blam.models.base_project_info import ProjectInfo
+from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
 from blam_schemas.bundle.blam_bundle_repository_v1_0 import Cmd
 from xsdata.formats.dataclass.parsers import XmlParser
 
@@ -38,28 +38,26 @@ class BundleImporter:
     
     @classmethod
     @transaction.atomic
-    def import_from_xml(cls, xml_content: str, collection_id: Optional[int] = None) -> Bundle:
+    def import_from_xml(cls, xml_content: str) -> Bundle:
         """
         Imports XML content into Django models
         
         Args:
             xml_content: The XML content to import
-            collection_id: Optional ID of the collection this bundle belongs to
             
         Returns:
             The created Bundle instance
         """
         cmd_data = cls.validate_xml(xml_content)
-        return cls._import_cmd_to_models(cmd_data, collection_id)
+        return cls._import_cmd_to_models(cmd_data)
     
     @classmethod
-    def _import_cmd_to_models(cls, cmd_data: Cmd, collection_id: Optional[int] = None) -> Bundle:
+    def _import_cmd_to_models(cls, cmd_data: Cmd) -> Bundle:
         """
         Converts Cmd object to Django models
         
         Args:
             cmd_data: The validated CMD data object
-            collection_id: Optional ID of the collection this bundle belongs to
             
         Returns:
             The created Bundle instance
@@ -68,7 +66,7 @@ class BundleImporter:
         general_info = cls._import_general_info(cmd_data)
         publication_info = cls._import_publication_info(cmd_data)
         administrative_info = cls._import_administrative_info(cmd_data)
-        structural_info = cls._import_structural_info(cmd_data, collection_id)
+        structural_info = cls._import_structural_info(cmd_data)
         
         # Get metadata license
         md_license, md_license_uri = cls._extract_metadata_license(cmd_data)
@@ -104,16 +102,50 @@ class BundleImporter:
         return import_administrative_info(cmd_data)
     
     @classmethod
-    def _import_structural_info(cls, cmd_data: Cmd, collection_id: Optional[int]):
-        """Import structural info from CMD data if collection_id is provided"""
-        if not collection_id:
-            return None
-        
+    def _import_structural_info(cls, cmd_data: Cmd) -> Optional['BundleStructuralInfo']:
+        """Import structural info from CMD data"""
+        # Extract the required info from cmd_data
         try:
-            return import_structural_info(cmd_data, collection_id)
+            repo_info = cmd_data.components.blam_bundle_repository_v1_0
+            struct_info_data = repo_info.bundle_structural_info
+            collection_ref = struct_info_data.bundle_is_member_of_collection
+            
+            if not collection_ref:
+                 logger.warning("Bundle XML is missing BundleIsMemberOfCollection reference. Cannot link to collection.")
+                 return None # Cannot proceed without collection reference
+                 
+            collection_identifier_value = collection_ref.value
+            # FIX: Access the type attribute correctly according to the schema
+            collection_identifier_type_enum = collection_ref.identifier_type
+            # Find the string representation matching the enum
+            from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
+            collection_identifier_type_str = None
+            for choice_value, choice_name in IdentifierTypeChoices.choices:
+                 # This comparison might need adjustment based on the enum's actual value representation
+                 if collection_identifier_type_enum.name == choice_name.upper(): # Simple name comparison, adjust if needed
+                      collection_identifier_type_str = choice_value
+                      break
+            
+            if not collection_identifier_type_str:
+                logger.error(f"Could not map bundle's collection identifier type enum '{collection_identifier_type_enum}' to a string choice.")
+                return None
+
+            # Call the standalone importer with correct arguments
+            return import_structural_info(
+                cmd_data,
+                collection_identifier_value,
+                collection_identifier_type_str
+            )
+        except AttributeError as e:
+            logger.error(f"Could not extract collection reference from bundle CMD data: {e}", exc_info=True)
+            return None
         except ValueError as e:
-            # Log the error but don't fail the import
-            logger.warning(f"Failed to import structural info: {str(e)}")
+            # Log the error (e.g., collection not found) but don't fail the entire import
+            logger.warning(f"Failed to import structural info (likely collection not found): {str(e)}")
+            return None
+        except Exception as e:
+            # Catch any other unexpected errors during extraction or import
+            logger.error(f"Unexpected error during structural info import: {e}", exc_info=True)
             return None
     
     @classmethod

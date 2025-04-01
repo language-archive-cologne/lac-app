@@ -354,7 +354,7 @@ def test_full_bundle_import(real_bundle_xml, create_test_collection):
               lambda *args: None):  # No-op patch to skip project linking
         
         # Import the bundle
-        bundle = BundleImporter.import_from_xml(real_bundle_xml, test_collection.id)
+        bundle = BundleImporter.import_from_xml(real_bundle_xml)
     
     # Verify it created a complete bundle object
     assert bundle is not None
