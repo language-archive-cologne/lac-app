@@ -100,32 +100,37 @@ def import_additional_metadata_files(
 
 
 def import_bundle_resources(
-    bundle_struct_info: BundleStructuralInfo, 
-    resources_data
+    bundle_struct_info: BundleStructuralInfo,
+    resources_data # This is the parsed XML data for <BundleResources>
 ) -> None:
     """
     Import bundle resources from CMD data to Django models.
     
     Args:
         bundle_struct_info: The BundleStructuralInfo object to link resources to
-        resources_data: Resources data from the CMD object
+        resources_data: Resources data from the CMD object (nested within struct info)
     """
-    # Get or create bundle resources container
-    # Since there's no clear unique identifier in the schema for BundleResources,
-    # we'll create a relationship with the structural info
-    bundle_resources, created = BundleResources.objects.get_or_create(
-        defaults={}  # No additional fields to set
-    )
-    
-    # Import media resources
+    # Get or create the associated BundleResources instance via the relationship
+    if bundle_struct_info.resources is None:
+        bundle_resources = BundleResources.objects.create() # Create a new one
+        bundle_struct_info.resources = bundle_resources    # Assign it
+        bundle_struct_info.save(update_fields=['resources']) # Save just the link
+    else:
+        bundle_resources = bundle_struct_info.resources # Use the existing one
+
+    # Ensure resources_data is not None before accessing attributes
+    if not resources_data:
+        return # If no <BundleResources> in XML, nothing more to do
+
+    # Import media resources if present in XML data
     if resources_data.media_resource:
         import_media_resources(bundle_resources, resources_data.media_resource)
-    
-    # Import written resources
+
+    # Import written resources if present in XML data
     if resources_data.written_resource:
         import_written_resources(bundle_resources, resources_data.written_resource)
-    
-    # Import other resources
+
+    # Import other resources if present in XML data
     if resources_data.other_resource:
         import_other_resources(bundle_resources, resources_data.other_resource)
 

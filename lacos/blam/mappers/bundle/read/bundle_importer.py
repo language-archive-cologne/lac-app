@@ -15,6 +15,7 @@ from lacos.blam.mappers.bundle.read.import_bundle_publication_info import import
 from lacos.blam.mappers.bundle.read.import_bundle_structural_info import import_structural_info
 from lacos.blam.mappers.bundle.read.import_bundle_administrative_info import import_administrative_info
 from lacos.blam.mappers.bundle.read.import_bundle_project_info import import_project_info
+from lacos.blam.mappers.bundle.read.import_bundle_header import import_bundle_header
 
 logger = logging.getLogger(__name__)
 class BundleImporter:
@@ -62,27 +63,28 @@ class BundleImporter:
         Returns:
             The created Bundle instance
         """
-        # Import all components
+        # Import header first, as it's required
+        header = import_bundle_header(cmd_data)
+        if not header:
+            # Decide how to handle missing header: raise error or return None/empty?
+            logger.error("Bundle import failed: Could not import BundleHeader.")
+            raise ValidationError("Bundle import failed due to missing or invalid header information.")
+            # Or return None, depending on desired behavior
+
+        # Import other components
         general_info = cls._import_general_info(cmd_data)
         publication_info = cls._import_publication_info(cmd_data)
         administrative_info = cls._import_administrative_info(cmd_data)
         structural_info = cls._import_structural_info(cmd_data)
         
-        # Get metadata license
-        md_license, md_license_uri = cls._extract_metadata_license(cmd_data)
-        
-        # Create or update bundle
+        # Create or update bundle, passing the header
         bundle = cls._create_or_update_bundle(
+            header, # Pass header
             general_info, 
             publication_info, 
             administrative_info, 
-            structural_info, 
-            md_license, 
-            md_license_uri
+            structural_info
         )
-        
-        # Import and link projects
-        cls._import_and_link_projects(cmd_data, bundle)
         
         return bundle
     
@@ -104,33 +106,43 @@ class BundleImporter:
     @classmethod
     def _import_structural_info(cls, cmd_data: Cmd) -> Optional['BundleStructuralInfo']:
         """Import structural info from CMD data"""
-        # Extract the required info from cmd_data
         try:
+            # Navigate through parsed XML data
             repo_info = cmd_data.components.blam_bundle_repository_v1_0
             struct_info_data = repo_info.bundle_structural_info
             collection_ref = struct_info_data.bundle_is_member_of_collection
-            
+
             if not collection_ref:
                  logger.warning("Bundle XML is missing BundleIsMemberOfCollection reference. Cannot link to collection.")
                  return None # Cannot proceed without collection reference
                  
             collection_identifier_value = collection_ref.value
-            # FIX: Access the type attribute correctly according to the schema
+            # Get the identifier type enum from parsed data
             collection_identifier_type_enum = collection_ref.identifier_type
-            # Find the string representation matching the enum
+
+            # --- Map Enum to Model String Choice ---
             from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
             collection_identifier_type_str = None
-            for choice_value, choice_name in IdentifierTypeChoices.choices:
-                 # This comparison might need adjustment based on the enum's actual value representation
-                 if collection_identifier_type_enum.name == choice_name.upper(): # Simple name comparison, adjust if needed
-                      collection_identifier_type_str = choice_value
-                      break
-            
+            if collection_identifier_type_enum: # Check if type was provided
+                 # Assumes enum .name ('HANDLE') matches uppercased choice display name ('Handle')
+                 for choice_value, choice_name in IdentifierTypeChoices.choices:
+                      if collection_identifier_type_enum.name == choice_name.upper():
+                           collection_identifier_type_str = choice_value
+                           break
+            else:
+                 # Handle case where IdentifierType attribute is missing in XML
+                 # Defaulting might be an option, or raising an error/warning
+                 logger.warning("BundleIsMemberOfCollection IdentifierType attribute missing in XML. Cannot determine collection identifier type.")
+                 return None # Or default if appropriate
+
             if not collection_identifier_type_str:
+                # Log if mapping failed (and enum wasn't None)
                 logger.error(f"Could not map bundle's collection identifier type enum '{collection_identifier_type_enum}' to a string choice.")
                 return None
+            # ---------------------------------------
 
-            # Call the standalone importer with correct arguments
+            # Call the standalone importer function
+            # It receives the full cmd_data and extracts what it needs internally
             return import_structural_info(
                 cmd_data,
                 collection_identifier_value,
@@ -148,59 +160,45 @@ class BundleImporter:
             logger.error(f"Unexpected error during structural info import: {e}", exc_info=True)
             return None
     
-    @classmethod
-    def _extract_metadata_license(cls, cmd_data: Cmd) -> tuple:
-        """Extract metadata license information from CMD data"""
-        repo = cmd_data.components.blam_bundle_repository_v1_0
-        md_license = repo.mdlicense.value if repo.mdlicense else None
-        md_license_uri = repo.mdlicense.uri if repo.mdlicense else None
-        return md_license, md_license_uri
-    
+
     @classmethod
     def _create_or_update_bundle(
         cls, 
+        header, # Add header parameter
         general_info, 
         publication_info, 
         administrative_info, 
-        structural_info, 
-        md_license, 
-        md_license_uri
+        structural_info
     ) -> Bundle:
         """Create or update a Bundle with the imported components"""
-        # Start with required fields
+        # Bundle data now includes the required base_header
         bundle_data = {
+            'base_header': header,
             'general_info': general_info,
             'publication_info': publication_info,
             'administrative_info': administrative_info,
         }
         
-        # Add optional fields only if they exist
+        # Add structural_info model instance if it was successfully imported
         if structural_info is not None:
             bundle_data['structural_info'] = structural_info
-        if md_license is not None:
-            bundle_data['md_license'] = md_license
-        if md_license_uri is not None:
-            bundle_data['md_license_uri'] = md_license_uri
         
-        # Create or get bundle using general_info as unique identifier
-        bundle, created = Bundle.objects.get_or_create(
-            general_info=general_info,
+        # Create or get bundle using the header's unique self-link as the identifier
+        # The defaults dictionary will contain all other fields for creation/update
+        bundle, created = Bundle.objects.update_or_create(
+            base_header=header, # Use header for lookup
             defaults=bundle_data
         )
         
-        # Update fields if the bundle already existed
-        if not created:
-            for field, value in bundle_data.items():
-                setattr(bundle, field, value)
-            bundle.save()
+        # No need for the manual update loop anymore, update_or_create handles it.
+        # if not created:
+        #     for field, value in bundle_data.items():
+        #         # Be careful not to overwrite the lookup key (base_header)
+        #         if field != 'base_header': 
+        #              setattr(bundle, field, value)
+        #     bundle.save()
             
+        status = "created" if created else "updated"
+        logger.info(f"Bundle linked to header '{header.md_self_link}' {status}.")
+
         return bundle
-    
-    @classmethod
-    def _import_and_link_projects(cls, cmd_data: Cmd, bundle: Bundle) -> None:
-        """Import project info and link to bundle"""
-        repo = cmd_data.components.blam_bundle_repository_v1_0
-        if hasattr(repo, 'project_info') and repo.project_info:
-            projects = import_project_info(cmd_data)
-            for project in projects:
-                bundle.projects.add(project)

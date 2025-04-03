@@ -16,8 +16,7 @@ from lacos.blam.mappers.collection.read.collection_importer import CollectionImp
 from lacos.blam.mappers.bundle.read.bundle_importer import BundleImporter
 from lacos.storage.services.resource_mapping_service import ResourceMappingService
 from lacos.storage.services.file_discovery_service import FileDiscoveryService
-
-# Django settings and models (import models within tasks to avoid circular issues)
+from lacos.blam.services.resolve_links import resolve_collection_bundle_links as resolve_links_service
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -161,9 +160,10 @@ def import_s3_bundles_for_collection(collection_id: Optional[UUID], bundle_keys:
     return collection_id
 
 @db_task()
-def resolve_collection_bundle_links(collection_id: Optional[UUID]) -> Optional[UUID]:
+def resolve_collection_bundle_links_task(collection_id: Optional[UUID]) -> Optional[UUID]:
     """
     Resolve CollectionMemberReferences to actual Bundles for a given Collection.
+    Uses the resolve_collection_bundle_links function from the services module.
 
     Args:
         collection_id: The database ID of the collection to process.
@@ -171,60 +171,28 @@ def resolve_collection_bundle_links(collection_id: Optional[UUID]) -> Optional[U
     Returns:
         The collection_id to pass down the pipeline, or None if collection not found.
     """
-    from lacos.blam.models.collection.collection_repository import Collection
+    if collection_id is None:
+        logger.warning("resolve_collection_bundle_links_task received None collection_id. Skipping.")
+        return None  # Propagate None if previous step failed
+
     logger.info(f"Attempting to resolve bundle links for collection ID: {collection_id}")
 
-    if collection_id is None:
-        logger.warning("resolve_collection_bundle_links received None collection_id. Skipping.")
-        return None # Propagate None if previous step failed
-
     try:
-        collection = Collection.objects.get(id=collection_id)
+        # Call the service function
+        result = resolve_links_service(collection_id)
         
-        # Try to resolve bundle references in a more robust way
-        try:
-            resolved_count = CollectionImporter.resolve_bundle_references(collection)
-            logger.info(f"Resolved {resolved_count} bundle links for collection ID: {collection_id}")
-        except AttributeError as e:
-            # Handle the case where collection.structural_info doesn't have members attribute
-            logger.warning(f"Could not resolve bundle links using standard method: {e}. Using alternate approach.")
+        if result is None:
+            logger.error(f"Collection {collection_id} not found for resolving bundle links.")
+            return None
             
-            # Try an alternate approach using the model relationships directly
-            resolved_count = 0
-            try:
-                # Use the related_name defined in BundleStructuralInfo
-                bundle_structural_infos = collection.bundle_collection.all()
-                logger.info(f"Found {len(bundle_structural_infos)} bundle structural infos using 'collection.bundle_collection'")
-                
-                # Process these members to link bundles
-                for member_info in bundle_structural_infos:
-                    # Assuming the logic should be applied to the BundleStructuralInfo object itself
-                    # or potentially the Bundle it links to (if member_info.resolve_bundle exists)
-                    if hasattr(member_info, 'resolve_bundle'):
-                        if member_info.resolve_bundle():
-                            resolved_count += 1
-                    else:
-                        # If resolve_bundle is not on BundleStructuralInfo, maybe it's on the Bundle?
-                        # This assumes BundleStructuralInfo has a link back to Bundle named 'bundle'
-                        if hasattr(member_info, 'bundle') and hasattr(member_info.bundle, 'resolve_bundle'):
-                           if member_info.bundle.resolve_bundle():
-                               resolved_count += 1
-                        else:
-                           logger.warning(f"Could not find a 'resolve_bundle' method for BundleStructuralInfo {getattr(member_info, 'id', 'N/A')} or its related Bundle.")
-
-            except Exception as alt_e:
-                 logger.error(f"Error occurred during alternate bundle resolution: {alt_e}", exc_info=True)
-            
-            logger.info(f"Resolved {resolved_count} bundle links using alternate approach for collection ID: {collection_id}")
-        
-        # Return collection_id to pass down the pipeline
+        # We return the collection_id even if bundle resolution fails
+        # This allows the pipeline to continue to resource mapping
+        logger.info(f"Bundle link resolution completed for collection ID: {collection_id}")
         return collection_id
-    except Collection.DoesNotExist:
-        logger.error(f"Collection {collection_id} not found for resolving bundle links.")
-        return None
     except Exception as e:
         logger.error(f"Error resolving bundle links for collection {collection_id}: {e}", exc_info=True)
-        return collection_id  # Return ID to continue pipeline even if this step fails
+        # Return collection_id to continue pipeline even if this step fails
+        return collection_id
 
 @db_task()
 def map_collection_resources(collection_id: Optional[UUID]) -> Optional[UUID]: # Return Optional[UUID] for pipeline consistency
@@ -234,125 +202,23 @@ def map_collection_resources(collection_id: Optional[UUID]) -> Optional[UUID]: #
     Args:
         collection_id: The database ID of the collection to map.
     """
-    from lacos.blam.models.collection.collection_repository import Collection
-    from lacos.blam.models.bundle.bundle_repository import Bundle
-    # Import specific resource models if needed for detailed mapping
-    # from lacos.blam.models.resource import MediaResource, WrittenResource, OtherResource
-
     logger.info(f"Mapping S3 resources for collection ID: {collection_id}")
 
     if collection_id is None:
         logger.warning("map_collection_resources received None collection_id. Skipping.")
         return None # Propagate None
 
-    mapping_service = ResourceMappingService()
-    discovery_service = FileDiscoveryService() # Needed for path formatting
-
     try:
-        collection = Collection.objects.get(id=collection_id)
-
-        # 1. Map the Collection object itself
-        try:
-            # Use FileDiscoveryService to get the expected S3 *prefix* (key) for the collection
-            # Assuming collection path pattern refers to a prefix ending in '/'
-            collection_key_prefix = discovery_service.form_collection_path(collection_id) + "/" # Ensure trailing slash if needed
-            # Bucket usually comes from settings or service default
-            bucket = discovery_service.production_bucket
-            try:
-                mapping_service.register_s3_location(collection, bucket, collection_key_prefix)
-                logger.info(f"Mapped Collection {collection_id} to S3 location: {bucket}/{collection_key_prefix}")
-            except Exception as register_err:
-                # Handle integer overflow or other database errors
-                logger.error(f"Failed to map Collection {collection_id} to S3 due to database error: {register_err}", exc_info=True)
-                # We'll continue with bundle mapping even if collection mapping fails
-        except Exception as e:
-             logger.error(f"Failed to map Collection {collection_id} object: {e}", exc_info=True)
-
-
-        # 2. Map associated Bundles and their Resources
-        # Ensure bundle links have been resolved before running this
-        if hasattr(collection, 'structural_info') and collection.structural_info:
-            try:
-                # Use the reverse relationship from Collection to BundleStructuralInfo
-                linked_bundles = Bundle.objects.filter(
-                    structural_info__is_member_of_collection=collection
-                ).distinct()
-                
-                logger.info(f"Found {linked_bundles.count()} linked bundles to map for collection {collection_id}.")
-            except Exception as e:
-                logger.warning(f"Error querying linked bundles with standard relationship: {e}")
-                # If the above query fails, try a more direct approach
-                try:
-                    # Get bundles via the bundle_collection reverse relationship
-                    linked_bundles = Bundle.objects.filter(
-                        structural_info__in=collection.bundle_collection.all()
-                    ).distinct()
-                    logger.info(f"Found {linked_bundles.count()} linked bundles using bundle_collection reverse relation")
-                except Exception as alt_e:
-                    logger.error(f"Failed with alternative bundle lookup approach as well: {alt_e}")
-                    linked_bundles = Bundle.objects.none()
-            
-            for bundle in linked_bundles:
-                try:
-                    # Map the Bundle object
-                    bundle_key_prefix = discovery_service.form_bundle_path(collection_id, bundle.id) + "/" # Ensure trailing slash
-                    mapping_service.register_s3_location(bundle, bucket, bundle_key_prefix)
-                    logger.info(f"Mapped Bundle {bundle.id} to S3 location: {bucket}/{bundle_key_prefix}")
-
-                    # 3. Map Resources within the Bundle (Example - adjust to your models)
-                    # Construct the base resource key prefix
-                    try:
-                         resource_pattern = discovery_service.get_resource_path_pattern()
-                         prefix_pattern = resource_pattern.rsplit('{resource_filename}', 1)[0]
-                         resources_base_key = prefix_pattern.format(collection_id=collection_id, bundle_id=bundle.id)
-                    except Exception as format_e:
-                        logger.error(f"Could not format resource base key for bundle {bundle.id}: {format_e}")
-                        continue # Skip resource mapping for this bundle
-
-                    resource_count = 0
-                    # Iterate through different resource types linked to the bundle
-                    # Example: assumes related names like 'bundle_media_resources', etc.
-                    resource_relations = ['bundle_media_resources', 'bundle_written_resources', 'bundle_other_resources']
-                    for relation_name in resource_relations:
-                        if hasattr(bundle, relation_name):
-                             related_manager = getattr(bundle, relation_name)
-                             if hasattr(related_manager, 'all'):
-                                 for bundle_resource_link in related_manager.all():
-                                     # Get the actual resource instance (MediaResource, WrittenResource...)
-                                     # This assumes the link object has an attribute pointing to the actual resource
-                                     resource = None
-                                     if hasattr(bundle_resource_link, 'media_resource'):
-                                         resource = bundle_resource_link.media_resource
-                                     elif hasattr(bundle_resource_link, 'written_resource'):
-                                         resource = bundle_resource_link.written_resource
-                                     elif hasattr(bundle_resource_link, 'other_resource'):
-                                         resource = bundle_resource_link.other_resource
-
-                                     if resource and hasattr(resource, 'file_name'):
-                                         try:
-                                             # Construct full S3 key for the resource
-                                             resource_s3_key = f"{resources_base_key}{resource.file_name}"
-                                             mapping_service.register_s3_location(resource, bucket, resource_s3_key)
-                                             resource_count += 1
-                                         except Exception as res_map_e:
-                                             logger.error(f"Failed to map resource {getattr(resource, 'id', 'N/A')} (name: {resource.file_name}) for bundle {bundle.id}: {res_map_e}", exc_info=True)
-                                     else:
-                                         logger.warning(f"Could not map resource linked via {relation_name} for bundle {bundle.id}: Missing resource object or file_name.")
-
-
-                    logger.info(f"Mapped {resource_count} resources for Bundle {bundle.id}")
-
-                except Exception as bundle_map_e:
-                    logger.error(f"Failed to map Bundle {bundle.id} or its resources: {bundle_map_e}", exc_info=True)
-
-    except Collection.DoesNotExist:
-        logger.error(f"Collection {collection_id} not found for resource mapping.")
+        # Delegate to the service method
+        mapping_service = ResourceMappingService()
+        total_mapped = mapping_service.map_collection_hierarchy(collection_id)
+        
+        logger.info(f"Successfully mapped {total_mapped} resources for collection {collection_id}")
+        return collection_id
     except Exception as e:
         logger.error(f"Unexpected error mapping resources for collection {collection_id}: {e}", exc_info=True)
-        return None # Propagate None or indicate error
-
-    # Return collection_id for pipeline consistency if successful
-    return collection_id
+        # We return collection_id even on error to allow pipeline to continue
+        return collection_id
 
 
 # --- Orchestration Tasks ---
@@ -451,6 +317,7 @@ def process_s3_prefix(bucket: str = None, prefix: str = ''):
             # Note: import_s3_bundles_for_collection now expects (collection_id, bundle_keys, bucket)
             # The collection_id comes from the previous task, bundle_keys and bucket are bound.
             first_task_in_pipeline.then(bundles_task_signature)\
+                                .then(resolve_collection_bundle_links_task)\
                                 .then(map_collection_resources)
 
             # Enqueue the *first* task instance, which now contains the full pipeline definition.

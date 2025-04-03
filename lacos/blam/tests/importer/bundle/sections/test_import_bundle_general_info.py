@@ -215,21 +215,24 @@ def test_general_info_data_mapping(real_cmd_data):
     assert "Translation" in keywords
     assert "Swadesh list" in keywords
     
-    # Verify languages were imported
-    assert BundleObjectLanguage.objects.filter(bundle=general_info).count() == 1
-    language = BundleObjectLanguage.objects.get(bundle=general_info)
+    # Verify languages were imported and linked via ManyToMany
+    assert general_info.object_languages.count() == 1
+    # Get the canonical language object via the M2M relationship
+    language = general_info.object_languages.first()
+    assert language is not None # Ensure the relationship worked
     assert language.name == "Beria"
     assert language.iso_639_3_code == "zag"
     assert language.glottolog_code == "zagh1240"
     
-    # Verify alternative names
+    # Verify alternative names (now linked to the canonical language object)
     alt_names = list(language.alternative_names.all().values_list('value', flat=True))
     assert "Beri" in alt_names
     assert "Zaghawa" in alt_names
     assert "Zaghawa language" in alt_names
     
-    # Verify language taxonomy
-    taxonomy = language.bundle_object_language_taxonomy
+    # Verify language taxonomy (linked via the canonical language object)
+    # Assuming the related name on the OneToOneField is 'bundle_object_language_taxonomy'
+    taxonomy = language.bundle_object_language_taxonomy 
     assert taxonomy is not None
     families = list(taxonomy.language_family.all().values_list('value', flat=True))
     assert "Saharan" in families
@@ -250,4 +253,35 @@ def test_get_or_create_behavior(real_cmd_data):
     
     # Count should still be 1
     count = BundleGeneralInfo.objects.filter(id_value="hdl:11341/00-0000-0000-0000-1AE5-2").count()
-    assert count == 1 
+    assert count == 1
+    # Add check for canonical language count
+    assert BundleObjectLanguage.objects.count() == 1 # Only one 'zag' language should exist
+
+
+@pytest.mark.django_db
+def test_language_update_behavior(real_cmd_data):
+    """Test that re-importing updates existing language data based on ISO code."""
+    # First import
+    import_general_info(real_cmd_data)
+    assert BundleObjectLanguage.objects.count() == 1
+    lang1 = BundleObjectLanguage.objects.get(iso_639_3_code='zag')
+    assert lang1.name == "Beria" 
+    assert lang1.glottolog_code == "zagh1240"
+
+    # Modify the name in the source data for the second import
+    # IMPORTANT: Modify the actual cmd_data fixture used by the importer
+    bundle_info_schema = real_cmd_data.components.blam_bundle_repository_v1_0.bundle_general_info
+    bundle_info_schema.bundle_object_languages.bundle_object_language[0].object_language_name = "Zaghawa_Updated"
+    bundle_info_schema.bundle_object_languages.bundle_object_language[0].object_language_glottolog_code.value = "xxxx1111"
+
+    # Second import (using the modified cmd_data)
+    import_general_info(real_cmd_data)
+    
+    # Count should still be 1 (no new language created)
+    assert BundleObjectLanguage.objects.count() == 1
+    
+    # Verify the existing object was updated
+    lang2 = BundleObjectLanguage.objects.get(iso_639_3_code='zag')
+    assert lang1.pk == lang2.pk # Should be the same object
+    assert lang2.name == "Zaghawa_Updated" # Name should be updated
+    assert lang2.glottolog_code == "xxxx1111" # Glottolog code should be updated 

@@ -193,36 +193,51 @@ def import_object_languages(general_info: BundleGeneralInfo, languages: List[Any
         languages: List of language data objects from the schema
     """
     for lang_data in languages:
-        language = create_object_language(general_info, lang_data)
-        
-        # Add alternative names if present
-        if hasattr(lang_data, 'object_language_alternative_names') and lang_data.object_language_alternative_names:
-            add_alternative_names(language, lang_data.object_language_alternative_names.object_language_alternative_name)
-        
-        # Add language taxonomy if present
-        if hasattr(lang_data, 'object_language_taxonomy') and lang_data.object_language_taxonomy:
-            create_language_taxonomy(language, lang_data.object_language_taxonomy)
+        # Get or create the canonical language object based on unique codes
+        language = create_or_update_object_language(lang_data)
+
+        # If language object was successfully obtained/created, link it
+        if language:
+            general_info.object_languages.add(language)
+
+            # Add alternative names if present
+            if hasattr(lang_data, 'object_language_alternative_names') and lang_data.object_language_alternative_names:
+                add_alternative_names(language, lang_data.object_language_alternative_names.object_language_alternative_name)
+            
+            # Add language taxonomy if present
+            if hasattr(lang_data, 'object_language_taxonomy') and lang_data.object_language_taxonomy:
+                create_language_taxonomy(language, lang_data.object_language_taxonomy)
 
 
-def create_object_language(general_info: BundleGeneralInfo, lang_data: Any) -> BundleObjectLanguage:
-    """
-    Create a BundleObjectLanguage instance from schema data.
-    
+def create_or_update_object_language(lang_data: Any) -> Optional[BundleObjectLanguage]:
+    """Get or create a canonical BundleObjectLanguage based on unique identifiers.
+
+    Uses iso_639_3_code as the primary unique identifier for lookup.
+    Updates other fields if the object already exists.
+
     Args:
-        general_info: The BundleGeneralInfo instance to associate with
         lang_data: The language data from the schema
-        
+
     Returns:
-        The created BundleObjectLanguage instance
+        The created or updated BundleObjectLanguage instance, or None if no ISO code.
     """
-    language, created = BundleObjectLanguage.objects.get_or_create(
-        bundle=general_info,
-        display_name=lang_data.object_language_display_name,
-        defaults={
-            'name': lang_data.object_language_name,
-            'iso_639_3_code': getattr(lang_data.object_language_iso639_3_code, 'value', None),
-            'glottolog_code': getattr(lang_data.object_language_glottolog_code, 'value', None)
-        }
+    iso_code = getattr(lang_data.object_language_iso639_3_code, 'value', None)
+    if not iso_code:
+        # Cannot uniquely identify language without ISO code
+        # Log a warning or error? Depending on requirements.
+        return None 
+
+    defaults = {
+        'display_name': lang_data.object_language_display_name,
+        'name': lang_data.object_language_name,
+        'glottolog_code': getattr(lang_data.object_language_glottolog_code, 'value', None)
+    }
+    # Remove None values from defaults to avoid overwriting existing data with None
+    defaults = {k: v for k, v in defaults.items() if v is not None}
+
+    language, created = BundleObjectLanguage.objects.update_or_create(
+        iso_639_3_code=iso_code, # Use ISO code for lookup
+        defaults=defaults
     )
     return language
 

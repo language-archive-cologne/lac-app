@@ -223,6 +223,13 @@ def test_find_collection_and_bundle_xmls_s3(mock_s3, discovery_service):
     # Call the method
     result = discovery_service.find_collection_and_bundle_xmls_s3(TEST_BUCKET_NAME)
     
+    # --- DEBUG: Print the result to see what's found ---
+    print("\n--- Result from find_collection_and_bundle_xmls_s3 ---")
+    print(f"Potential Collections: {result.get('potential_collection_xmls')}")
+    print(f"Potential Bundles: {result.get('potential_bundle_xmls')}")
+    print("----------------------------------------------------\n")
+    # ---------------------------------------------------
+
     # Check results
     assert len(result['potential_collection_xmls']) == 2
     assert discovery_service.form_collection_xml_path("algerien") in result['potential_collection_xmls']

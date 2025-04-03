@@ -20,7 +20,6 @@ class BundlePublicationInfo(PublicationInfo):
     class Meta:
         verbose_name = "Bundle Publication Info"
         verbose_name_plural = "Bundle Publication Info"
-        unique_together = [('identifier', 'identifier_type')]
 
 
 class BundleCreator(BaseCreator):

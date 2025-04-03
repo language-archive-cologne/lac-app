@@ -108,7 +108,7 @@ def test_general_info_data_mapping(real_cmd_data):
     assert general_info.description == "The Interviews were made by Issak Oukafi Cheikh for his Master Thesis 'L'historie d'Eharir (Tassili n Azjer, Sahara) dans la perception locale de l'art rupestre'. He talked with several locals from the village Eharir in western Algeria in 2010/2011 about thier perception of ancient rock art in the region."
     assert general_info.version == "1"
     assert general_info.id_value == "hdl:11341/0000-0000-0000-3D7C"
-    assert general_info.id_type == "Handle"
+    assert general_info.id_type == "HANDLE"
     
     # Check location was created and linked
     assert general_info.location is not None
@@ -278,4 +278,33 @@ def test_relationships_are_created(real_cmd_data):
     
     # Check reverse relationship from CollectionObjectLanguageLanguageFamily to CollectionObjectLanguageTaxonomy (ManyToMany)
     family = language.taxonomy.language_family.first()
-    assert family.collectionobjectlanguagetaxonomy_set.filter(id=language.taxonomy.id).exists() 
+    assert family.collectionobjectlanguagetaxonomy_set.filter(id=language.taxonomy.id).exists()
+
+
+@pytest.mark.django_db
+def test_language_update_behavior(real_cmd_data):
+    """Test that re-importing updates existing language data based on ISO code."""
+    # First import
+    import_general_info(real_cmd_data)
+    assert CollectionObjectLanguage.objects.count() == 1
+    lang1 = CollectionObjectLanguage.objects.get(iso_639_3_code='taq')
+    assert lang1.name == "Tamasheq" 
+    assert lang1.glottolog_code == "tama1365"
+
+    # Modify the name in the source data for the second import
+    real_cmd_data.components.blam_collection_repository_v1_0.collection_general_info.collection_object_languages.collection_object_language[0].object_language_name = "Tamasheq_Updated"
+    # Modify glottolog code as well
+    real_cmd_data.components.blam_collection_repository_v1_0.collection_general_info.collection_object_languages.collection_object_language[0].object_language_glottolog_code.value = "xxxx1111"
+
+
+    # Second import
+    import_general_info(real_cmd_data)
+    
+    # Count should still be 1 (no new language created)
+    assert CollectionObjectLanguage.objects.count() == 1
+    
+    # Verify the existing object was updated
+    lang2 = CollectionObjectLanguage.objects.get(iso_639_3_code='taq')
+    assert lang1.pk == lang2.pk # Should be the same object
+    assert lang2.name == "Tamasheq_Updated" # Name should be updated
+    assert lang2.glottolog_code == "xxxx1111" # Glottolog code should be updated 

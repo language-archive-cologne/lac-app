@@ -11,6 +11,10 @@ from lacos.blam.models.collection.collection_general_info import (
 from blam_schemas.collection.blam_collection_repository_v1_0 import (
     Cmd
 )
+from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @transaction.atomic
@@ -132,20 +136,40 @@ def create_base_general_info(general_info_schema, location: CollectionLocation) 
     
     # Set the ID value and type from the first collection ID
     id_value = None
-    id_type = None
+    id_type_enum = None
+    id_type_str = None # The string value to store
+
     if general_info_schema.collection_id and len(general_info_schema.collection_id) > 0:
         first_id = general_info_schema.collection_id[0]
         id_value = first_id.value
-        id_type = first_id.identifier_type.value
-    
-    # Create base general info
+        id_type_enum = first_id.identifier_type # Get the enum e.g., CollectionIdIdentifierType.HANDLE
+        
+        if id_type_enum:
+            # Map the enum name to the database value from IdentifierTypeChoices
+            for choice_value, choice_name in IdentifierTypeChoices.choices:
+                if id_type_enum.name == choice_value: # Compare enum name with DB value ('HANDLE' == 'HANDLE')
+                    id_type_str = choice_value
+                    break
+            if not id_type_str:
+                 logger.warning(f"Could not map Collection ID type enum '{id_type_enum.name}' to IdentifierTypeChoices. Storing raw value.")
+                 # Fallback or raise error? Storing raw value from enum for now.
+                 id_type_str = id_type_enum.value 
+        else:
+            logger.warning("Collection ID found but IdentifierType attribute is missing.")
+            # Handle missing type? Default to OTHER?
+            id_type_str = IdentifierTypeChoices.OTHER
+    else:
+        logger.warning("No Collection ID found in schema.")
+        # Handle missing ID entirely? Maybe raise error depending on requirements
+
+    # Create base general info using the mapped id_type_str
     general_info, created = CollectionGeneralInfo.objects.get_or_create(
         id_value=id_value,
         defaults={
             "display_title": display_title,
             "description": description,
             "version": version,
-            "id_type": id_type,
+            "id_type": id_type_str, # Use the mapped string value
             "location": location,
         },
     )
@@ -155,7 +179,7 @@ def create_base_general_info(general_info_schema, location: CollectionLocation) 
         general_info.display_title = display_title
         general_info.description = description
         general_info.version = version
-        general_info.id_type = id_type
+        general_info.id_type = id_type_str # Ensure update uses the mapped string value
         general_info.location = location
         general_info.save()
     
@@ -192,26 +216,30 @@ def import_object_languages(general_info: CollectionGeneralInfo, object_language
     """
     if object_languages_schema and hasattr(object_languages_schema, 'collection_object_language'):
         for language_schema in object_languages_schema.collection_object_language:
-            # Prepare language data
-            language_data = {
-                'display_name': language_schema.object_language_display_name[0],
+            # Use iso_code as the primary identifier
+            iso_code = getattr(language_schema.object_language_iso639_3_code, 'value', None)
+            if not iso_code:
+                logger.warning(f"Skipping language import: Missing ISO 639-3 code in schema for language name '{language_schema.object_language_name}'")
+                continue # Skip this language if it lacks the unique key
+
+            # Prepare data for defaults dictionary
+            defaults = {
+                'display_name': language_schema.object_language_display_name[0] if language_schema.object_language_display_name else None,
                 'name': language_schema.object_language_name,
-                'iso_639_3_code': language_schema.object_language_iso639_3_code.value,
-                'glottolog_code': language_schema.object_language_glottolog_code.value
+                'glottolog_code': getattr(language_schema.object_language_glottolog_code, 'value', None)
             }
-            
-            # Try to find an existing language with the same display name and codes, or create a new one
-            language, created = CollectionObjectLanguage.objects.get_or_create(
-                display_name=language_data['display_name'],
-                defaults=language_data
+            # Remove None values to avoid overwriting existing data with None
+            defaults = {k: v for k, v in defaults.items() if v is not None}
+
+            # Get or create the canonical language object based on ISO code
+            language, created = CollectionObjectLanguage.objects.update_or_create(
+                iso_639_3_code=iso_code, # Use ISO code for lookup
+                defaults=defaults
             )
             
-            # Update any fields that might have changed
-            if not created:
-                for key, value in language_data.items():
-                    setattr(language, key, value)
-                language.save()
-            
+            # Link the canonical language to the current general_info
+            general_info.object_languages.add(language)
+
             # Import alternative names if they exist
             if hasattr(language_schema, 'object_language_alternative_names') and language_schema.object_language_alternative_names:
                 for alt_name_value in language_schema.object_language_alternative_names.object_language_alternative_name:
@@ -231,6 +259,3 @@ def import_object_languages(general_info: CollectionGeneralInfo, object_language
                 for family_value in language_schema.object_language_taxonomy.object_language_language_family:
                     family, created = CollectionObjectLanguageLanguageFamily.objects.get_or_create(value=family_value)
                     taxonomy.language_family.add(family)
-            
-            # Add the language to the general info
-            general_info.object_languages.add(language)

@@ -297,65 +297,19 @@ def test_full_bundle_import(real_bundle_xml, create_test_collection):
         md_profile="https://example.com/bundle/profile/schema"
     )
     
-    # Create patches for the problematic functions
-    # 1. Patch _extract_metadata_license to return None, None instead of md_license values
-    original_extract_metadata_license = BundleImporter._extract_metadata_license
-    def mock_extract_metadata_license(*args):
-        # Just return None, None regardless of the arguments
-        return None, None
-    
-    # 2. Patch import_structural_info to use our identifier_type
+    # Patch import_structural_info to use our identifier_type
     original_import_structural_info = import_structural_info
-    def mock_import_structural_info(cmd_data, coll_id):
-        return original_import_structural_info(cmd_data, collection_id, identifier_type)
-    
-    # 3. Patch _create_or_update_bundle to include the header
-    original_create_or_update = BundleImporter._create_or_update_bundle
-    def mock_create_or_update(*args, **kwargs):
-        # Print the args to see what we're actually getting
-        print(f"Args received: {args}")
-        print(f"Number of args: {len(args)}")
-        
-        # Based on the actual log output:
-        # args[0] = general_info (BundleGeneralInfo)
-        # args[1] = publication_info (BundlePublicationInfo)
-        # args[2] = administrative_info (BundleAdministrativeInfo)
-        # args[3] = structural_info (BundleStructuralInfo)
-        
-        general_info = args[0]  # BundleGeneralInfo
-        publication_info = args[1]  # BundlePublicationInfo 
-        administrative_info = args[2]  # BundleAdministrativeInfo
-        structural_info = args[3] if len(args) > 3 else None  # BundleStructuralInfo
-            
-        # Create a structural_info if it's None 
-        if structural_info is None:
-            from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
-            structural_info = BundleStructuralInfo.objects.create(is_member_of_collection=test_collection)
-        
-        # Create bundle with all required fields in correct order
-        bundle = Bundle.objects.create(
-            base_header=bundle_header,
-            general_info=general_info,  # BundleGeneralInfo
-            publication_info=publication_info,  # BundlePublicationInfo
-            administrative_info=administrative_info,  # BundleAdministrativeInfo
-            structural_info=structural_info  # BundleStructuralInfo
-        )
-                
-        return bundle
-        
-    # Apply the patches
-    with patch('lacos.blam.mappers.bundle.read.bundle_importer.BundleImporter._extract_metadata_license', 
-              mock_extract_metadata_license), \
-         patch('lacos.blam.mappers.bundle.read.bundle_importer.import_structural_info', 
-              mock_import_structural_info), \
-         patch('lacos.blam.mappers.bundle.read.bundle_importer.BundleImporter._create_or_update_bundle',
-              mock_create_or_update), \
-         patch('lacos.blam.mappers.bundle.read.bundle_importer.BundleImporter._import_and_link_projects',
-              lambda *args: None):  # No-op patch to skip project linking
-        
-        # Import the bundle
+    def mock_import_structural_info(cmd_data, coll_id, type_str): # Adjust signature if needed based on actual import_structural_info
+        # Assuming import_structural_info correctly finds the collection now
+        return import_structural_info(cmd_data, collection_id, identifier_type)
+
+    # Apply remaining patches
+    with patch('lacos.blam.mappers.bundle.read.bundle_importer.import_structural_info',
+              mock_import_structural_info):
+
+        # Import the bundle using the correct signature
         bundle = BundleImporter.import_from_xml(real_bundle_xml)
-    
+
     # Verify it created a complete bundle object
     assert bundle is not None
     assert isinstance(bundle, Bundle)
@@ -370,4 +324,8 @@ def test_full_bundle_import(real_bundle_xml, create_test_collection):
     
     # Verify bundle has the expected data
     repo = BundleImporter.validate_xml(real_bundle_xml).components.blam_bundle_repository_v1_0
-    assert bundle.general_info.display_title == repo.bundle_general_info.bundle_display_title 
+    assert bundle.general_info.display_title == repo.bundle_general_info.bundle_display_title
+    
+    # Remove MD License assertions
+    # assert bundle.base_header.md_license == repo.mdlicense.value
+    # assert bundle.base_header.md_license_uri == repo.mdlicense.uri 

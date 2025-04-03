@@ -327,10 +327,12 @@ class FileDiscoveryService(BaseStorageService):
     def find_collection_and_bundle_xmls_s3(self, bucket, prefix=""):
         """
         Find all collection and bundle XML files in the specified S3 bucket.
+        Performs a two-pass scan: first identifies collections, then searches
+        within each collection for bundles.
         
         Args:
             bucket: S3 bucket name
-            prefix: Prefix to start searching from
+            prefix: Prefix to start searching from (applied to collection search)
             
         Returns:
             Dictionary with lists of collection and bundle XML paths
@@ -341,72 +343,80 @@ class FileDiscoveryService(BaseStorageService):
             'potential_bundle_xmls': []
         }
         
-        # List all "directories" at the top level
+        # --- Pass 1: Find Collections --- 
         paginator = self.s3_client.get_paginator('list_objects_v2')
-        response = paginator.paginate(Bucket=bucket, Prefix=prefix, Delimiter='/')
-        
-        collection_prefixes = list(response.search('CommonPrefixes')) # Convert generator to list for logging
-        logger.debug(f"Found {len(collection_prefixes)} potential top-level prefixes: {[p.get('Prefix') for p in collection_prefixes]}")
+        try:
+            collection_page_iterator = paginator.paginate(Bucket=bucket, Prefix=prefix, Delimiter='/')
+            collection_prefixes = list(collection_page_iterator.search('CommonPrefixes')) # Convert generator
+            logger.debug(f"Found {len(collection_prefixes)} potential top-level collection prefixes: {[p.get('Prefix') for p in collection_prefixes if p]}")
 
-        for prefix_obj in collection_prefixes:
-            current_prefix = prefix_obj.get('Prefix')
-            # Extract the last part of the prefix, this could be a collection ID or a bundle ID
-            potential_id = current_prefix.rstrip('/').rsplit('/', 1)[-1]
-            logger.debug(f"Processing top-level prefix: {current_prefix}, potential ID: {potential_id}")
-            
-            # --- Check if this prefix represents a Collection --- 
-            is_collection = False
-            try:
-                collection_xml_key = self.form_collection_xml_path(potential_id)
-                # Ensure the formed key actually starts with the current_prefix 
-                # (e.g., handle cases where potential_id might be ambiguous)
-                # This check assumes collection_id is the first part of the prefix
-                if collection_xml_key.startswith(current_prefix) or current_prefix.startswith(potential_id + '/'):
-                    logger.debug(f"Checking for collection XML at: {collection_xml_key}")
-                    self.s3_client.head_object(Bucket=bucket, Key=collection_xml_key)
-                    result['potential_collection_xmls'].append(collection_xml_key)
-                    logger.info(f"SUCCESS: Identified as Collection via XML: {collection_xml_key}")
-                    is_collection = True 
-                else:
-                    logger.debug(f"Skipping collection check for {potential_id} as formed path {collection_xml_key} doesn't match prefix {current_prefix}")
-            except ClientError as e:
-                if e.response.get('Error', {}).get('Code', 'Unknown') == '404':
-                    logger.debug(f"Not a collection: Collection XML check failed (404) for {collection_xml_key}")
-                else:
-                    error_code = e.response.get('Error', {}).get('Code', 'Unknown')
-                    logger.warning(f"WARN: Collection XML check failed unexpectedly for {collection_xml_key}. Error: {error_code}")
-            except Exception as e:
-                 logger.error(f"ERROR: Unexpected error checking collection XML for {potential_id}: {e}", exc_info=True)
+            for prefix_obj in collection_prefixes:
+                if not prefix_obj: continue # Skip if None
+                collection_prefix = prefix_obj.get('Prefix')
+                potential_collection_id = collection_prefix.rstrip('/').rsplit('/', 1)[-1]
+                logger.debug(f"Checking prefix {collection_prefix} as potential collection '{potential_collection_id}'")
 
-            # --- If not identified as a collection, check if it represents a Bundle --- 
-            # Bundles need context of the collection_id. We assume the collection_id is the first part of the overall prefix.
-            if not is_collection:
-                collection_id_context = prefix.rstrip('/') # Get the base search prefix (e.g., 'zaghawa')
-                if not collection_id_context: # Handle root search
-                     # Maybe extract from the current_prefix itself if pattern allows? Risky.
-                     logger.warning(f"Cannot determine collection context for bundle check on prefix {current_prefix} when searching from root.")
-                     continue
-                
-                bundle_id = potential_id # Assume the potential_id is the bundle_id
                 try:
-                    bundle_xml_key = self.form_bundle_xml_path(collection_id_context, bundle_id)
-                    # Ensure the formed key starts with the current_prefix
-                    if bundle_xml_key.startswith(current_prefix):
-                        logger.debug(f"Checking for bundle XML at: {bundle_xml_key} (context: {collection_id_context})")
-                        self.s3_client.head_object(Bucket=bucket, Key=bundle_xml_key)
-                        result['potential_bundle_xmls'].append(bundle_xml_key)
-                        logger.info(f"SUCCESS: Identified as Bundle via XML: {bundle_xml_key}")
+                    collection_xml_key = self.form_collection_xml_path(potential_collection_id)
+                    # Check if the formed key belongs to this prefix
+                    if collection_xml_key.startswith(collection_prefix):
+                        logger.debug(f"Checking for collection XML at: {collection_xml_key}")
+                        self.s3_client.head_object(Bucket=bucket, Key=collection_xml_key)
+                        result['potential_collection_xmls'].append(collection_xml_key)
+                        logger.info(f"SUCCESS: Identified Collection via XML: {collection_xml_key}")
+
+                        # --- Pass 2: Find Bundles within this Collection --- 
+                        logger.debug(f"Searching for bundles within collection prefix: {collection_prefix}")
+                        bundle_page_iterator = paginator.paginate(Bucket=bucket, Prefix=collection_prefix, Delimiter='/')
+                        bundle_prefixes = list(bundle_page_iterator.search('CommonPrefixes'))
+                        logger.debug(f"Found {len(bundle_prefixes)} potential bundle prefixes under {collection_prefix}: {[p.get('Prefix') for p in bundle_prefixes if p]}")
+                        
+                        for bundle_prefix_obj in bundle_prefixes:
+                            if not bundle_prefix_obj: continue # Skip if None
+                            bundle_prefix = bundle_prefix_obj.get('Prefix')
+                            potential_bundle_id = bundle_prefix.rstrip('/').rsplit('/', 1)[-1]
+                            logger.debug(f"Checking prefix {bundle_prefix} as potential bundle '{potential_bundle_id}'")
+
+                            # Skip if bundle ID is same as collection ID (inner folder case)
+                            if potential_bundle_id == potential_collection_id:
+                                logger.debug(f"Skipping prefix {bundle_prefix} as potential_bundle_id matches potential_collection_id")
+                                continue
+                                
+                            try:
+                                bundle_xml_key = self.form_bundle_xml_path(potential_collection_id, potential_bundle_id)
+                                # Check if the formed key belongs to this bundle prefix
+                                if bundle_xml_key.startswith(bundle_prefix):
+                                     logger.debug(f"Checking for bundle XML at: {bundle_xml_key}")
+                                     self.s3_client.head_object(Bucket=bucket, Key=bundle_xml_key)
+                                     result['potential_bundle_xmls'].append(bundle_xml_key)
+                                     logger.info(f"SUCCESS: Identified Bundle via XML: {bundle_xml_key}")
+                                else:
+                                     logger.debug(f"Skipping bundle check for {potential_bundle_id} as formed path {bundle_xml_key} doesn't match prefix {bundle_prefix}")
+                            except ClientError as bundle_e:
+                                if bundle_e.response.get('Error', {}).get('Code', 'Unknown') == '404':
+                                    logger.debug(f"Not a bundle: Bundle XML check failed (404) for {bundle_xml_key}")
+                                else:
+                                     error_code = bundle_e.response.get('Error', {}).get('Code', 'Unknown')
+                                     logger.warning(f"WARN: Bundle XML check failed unexpectedly for {bundle_xml_key}. Error: {error_code}")
+                            except Exception as bundle_e:
+                                logger.error(f"ERROR: Unexpected error checking bundle XML for {potential_bundle_id}: {bundle_e}", exc_info=True)
+                        # --- End Bundle Search --- 
+                        
                     else:
-                         logger.debug(f"Skipping bundle check for {bundle_id} as formed path {bundle_xml_key} doesn't match prefix {current_prefix}")
-                except ClientError as e:
-                    if e.response.get('Error', {}).get('Code', 'Unknown') == '404':
-                        logger.debug(f"Not a bundle: Bundle XML check failed (404) for {bundle_xml_key}")
+                         logger.debug(f"Skipping collection check for {potential_collection_id} as formed path {collection_xml_key} doesn't match prefix {collection_prefix}")
+                except ClientError as coll_e:
+                    if coll_e.response.get('Error', {}).get('Code', 'Unknown') == '404':
+                        logger.debug(f"Not a collection: Collection XML check failed (404) for {collection_xml_key}")
                     else:
-                        error_code = e.response.get('Error', {}).get('Code', 'Unknown')
-                        logger.warning(f"WARN: Bundle XML check failed unexpectedly for {bundle_xml_key}. Error: {error_code}")
-                except Exception as e:
-                    logger.error(f"ERROR: Unexpected error checking bundle XML for {bundle_id}: {e}", exc_info=True)
-        
+                         error_code = coll_e.response.get('Error', {}).get('Code', 'Unknown')
+                         logger.warning(f"WARN: Collection XML check failed unexpectedly for {collection_xml_key}. Error: {error_code}")
+                except Exception as coll_e:
+                     logger.error(f"ERROR: Unexpected error checking collection XML for {potential_collection_id}: {coll_e}", exc_info=True)
+            # --- End Collection Search --- 
+            
+        except Exception as outer_e:
+            logger.error(f"ERROR: Failed during S3 listing for prefix '{prefix}': {outer_e}", exc_info=True)
+
         logger.info(f"Finished S3 XML discovery. Found {len(result['potential_collection_xmls'])} collections, {len(result['potential_bundle_xmls'])} bundles.")
         return result
 

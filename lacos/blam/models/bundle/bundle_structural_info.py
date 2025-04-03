@@ -10,6 +10,13 @@ class BundleStructuralInfo(StructuralInfo):
     is_member_of_collection = models.ForeignKey('blam.Collection', on_delete=models.CASCADE, related_name='bundle_collection')
     additional_metadata_files = models.ManyToManyField('BundleAdditionalMetadataFile', blank=True)
     bundle_topics = models.ManyToManyField('BundleTopic', blank=True)
+    resources = models.OneToOneField(
+        'BundleResources',
+        on_delete=models.SET_NULL,  # Or CASCADE if resources should be deleted with struct info
+        null=True,
+        blank=True,
+        related_name='structural_info'
+    )
     
     class Meta:
         verbose_name = "Bundle Structural Info"
