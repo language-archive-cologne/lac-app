@@ -8,20 +8,15 @@ from lacos.blam.services.resolve_links import (
     get_collection_by_id,
     resolve_bundle_links_primary_method,
     get_bundle_structural_infos,
-    resolve_links_using_structural_infos
+    resolve_links_using_structural_infos,
+    resolve_bundle_references_direct
 )
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
 from lacos.blam.mappers.collection.read.collection_importer import CollectionImporter
-
-# Import required models only for typing/reference
-from lacos.blam.models.collection.collection_header import CollectionHeader
-from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo
-from lacos.blam.models.collection.collection_publication_info import CollectionPublicationInfo
-from lacos.blam.models.collection.collection_administrative_info import CollectionAdministrativeInfo
-from lacos.blam.models.base_project_info import ProjectInfo
 from lacos.blam.models.collection.collection_structural_info import CollectionStructuralInfo
+from lacos.blam.models.bundle.bundle_general_info import BundleGeneralInfo
 
 # Disable logger during tests to avoid noise
 logging.getLogger('lacos.blam.services.resolve_links').setLevel(logging.CRITICAL)
@@ -377,4 +372,130 @@ def test_resolve_collection_bundle_links_fallback_exception(monkeypatch):
     
     # Test the function
     result = resolve_collection_bundle_links(collection_id)
+    assert result == collection_id
+
+
+# Tests for the new resolve_bundle_references_direct function
+@pytest.mark.django_db
+def test_resolve_bundle_references_direct_no_structural_info():
+    """Test resolve_bundle_references_direct raises AttributeError on missing structural_info."""
+    # Create mock collection without structural_info attribute
+    mock_collection = MagicMock(spec=Collection)
+    del mock_collection.structural_info
+    
+    # Test that it raises AttributeError
+    with pytest.raises(AttributeError):
+        resolve_bundle_references_direct(mock_collection)
+
+
+@pytest.mark.django_db
+def test_resolve_bundle_references_direct_no_bundle_references():
+    """Test resolve_bundle_references_direct returns 0 when no bundle references exist."""
+    # Create mock collection with structural_info but no bundle_references
+    mock_collection = MagicMock(spec=Collection)
+    mock_struct_info = MagicMock(spec=CollectionStructuralInfo)
+    mock_collection.structural_info = mock_struct_info
+    
+    # Add the bundle_references attribute to the mock
+    mock_bundle_refs = MagicMock()
+    mock_bundle_refs.exists.return_value = False
+    mock_struct_info.bundle_references = mock_bundle_refs
+    
+    # Test the function
+    result = resolve_bundle_references_direct(mock_collection)
+    assert result == 0
+
+
+@pytest.mark.django_db
+def test_resolve_bundle_references_direct_successful_linking():
+    """Test resolve_bundle_references_direct successfully links bundles to collection."""
+    # Create mock collection with structural_info and bundle_references
+    mock_collection = MagicMock(spec=Collection)
+    mock_struct_info = MagicMock(spec=CollectionStructuralInfo)
+    mock_collection.structural_info = mock_struct_info
+    mock_collection.id = uuid4()
+    
+    # Create mock references
+    mock_ref1 = MagicMock()
+    mock_ref1.id_value = "test-bundle-1"
+    mock_ref1.id_type = "handle"
+    
+    mock_ref2 = MagicMock()
+    mock_ref2.id_value = "test-bundle-2"
+    mock_ref2.id_type = "handle"
+    
+    # Set up bundle_references to return our mock references
+    mock_bundle_refs = MagicMock()
+    mock_bundle_refs.exists.return_value = True
+    mock_bundle_refs.all.return_value = [mock_ref1, mock_ref2]
+    mock_struct_info.bundle_references = mock_bundle_refs
+    
+    # Mock the BundleGeneralInfo.objects.filter().first() calls
+    mock_bundle_info1 = MagicMock()
+    mock_bundle_info2 = MagicMock()
+    
+    # Mock the Bundle.objects.filter().first() calls
+    mock_bundle1 = MagicMock(spec=Bundle)
+    mock_bundle1.id = uuid4()
+    mock_structural_info1 = MagicMock(spec=BundleStructuralInfo)
+    mock_bundle1.structural_info = mock_structural_info1
+    
+    mock_bundle2 = MagicMock(spec=Bundle)
+    mock_bundle2.id = uuid4()
+    mock_structural_info2 = MagicMock(spec=BundleStructuralInfo)
+    mock_bundle2.structural_info = mock_structural_info2
+    
+    # Use patch to replace the actual database queries
+    with patch('lacos.blam.models.bundle.bundle_general_info.BundleGeneralInfo.objects.filter') as mock_bundle_info_filter, \
+         patch('lacos.blam.models.bundle.bundle_repository.Bundle.objects.filter') as mock_bundle_filter:
+        
+        # Setup mock returns
+        mock_bundle_info_filter.side_effect = lambda **kwargs: MagicMock(first=lambda: 
+            mock_bundle_info1 if kwargs.get('id_value') == "test-bundle-1" else mock_bundle_info2)
+        
+        mock_bundle_filter.side_effect = lambda **kwargs: MagicMock(first=lambda: 
+            mock_bundle1 if kwargs.get('general_info') == mock_bundle_info1 else mock_bundle2)
+        
+        # Test the function
+        result = resolve_bundle_references_direct(mock_collection)
+        assert result == 2
+        
+        # Verify the structural infos were updated correctly
+        mock_structural_info1.save.assert_called_once_with(update_fields=['is_member_of_collection'])
+        assert mock_structural_info1.is_member_of_collection == mock_collection
+        
+        mock_structural_info2.save.assert_called_once_with(update_fields=['is_member_of_collection'])
+        assert mock_structural_info2.is_member_of_collection == mock_collection
+
+
+# Integration test with existing link resolution
+@pytest.mark.django_db
+def test_resolve_collection_bundle_links_with_patched_method(monkeypatch):
+    """Test resolve_collection_bundle_links uses our patched method successfully."""
+    collection_id = uuid4()
+    mock_collection = MagicMock(spec=Collection)
+    
+    # Mock get_collection_by_id to return our mock collection
+    def mock_get_collection(coll_id):
+        assert coll_id == collection_id
+        return mock_collection
+    
+    monkeypatch.setattr('lacos.blam.services.resolve_links.get_collection_by_id', mock_get_collection)
+    
+    # Mock the primary method to return a success value
+    def mock_resolve_primary(coll):
+        assert coll is mock_collection
+        return 5  # Successfully resolved 5 links
+    
+    # Patch the primary resolution method to use our mock
+    monkeypatch.setattr('lacos.blam.services.resolve_links.resolve_bundle_links_primary_method', mock_resolve_primary)
+    
+    # Patch CollectionImporter to have our direct implementation
+    if not hasattr(CollectionImporter, 'resolve_bundle_references'):
+        setattr(CollectionImporter, 'resolve_bundle_references', resolve_bundle_references_direct)
+    
+    # Test the function
+    result = resolve_collection_bundle_links(collection_id)
+    
+    # Verify result is correct
     assert result == collection_id

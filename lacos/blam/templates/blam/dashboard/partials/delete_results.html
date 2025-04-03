@@ -1,0 +1,67 @@
+<div class="bg-white rounded-lg shadow-lg p-6">
+    <div class="flex justify-between items-start">
+        <h3 class="text-xl font-semibold text-gray-900">Database Deletion Results</h3>
+        <button class="text-gray-500 hover:text-gray-700" onclick="this.parentElement.parentElement.remove(); document.getElementById('confirm-modal').innerHTML = ''; document.getElementById('confirm-modal').classList.add('hidden');">
+            <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+            </svg>
+        </button>
+    </div>
+    
+    <div class="mt-4">
+        <div class="p-4 bg-blue-100 text-blue-700 rounded mb-4">{{ message }}</div>
+        
+        <h5 class="font-medium mb-2">Deleted Items:</h5>
+        <ul class="mb-4 divide-y divide-gray-200 border rounded">
+            {% for key, value in deleted.items %}
+                <li class="px-4 py-2 flex justify-between items-center">
+                    <span>{{ key|title|cut:"_" }}</span>
+                    <span class="bg-red-600 text-white px-2 py-1 rounded-full text-xs">{{ value }}</span>
+                </li>
+            {% endfor %}
+        </ul>
+        
+        {% if operation == 'collections' and orphaned %}
+            <h5 class="font-medium mb-2">Orphaned Items:</h5>
+            <ul class="mb-4 divide-y divide-gray-200 border rounded">
+                {% for key, value in orphaned.items %}
+                    <li class="px-4 py-2 flex justify-between items-center">
+                        <span>{{ key|title|cut:"_" }}</span>
+                        <span class="bg-yellow-600 text-white px-2 py-1 rounded-full text-xs">{{ value }}</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+        
+        {% if operation == 'bundles' and affected %}
+            <h5 class="font-medium mb-2">Affected Collections:</h5>
+            <ul class="mb-4 divide-y divide-gray-200 border rounded">
+                {% for key, value in affected.items %}
+                    <li class="px-4 py-2 flex justify-between items-center">
+                        <span>{{ key|title|cut:"_" }}</span>
+                        <span class="bg-yellow-600 text-white px-2 py-1 rounded-full text-xs">{{ value }}</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+        
+        {% if errors %}
+            <div class="mt-4">
+                <h5 class="font-medium mb-2">Errors:</h5>
+                <ul class="divide-y divide-gray-200 border rounded">
+                    {% for error in errors %}
+                        <li class="px-4 py-2 bg-red-100 text-red-700">{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+    </div>
+    
+    <div class="mt-5 flex justify-end">
+        <button 
+            class="px-4 py-2 bg-gray-500 text-white text-base font-medium rounded-md shadow-sm hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-300"
+            onclick="location.reload()">
+            Refresh Page
+        </button>
+    </div>
+</div> 

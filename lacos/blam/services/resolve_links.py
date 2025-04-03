@@ -1,7 +1,9 @@
 from typing import Optional, List, Tuple
 from uuid import UUID
 from lacos.blam.models.collection.collection_repository import Collection
+from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
+from lacos.blam.models.bundle.bundle_general_info import BundleGeneralInfo
 from lacos.blam.mappers.collection.read.collection_importer import CollectionImporter
 import logging
 
@@ -156,3 +158,86 @@ def resolve_collection_bundle_links(collection_id: Optional[UUID]) -> Optional[U
         
     # Return collection_id to pass down the pipeline regardless of success/failure
     return collection_id
+
+def resolve_bundle_references_direct(collection: Collection) -> int:
+    """
+    Direct implementation of the missing CollectionImporter.resolve_bundle_references method.
+    Links bundles to collections based on structural information.
+    
+    Args:
+        collection: The Collection object to resolve bundle references for
+        
+    Returns:
+        Number of successfully linked bundles
+        
+    Raises:
+        AttributeError: If the collection doesn't have the expected structure
+    """
+    if not collection or not hasattr(collection, 'structural_info'):
+        raise AttributeError("Collection missing structural_info attribute")
+        
+    # Get the collection's structural info
+    structural_info = collection.structural_info
+    
+    # Check if there are bundle references to resolve
+    if not hasattr(structural_info, 'bundle_references') or not structural_info.bundle_references.exists():
+        logger.info(f"No bundle references found for collection {collection.id}")
+        return 0
+        
+    # Counter for successful links
+    linked_count = 0
+    
+    # Process each bundle reference
+    for ref in structural_info.bundle_references.all():
+        try:
+            # Get identifier information from the reference
+            id_value = getattr(ref, 'id_value', None)
+            id_type = getattr(ref, 'id_type', None)
+            
+            if not id_value or not id_type:
+                logger.warning(f"Bundle reference missing id_value or id_type for collection {collection.id}")
+                continue
+                
+            # Find the bundle using its identifier
+            bundle = None
+            try:
+                # Try to find the bundle through its header/general_info
+                bundle_info = BundleGeneralInfo.objects.filter(id_value=id_value, id_type=id_type).first()
+                if bundle_info:
+                    bundle = Bundle.objects.filter(general_info=bundle_info).first()
+            except Exception as e:
+                logger.warning(f"Error finding bundle with identifier {id_value} ({id_type}): {e}")
+                
+            if not bundle:
+                logger.warning(f"Could not find bundle with identifier {id_value} ({id_type})")
+                continue
+                
+            # Check if bundle has structural info
+            if not hasattr(bundle, 'structural_info') or not bundle.structural_info:
+                logger.warning(f"Bundle {bundle.id} missing structural_info")
+                continue
+                
+            # Link the bundle to the collection
+            bundle.structural_info.is_member_of_collection = collection
+            bundle.structural_info.save(update_fields=['is_member_of_collection'])
+            linked_count += 1
+            
+            logger.info(f"Linked bundle {bundle.id} to collection {collection.id}")
+                
+        except Exception as e:
+            logger.error(f"Error resolving bundle reference for collection {collection.id}: {e}", exc_info=True)
+            
+    return linked_count
+
+# Patch the CollectionImporter class to add the missing method
+def patch_collection_importer():
+    """
+    Patch the CollectionImporter class with our direct implementation
+    of resolve_bundle_references if it doesn't already exist.
+    """
+    if not hasattr(CollectionImporter, 'resolve_bundle_references'):
+        setattr(CollectionImporter, 'resolve_bundle_references', resolve_bundle_references_direct)
+        logger.info("Patched CollectionImporter with resolve_bundle_references method")
+
+# Apply the patch when this module is imported
+patch_collection_importer()
