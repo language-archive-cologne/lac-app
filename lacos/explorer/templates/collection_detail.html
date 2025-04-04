@@ -1,0 +1,36 @@
+{% extends "explorer_base.html" %}
+{% load i18n %}
+
+{% block title %}{% blocktranslate with name=collection.name %}Collection: {{ name }}{% endblocktranslate %} - {{ block.super }}{% endblock title %}
+
+{% block explorer_content %}
+  {# Optional: Add Breadcrumbs here #}
+  <div class="mb-4">
+    <a href="{% url 'explorer:collection_list' %}" class="text-blue-600 hover:underline">&larr; {% translate "Back to Collections" %}</a>
+  </div>
+
+  <h2 class="text-xl font-medium text-gray-700 mb-2">{{ collection.name }}</h2>
+  {% if collection.description %}
+    <p class="text-gray-600 mb-4">{{ collection.description }}</p>
+  {% endif %}
+
+  <h3 class="text-lg font-medium text-gray-700 mb-3">{% translate "Bundles in this Collection" %}</h3>
+
+  {% with bundles=collection.bundles.all %} {# Or use bundle_list if passed separately #}
+    {% if bundles %}
+      <ul class="space-y-2">
+        {% for bundle in bundles %}
+          <li class="bg-white p-3 rounded shadow-sm hover:shadow-md transition-shadow duration-200">
+            <a href="{{ bundle.get_absolute_url }}" class="text-blue-600 hover:underline">
+              {{ bundle.name }} {# Assuming bundle has a 'name' attribute #}
+            </a>
+            {# Add more bundle details if needed #}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-gray-500">{% translate "No bundles found in this collection." %}</p>
+    {% endif %}
+  {% endwith %}
+
+{% endblock explorer_content %}

@@ -8,8 +8,6 @@
   <h1 class="text-2xl font-bold text-gray-800 mb-4">Welcome to Language Archive Cologne</h1>
   
   <p class="text-gray-600 mb-4">
-    This is a sample home page that demonstrates how to extend the base template.
-    You can customize this page with your own content.
   </p>
   
   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
@@ -17,7 +15,7 @@
     <div class="bg-gray-50 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
       <h2 class="text-xl font-semibold text-gray-700 mb-2">Browse Collections</h2>
       <p class="text-gray-600 mb-4">Explore our language collections and resources.</p>
-      <a href="#" class="text-blue-600 hover:text-blue-800 font-medium">View Collections →</a>
+      <a href="{% url 'explorer:collection_list' %}" class="text-blue-600 hover:text-blue-800 font-medium">View Collections →</a>
     </div>
     
     <!-- Sample card 2 -->
