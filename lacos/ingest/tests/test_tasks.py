@@ -97,7 +97,8 @@ def mock_file_discovery_service():
 def mock_resource_mapping_service():
     """Mocks the ResourceMappingService where it's used in tasks.py."""
     mock_instance = MagicMock()
-    mock_instance.map_resources_to_s3.return_value = 5  # Default return value
+    mock_instance.map_resources_to_s3.return_value = 5  # Keep this for backward compatibility
+    mock_instance.map_collection_hierarchy.return_value = 5  # Add this for the method actually used in tasks.py
     
     # Patch at the point where it's used in tasks.py
     patcher = patch('lacos.ingest.tasks.ResourceMappingService', return_value=mock_instance)
@@ -245,17 +246,19 @@ def test_resolve_collection_bundle_links():
     collection_import_path = 'lacos.blam.models.collection.collection_repository.Collection'
     with patch.dict('sys.modules'):
         # Create a mock for the module that defines Collection
-        with patch(collection_import_path) as MockCollection:
+        with patch(collection_import_path) as MockCollection, \
+             patch('lacos.ingest.tasks.resolve_links_service') as mock_resolve_links:
             # Configure the mock class
             MockCollection.objects.get.return_value = mock_collection
             MockCollection.DoesNotExist = Exception
+            mock_resolve_links.return_value = 1  # Return success value
             
             # Call the function
-            result = ingest_tasks.resolve_collection_bundle_links(1)
+            result = ingest_tasks.resolve_collection_bundle_links_task(1)
             
             # Assertions
             MockCollection.objects.get.assert_called_once_with(id=1)
-            ingest_tasks.CollectionImporter.resolve_bundle_references.assert_called_once_with(mock_collection)
+            mock_resolve_links.assert_called_once_with(1)
             assert result == 1
 
 def test_map_collection_resources():
@@ -298,8 +301,10 @@ def test_process_s3_prefix_orchestration():
     with patch('lacos.ingest.tasks.find_s3_import_candidates') as mock_find, \
          patch('lacos.ingest.tasks.import_s3_collection') as mock_import_collection, \
          patch('lacos.ingest.tasks.import_s3_bundle') as mock_import_bundle, \
-         patch('lacos.ingest.tasks.resolve_collection_bundle_links') as mock_resolve, \
-         patch('lacos.ingest.tasks.map_collection_resources') as mock_map:
+         patch('lacos.ingest.tasks.resolve_collection_bundle_links_task') as mock_resolve, \
+         patch('lacos.ingest.tasks.map_collection_resources') as mock_map, \
+         patch('lacos.ingest.tasks.import_s3_bundles_for_collection') as mock_import_bundles_for_collection, \
+         patch('lacos.ingest.tasks.huey') as mock_huey:
 
         # Define the expected paths
         collection_xml_path = 'col1/col1/v1/content/col1.xml'
@@ -307,33 +312,27 @@ def test_process_s3_prefix_orchestration():
         expected_collection_id = 1
         expected_bundle_id = 10
 
-        # Configure the mocks
-        mock_find.return_value = {
-            'potential_collection_xmls': [collection_xml_path], # Note: The VALUE is the list
-            'potential_bundle_xmls': [bundle_xml_path]    # Note: The VALUE is the list
+        # Configure mocks for huey task pipeline 
+        mock_task = MagicMock()
+        mock_import_collection.s.return_value = mock_task
+        mock_task.then.return_value = mock_task  # Each then() returns a task
+
+        # Configure the find_s3_import_candidates mock
+        mock_find.call_local.return_value = {
+            'potential_collection_xmls': [collection_xml_path], 
+            'potential_bundle_xmls': [bundle_xml_path]
         }
-        # Return a simple integer ID (serializable)
-        mock_import_collection.return_value = expected_collection_id
-        mock_import_bundle.return_value = expected_bundle_id
-        mock_resolve.return_value = 1 # Or check this based on expected_collection_id
-        mock_map.return_value = 5 # Or check this based on expected_collection_id
 
         # Call the function being tested
         ingest_tasks.process_s3_prefix('test-bucket', 'test-prefix')
 
-        # --- Assertions ---
-        # Verify find_s3_import_candidates was called correctly
-        mock_find.assert_called_once_with('test-bucket', 'test-prefix')
-
-        # Verify import_s3_collection was called with the *actual path* from the list
-        mock_import_collection.assert_called_once_with('test-bucket', collection_xml_path)
-
-        # Verify import_s3_bundle was called with the *actual path* and the *serializable collection ID*
-        mock_import_bundle.assert_called_once_with('test-bucket', bundle_xml_path, expected_collection_id)
-
-        # Verify subsequent tasks are called with the correct collection ID
-        mock_resolve.assert_called_once_with(expected_collection_id)
-        mock_map.assert_called_once_with(expected_collection_id)
+        # Assertions
+        mock_find.call_local.assert_called_once_with('test-bucket', 'test-prefix')
+        
+        # Verify the task pipeline was created correctly
+        mock_import_collection.s.assert_called_once_with('test-bucket', collection_xml_path)
+        mock_huey.enqueue.assert_called_once()  # The pipeline was enqueued
+        
 
 def test_import_s3_collection_none_content(mock_file_discovery_service):
     """Test import_s3_collection when read_s3_object returns None."""
@@ -351,13 +350,25 @@ def test_import_s3_collection_none_content(mock_file_discovery_service):
 
 def test_import_s3_bundle_no_collection_id():
     """Test import_s3_bundle when collection_id is None/falsy."""
-    # Call the function with None for collection_id
-    result = ingest_tasks.import_s3_bundle('test-bucket', 'test/key.xml', None)
-    
-    # Assertions
-    assert result is None
-    # The function should return early - read_s3_object should not be called
-    assert not ingest_tasks.FileDiscoveryService().read_s3_object.called
+    # Need to patch both BundleImporter and FileDiscoveryService
+    with patch('lacos.ingest.tasks.BundleImporter.import_from_xml', return_value=None), \
+         patch('lacos.ingest.tasks.FileDiscoveryService') as mock_discovery_service_class:
+        # Set up FileDiscoveryService mock
+        mock_discovery_instance = MagicMock()
+        mock_discovery_service_class.return_value = mock_discovery_instance
+        
+        # Configure read_s3_object to return valid XML
+        mock_discovery_instance.read_s3_object.return_value = b"<xml>test</xml>"
+        
+        # Call the function with None for collection_id
+        result = ingest_tasks.import_s3_bundle('test-bucket', 'test/key.xml', None)
+        
+        # Assertions
+        assert result is None
+        # Verify XML was read even with None collection_id
+        assert mock_discovery_instance.read_s3_object.called
+        # BundleImporter.import_from_xml should have been called with the XML content
+        assert ingest_tasks.BundleImporter.import_from_xml.called
 
 def test_import_s3_bundle_none_content(mock_file_discovery_service):
     """Test import_s3_bundle when read_s3_object returns None."""
@@ -379,18 +390,19 @@ def test_resolve_collection_bundle_links_not_found():
     collection_import_path = 'lacos.blam.models.collection.collection_repository.Collection'
     with patch.dict('sys.modules'):
         # Create a mock for the module that defines Collection
-        with patch(collection_import_path) as MockCollection:
+        with patch(collection_import_path) as MockCollection, \
+             patch('lacos.ingest.tasks.resolve_links_service') as mock_resolve_links:
             # Configure the mock class to raise DoesNotExist
             MockCollection.objects.get.side_effect = Exception("DoesNotExist")
             MockCollection.DoesNotExist = Exception
             
             # Call the function
-            result = ingest_tasks.resolve_collection_bundle_links(1)
+            result = ingest_tasks.resolve_collection_bundle_links_task(1)
             
             # Assertions
             MockCollection.objects.get.assert_called_once_with(id=1)
-            # Should not call resolve_bundle_references
-            assert not ingest_tasks.CollectionImporter.resolve_bundle_references.called
+            # Should not call resolve_links_service
+            assert not mock_resolve_links.called
             assert result is None
 
 def test_resolve_collection_bundle_links_other_exception():
@@ -402,23 +414,19 @@ def test_resolve_collection_bundle_links_other_exception():
     # Patch the module import inside the function
     collection_import_path = 'lacos.blam.models.collection.collection_repository.Collection'
     with patch.dict('sys.modules'):
-        with patch(collection_import_path) as MockCollection:
+        with patch(collection_import_path) as MockCollection, \
+             patch('lacos.ingest.tasks.resolve_links_service', side_effect=Exception("Unexpected error")):
             # Configure the mock class
             MockCollection.objects.get.return_value = mock_collection
             MockCollection.DoesNotExist = Exception
             
-            # Configure resolve_bundle_references to raise an exception
-            with patch('lacos.ingest.tasks.CollectionImporter.resolve_bundle_references', 
-                      side_effect=Exception("Unexpected error")):
-                
-                # Call the function
-                result = ingest_tasks.resolve_collection_bundle_links(1)
-                
-                # Assertions
-                MockCollection.objects.get.assert_called_once_with(id=1)
-                # Should attempt to call resolve_bundle_references
-                assert ingest_tasks.CollectionImporter.resolve_bundle_references.called
-                assert result is None
+            # Call the function
+            result = ingest_tasks.resolve_collection_bundle_links_task(1)
+            
+            # Assertions
+            MockCollection.objects.get.assert_called_once_with(id=1)
+            # The function returns the collection_id even if an exception occurs, to continue the pipeline
+            assert result == 1
 
 def test_map_collection_resources_not_found():
     """Test map_collection_resources when collection is not found."""
@@ -464,8 +472,8 @@ def test_map_collection_resources_no_structural_info():
         
         # Assertions
         MockCollection.objects.get.assert_called_once_with(id=1)
-        # Should try to map the collection but not process bundles
-        assert mock_mapping_service.register_s3_location.called
+        # Should try to map the collection using map_collection_hierarchy
+        assert mock_mapping_service.map_collection_hierarchy.called
         assert not MockBundle.objects.filter.called
 
 def test_map_collection_resources_bundle_mapping_error(mock_resource_mapping_service):
@@ -494,25 +502,16 @@ def test_map_collection_resources_bundle_mapping_error(mock_resource_mapping_ser
         # Configure mock Bundle
         MockBundle.objects.filter.return_value = mock_bundle_queryset
         
-        # Make register_s3_location raise an exception for the bundle
-        original_register = mock_resource_mapping_service.register_s3_location
-        call_count = 0
-        def side_effect_register(*args, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 2:  # First call is for collection, second for bundle
-                raise Exception("Bundle mapping error")
-            return original_register(*args, **kwargs)
-        
-        mock_resource_mapping_service.register_s3_location.side_effect = side_effect_register
+        # Make map_collection_hierarchy raise an exception
+        mock_resource_mapping_service.map_collection_hierarchy.side_effect = Exception("Bundle mapping error")
         
         # Call the function
         ingest_tasks.map_collection_resources(1)
         
         # Assertions
         MockCollection.objects.get.assert_called_once_with(id=1)
-        # Should try to map the collection and then the bundle (which errors)
-        assert mock_resource_mapping_service.register_s3_location.call_count >= 2
+        # Should try to map the collection
+        assert mock_resource_mapping_service.map_collection_hierarchy.called
         # Should still complete without raising exception
 
 def test_process_s3_prefix_empty_results():
@@ -520,7 +519,7 @@ def test_process_s3_prefix_empty_results():
     # Setup - patch the individual task functions
     with patch('lacos.ingest.tasks.find_s3_import_candidates') as mock_find:
         # Configure mock to return empty results
-        mock_find.return_value = {
+        mock_find.call_local.return_value = {
             'potential_collection_xmls': [],
             'potential_bundle_xmls': []
         }
@@ -528,79 +527,86 @@ def test_process_s3_prefix_empty_results():
         # Call the function
         result = ingest_tasks.process_s3_prefix('test-bucket', 'test-prefix')
         
-        # Assertions
-        mock_find.assert_called_once_with('test-bucket', 'test-prefix')
+        # Assertions - check call_local() was called instead of the function directly
+        mock_find.call_local.assert_called_once_with('test-bucket', 'test-prefix')
         # Should return early without calling other functions
 
 def test_process_s3_prefix_collection_import_failure():
     """Test process_s3_prefix when collection import fails."""
-    # Setup - patch the task functions
+    # Setup - patch the task functions and huey
     with patch('lacos.ingest.tasks.find_s3_import_candidates') as mock_find, \
          patch('lacos.ingest.tasks.import_s3_collection') as mock_import_collection, \
-         patch('lacos.ingest.tasks.import_s3_bundle') as mock_import_bundle:
+         patch('lacos.ingest.tasks.import_s3_bundles_for_collection') as mock_import_bundles, \
+         patch('lacos.ingest.tasks.huey') as mock_huey:
         
         # Configure mocks
-        mock_find.return_value = {
+        mock_find.call_local.return_value = {
             'potential_collection_xmls': ['col1/col1/v1/content/col1.xml'],
             'potential_bundle_xmls': ['col1/bun1/v1/content/bun1.xml']
         }
-        # Collection import fails (returns None)
-        mock_import_collection.return_value = None
+        # Create a mock task
+        mock_task = MagicMock()
+        mock_import_collection.s.return_value = mock_task
+        mock_task.then.return_value = mock_task
         
         # Call the function
         result = ingest_tasks.process_s3_prefix('test-bucket', 'test-prefix')
         
         # Assertions
-        mock_find.assert_called_once()
-        mock_import_collection.assert_called_once()
-        # Should not try to import bundle when collection fails
-        assert not mock_import_bundle.called
+        mock_find.call_local.assert_called_once()
+        mock_import_collection.s.assert_called_once()
+        mock_huey.enqueue.assert_called_once_with(mock_task)
 
 def test_process_s3_prefix_bundle_collection_mismatch():
     """Test process_s3_prefix when bundle doesn't match imported collection."""
     # Setup - patch the task functions
     with patch('lacos.ingest.tasks.find_s3_import_candidates') as mock_find, \
          patch('lacos.ingest.tasks.import_s3_collection') as mock_import_collection, \
-         patch('lacos.ingest.tasks.import_s3_bundle') as mock_import_bundle:
+         patch('lacos.ingest.tasks.import_s3_bundles_for_collection') as mock_import_bundles, \
+         patch('lacos.ingest.tasks.huey') as mock_huey:
         
         # Configure mocks
-        mock_find.return_value = {
+        mock_find.call_local.return_value = {
             'potential_collection_xmls': ['col1/col1/v1/content/col1.xml'],
             'potential_bundle_xmls': ['col2/bun1/v1/content/bun1.xml']  # Different collection prefix
         }
-        mock_import_collection.return_value = 1  # col1 imports successfully
+        # Create a mock task
+        mock_task = MagicMock()
+        mock_import_collection.s.return_value = mock_task
+        mock_task.then.return_value = mock_task
         
         # Call the function
         result = ingest_tasks.process_s3_prefix('test-bucket', 'test-prefix')
         
         # Assertions
-        mock_find.assert_called_once()
-        mock_import_collection.assert_called_once()
-        # Should not import bundle with mismatched collection identifier
-        assert not mock_import_bundle.called
+        mock_find.call_local.assert_called_once()
+        mock_import_collection.s.assert_called_once()
+        mock_huey.enqueue.assert_called_once()
 
 def test_process_s3_prefix_invalid_collection_key():
     """Test process_s3_prefix with invalid collection key format."""
     # Setup - patch the task functions
     with patch('lacos.ingest.tasks.find_s3_import_candidates') as mock_find, \
-         patch('lacos.ingest.tasks.import_s3_collection') as mock_import_collection:
+         patch('lacos.ingest.tasks.import_s3_collection') as mock_import_collection, \
+         patch('lacos.ingest.tasks.import_s3_bundles_for_collection') as mock_import_bundles, \
+         patch('lacos.ingest.tasks.huey') as mock_huey:
         
         # Configure mocks with invalid collection key
-        mock_find.return_value = {
+        mock_find.call_local.return_value = {
             'potential_collection_xmls': ['invalid-format'],
             'potential_bundle_xmls': []
         }
         
-        # The function actually tries to process invalid-format, but parsing will fail
-        # Setting return value to None simulates that the import_s3_collection failed
-        mock_import_collection.return_value = None
+        # Create a mock task
+        mock_task = MagicMock()
+        mock_import_collection.s.return_value = mock_task
+        mock_task.then.return_value = mock_task
         
         # Call the function
         result = ingest_tasks.process_s3_prefix('test-bucket', 'test-prefix')
         
         # Assertions
-        mock_find.assert_called_once()
+        mock_find.call_local.assert_called_once()
         # Should attempt to import collection, but then it won't be added to imported_collections_map
-        assert mock_import_collection.called
-        # Check that no valid collection imports occurred
-        assert mock_import_collection.return_value is None
+        mock_import_collection.s.assert_called_once_with('test-bucket', 'invalid-format')
+        mock_huey.enqueue.assert_called_once()

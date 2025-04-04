@@ -112,7 +112,7 @@ def import_s3_bundle(bucket: str, s3_key: str, collection_id: UUID = None) -> Op
         try:
             from lacos.blam.models.collection.collection_repository import Collection
             collection = Collection.objects.get(id=collection_id)
-            collection_title = getattr(collection.general_info, 'display_title', 'Unknown')
+            collection_title = getattr(collection.get_general_info, 'display_title', 'Unknown')
             logger.info(f"{task_id}: Verified target collection {collection_id} exists and is accessible | Title: {collection_title}")
         except Collection.DoesNotExist:
             logger.warning(f"{task_id}: Target collection {collection_id} not found in database - bundle may not link correctly")
@@ -136,13 +136,13 @@ def import_s3_bundle(bucket: str, s3_key: str, collection_id: UUID = None) -> Op
             logger.error(f"{task_id}: FAILED - BundleImporter returned None")
             return None
             
-        bundle_title = getattr(bundle.general_info, 'display_title', 'Unknown')
+        bundle_title = getattr(bundle.get_general_info, 'display_title', 'Unknown')
         logger.info(f"{task_id}: Successfully imported bundle | ID={bundle.id} | Title={bundle_title}")
         
         # Check if the bundle found its collection 
         original_collection = None
-        if hasattr(bundle, 'structural_info') and bundle.structural_info and bundle.structural_info.is_member_of_collection:
-            original_collection = bundle.structural_info.is_member_of_collection
+        if hasattr(bundle, 'get_structural_info') and bundle.get_structural_info and bundle.get_structural_info.is_member_of_collection:
+            original_collection = bundle.get_structural_info.is_member_of_collection
             original_collection_title = getattr(original_collection.general_info, 'display_title', 'Unknown')
             logger.info(f"{task_id}: Bundle automatically linked to collection | Collection ID={original_collection.id} | Title={original_collection_title}")
         else:
@@ -150,21 +150,21 @@ def import_s3_bundle(bucket: str, s3_key: str, collection_id: UUID = None) -> Op
         
         # If collection_id was provided and the bundle's structural_info exists but has no collection link,
         # we can set it explicitly as a fallback
-        if collection_id and bundle and hasattr(bundle, 'structural_info') and bundle.structural_info:
-            if not bundle.structural_info.is_member_of_collection:
+        if collection_id and bundle and hasattr(bundle, 'get_structural_info') and bundle.get_structural_info:
+            if not bundle.get_structural_info.is_member_of_collection:
                 try:
                     from lacos.blam.models.collection.collection_repository import Collection
                     collection = Collection.objects.get(id=collection_id)
-                    collection_title = getattr(collection.general_info, 'display_title', 'Unknown')
-                    bundle.structural_info.is_member_of_collection = collection
-                    bundle.structural_info.save(update_fields=['is_member_of_collection'])
+                    collection_title = getattr(collection.get_general_info, 'display_title', 'Unknown')
+                    bundle.get_structural_info.is_member_of_collection = collection
+                    bundle.get_structural_info.save(update_fields=['is_member_of_collection'])
                     logger.info(f"{task_id}: LINK SUCCESS - Explicitly linked bundle to collection | Collection ID={collection_id} | Title={collection_title}")
                 except Exception as e:
                     logger.warning(f"{task_id}: LINK FAILED - Could not link bundle {bundle.id} to collection {collection_id}: {e}")
             elif original_collection and original_collection.id != collection_id:
                 logger.warning(f"{task_id}: LINK CONFLICT - Bundle linked to different collection {original_collection.id} than provided {collection_id}")
         
-        logger.info(f"{task_id}: IMPORT SUCCESS | Bundle ID={bundle.id} | Collection ID={getattr(bundle.structural_info.is_member_of_collection, 'id', 'None') if hasattr(bundle, 'structural_info') and bundle.structural_info else 'None'}")
+        logger.info(f"{task_id}: IMPORT SUCCESS | Bundle ID={bundle.id} | Collection ID={getattr(bundle.get_structural_info.is_member_of_collection, 'id', 'None') if hasattr(bundle, 'get_structural_info') and bundle.get_structural_info else 'None'}")
         return bundle.id
     except Exception as e:
         logger.error(f"{task_id}: IMPORT FAILED - Error importing bundle from S3 {bucket}/{s3_key}: {e}", exc_info=True)
@@ -195,7 +195,7 @@ def import_s3_bundles_for_collection(collection_id: Optional[UUID], bundle_keys:
     try:
         from lacos.blam.models.collection.collection_repository import Collection
         collection = Collection.objects.get(id=collection_id)
-        collection_title = getattr(collection.general_info, 'display_title', 'Unknown')
+        collection_title = getattr(collection.get_general_info, 'display_title', 'Unknown')
         logger.info(f"{task_id}: Verified collection exists | ID={collection_id} | Title={collection_title}")
     except Collection.DoesNotExist:
         logger.error(f"{task_id}: FAILED - Collection {collection_id} not found in database. Bundle import will likely fail.")
@@ -267,7 +267,7 @@ def resolve_collection_bundle_links_task(collection_id: Optional[UUID]) -> Optio
     try:
         from lacos.blam.models.collection.collection_repository import Collection
         collection = Collection.objects.get(id=collection_id)
-        collection_title = getattr(collection.general_info, 'display_title', 'Unknown')
+        collection_title = getattr(collection.get_general_info, 'display_title', 'Unknown')
         logger.info(f"{task_id}: Verified collection exists | ID={collection_id} | Title={collection_title}")
     except Collection.DoesNotExist:
         logger.error(f"{task_id}: FAILED - Collection {collection_id} not found in database")
@@ -327,7 +327,7 @@ def map_collection_resources(collection_id: Optional[UUID]) -> Optional[UUID]: #
         from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
         
         collection = Collection.objects.get(id=collection_id)
-        collection_title = getattr(collection.general_info, 'display_title', 'Unknown')
+        collection_title = getattr(collection.get_general_info, 'display_title', 'Unknown')
         logger.info(f"{task_id}: Verified collection exists | ID={collection_id} | Title={collection_title}")
         
         # Check for linked bundles
