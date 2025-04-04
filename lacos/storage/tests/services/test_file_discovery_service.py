@@ -193,52 +193,80 @@ def test_find_resources_in_bundle_s3(mock_s3, discovery_service):
         assert resource in resources
 
 def test_find_collection_and_bundle_xmls_s3(mock_s3, discovery_service):
-    """Test finding both collection and bundle XML files using the S3 API"""
-    # Create test collections and bundles with more realistic IDs
-    collections = ["algerien", "alwateti"]
-    bundles_by_collection = {
-        "algerien": ["alg_bundle_complex_1", "alg_bundle_complex_2"],
-        "alwateti": ["alw_bundle_3"]
-    }
+    """Test finding both collection and bundle XML files using the S3 API
+       with a realistic sibling structure (like 'zaghawa')."""
+    # Define the zaghawa structure IDs
+    prefix = "zaghawa/"
+    collection_id = "zaghawa"
+    bundle_ids = [
+        "zag_eoi_20141009_1",
+        "zag_eoi_20141016_1",
+        "zag_eoi_20141016_2"
+    ]
     
     # Create the structure in S3
-    for collection_id in collections:
-        # Create collection XML
-        collection_xml_path = discovery_service.form_collection_xml_path(collection_id)
+    # Collection
+    collection_xml_path = discovery_service.form_collection_xml_path(collection_id)
+    # Ensure the path starts with the prefix for this test structure
+    assert collection_xml_path.startswith(f"{prefix}{collection_id}/") 
+    mock_s3.put_object(
+        Bucket=TEST_BUCKET_NAME,
+        Key=collection_xml_path,
+        Body=f"<xml>Collection {collection_id}</xml>"
+    )
+    # Add a placeholder file to ensure the directory is listed
+    mock_s3.put_object(
+        Bucket=TEST_BUCKET_NAME,
+        Key=f"{prefix}{collection_id}/0=ocfl_object_1.0", 
+        Body="placeholder"
+    )
+        
+    # Create bundles
+    expected_bundle_xml_paths = []
+    for bundle_id in bundle_ids:
+        # IMPORTANT: Use the identified collection_id when forming the bundle path
+        bundle_xml_path = discovery_service.form_bundle_xml_path(collection_id, bundle_id)
+        # Ensure the path starts with the correct sibling prefix for this test
+        assert bundle_xml_path.startswith(f"{prefix}{bundle_id}/")
+        expected_bundle_xml_paths.append(bundle_xml_path)
         mock_s3.put_object(
             Bucket=TEST_BUCKET_NAME,
-            Key=collection_xml_path,
-            Body=f"<xml>Collection {collection_id}</xml>"
+            Key=bundle_xml_path,
+            Body=f"<xml>Bundle {bundle_id}</xml>"
         )
-        
-        # Create bundles for this collection
-        for bundle_id in bundles_by_collection.get(collection_id, []):
-            bundle_xml_path = discovery_service.form_bundle_xml_path(collection_id, bundle_id)
-            mock_s3.put_object(
-                Bucket=TEST_BUCKET_NAME,
-                Key=bundle_xml_path,
-                Body=f"<xml>Bundle {bundle_id}</xml>"
-            )
-    
-    # Call the method
-    result = discovery_service.find_collection_and_bundle_xmls_s3(TEST_BUCKET_NAME)
+        # Add a placeholder file
+        mock_s3.put_object(
+            Bucket=TEST_BUCKET_NAME,
+            Key=f"{prefix}{bundle_id}/0=ocfl_object_1.0", 
+            Body="placeholder"
+        )
+
+    # Add another unrelated prefix to ensure filtering works
+    mock_s3.put_object(
+        Bucket=TEST_BUCKET_NAME,
+        Key="other_prefix/some_file.txt",
+        Body="ignore me"
+    )
+
+    # Call the method with the specific prefix
+    result = discovery_service.find_collection_and_bundle_xmls_s3(TEST_BUCKET_NAME, prefix=prefix)
     
     # --- DEBUG: Print the result to see what's found ---
-    print("\n--- Result from find_collection_and_bundle_xmls_s3 ---")
+    print("\n--- Result from test_find_collection_and_bundle_xmls_s3 (zaghawa structure) ---")
     print(f"Potential Collections: {result.get('potential_collection_xmls')}")
     print(f"Potential Bundles: {result.get('potential_bundle_xmls')}")
-    print("----------------------------------------------------\n")
+    print("-----------------------------------------------------------------------------\n")
     # ---------------------------------------------------
 
     # Check results
-    assert len(result['potential_collection_xmls']) == 2
-    assert discovery_service.form_collection_xml_path("algerien") in result['potential_collection_xmls']
-    assert discovery_service.form_collection_xml_path("alwateti") in result['potential_collection_xmls']
+    # Should find exactly one collection XML under the zaghawa prefix
+    assert len(result['potential_collection_xmls']) == 1, f"Expected 1 collection, found {len(result['potential_collection_xmls'])}"
+    assert collection_xml_path in result['potential_collection_xmls']
     
-    assert len(result['potential_bundle_xmls']) == 3
-    assert discovery_service.form_bundle_xml_path("algerien", "alg_bundle_complex_1") in result['potential_bundle_xmls']
-    assert discovery_service.form_bundle_xml_path("algerien", "alg_bundle_complex_2") in result['potential_bundle_xmls']
-    assert discovery_service.form_bundle_xml_path("alwateti", "alw_bundle_3") in result['potential_bundle_xmls']
+    # Should find exactly three bundle XMLs associated with the zaghawa collection
+    assert len(result['potential_bundle_xmls']) == 3, f"Expected 3 bundles, found {len(result['potential_bundle_xmls'])}"
+    for expected_path in expected_bundle_xml_paths:
+        assert expected_path in result['potential_bundle_xmls'], f"Expected bundle path {expected_path} not found in results"
 
 def test_get_collection_xml(mock_s3, discovery_service):
     """Test retrieving a collection XML file"""
