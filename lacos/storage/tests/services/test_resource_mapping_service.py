@@ -265,37 +265,78 @@ def test_construct_s3_path_unrecognized_object(resource_mapping_service):
 @pytest.mark.django_db
 @patch('lacos.storage.services.file_discovery_service.FileDiscoveryService')
 def test_map_collection_hierarchy_successful(mock_discovery_service, resource_mapping_service, db_objects):
-    """Test successful mapping of a complete collection hierarchy."""
+    """Test successful mapping of a complete collection hierarchy, including resources."""
     # Setup mocks
     mock_discovery_instance = MagicMock()
     mock_discovery_service.return_value = mock_discovery_instance
     
     # Configure mock responses
-    collection_id = db_objects['collection'].id
-    bundle_id = db_objects['bundle'].id
+    collection = db_objects['collection']
+    bundle = db_objects['bundle']
+    media_resource = db_objects['media_resource']
+    written_resource = db_objects['written_resource']
+    other_resource = db_objects['other_resource']
+    collection_id = collection.id
+    bundle_id = bundle.id
+    
     mock_discovery_instance.production_bucket = "test-bucket"
     mock_discovery_instance.form_collection_path.return_value = f"collections/{collection_id}"
     mock_discovery_instance.form_bundle_path.return_value = f"collections/{collection_id}/bundles/{bundle_id}"
-    mock_discovery_instance.get_resource_path_pattern.return_value = f"collections/{collection_id}/bundles/{bundle_id}/resources/{{resource_filename}}"
+    # Define the base resource path using the pattern
+    resource_path_pattern = "collections/{collection_id}/bundles/{bundle_id}/resources/{resource_filename}"
+    mock_discovery_instance.get_resource_path_pattern.return_value = resource_path_pattern
+    resources_base_key = f"collections/{collection_id}/bundles/{bundle_id}/resources/"
     
-    # Get test objects
-    bundle = db_objects['bundle']
-    collection = db_objects['collection']
-    
-    # Verify the relationship is set correctly
-    struct_info_qs = bundle.structural_info.all()
-    assert struct_info_qs.exists()
-    assert struct_info_qs.first().is_member_of_collection == collection
-    
+    # Verify the relationships are set correctly in the fixture
+    assert bundle.structural_info.filter(is_member_of_collection=collection).exists()
+    # Explicitly fetch the BundleResources instance
+    bundle_resources = BundleResources.objects.filter(bundle=bundle).first()
+    if bundle_resources:
+        assert bundle_resources.bundle_media_resources.filter(id=media_resource.id).exists()
+        assert bundle_resources.bundle_written_resources.filter(id=written_resource.id).exists()
+        assert bundle_resources.bundle_other_resources.filter(id=other_resource.id).exists()
+    else:
+        pytest.fail(f"Could not find BundleResources instance for Bundle {bundle.id} via direct query...")
+        
     # Test mapping
     mapped_count = resource_mapping_service.map_collection_hierarchy(collection.id)
     
-    # Should map at least collection + bundle
-    assert mapped_count >= 2
+    # Should map 1 Collection + 1 Bundle + 3 Resources = 5
+    assert mapped_count == 5
     
-    # Verify mocks were called correctly
+    # Verify mocks were called correctly (adjust if needed based on discovery service usage)
     mock_discovery_instance.form_collection_path.assert_called_with(collection.id)
     mock_discovery_instance.form_bundle_path.assert_called_with(collection.id, bundle.id)
+    mock_discovery_instance.get_resource_path_pattern.assert_called()
+    
+    # Verify S3ResourceLocation objects were created for all items
+    # Collection
+    collection_ct = ContentType.objects.get_for_model(Collection)
+    col_loc = S3ResourceLocation.objects.get(content_type=collection_ct, object_id=collection.id)
+    assert col_loc.s3_key == f"collections/{collection_id}/"
+    
+    # Bundle
+    bundle_ct = ContentType.objects.get_for_model(Bundle)
+    bun_loc = S3ResourceLocation.objects.get(content_type=bundle_ct, object_id=bundle.id)
+    assert bun_loc.s3_key == f"collections/{collection_id}/bundles/{bundle_id}/"
+    
+    # Media Resource
+    media_ct = ContentType.objects.get_for_model(MediaResource)
+    media_loc = S3ResourceLocation.objects.get(content_type=media_ct, object_id=media_resource.id)
+    assert media_loc.s3_key == f"{resources_base_key}{media_resource.file_name}"
+    assert media_loc.resource_pid == media_resource.file_pid # Check PID was registered
+    
+    # Written Resource
+    written_ct = ContentType.objects.get_for_model(WrittenResource)
+    written_loc = S3ResourceLocation.objects.get(content_type=written_ct, object_id=written_resource.id)
+    assert written_loc.s3_key == f"{resources_base_key}{written_resource.file_name}"
+    assert written_loc.resource_pid == written_resource.file_pid
+    
+    # Other Resource
+    other_ct = ContentType.objects.get_for_model(OtherResource)
+    other_loc = S3ResourceLocation.objects.get(content_type=other_ct, object_id=other_resource.id)
+    assert other_loc.s3_key == f"{resources_base_key}{other_resource.file_name}"
+    assert other_loc.resource_pid == other_resource.file_pid
 
 @pytest.mark.django_db
 @patch('lacos.storage.services.file_discovery_service.FileDiscoveryService')

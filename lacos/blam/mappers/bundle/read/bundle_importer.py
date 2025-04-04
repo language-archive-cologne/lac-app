@@ -1,12 +1,12 @@
 from dataclasses import asdict
-from typing import Any, Optional, List
+from typing import Any, Optional, List, Tuple
 from django.db import transaction
 from django.core.exceptions import ValidationError
 import logging
 import uuid
 
 from lacos.blam.models.bundle.bundle_repository import Bundle
-from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
+from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo, BundleResources
 from blam_schemas.bundle.blam_bundle_repository_v1_0 import Cmd
 from xsdata.formats.dataclass.parsers import XmlParser
 
@@ -15,7 +15,6 @@ from lacos.blam.mappers.bundle.read.import_bundle_general_info import import_gen
 from lacos.blam.mappers.bundle.read.import_bundle_publication_info import import_publication_info
 from lacos.blam.mappers.bundle.read.import_bundle_structural_info import import_structural_info
 from lacos.blam.mappers.bundle.read.import_bundle_administrative_info import import_administrative_info
-from lacos.blam.mappers.bundle.read.import_bundle_project_info import import_project_info
 from lacos.blam.mappers.bundle.read.import_bundle_header import import_bundle_header
 
 logger = logging.getLogger(__name__)
@@ -40,7 +39,7 @@ class BundleImporter:
     
     @classmethod
     @transaction.atomic
-    def import_from_xml(cls, xml_content: str) -> Bundle:
+    def import_from_xml(cls, xml_content: str) -> Optional[Tuple[Bundle, Optional[uuid.UUID]]]:
         """
         Imports XML content into Django models
         
@@ -48,7 +47,7 @@ class BundleImporter:
             xml_content: The XML content to import
             
         Returns:
-            The created or existing Bundle instance
+            Tuple (Bundle instance, BundleResources ID or None) if successful, None otherwise.
         """
         # Validate the XML content
         cmd_data = cls.validate_xml(xml_content)
@@ -61,18 +60,32 @@ class BundleImporter:
             # If we have an md_self_link, check if a bundle already exists
             existing_bundle = Bundle.objects.filter(identifier=md_self_link).first()
             if existing_bundle:
-                logger.info(f"Found existing bundle with identifier {md_self_link}, returning without changes")
-                return existing_bundle
+                logger.info(f"Found existing bundle with identifier {md_self_link}, checking for BundleResources...")
+                # If bundle exists, try to find its BundleResources ID
+                existing_bundle_resources_id = None
+                try:
+                    # Assuming the reverse relation is 'resources' and it's a ForeignKey
+                    # Fetch the first related BundleResources and get its ID
+                    related_resources = existing_bundle.resources.first()
+                    if related_resources:
+                        existing_bundle_resources_id = related_resources.id
+                        logger.info(f"Found existing BundleResources ID {existing_bundle_resources_id} for bundle {md_self_link}")
+                    else:
+                         logger.warning(f"Existing bundle {md_self_link} found, but no associated BundleResources object found.")
+                except Exception as e:
+                    logger.error(f"Error fetching BundleResources for existing bundle {md_self_link}: {e}")
+                # Return existing bundle and potentially found resources ID
+                return (existing_bundle, existing_bundle_resources_id)
         
         # No existing bundle found, create a new one
-        bundle = cls._import_cmd_to_models(cmd_data)
+        bundle, bundle_resources_id = cls._import_cmd_to_models(cmd_data)
         
-        # Set the identifier on the bundle
-        if md_self_link:
+        # Set the identifier on the bundle if not already set by header import
+        if md_self_link and not bundle.identifier == md_self_link:
             bundle.identifier = md_self_link
             bundle.save(update_fields=['identifier'])
         
-        return bundle
+        return (bundle, bundle_resources_id)
     
     @classmethod
     def _create_bundle(cls, cmd_data: Cmd) -> Bundle:
@@ -92,7 +105,7 @@ class BundleImporter:
         return bundle
 
     @classmethod
-    def _import_cmd_to_models(cls, cmd_data: Cmd) -> Bundle:
+    def _import_cmd_to_models(cls, cmd_data: Cmd) -> Tuple[Bundle, Optional[uuid.UUID]]:
         """
         Converts Cmd object to Django models
         
@@ -100,36 +113,45 @@ class BundleImporter:
             cmd_data: The validated CMD data object
             
         Returns:
-            The created or updated Bundle instance
+            Tuple (Created Bundle instance, BundleResources ID or None)
         """
         # First, create a new Bundle
         bundle = cls._create_bundle(cmd_data)
+        bundle_resources_id: Optional[uuid.UUID] = None # Initialize
         
         try:
             # Import header first, as it's required
             header = import_bundle_header(cmd_data, bundle)
             if not header:
-                # Decide how to handle missing header: raise error or return None/empty?
                 logger.error("Bundle import failed: Could not import BundleHeader.")
                 raise ValidationError("Bundle import failed due to missing or invalid header information.")
-                # Or return None, depending on desired behavior
 
             # Import other components, passing the bundle instance
             cls._import_general_info(cmd_data, bundle)
             cls._import_publication_info(cmd_data, bundle)
             cls._import_administrative_info(cmd_data, bundle)
-            cls._import_structural_info(cmd_data, bundle)
             
-            # No need to call _create_or_update_bundle since the bundle was already created
-            # and all relations have been established
+            # Import structural info and get BundleResources ID
+            bundle_struct_info = cls._import_structural_info(cmd_data, bundle)
+            if bundle_struct_info and hasattr(bundle_struct_info, 'bundle') and bundle_struct_info.bundle:
+                 # Try to get the BundleResources ID from the related bundle
+                try:
+                    # Assuming reverse relation 'resources' and it's a ForeignKey
+                    br_instance = bundle_struct_info.bundle.resources.first()
+                    if br_instance:
+                        bundle_resources_id = br_instance.id
+                        logger.info(f"Successfully obtained BundleResources ID: {bundle_resources_id} during import.")
+                    else:
+                        logger.warning("Structural info imported, but failed to find associated BundleResources instance.")
+                except Exception as e:
+                     logger.error(f"Error getting BundleResources ID after structural info import: {e}")
             
-            logger.info(f"Bundle import completed for '{header.md_self_link}'.")
-            return bundle
+            logger.info(f"Bundle import completed for '{getattr(header, 'md_self_link', 'Unknown')}'.")
+            return (bundle, bundle_resources_id)
             
         except Exception as e:
-            # If any error occurs, the transaction will be rolled back automatically
-            # No need to manually delete the bundle
             logger.error(f"Error during bundle import: {e}", exc_info=True)
+            # Reraise to ensure transaction rollback
             raise e
     
     @classmethod
@@ -146,47 +168,47 @@ class BundleImporter:
     def _import_administrative_info(cls, cmd_data: Cmd, bundle: Bundle):
         """Import administrative info from CMD data"""
         return import_administrative_info(cmd_data, bundle)
+
     
     @classmethod
     def _import_structural_info(cls, cmd_data: Cmd, bundle: Bundle) -> Optional['BundleStructuralInfo']:
-        """Import structural info from CMD data"""
+        """Import structural info from CMD data. Returns the BundleStructuralInfo object."""
         try:
             # Navigate through parsed XML data
             repo_info = cmd_data.components.blam_bundle_repository_v1_0
+            if not repo_info or not repo_info.bundle_structural_info:
+                logger.warning("Bundle XML is missing BundleStructuralInfo section.")
+                return None
+                
             struct_info_data = repo_info.bundle_structural_info
             collection_ref = struct_info_data.bundle_is_member_of_collection
 
             if not collection_ref:
-                 logger.warning("Bundle XML is missing BundleIsMemberOfCollection reference. Cannot link to collection.")
+                 logger.warning("Bundle XML is missing BundleIsMemberOfCollection reference. Cannot link to collection or import structural info.")
                  return None # Cannot proceed without collection reference
                  
             collection_identifier_value = collection_ref.value
-            # Get the identifier type enum from parsed data
             collection_identifier_type_enum = collection_ref.identifier_type
 
             # --- Map Enum to Model String Choice ---
             from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
             collection_identifier_type_str = None
-            if collection_identifier_type_enum: # Check if type was provided
-                 # Assumes enum .name ('HANDLE') matches uppercased choice display name ('Handle')
+            if collection_identifier_type_enum:
                  for choice_value, choice_name in IdentifierTypeChoices.choices:
                       if collection_identifier_type_enum.name == choice_name.upper():
                            collection_identifier_type_str = choice_value
                            break
             else:
-                 # Handle case where IdentifierType attribute is missing in XML
-                 # Defaulting might be an option, or raising an error/warning
                  logger.warning("BundleIsMemberOfCollection IdentifierType attribute missing in XML. Cannot determine collection identifier type.")
-                 return None # Or default if appropriate
+                 return None 
 
             if not collection_identifier_type_str:
-                # Log if mapping failed (and enum wasn't None)
                 logger.error(f"Could not map bundle's collection identifier type enum '{collection_identifier_type_enum}' to a string choice.")
                 return None
             # ---------------------------------------
 
             # Call the standalone importer function
-            # It receives the full cmd_data and extracts what it needs internally
+            # It returns the created/updated BundleStructuralInfo instance or None
             return import_structural_info(
                 cmd_data,
                 collection_identifier_value,
@@ -194,13 +216,11 @@ class BundleImporter:
                 bundle
             )
         except AttributeError as e:
-            logger.error(f"Could not extract collection reference from bundle CMD data: {e}", exc_info=True)
+            logger.error(f"Could not extract data from bundle CMD data for structural info: {e}", exc_info=False) # Less verbose logging
             return None
         except ValueError as e:
-            # Log the error (e.g., collection not found) but don't fail the entire import
-            logger.warning(f"Failed to import structural info (likely collection not found): {str(e)}")
+            logger.warning(f"Failed to import structural info (e.g., collection not found): {str(e)}")
             return None
         except Exception as e:
-            # Catch any other unexpected errors during extraction or import
             logger.error(f"Unexpected error during structural info import: {e}", exc_info=True)
             return None

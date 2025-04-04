@@ -10,6 +10,8 @@ from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import BundleResources, MediaResource, WrittenResource, OtherResource
 from uuid import UUID
+from typing import List, Dict, Optional, Tuple, Any
+from django.db import transaction
 
 logger = logging.getLogger(__name__)
 
@@ -216,162 +218,120 @@ class ResourceMappingService(BaseStorageService):
                 s3_key = f"{base_key}/{file_name}"
                 self.register_s3_location(resource, bucket, s3_key)
 
-    def map_collection_hierarchy(self, collection_id: UUID) -> int:
+    def map_collection_hierarchy(self, collection_id: UUID, bundle_resources_pairs: List[Tuple[UUID, Optional[UUID]]]) -> int:
         """
         Map an entire collection hierarchy to S3 locations.
-        
-        Creates S3ResourceLocation entries for a collection, its bundles and resources.
+        Uses explicitly passed (bundle_id, bundle_resources_id) pairs.
         
         Args:
             collection_id: The collection UUID to map
+            bundle_resources_pairs: List of tuples (bundle_id, bundle_resources_id or None)
             
         Returns:
-            int: Total number of objects mapped
+            int: Total number of objects mapped (Collection + Bundles + Resources)
         """
-        from lacos.blam.models.collection.collection_repository import Collection
-        from lacos.blam.models.bundle.bundle_repository import Bundle
         from lacos.storage.services.file_discovery_service import FileDiscoveryService
         
         total_mapped = 0
-        discovery_service = FileDiscoveryService()  # Needed for path formatting
+        discovery_service = FileDiscoveryService()
+        bucket = discovery_service.production_bucket # Get bucket once
         
+        # 1. Map the Collection object itself
         try:
             collection = Collection.objects.get(id=collection_id)
-            
-            # 1. Map the Collection object itself
+            collection_key_prefix = discovery_service.form_collection_path(collection_id) + "/"  # Ensure trailing slash
+            self.register_s3_location(collection, bucket, collection_key_prefix)
+            logger.info(f"Mapped Collection {collection_id} to S3 location: {bucket}/{collection_key_prefix}")
+            total_mapped += 1
+        except Collection.DoesNotExist:
+             logger.error(f"Collection {collection_id} not found for resource mapping.")
+             return 0 # Cannot proceed without collection
+        except Exception as e:
+            logger.error(f"Failed to map Collection {collection_id} object: {e}", exc_info=True)
+            # Continue to map bundles even if collection mapping failed?
+            # For now, we return 0 if collection fetch fails, but log error if mapping fails.
+
+        # 2. Iterate through bundles using the provided pairs
+        logger.info(f"Processing {len(bundle_resources_pairs)} bundle/resources pairs for collection {collection_id}.")
+        for bundle_id, bundle_resources_id in bundle_resources_pairs:
             try:
-                # Use FileDiscoveryService to get the expected S3 *prefix* (key) for the collection
-                collection_key_prefix = discovery_service.form_collection_path(collection_id) + "/"  # Ensure trailing slash
-                # Bucket usually comes from settings or service default
-                bucket = discovery_service.production_bucket
+                # Fetch Bundle by ID
+                bundle = Bundle.objects.get(id=bundle_id)
                 
-                self.register_s3_location(collection, bucket, collection_key_prefix)
-                logger.info(f"Mapped Collection {collection_id} to S3 location: {bucket}/{collection_key_prefix}")
+                # Map the Bundle object
+                bundle_key_prefix = discovery_service.form_bundle_path(collection_id, bundle.id) + "/"  # Ensure trailing slash
+                self.register_s3_location(bundle, bucket, bundle_key_prefix)
+                logger.info(f"Mapped Bundle {bundle.id} to S3 location: {bucket}/{bundle_key_prefix}")
                 total_mapped += 1
-            except Exception as e:
-                logger.error(f"Failed to map Collection {collection_id} object: {e}", exc_info=True)
-            
-            # 2. Map associated Bundles and their Resources
-            # Ensure bundle links have been resolved before running this
-            if hasattr(collection, 'structural_info') and collection.structural_info:
-                try:
-                    # Use the reverse relationship from Collection to BundleStructuralInfo
-                    linked_bundles = Bundle.objects.filter(
-                        structural_info__is_member_of_collection=collection
-                    ).distinct()
-                    
-                    logger.info(f"Found {linked_bundles.count()} linked bundles to map for collection {collection_id}.")
-                except Exception as e:
-                    logger.warning(f"Error querying linked bundles with standard relationship: {e}")
-                    # If the above query fails, try a more direct approach
-                    try:
-                        # Get bundles via the bundle_collection reverse relationship
-                        linked_bundles = Bundle.objects.filter(
-                            structural_info__in=collection.bundle_collection.all()
-                        ).distinct()
-                        logger.info(f"Found {linked_bundles.count()} linked bundles using bundle_collection reverse relation")
-                    except Exception as alt_e:
-                        logger.error(f"Failed with alternative bundle lookup approach as well: {alt_e}")
-                        linked_bundles = Bundle.objects.none()
                 
-                for bundle in linked_bundles:
+                # 3. Map Resources using the BundleResources ID
+                if bundle_resources_id:
                     try:
-                        # Map the Bundle object
-                        bundle_key_prefix = discovery_service.form_bundle_path(collection_id, bundle.id) + "/"  # Ensure trailing slash
-                        self.register_s3_location(bundle, bucket, bundle_key_prefix)
-                        logger.info(f"Mapped Bundle {bundle.id} to S3 location: {bucket}/{bundle_key_prefix}")
-                        total_mapped += 1
+                        # Fetch BundleResources directly by its ID
+                        bundle_resources = BundleResources.objects.get(id=bundle_resources_id)
+                        logger.info(f"Found BundleResources object (ID: {bundle_resources.id}) for Bundle {bundle.id} via passed ID.")
                         
-                        # 3. Map Resources within the Bundle
+                        # Get base S3 key for resources within this bundle
                         try:
                             resource_pattern = discovery_service.get_resource_path_pattern()
                             prefix_pattern = resource_pattern.rsplit('{resource_filename}', 1)[0]
                             resources_base_key = prefix_pattern.format(collection_id=collection_id, bundle_id=bundle.id)
                         except Exception as format_e:
                             logger.error(f"Could not format resource base key for bundle {bundle.id}: {format_e}")
-                            continue  # Skip resource mapping for this bundle
-                        
+                            continue # Skip resource mapping for this bundle if key fails
+
                         resource_count = 0
-                        # Check if bundle has structural_info with resources
-                        if hasattr(bundle, 'structural_info') and bundle.structural_info and hasattr(bundle.structural_info, 'resources') and bundle.structural_info.resources:
-                            bundle_resources = bundle.structural_info.resources
-                            
-                            # Map media resources
-                            if hasattr(bundle_resources, 'bundle_media_resources'):
-                                for media_resource in bundle_resources.bundle_media_resources.all():
-                                    if hasattr(media_resource, 'file_name') and media_resource.file_name:
-                                        try:
-                                            resource_s3_key = f"{resources_base_key}{media_resource.file_name}"
-                                            self.register_s3_location(media_resource, bucket, resource_s3_key)
-                                            resource_count += 1
-                                            total_mapped += 1
-                                        except Exception as res_map_e:
-                                            logger.error(f"Failed to map media resource {getattr(media_resource, 'id', 'N/A')} (name: {media_resource.file_name}) for bundle {bundle.id}: {res_map_e}", exc_info=True)
-                            
-                            # Map written resources
-                            if hasattr(bundle_resources, 'bundle_written_resources'):
-                                for written_resource in bundle_resources.bundle_written_resources.all():
-                                    if hasattr(written_resource, 'file_name') and written_resource.file_name:
-                                        try:
-                                            resource_s3_key = f"{resources_base_key}{written_resource.file_name}"
-                                            self.register_s3_location(written_resource, bucket, resource_s3_key)
-                                            resource_count += 1
-                                            total_mapped += 1
-                                        except Exception as res_map_e:
-                                            logger.error(f"Failed to map written resource {getattr(written_resource, 'id', 'N/A')} (name: {written_resource.file_name}) for bundle {bundle.id}: {res_map_e}", exc_info=True)
-                            
-                            # Map other resources
-                            if hasattr(bundle_resources, 'bundle_other_resources'):
-                                for other_resource in bundle_resources.bundle_other_resources.all():
-                                    if hasattr(other_resource, 'file_name') and other_resource.file_name:
-                                        try:
-                                            resource_s3_key = f"{resources_base_key}{other_resource.file_name}"
-                                            self.register_s3_location(other_resource, bucket, resource_s3_key)
-                                            resource_count += 1
-                                            total_mapped += 1
-                                        except Exception as res_map_e:
-                                            logger.error(f"Failed to map other resource {getattr(other_resource, 'id', 'N/A')} (name: {other_resource.file_name}) for bundle {bundle.id}: {res_map_e}", exc_info=True)
+                        # Map media resources
+                        if hasattr(bundle_resources, 'bundle_media_resources'):
+                            for media_resource in bundle_resources.bundle_media_resources.all():
+                                if hasattr(media_resource, 'file_name') and media_resource.file_name:
+                                    try:
+                                        resource_s3_key = f"{resources_base_key}{media_resource.file_name}"
+                                        self.register_s3_location(media_resource, bucket, resource_s3_key)
+                                        resource_count += 1
+                                        total_mapped += 1
+                                    except Exception as res_map_e:
+                                        logger.error(f"Failed to map media resource {getattr(media_resource, 'id', 'N/A')} (name: {media_resource.file_name}): {res_map_e}", exc_info=False)
                         
-                        # For backwards compatibility, also try the old incorrect path
-                        # Iterate through different resource types linked to the bundle
-                        resource_relations = ['bundle_media_resources', 'bundle_written_resources', 'bundle_other_resources']
-                        for relation_name in resource_relations:
-                            if hasattr(bundle, relation_name):
-                                related_manager = getattr(bundle, relation_name)
-                                if hasattr(related_manager, 'all'):
-                                    for bundle_resource_link in related_manager.all():
-                                        # Get the actual resource instance (MediaResource, WrittenResource...)
-                                        resource = None
-                                        if hasattr(bundle_resource_link, 'media_resource'):
-                                            resource = bundle_resource_link.media_resource
-                                        elif hasattr(bundle_resource_link, 'written_resource'):
-                                            resource = bundle_resource_link.written_resource
-                                        elif hasattr(bundle_resource_link, 'other_resource'):
-                                            resource = bundle_resource_link.other_resource
-                                        
-                                        if resource and hasattr(resource, 'file_name'):
-                                            try:
-                                                # Construct full S3 key for the resource
-                                                resource_s3_key = f"{resources_base_key}{resource.file_name}"
-                                                self.register_s3_location(resource, bucket, resource_s3_key)
-                                                resource_count += 1
-                                                total_mapped += 1
-                                            except Exception as res_map_e:
-                                                logger.error(f"Failed to map resource {getattr(resource, 'id', 'N/A')} (name: {resource.file_name}) for bundle {bundle.id}: {res_map_e}", exc_info=True)
-                                        else:
-                                            logger.warning(f"Could not map resource linked via {relation_name} for bundle {bundle.id}: Missing resource object or file_name.")
+                        # Map written resources
+                        if hasattr(bundle_resources, 'bundle_written_resources'):
+                             for written_resource in bundle_resources.bundle_written_resources.all():
+                                if hasattr(written_resource, 'file_name') and written_resource.file_name:
+                                    try:
+                                        resource_s3_key = f"{resources_base_key}{written_resource.file_name}"
+                                        self.register_s3_location(written_resource, bucket, resource_s3_key)
+                                        resource_count += 1
+                                        total_mapped += 1
+                                    except Exception as res_map_e:
+                                        logger.error(f"Failed to map written resource {getattr(written_resource, 'id', 'N/A')} (name: {written_resource.file_name}): {res_map_e}", exc_info=False)
                         
-                        logger.info(f"Mapped {resource_count} resources for Bundle {bundle.id}")
-                    except Exception as bundle_map_e:
-                        logger.error(f"Failed to map Bundle {bundle.id} or its resources: {bundle_map_e}", exc_info=True)
+                        # Map other resources
+                        if hasattr(bundle_resources, 'bundle_other_resources'):
+                             for other_resource in bundle_resources.bundle_other_resources.all():
+                                if hasattr(other_resource, 'file_name') and other_resource.file_name:
+                                    try:
+                                        resource_s3_key = f"{resources_base_key}{other_resource.file_name}"
+                                        self.register_s3_location(other_resource, bucket, resource_s3_key)
+                                        resource_count += 1
+                                        total_mapped += 1
+                                    except Exception as res_map_e:
+                                        logger.error(f"Failed to map other resource {getattr(other_resource, 'id', 'N/A')} (name: {other_resource.file_name}): {res_map_e}", exc_info=False)
+                        
+                        logger.info(f"Mapped {resource_count} resources for Bundle {bundle.id} using BundleResources ID {bundle_resources.id}")
+
+                    except BundleResources.DoesNotExist:
+                         logger.error(f"BundleResources object with passed ID {bundle_resources_id} not found for Bundle {bundle.id}. Cannot map resources.")
+                    except Exception as res_fetch_e:
+                         logger.error(f"Error fetching or processing BundleResources {bundle_resources_id} for Bundle {bundle.id}: {res_fetch_e}", exc_info=True)
+                else:
+                    logger.warning(f"No BundleResources ID provided for Bundle {bundle.id}. Skipping resource mapping.")
+                    
+            except Bundle.DoesNotExist:
+                logger.error(f"Bundle with ID {bundle_id} not found. Cannot map bundle or its resources.")
+            except Exception as bundle_map_e:
+                logger.error(f"Failed to map Bundle {bundle_id} or its resources: {bundle_map_e}", exc_info=True)
         
-        except Collection.DoesNotExist:
-            logger.error(f"Collection {collection_id} not found for resource mapping.")
-            return 0
-        except Exception as e:
-            logger.error(f"Unexpected error mapping resources for collection {collection_id}: {e}", exc_info=True)
-            return total_mapped
-        
+        logger.info(f"Finished mapping for collection {collection_id}. Total objects mapped: {total_mapped}")
         return total_mapped  # Return count of mapped objects
 
 

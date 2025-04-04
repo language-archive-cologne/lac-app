@@ -1,5 +1,4 @@
-# Temporarily commented out during model restructuring
-"""
+
 from django.contrib import admin
 
 # Import Bundle models
@@ -48,17 +47,8 @@ class BundleStructuralInfoAdmin(admin.ModelAdmin):
 
 @admin.register(Bundle)
 class BundleAdmin(admin.ModelAdmin):
-    list_display = ('id', 'get_display_title', 'get_self_link')
-    search_fields = ('general_info__display_title', 'base_header__md_self_link')
-    raw_id_fields = ('base_header', 'general_info', 'publication_info', 'administrative_info', 'structural_info')
+    list_display = ('id', 'identifier')
 
-    @admin.display(description='Display Title')
-    def get_display_title(self, obj):
-        return obj.general_info.display_title if obj.general_info else 'N/A'
-
-    @admin.display(description='Self Link')
-    def get_self_link(self, obj):
-        return obj.base_header.md_self_link if obj.base_header else 'N/A'
 
 # Collection Admin Views
 @admin.register(CollectionHeader)
@@ -89,22 +79,9 @@ class CollectionStructuralInfoAdmin(admin.ModelAdmin):
 
 @admin.register(Collection)
 class CollectionAdmin(admin.ModelAdmin):
-    list_display = ('id', 'get_display_title', 'get_self_link', 'get_collection_id')
+    list_display = ('id', 'identifier')
     search_fields = ('general_info__display_title', 'base_header__md_self_link', 'general_info__id_value')
     raw_id_fields = ('base_header', 'general_info', 'publication_info', 'administrative_info', 'structural_info') # Added project_info potentially
-    # If ProjectInfo is linked, add it to raw_id_fields: 'project_info'
-
-    @admin.display(description='Display Title')
-    def get_display_title(self, obj):
-        return obj.general_info.display_title if obj.general_info else 'N/A'
-
-    @admin.display(description='Self Link')
-    def get_self_link(self, obj):
-        return obj.base_header.md_self_link if obj.base_header else 'N/A'
-
-    @admin.display(description='Collection ID')
-    def get_collection_id(self, obj):
-        return obj.general_info.id_value if obj.general_info else 'N/A'
 
 # --- Resource Admin Views ---
 
@@ -157,4 +134,3 @@ class BundleResourcesAdmin(admin.ModelAdmin):
     @admin.display(description='Other Count')
     def other_count(self, obj):
         return obj.bundle_other_resources.count()
-"""
