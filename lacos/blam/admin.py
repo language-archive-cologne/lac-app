@@ -1,4 +1,3 @@
-
 from django.contrib import admin
 
 # Import Bundle models
@@ -80,8 +79,7 @@ class CollectionStructuralInfoAdmin(admin.ModelAdmin):
 @admin.register(Collection)
 class CollectionAdmin(admin.ModelAdmin):
     list_display = ('id', 'identifier')
-    search_fields = ('general_info__display_title', 'base_header__md_self_link', 'general_info__id_value')
-    raw_id_fields = ('base_header', 'general_info', 'publication_info', 'administrative_info', 'structural_info') # Added project_info potentially
+    search_fields = ('general_info__display_title', 'header__md_self_link', 'general_info__id_value')
 
 # --- Resource Admin Views ---
 
