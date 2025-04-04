@@ -20,7 +20,14 @@ Template for displaying root level items and folders with lazy loading
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                             </svg>
                         </button>
-                        <span class="folder-name text-gray-800 font-medium">{{ item.name }}</span>
+                        <span class="folder-name text-gray-800 font-medium">
+                            {{ item.name }}
+                            {% if item.is_blam_object %}
+                                <span class="ml-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                                    {{ item.blam_type|title }}
+                                </span>
+                            {% endif %}
+                        </span>
                         
                         <div class="ml-auto flex items-center space-x-2">
                             {% if bucket_type == 'ingest' %}
@@ -52,16 +59,31 @@ Template for displaying root level items and folders with lazy loading
                                 {% endif %}
                             {% endif %}
                             
-                            <button hx-post="{% url 'storage:delete_object' bucket_type=bucket_type object_type='folder' object_path=item.path %}"
-                                    hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-                                    hx-target="closest li"
-                                    hx-swap="outerHTML"
-                                    hx-confirm="Are you sure you want to delete this folder and all its contents? This cannot be undone."
-                                    class="text-red-500 hover:text-red-700" title="Delete Folder">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                </svg>
-                            </button>
+                            {% if item.is_blam_object %}
+                                <!-- Delete button for BLAM objects (Collection or Bundle) -->
+                                <button hx-post="{% url 'blam:delete_model' model_type=item.blam_type object_id=item.blam_id %}"
+                                        hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                                        hx-target="closest li"
+                                        hx-swap="outerHTML"
+                                        hx-confirm="Are you sure you want to delete this {{ item.blam_type }}? This will permanently delete all associated data from the database."
+                                        class="text-red-500 hover:text-red-700" title="Delete {{ item.blam_type|title }} from Database">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
+                                </button>
+                            {% else %}
+                                <!-- Regular delete button for standard folders -->
+                                <button hx-post="{% url 'storage:delete_object' bucket_type=bucket_type object_type='folder' object_path=item.path %}"
+                                        hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                                        hx-target="closest li"
+                                        hx-swap="outerHTML"
+                                        hx-confirm="Are you sure you want to delete this folder and all its contents? This cannot be undone."
+                                        class="text-red-500 hover:text-red-700" title="Delete Folder">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
+                                </button>
+                            {% endif %}
                         </div>
                     </div>
                     

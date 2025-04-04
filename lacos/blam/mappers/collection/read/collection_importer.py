@@ -3,6 +3,7 @@ from typing import Any, Optional, List
 from django.db import transaction
 from django.core.exceptions import ValidationError
 import logging
+import uuid
 
 from lacos.blam.models.collection.collection_repository import Collection
 from blam_schemas.collection.blam_collection_repository_v1_0 import Cmd
@@ -56,9 +57,26 @@ class CollectionImporter:
         # Validate the XML content
         cmd_data = cls.validate_xml(xml_content)
         
-        # Import the CMD data to Django models
+        # Extract the MD self link identifier from the header
+        md_self_link = None
+        if cmd_data.header and cmd_data.header.md_self_link:
+            md_self_link = cmd_data.header.md_self_link.value
+            
+            # If we have an md_self_link, check if a collection already exists
+            existing_collection = Collection.objects.filter(identifier=md_self_link).first()
+            if existing_collection:
+                logger.info(f"Found existing collection with identifier {md_self_link}, returning without changes")
+                return existing_collection
+        
+        # Create a new collection with the components
         collection = cls._import_cmd_to_models(cmd_data)
         
+        # Set the identifier on the collection
+        if md_self_link:
+            collection.identifier = md_self_link
+            collection.save(update_fields=['identifier'])
+        
+        logger.info(f"Collection import completed for '{md_self_link}'.")
         return collection
     
     @classmethod
@@ -72,156 +90,152 @@ class CollectionImporter:
         Returns:
             The created Collection instance
         """
-        # Import mandatory components
-        header = import_collection_header(cmd_data)
-        # We don't need to import licenses separately as they're handled in import_administrative_info
-        general_info = import_general_info(cmd_data)
-        publication_info = import_publication_info(cmd_data)
-        administrative_info = import_administrative_info(cmd_data)
-        structural_info = import_structural_info(cmd_data)
+        # First, create the Collection object (a lightweight object without components)
+        collection = cls._create_collection(cmd_data)
         
-        # Import optional project info if available
-        project_info = None
-        if hasattr(cmd_data.components.blam_collection_repository_v1_0, 'project_info') and cmd_data.components.blam_collection_repository_v1_0.project_info:
-            project_info = import_project_info(cmd_data)
-            logger.info("Project info found and imported")
-        else:
-            logger.info("No project info found in XML - this is optional")
-        
-        # Create or update collection with all components
-        collection = cls._create_or_update_collection(
-            header,
-            general_info, 
-            publication_info, 
-            project_info,
-            administrative_info,
-            structural_info
-        )
-        
-        return collection
-    
-    @classmethod
-    def _import_header(cls, cmd_data: Cmd):
-        """Import header from CMD data"""
-        return import_collection_header(cmd_data)
-    
-    @classmethod
-    def _import_license(cls, cmd_data: Cmd):
-        """Import license from CMD data"""
-        return import_collection_license(cmd_data)
-    
-    @classmethod
-    def _import_general_info(cls, cmd_data: Cmd):
-        """Import general info from CMD data"""
-        return import_general_info(cmd_data)
-    
-    @classmethod
-    def _import_publication_info(cls, cmd_data: Cmd):
-        """Import publication info from CMD data"""
-        return import_publication_info(cmd_data)
-    
-    @classmethod
-    def _import_project_info(cls, cmd_data: Cmd):
-        """Import project info from CMD data"""
-        return import_project_info(cmd_data)
-
-    @classmethod
-    def _import_administrative_info(cls, cmd_data: Cmd):
-        """Import administrative info from CMD data"""
-        return import_administrative_info(cmd_data)
-    
-    @classmethod
-    def _import_structural_info(cls, cmd_data: Cmd):
-        """Import structural info from CMD data"""
-        return import_structural_info(cmd_data)
-
-    @classmethod
-    def _create_or_update_collection(
-        cls, 
-        header,
-        general_info, 
-        publication_info, 
-        project_info,
-        administrative_info,
-        structural_info
-    ) -> Collection:
-        """Create or update a Collection with the imported components"""
-        # Create base collection data with mandatory fields only
-        collection_data = {
-            'base_header': header,
-            'general_info': general_info,
-            'publication_info': publication_info,
-            'administrative_info': administrative_info,
-            'structural_info': structural_info
-        }
-        
-        # Add project_info only if it exists and is not None
-        if project_info is not None:
-            collection_data['project_info'] = project_info[0] if isinstance(project_info, list) else project_info
+        try:
+            #  import all components, passing the collection to each import function
+            cls._import_header(cmd_data, collection)
+            cls._import_general_info(cmd_data, collection)
+            cls._import_publication_info(cmd_data, collection)
+            cls._import_administrative_info(cmd_data, collection)
+            cls._import_structural_info(cmd_data, collection)
+            cls._import_license(cmd_data, collection)
             
-        # Create or update collection
-        collection, created = Collection.objects.get_or_create(
-            base_header=header,
-            defaults=collection_data
-        )
-        
-        # Update fields if the collection already existed
-        if not created:
-            for field, value in collection_data.items():
-                setattr(collection, field, value)
-            collection.save()
+            # Import optional project info if available
+            if hasattr(cmd_data.components.blam_collection_repository_v1_0, 'project_info') and cmd_data.components.blam_collection_repository_v1_0.project_info:
+                cls._import_project_info(cmd_data, collection)
+                logger.info("Project info found and imported")
+            else:
+                logger.info("No project info found in XML - this is optional")
             
-        return collection
+            return collection
+            
+        except Exception as e:
+            # If any error occurs, the transaction will be rolled back automatically
+            # No need to manually delete the collection
+            logger.error(f"Error during collection import: {e}", exc_info=True)
+            raise e
     
     @classmethod
-    def resolve_bundle_references(cls, collection: Collection) -> int:
+    def _create_collection(cls, cmd_data: Cmd) -> Collection:
         """
-        Resolve bundle references for a collection.
-        
-        This method attempts to link collection member references to actual bundles
-        if they exist in the system. It uses the two-phase reference approach where
-        identifiers are stored first, and then resolved to actual bundles when available.
+        Create a new Collection for the import process
         
         Args:
-            collection: The Collection instance to resolve bundle references for.
+            cmd_data: The validated CMD data
             
         Returns:
-            The number of successfully resolved bundle references.
+            A new Collection instance
         """
-        resolved_count = 0
+        # Create a new collection with a temporary identifier
+        # This will be replaced with the proper md_self_link in import_from_xml
+        collection = Collection.objects.create(identifier=f"temp-collection-{uuid.uuid4()}")
+        logger.info(f"Created new Collection with ID {collection.id}")
+        return collection
+    
+    @classmethod
+    def _import_header(cls, cmd_data: Cmd, collection: Collection):
+        """
+        Import header from CMD data and attach to collection
         
-        # Get all collection members from structural info
-        if hasattr(collection, 'structural_info') and collection.structural_info:
-            # Get all member references
-            member_references = collection.structural_info.members.filter(bundle__isnull=True)
-            
-            # Try to resolve each reference
-            for member in member_references:
-                if member.resolve_bundle():
-                    resolved_count += 1
+        Args:
+            cmd_data: The validated CMD data
+            collection: The Collection instance to attach to
+        """
+        # Pass the collection to the import function
+        header = import_collection_header(cmd_data, collection)
+        logger.info(f"Imported header for collection {collection.id}")
+        return header
+    
+    @classmethod
+    def _import_license(cls, cmd_data: Cmd, collection: Collection):
+        """
+        Import license from CMD data and attach to collection
         
-        return resolved_count
+        Args:
+            cmd_data: The validated CMD data
+            collection: The Collection instance to attach to
+        """
+        # Pass the collection to the import function
+        license_obj = import_collection_license(cmd_data, collection)
+        if license_obj:
+            logger.info(f"Imported license {license_obj.license_name} for collection {collection.id}")
+        else:
+            logger.info(f"No license found for collection {collection.id}")
+        return license_obj
+    
+    @classmethod
+    def _import_general_info(cls, cmd_data: Cmd, collection: Collection):
+        """
+        Import general info from CMD data and attach to collection
+        
+        Args:
+            cmd_data: The validated CMD data
+            collection: The Collection instance to attach to
+        """
+        # Pass the collection to the import function
+        general_info = import_general_info(cmd_data, collection)
+        logger.info(f"Imported general info for collection {collection.id}")
+        return general_info
+    
+    @classmethod
+    def _import_publication_info(cls, cmd_data: Cmd, collection: Collection):
+        """
+        Import publication info from CMD data and attach to collection
+        
+        Args:
+            cmd_data: The validated CMD data
+            collection: The Collection instance to attach to
+        """
+        # Pass the collection to the import function
+        publication_info = import_publication_info(cmd_data, collection)
+        logger.info(f"Imported publication info for collection {collection.id}")
+        return publication_info
+    
+    @classmethod
+    def _import_project_info(cls, cmd_data: Cmd, collection: Collection):
+        """
+        Import project info from CMD data and attach to collection
+        
+        Args:
+            cmd_data: The validated CMD data
+            collection: The Collection instance to attach to
+        """
+        # Pass the collection to the import function
+        project_info = import_project_info(cmd_data, collection)
+        logger.info(f"Imported project info for collection {collection.id}")
+        return project_info
 
     @classmethod
-    def resolve_all_bundle_references(cls) -> dict:
+    def _import_administrative_info(cls, cmd_data: Cmd, collection: Collection):
         """
-        Resolve all unresolved bundle references across all collections.
+        Import administrative info from CMD data and attach to collection
         
-        This method is useful for batch processing after importing multiple bundles,
-        to establish links between collections and bundles.
-        
-        Returns:
-            A dictionary with collection IDs as keys and the number of resolved references as values.
+        Args:
+            cmd_data: The validated CMD data
+            collection: The Collection instance to attach to
         """
-        from lacos.blam.models.collection.collection_repository import Collection
+        # Pass the collection to the import function
+        administrative_info = import_administrative_info(cmd_data, collection)
+        logger.info(f"Imported administrative info for collection {collection.id}")
+        return administrative_info
+    
+    @classmethod
+    def _import_structural_info(cls, cmd_data: Cmd, collection: Collection):
+        """
+        Import structural info from CMD data and attach to collection
         
-        results = {}
-        
-        # Process all collections
-        for collection in Collection.objects.all():
-            resolved_count = cls.resolve_bundle_references(collection)
-            if resolved_count > 0:
-                results[str(collection.id)] = resolved_count
-        
-        return results
+        Args:
+            cmd_data: The validated CMD data
+            collection: The Collection instance to attach to
+        """
+        # Pass the collection to the import function
+        structural_info = import_structural_info(cmd_data, collection)
+        logger.info(f"Imported structural info for collection {collection.id}")
+        return structural_info
+    
+# The following methods (resolve_bundle_references, resolve_all_bundle_references) are being removed
+# as they seem disconnected from the actual import logic and model relationships.
+# Bundle linking is handled during bundle import via the ForeignKey from BundleStructuralInfo.
     

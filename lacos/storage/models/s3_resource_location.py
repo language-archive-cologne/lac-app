@@ -12,9 +12,10 @@ class S3ResourceLocation(models.Model):
     """
     # The handle/PID
     resource_pid = models.URLField(
-        null=False,
+        null=True,
+        blank=True,
         unique=True,
-        help_text="PID/Handle that uniquely identifies the resource"
+        help_text="PID/Handle that uniquely identifies the resource (optional)"
     )
     
     # S3 storage information
@@ -48,8 +49,9 @@ class S3ResourceLocation(models.Model):
         on_delete=models.CASCADE,
         help_text="Type of the resource"
     )
-    object_id = models.PositiveIntegerField(
-        help_text="ID of the resource object"
+    object_id = models.CharField(
+        max_length=36,  # Standard UUID length
+        help_text="UUID or ID of the resource object"
     )
     content_object = GenericForeignKey('content_type', 'object_id')
     

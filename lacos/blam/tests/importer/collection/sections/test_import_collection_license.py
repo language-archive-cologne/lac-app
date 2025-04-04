@@ -1,10 +1,19 @@
 import pytest
 from unittest.mock import patch
+from datetime import date
+from xsdata.models.datatype import XmlDate
 
 from lacos.blam.mappers.collection.read.collection_importer import CollectionImporter
 from lacos.blam.mappers.collection.read.import_collection_license import import_collection_license, create_collection_license
-from lacos.blam.models.collection.collection_administrative_info import CollectionLicense
+from lacos.blam.models.collection.collection_administrative_info import CollectionLicense, CollectionAdministrativeInfo
+from lacos.blam.models.collection.collection_repository import Collection
 from blam_schemas.collection.blam_collection_repository_v1_0 import SimpletypeAccess41
+
+
+@pytest.fixture
+def test_collection():
+    """Create a test collection for testing."""
+    return Collection.objects.create(identifier="test-collection-license")
 
 
 @pytest.fixture
@@ -57,6 +66,9 @@ def cmd_data():
     })]
     admin_info.access = type('obj', (object,), {'value': SimpletypeAccess41.OPEN})
     
+    # Add availability_date as XmlDate
+    admin_info.availability_date = XmlDate(2023, 1, 1)
+    
     return cmd
 
 
@@ -73,33 +85,43 @@ def test_cmd_data_parsing(real_cmd_data):
 
 
 @pytest.mark.django_db
-def test_license_data_mapping(real_cmd_data):
+def test_license_data_mapping(real_cmd_data, test_collection):
     """Test that license data is mapped correctly from CMD to Django model"""
     # Test import with real data
-    license_value, license_uri = import_collection_license(real_cmd_data)
+    license_model = import_collection_license(real_cmd_data, test_collection)
     
-    # Verify the values were extracted correctly
-    assert license_value == "Creative Commons Attribution-NonCommercial-NoDerivs 3.0 Germany"
-    assert license_uri == "CC BY-NC-ND 3.0 DE"
+    # Verify the license was created with correct values
+    assert isinstance(license_model, CollectionLicense)
+    assert license_model.license_name == "Creative Commons Attribution-NonCommercial-NoDerivs 3.0 Germany"
+    assert license_model.license_identifier == "CC BY-NC-ND 3.0 DE"
+    assert license_model.access == "open"
+    
+    # Verify the license is associated with the collection via admin_info
+    admin_info = CollectionAdministrativeInfo.objects.get(collection=test_collection)
+    assert license_model in admin_info.licenses.all()
 
 
 @pytest.mark.django_db
-def test_missing_data_handling(cmd_data):
+def test_missing_data_handling(cmd_data, test_collection):
     """Test handling of missing license data"""
     # Remove license data
     admin_info = cmd_data.components.blam_collection_repository_v1_0.collection_administrative_info
     admin_info.license = []
     
-    # Import should still work with defaults
-    license_value, license_uri = import_collection_license(cmd_data)
+    # Import should still work but return None
+    license_model = import_collection_license(cmd_data, test_collection)
     
-    # Verify default values
-    assert license_value == ""
-    assert license_uri is None
+    # Verify no license was created
+    assert license_model is None
+    
+    # Verify an admin_info was still created for the collection
+    assert CollectionAdministrativeInfo.objects.filter(collection=test_collection).exists()
+    admin_info = CollectionAdministrativeInfo.objects.get(collection=test_collection)
+    assert admin_info.licenses.count() == 0
 
 
 @pytest.mark.django_db
-def test_missing_identifier_handling(cmd_data):
+def test_missing_identifier_handling(cmd_data, test_collection):
     """Test handling of missing license identifier"""
     # Remove identifier but keep license name
     admin_info = cmd_data.components.blam_collection_repository_v1_0.collection_administrative_info
@@ -108,11 +130,12 @@ def test_missing_identifier_handling(cmd_data):
     })]
     
     # Import should work with missing identifier
-    license_value, license_uri = import_collection_license(cmd_data)
+    license_model = import_collection_license(cmd_data, test_collection)
     
     # Verify values
-    assert license_value == "Creative Commons Attribution-NonCommercial-NoDerivs 3.0 Germany"
-    assert license_uri is None
+    assert isinstance(license_model, CollectionLicense)
+    assert license_model.license_name == "Creative Commons Attribution-NonCommercial-NoDerivs 3.0 Germany"
+    assert license_model.license_identifier == ""  # Empty string for missing identifier
 
 
 @pytest.mark.django_db

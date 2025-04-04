@@ -9,7 +9,11 @@ class CollectionStructuralInfo(StructuralInfo):
 
 
     """
-
+    collection = models.ForeignKey(
+        'Collection',
+        on_delete=models.CASCADE,
+        related_name='structural_info'
+    )
     additional_metadata_files = models.ManyToManyField(
         'CollectionAdditionalMetadataFile',
         blank=True,

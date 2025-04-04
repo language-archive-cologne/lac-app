@@ -24,6 +24,12 @@ from lacos.blam.models.bundle.bundle_header import BundleHeader
 
 
 @pytest.fixture
+def test_bundle():
+    """Create a test bundle for testing."""
+    return Bundle.objects.create(identifier="test-identifier-1")
+
+
+@pytest.fixture
 def real_bundle_xml():
     """Get the XML content from a real bundle file in the data directory."""
     xml_path = os.path.join('data', 'zaghawa', 'zag_eoi_20141009_1', 'v1', 'content', 'zag_eoi_20141009_1.xml')
@@ -88,13 +94,13 @@ def test_real_xml_parsing(real_bundle_xml):
 
 
 @pytest.mark.django_db
-def test_import_general_info(real_cmd_data):
+def test_import_general_info(real_cmd_data, test_bundle):
     """Test general info import with real data and DB"""
     # Import directly from the module
     from lacos.blam.mappers.bundle.read.import_bundle_general_info import import_general_info
     
     # Import the general info
-    general_info = import_general_info(real_cmd_data)
+    general_info = import_general_info(real_cmd_data, test_bundle)
     
     # Verify it created a database object
     assert general_info is not None
@@ -110,13 +116,13 @@ def test_import_general_info(real_cmd_data):
 
 
 @pytest.mark.django_db
-def test_import_publication_info(real_cmd_data):
+def test_import_publication_info(real_cmd_data, test_bundle):
     """Test publication info import with real data and DB"""
     # Import directly from the module
     from lacos.blam.mappers.bundle.read.import_bundle_publication_info import import_publication_info
     
     # Import the publication info
-    publication_info = import_publication_info(real_cmd_data)
+    publication_info = import_publication_info(real_cmd_data, test_bundle)
     
     # Verify it created a database object
     assert publication_info is not None
@@ -132,7 +138,7 @@ def test_import_publication_info(real_cmd_data):
 
 
 @pytest.mark.django_db
-def test_import_administrative_info(real_cmd_data):
+def test_import_administrative_info(real_cmd_data, test_bundle):
     """Test administrative info import with real data and DB"""
     # Import directly from the module
     from lacos.blam.mappers.bundle.read.import_bundle_administrative_info import import_administrative_info
@@ -140,8 +146,8 @@ def test_import_administrative_info(real_cmd_data):
     # Since we need to modify the imported function to include availability_date
     original_import_admin_info = import_administrative_info
     
-    def patched_import_admin_info(cmd_data):
-        admin_info = original_import_admin_info(cmd_data)
+    def patched_import_admin_info(cmd_data, bundle):
+        admin_info = original_import_admin_info(cmd_data, bundle)
         # Set the required availability_date field if not already set
         if not admin_info.availability_date:
             admin_info.availability_date = timezone.now().date()
@@ -152,7 +158,7 @@ def test_import_administrative_info(real_cmd_data):
     with patch('lacos.blam.mappers.bundle.read.import_bundle_administrative_info.import_administrative_info', 
               side_effect=patched_import_admin_info):
         # Import the administrative info
-        administrative_info = import_administrative_info(real_cmd_data)
+        administrative_info = import_administrative_info(real_cmd_data, test_bundle)
     
     # Verify it created a database object
     assert administrative_info is not None
@@ -190,12 +196,16 @@ def test_import_administrative_info(real_cmd_data):
 @pytest.fixture
 def create_test_collection():
     def _create_collection(identifier="test-collection-id", identifier_type="DOI"):
+        # Create the Collection first
+        collection = Collection.objects.create()
+        
         # Create the required components
         header = CollectionHeader.objects.create(
             md_creator="Test Creator",
             md_self_link="https://example.com/metadata/12345",
             md_profile="https://example.com/profile/schema",
-            md_collection_display_name="Test Collection Display Name"
+            md_collection_display_name="Test Collection Display Name",
+            collection=collection
         )
         
         # Create a location first (required for GeneralInfo)
@@ -212,29 +222,25 @@ def create_test_collection():
             id_type=identifier_type,
             description="Test description",
             version="1.0",
-            location=location
+            location=location,
+            collection=collection
         )
         
         publication_info = CollectionPublicationInfo.objects.create(
             publication_year="2023",
-            data_provider="Test Provider"
+            data_provider="Test Provider",
+            collection=collection
         )
         
         # Include availability_date which is a required field
         administrative_info = CollectionAdministrativeInfo.objects.create(
             access_level="public",
-            availability_date=timezone.now().date()
+            availability_date=timezone.now().date(),
+            collection=collection
         )
         
-        structural_info = CollectionStructuralInfo.objects.create()
-        
-        # Create the Collection
-        collection = Collection.objects.create(
-            base_header=header,
-            general_info=general_info,
-            publication_info=publication_info,
-            administrative_info=administrative_info,
-            structural_info=structural_info
+        structural_info = CollectionStructuralInfo.objects.create(
+            collection=collection
         )
         
         return collection
@@ -243,7 +249,7 @@ def create_test_collection():
 
 
 @pytest.mark.django_db
-def test_import_structural_info(real_cmd_data, create_test_collection):
+def test_import_structural_info(real_cmd_data, create_test_collection, test_bundle):
     """Test structural info import with real data and DB"""
     # Import directly from the module
     from lacos.blam.mappers.bundle.read.import_bundle_structural_info import import_structural_info
@@ -253,8 +259,8 @@ def test_import_structural_info(real_cmd_data, create_test_collection):
     identifier_type = "DOI"
     test_collection = create_test_collection(collection_id, identifier_type)
     
-    # Import the structural info using the real collection
-    structural_info = import_structural_info(real_cmd_data, collection_id, identifier_type)
+    # Import the structural info using the real collection and bundle
+    structural_info = import_structural_info(real_cmd_data, collection_id, identifier_type, test_bundle)
     
     # Verify it created a database object
     assert structural_info is not None
@@ -290,84 +296,60 @@ def test_full_bundle_import(real_bundle_xml, create_test_collection):
     identifier_type = "DOI"
     test_collection = create_test_collection(collection_id, identifier_type)
     
+    # Create a Bundle first
+    test_bundle = Bundle.objects.create(identifier="test-bundle-full-import")
+    
     # Create a BundleHeader to use in our test
     bundle_header = BundleHeader.objects.create(
         md_creator="Test Creator",
         md_self_link="https://example.com/bundle/metadata/12345",
-        md_profile="https://example.com/bundle/profile/schema"
+        md_profile="https://example.com/bundle/profile/schema",
+        bundle=test_bundle
     )
     
-    # Create patches for the problematic functions
-    # 1. Patch _extract_metadata_license to return None, None instead of md_license values
-    original_extract_metadata_license = BundleImporter._extract_metadata_license
-    def mock_extract_metadata_license(*args):
-        # Just return None, None regardless of the arguments
-        return None, None
-    
-    # 2. Patch import_structural_info to use our identifier_type
+    # Patch import_structural_info to use our identifier_type
     original_import_structural_info = import_structural_info
-    def mock_import_structural_info(cmd_data, coll_id):
-        return original_import_structural_info(cmd_data, collection_id, identifier_type)
-    
-    # 3. Patch _create_or_update_bundle to include the header
-    original_create_or_update = BundleImporter._create_or_update_bundle
-    def mock_create_or_update(*args, **kwargs):
-        # Print the args to see what we're actually getting
-        print(f"Args received: {args}")
-        print(f"Number of args: {len(args)}")
-        
-        # Based on the actual log output:
-        # args[0] = general_info (BundleGeneralInfo)
-        # args[1] = publication_info (BundlePublicationInfo)
-        # args[2] = administrative_info (BundleAdministrativeInfo)
-        # args[3] = structural_info (BundleStructuralInfo)
-        
-        general_info = args[0]  # BundleGeneralInfo
-        publication_info = args[1]  # BundlePublicationInfo 
-        administrative_info = args[2]  # BundleAdministrativeInfo
-        structural_info = args[3] if len(args) > 3 else None  # BundleStructuralInfo
-            
-        # Create a structural_info if it's None 
-        if structural_info is None:
-            from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
-            structural_info = BundleStructuralInfo.objects.create(is_member_of_collection=test_collection)
-        
-        # Create bundle with all required fields in correct order
-        bundle = Bundle.objects.create(
-            base_header=bundle_header,
-            general_info=general_info,  # BundleGeneralInfo
-            publication_info=publication_info,  # BundlePublicationInfo
-            administrative_info=administrative_info,  # BundleAdministrativeInfo
-            structural_info=structural_info  # BundleStructuralInfo
-        )
-                
-        return bundle
-        
-    # Apply the patches
-    with patch('lacos.blam.mappers.bundle.read.bundle_importer.BundleImporter._extract_metadata_license', 
-              mock_extract_metadata_license), \
-         patch('lacos.blam.mappers.bundle.read.bundle_importer.import_structural_info', 
-              mock_import_structural_info), \
-         patch('lacos.blam.mappers.bundle.read.bundle_importer.BundleImporter._create_or_update_bundle',
-              mock_create_or_update), \
-         patch('lacos.blam.mappers.bundle.read.bundle_importer.BundleImporter._import_and_link_projects',
-              lambda *args: None):  # No-op patch to skip project linking
-        
-        # Import the bundle
-        bundle = BundleImporter.import_from_xml(real_bundle_xml, test_collection.id)
-    
+    def mock_import_structural_info(cmd_data, coll_id, type_str, bundle): # Adjust signature to include bundle
+        # Assuming import_structural_info correctly finds the collection now
+        return import_structural_info(cmd_data, collection_id, identifier_type, bundle)
+
+    # Apply remaining patches
+    with patch('lacos.blam.mappers.bundle.read.bundle_importer.import_structural_info',
+              mock_import_structural_info):
+
+        # Import the bundle using the correct signature
+        bundle = BundleImporter.import_from_xml(real_bundle_xml)
+
     # Verify it created a complete bundle object
     assert bundle is not None
     assert isinstance(bundle, Bundle)
     assert bundle.id is not None
     
     # Verify all required components were created
-    assert bundle.general_info is not None
-    assert bundle.publication_info is not None
-    assert bundle.administrative_info is not None
-    assert bundle.structural_info is not None
+    assert bundle.get_general_info is not None
+    assert bundle.get_publication_info is not None
+    assert bundle.get_administrative_info is not None
+    assert bundle.get_structural_info is not None
     assert bundle.base_header is not None
     
     # Verify bundle has the expected data
     repo = BundleImporter.validate_xml(real_bundle_xml).components.blam_bundle_repository_v1_0
-    assert bundle.general_info.display_title == repo.bundle_general_info.bundle_display_title 
+    assert bundle.get_general_info is not None
+    assert bundle.get_general_info.display_title == repo.bundle_general_info.bundle_display_title
+    
+    # Remove MD License assertions
+    # assert bundle.base_header.md_license == repo.mdlicense.value
+    # assert bundle.base_header.md_license_uri == repo.mdlicense.uri 
+
+@pytest.mark.django_db
+def test_bundle_structural_info_creation(real_cmd_data, test_bundle):
+    """Test that BundleStructuralInfo is created correctly when a Bundle is imported."""
+    # Setup test: Create a Collection with the same identifier as in the XML
+    # Get the identifier from the XML structure
+    repo_info = real_cmd_data.components.blam_bundle_repository_v1_0
+    struct_info_data = repo_info.bundle_structural_info
+    collection_ref = struct_info_data.bundle_is_member_of_collection
+    collection_identifier = collection_ref.value
+    
+    # Create a collection with that identifier
+    collection = Collection.objects.create(identifier=collection_identifier) 

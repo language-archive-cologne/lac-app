@@ -10,6 +10,11 @@ class BundlePublicationInfo(PublicationInfo):
     and relationships.
     """
 
+    bundle = models.ForeignKey(
+        'Bundle',
+        on_delete=models.CASCADE,
+        related_name='publication_info'
+    )
     creators = models.ManyToManyField('BundleCreator', blank=True)
     contributors = models.ManyToManyField('BundleContributor', blank=True)
     
@@ -20,7 +25,6 @@ class BundlePublicationInfo(PublicationInfo):
     class Meta:
         verbose_name = "Bundle Publication Info"
         verbose_name_plural = "Bundle Publication Info"
-        unique_together = [('identifier', 'identifier_type')]
 
 
 class BundleCreator(BaseCreator):
@@ -40,7 +44,7 @@ class BundleContributor(BaseContributor):
     
     Represents individuals who contributed to the bundle in various roles.
     """
-    contributor_name = models.ForeignKey('BundleContributorName', on_delete=models.CASCADE, related_name='bundle_contributors')
+    contributor_name = models.ForeignKey('BundleContributorName', on_delete=models.CASCADE, related_name='contributors')
     
     class Meta:
         verbose_name = "Bundle Contributor"

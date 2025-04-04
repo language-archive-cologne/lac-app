@@ -1,5 +1,7 @@
 import pytest
+import os
 from unittest.mock import patch, MagicMock, PropertyMock
+from xsdata.formats.dataclass.parsers import XmlParser
 from django.core.exceptions import ObjectDoesNotExist
 
 from lacos.blam.mappers.bundle.read.bundle_importer import BundleImporter
@@ -17,18 +19,18 @@ from lacos.blam.models.bundle.bundle_structural_info import (
     BundleResources,
     MediaResource,
     WrittenResource,
-    WrittenResourceAnnotation,
     OtherResource
 )
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo, CollectionLocation
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
+from lacos.blam.models.bundle import Bundle
+from lacos.blam.models.bundle.bundle_repository import Bundle 
 
 
 @pytest.fixture
 def real_bundle_xml():
     """Get the XML content from a real bundle file in the data directory."""
-    import os
     xml_path = os.path.join('data', 'zaghawa', 'zag_eoi_20141009_1', 'v1', 'content', 'zag_eoi_20141009_1.xml')
     
     try:
@@ -63,6 +65,50 @@ def mock_collection():
     type(mock_collection).general_info = PropertyMock(return_value=mock_general_info)
     
     return mock_collection
+
+
+@pytest.fixture
+@pytest.mark.django_db
+def db_collection():
+    """Creates a real Collection and CollectionGeneralInfo in the test database."""
+    collection_handle = "hdl:11341/00-0000-0000-0000-1AC6-9" # From real_bundle_xml
+    collection_id_type = IdentifierTypeChoices.HANDLE
+
+    # Create necessary related objects if they don't exist or use defaults
+    # Assuming CollectionLocation might be needed or handled by defaults/null=True
+    location, _ = CollectionLocation.objects.get_or_create(
+        # Add necessary defaults or lookup existing
+        location_name="Test Location",
+        region_name="Test Region",
+        country_name="Test Country",
+        country_code="XX"
+    )
+
+    general_info, created_gi = CollectionGeneralInfo.objects.get_or_create(
+        id_value=collection_handle,
+        id_type=collection_id_type,
+        defaults={
+            'display_title': "Zaghawa Test Collection",
+            'description': "Test collection for structural info import",
+            # Add other required fields for CollectionGeneralInfo if any, or ensure they allow null/blank
+            'location': location, # Link the location
+        }
+    )
+
+    # Create the Collection itself, linking the general info
+    collection, created_c = Collection.objects.get_or_create(
+        general_info=general_info,
+        defaults={
+            # Add other required fields for Collection if any
+        }
+    )
+    return collection
+
+
+@pytest.fixture
+def test_bundle():
+    """Create a test bundle for testing."""
+    return Bundle.objects.create(identifier="test-structural-info-bundle")
 
 
 @pytest.mark.django_db
@@ -115,113 +161,150 @@ def test_cmd_structural_data_parsing(real_cmd_data):
 
 
 @pytest.mark.django_db
-def test_structural_info_data_mapping(real_cmd_data, mock_collection):
-    """Test that structural info is mapped correctly from CMD to Django models"""
-    # Get the collection identifier from the XML
+def test_structural_info_data_mapping(real_cmd_data, mock_collection, test_bundle):
+    # ... (existing setup) ...
     components = real_cmd_data.components
-    structural_info = components.blam_bundle_repository_v1_0.bundle_structural_info
-    collection_id = structural_info.bundle_is_member_of_collection.value
+    structural_info_data = components.blam_bundle_repository_v1_0.bundle_structural_info
+    collection_id = structural_info_data.bundle_is_member_of_collection.value
     
-    # Verify the mock collection matches what we expect
-    assert mock_collection.general_info.id_value == "hdl:11341/00-0000-0000-0000-1AC6-9"
-    assert mock_collection.general_info.id_type == "Handle"
-    
-    # Patch the get method to return our mock collection
-    with patch('lacos.blam.models.collection.collection_general_info.CollectionGeneralInfo.objects.get') as mock_get:
-        mock_get.return_value = mock_collection.general_info
-        
-        # Also patch Collection.objects.get to return our mock collection
-        with patch('lacos.blam.models.collection.collection_repository.Collection.objects.get') as mock_coll_get:
-            mock_coll_get.return_value = mock_collection
-            
-            # Patch BundleStructuralInfo.objects.get_or_create to return a mock
-            with patch('lacos.blam.models.bundle.bundle_structural_info.BundleStructuralInfo.objects.get_or_create') as mock_create:
-                # Create a mock bundle_struct_info with resources
-                bundle_struct_info = MagicMock(spec=BundleStructuralInfo)
-                bundle_struct_info.is_member_of_collection = mock_collection
-                
-                # Create mock resources with media and written resources
-                resources = MagicMock(spec=BundleResources)
-                
-                # Create mock media resources
-                media = MagicMock(spec=MediaResource)
-                media.file_name = "ZAG_EOI_20141009_1.wav"
-                media.file_pid = "hdl:11341/00-0000-0000-0000-1B28-A"
-                media.mime_type = "audio/x-wav"
-                media.file_length = "1130.3"
-                
-                # Create mock written resources
-                written = MagicMock(spec=WrittenResource)
-                written.file_name = "ZAG_EOI_20141009_1.eaf"
-                written.file_pid = "hdl:11341/00-0000-0000-0000-1B29-8"
-                written.mime_type = "text/x-eaf+xml"
-                
-                # Set up media and written resources
-                media_resources = MagicMock()
-                media_resources.count.return_value = 1
-                media_resources.first.return_value = media
-                
-                written_resources = MagicMock()
-                written_resources.count.return_value = 1
-                written_resources.first.return_value = written
-                
-                # Attach resources to bundle_struct_info
-                resources.bundle_media_resources = media_resources
-                resources.bundle_written_resources = written_resources
-                bundle_struct_info.resources = resources
-                
-                # Set up the mock return value for get_or_create
-                mock_create.return_value = (bundle_struct_info, True)
-                
-                # Now patch the import_bundle_resources to avoid DB operations
-                with patch('lacos.blam.mappers.bundle.read.import_bundle_structural_info.import_bundle_resources'):
-                    # Test import with patched functions
-                    result = import_structural_info(real_cmd_data, collection_id, "Handle")
-                    
-                    # Verify the result matches what we expect
-                    assert result is bundle_struct_info
-                    assert result.is_member_of_collection == mock_collection
+    # Patch Collection and GeneralInfo lookups
+    with patch('lacos.blam.models.collection.collection_general_info.CollectionGeneralInfo.objects.get', return_value=mock_collection.general_info), \
+         patch('lacos.blam.models.collection.collection_repository.Collection.objects.get', return_value=mock_collection), \
+         patch('lacos.blam.models.bundle.bundle_structural_info.BundleStructuralInfo.objects.get_or_create') as mock_struct_get_or_create, \
+         patch('lacos.blam.models.bundle.bundle_structural_info.BundleResources.objects.create') as mock_resources_create, \
+         patch('lacos.blam.mappers.bundle.read.import_bundle_structural_info.import_media_resources') as mock_import_media, \
+         patch('lacos.blam.mappers.bundle.read.import_bundle_structural_info.import_written_resources') as mock_import_written, \
+         patch('lacos.blam.mappers.bundle.read.import_bundle_structural_info.import_other_resources') as mock_import_other, \
+         patch('lacos.blam.mappers.bundle.read.import_bundle_structural_info.import_additional_metadata_files') as mock_import_add_meta:
+
+        # --- Mock Setup ---
+        # Mock BundleStructuralInfo (initially without resources linked)
+        mock_bundle_struct_info = MagicMock(spec=BundleStructuralInfo)
+        mock_bundle_struct_info.is_member_of_collection = mock_collection
+        mock_bundle_struct_info.resources = None # Start as None
+        # We need save to be mockable on this instance
+        mock_bundle_struct_info.save = MagicMock()
+
+        # Mock BundleResources (the object that will be created)
+        mock_bundle_resources = MagicMock(spec=BundleResources)
+        mock_resources_create.return_value = mock_bundle_resources
+
+        # Simulate BundleStructuralInfo get_or_create returning the new mock
+        mock_struct_get_or_create.return_value = (mock_bundle_struct_info, True) # Simulate creation
+
+        # --- Call the function under test ---
+        result = import_structural_info(real_cmd_data, collection_id, "Handle", test_bundle)
+
+        # --- Assertions ---
+        # Verify BundleStructuralInfo was looked up/created correctly with both parameters
+        mock_struct_get_or_create.assert_called_once_with(
+            is_member_of_collection=mock_collection,
+            bundle=test_bundle
+        )
+
+        # Verify BundleResources was created because struct_info was new
+        mock_resources_create.assert_called_once()
+
+        # Verify the lower-level importers were called with the *created* bundle_resources
+        # Check based on the actual XML content loaded by real_cmd_data
+        assert structural_info_data.bundle_resources is not None
+        if structural_info_data.bundle_resources.media_resource:
+            mock_import_media.assert_called_once_with(mock_bundle_resources, structural_info_data.bundle_resources.media_resource)
+        else:
+            mock_import_media.assert_not_called()
+
+        if structural_info_data.bundle_resources.written_resource:
+            mock_import_written.assert_called_once_with(mock_bundle_resources, structural_info_data.bundle_resources.written_resource)
+        else:
+            mock_import_written.assert_not_called()
+
+        if structural_info_data.bundle_resources.other_resource:
+             mock_import_other.assert_called_once_with(mock_bundle_resources, structural_info_data.bundle_resources.other_resource)
+        else:
+             mock_import_other.assert_not_called()
+             
+        if structural_info_data.bundle_additional_metadata_file:
+             mock_import_add_meta.assert_called_once_with(mock_bundle_struct_info, structural_info_data.bundle_additional_metadata_file)
+        else:
+             mock_import_add_meta.assert_not_called()
+
+        # Verify the final result is the BundleStructuralInfo instance
+        assert result is mock_bundle_struct_info
 
 
 @pytest.mark.django_db
-def test_get_or_create_structural_info_behavior(real_cmd_data, mock_collection):
-    """Test that importing the same structural data twice doesn't create duplicates"""
-    # Get the collection identifier from the XML
+def test_get_or_create_structural_info_behavior(real_cmd_data, mock_collection, test_bundle):
+    # ... (existing setup) ...
     components = real_cmd_data.components
-    structural_info = components.blam_bundle_repository_v1_0.bundle_structural_info
-    collection_id = structural_info.bundle_is_member_of_collection.value
-    
-    # Patch the get method to return our mock collection
-    with patch('lacos.blam.models.collection.collection_general_info.CollectionGeneralInfo.objects.get') as mock_get:
-        mock_get.return_value = mock_collection.general_info
-        
-        # Also patch Collection.objects.get to return our mock collection
-        with patch('lacos.blam.models.collection.collection_repository.Collection.objects.get') as mock_coll_get:
-            mock_coll_get.return_value = mock_collection
-            
-            # Patch BundleStructuralInfo.objects.get_or_create to return a mock
-            with patch('lacos.blam.models.bundle.bundle_structural_info.BundleStructuralInfo.objects.get_or_create') as mock_create:
-                # Create a mock bundle_struct_info
-                bundle_struct_info = MagicMock(spec=BundleStructuralInfo)
-                bundle_struct_info.is_member_of_collection = mock_collection
-                
-                # Set up the mock return value for get_or_create
-                # First call will indicate "created=True", second will be "created=False"
-                mock_create.side_effect = [(bundle_struct_info, True), (bundle_struct_info, False)]
-                
-                # Test first import
-                with patch('lacos.blam.mappers.bundle.read.import_bundle_structural_info.import_bundle_resources'):
-                    # First import
-                    struct_info1 = import_structural_info(real_cmd_data, collection_id, "Handle")
-                    
-                    # Second import with same data should get existing record
-                    struct_info2 = import_structural_info(real_cmd_data, collection_id, "Handle")
-                    
-                    # Should be the same record
-                    assert struct_info1 is struct_info2
-                    
-                    # Verify get_or_create was called twice, first time with created=True, second with created=False
-                    assert mock_create.call_count == 2
+    structural_info_data = components.blam_bundle_repository_v1_0.bundle_structural_info
+    collection_id = structural_info_data.bundle_is_member_of_collection.value
+
+    # Patch necessary lookups and creation methods
+    with patch('lacos.blam.models.collection.collection_general_info.CollectionGeneralInfo.objects.get', return_value=mock_collection.general_info), \
+         patch('lacos.blam.models.collection.collection_repository.Collection.objects.get', return_value=mock_collection), \
+         patch('lacos.blam.models.bundle.bundle_structural_info.BundleStructuralInfo.objects.get_or_create') as mock_struct_get_or_create, \
+         patch('lacos.blam.models.bundle.bundle_structural_info.BundleResources.objects.filter') as mock_resources_filter, \
+         patch('lacos.blam.models.bundle.bundle_structural_info.BundleResources.objects.create') as mock_resources_create, \
+         patch('lacos.blam.mappers.bundle.read.import_bundle_structural_info.import_media_resources'), \
+         patch('lacos.blam.mappers.bundle.read.import_bundle_structural_info.import_written_resources'), \
+         patch('lacos.blam.mappers.bundle.read.import_bundle_structural_info.import_other_resources'), \
+         patch('lacos.blam.mappers.bundle.read.import_bundle_structural_info.import_additional_metadata_files'): # Patch lower-level imports
+
+        # --- Mock Setup ---
+        # Mock BundleStructuralInfo for first call (created=True)
+        mock_bundle_struct_info_new = MagicMock(spec=BundleStructuralInfo)
+        mock_bundle_struct_info_new.is_member_of_collection = mock_collection
+        mock_bundle_struct_info_new.bundle = test_bundle
+        # We need save to be mockable on this instance
+        mock_bundle_struct_info_new.save = MagicMock()
+
+        # Mock BundleResources (the object created on first call)
+        mock_bundle_resources = MagicMock(spec=BundleResources)
+        mock_resources_create.return_value = mock_bundle_resources
+        mock_resources_filter.return_value.first.return_value = None
+
+        # Mock BundleStructuralInfo for second call (created=False)
+        mock_bundle_struct_info_existing = MagicMock(spec=BundleStructuralInfo)
+        mock_bundle_struct_info_existing.is_member_of_collection = mock_collection
+        mock_bundle_struct_info_existing.bundle = test_bundle
+        # Set resources on existing struct_info (in the real implementation, 
+        # this should already be linked)
+        mock_bundle_struct_info_existing.save = MagicMock() # Still need save method
+
+        # Set up side effect for BundleStructuralInfo.objects.get_or_create
+        mock_struct_get_or_create.side_effect = [
+            (mock_bundle_struct_info_new, True),      # First call: created
+            (mock_bundle_struct_info_existing, False) # Second call: existed
+        ]
+
+        # --- Call 1: Create ---
+        struct_info1 = import_structural_info(real_cmd_data, collection_id, "Handle", test_bundle)
+
+        # Assertions for call 1
+        assert struct_info1 is mock_bundle_struct_info_new
+        mock_struct_get_or_create.assert_called_with(
+            is_member_of_collection=mock_collection,
+            bundle=test_bundle
+        )
+        mock_resources_create.assert_called_once() # Resources should be created
+
+        # Reset mocks before second call
+        mock_resources_create.reset_mock()
+        mock_resources_filter.return_value.first.return_value = mock_bundle_resources
+
+        # --- Call 2: Get Existing ---
+        struct_info2 = import_structural_info(real_cmd_data, collection_id, "Handle", test_bundle)
+
+        # Assertions for call 2
+        assert struct_info2 is mock_bundle_struct_info_existing # Should get existing mock
+        mock_struct_get_or_create.assert_called_with(
+            is_member_of_collection=mock_collection,
+            bundle=test_bundle
+        )
+        mock_resources_create.assert_not_called() # Resources should NOT be created again
+
+        # Final check on get_or_create call count
+        assert mock_struct_get_or_create.call_count == 2
 
 
 @pytest.mark.django_db
@@ -420,7 +503,7 @@ def test_collection_not_found_error(real_cmd_data):
         
         # Test that the function raises ValueError when ObjectDoesNotExist is raised
         with pytest.raises(ValueError) as exc_info:
-            import_structural_info(real_cmd_data, "non-existent-id", "DOI")
+            import_structural_info(real_cmd_data, "non-existent-id", "DOI", test_bundle)
         
         # Verify the error message
         assert "does not exist" in str(exc_info.value)

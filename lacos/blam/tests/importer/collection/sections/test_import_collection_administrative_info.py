@@ -10,7 +10,14 @@ from lacos.blam.models.collection.collection_administrative_info import (
     CollectionRightsHolder,
     CollectionRightsHolderIdentifier
 )
+from lacos.blam.models.collection.collection_repository import Collection
 from blam_schemas.collection.blam_collection_repository_v1_0 import SimpletypeAccess41
+
+
+@pytest.fixture
+def test_collection():
+    """Create a test collection for testing."""
+    return Collection.objects.create(identifier="test-collection-administrative-info")
 
 
 @pytest.fixture
@@ -114,14 +121,15 @@ def test_cmd_data_parsing(real_cmd_data):
 
 
 @pytest.mark.django_db
-def test_administrative_info_data_mapping(real_cmd_data):
+def test_administrative_info_data_mapping(real_cmd_data, test_collection):
     """Test that administrative info is mapped correctly from CMD to Django model"""
     # Test import with real data
-    admin_info = import_administrative_info(real_cmd_data)
+    admin_info = import_administrative_info(real_cmd_data, test_collection)
     
     # Verify the object was created and fields were set correctly
     assert isinstance(admin_info, CollectionAdministrativeInfo)
     assert admin_info.availability_date == "2022-10-26"  # Actual date from XML
+    assert admin_info.collection == test_collection
     
     # Verify identical resources if any
     if hasattr(admin_info, 'is_identical_to'):
@@ -153,19 +161,19 @@ def test_administrative_info_data_mapping(real_cmd_data):
 
 
 @pytest.mark.django_db
-def test_get_or_create_behavior(real_cmd_data):
+def test_get_or_create_behavior(real_cmd_data, test_collection):
     """Test that importing the same data twice doesn't create duplicates"""
     # First import
-    admin_info1 = import_administrative_info(real_cmd_data)
+    admin_info1 = import_administrative_info(real_cmd_data, test_collection)
     
     # Second import with same data should get existing record
-    admin_info2 = import_administrative_info(real_cmd_data)
+    admin_info2 = import_administrative_info(real_cmd_data, test_collection)
     
     # Should be the same record
     assert admin_info1.pk == admin_info2.pk
     
     # Count should still be 1
-    count = CollectionAdministrativeInfo.objects.count()
+    count = CollectionAdministrativeInfo.objects.filter(collection=test_collection).count()
     assert count == 1
     
     # Verify related objects weren't duplicated
@@ -176,7 +184,7 @@ def test_get_or_create_behavior(real_cmd_data):
 
 
 @pytest.mark.django_db
-def test_access_type_mapping(mock_admin_info, mock_cmd_data):
+def test_access_type_mapping(mock_admin_info, mock_cmd_data, test_collection):
     """Test that access types are correctly mapped from schema to model"""
     # Test different access types
     access_mappings = {
@@ -192,30 +200,35 @@ def test_access_type_mapping(mock_admin_info, mock_cmd_data):
             'license_identifier': 'TEST-1.0'
         })()
         admin_info = mock_admin_info(access_value=schema_access, licenses=[mock_license])
-        result = import_administrative_info(mock_cmd_data(admin_info))
+        result = import_administrative_info(mock_cmd_data(admin_info), test_collection)
         assert result.licenses.first().access == model_access
+        assert result.collection == test_collection
 
 
 @pytest.mark.django_db
-def test_relationships_are_created(real_cmd_data):
+def test_relationships_are_created(real_cmd_data, test_collection):
     """Test that all relationships are properly created in the database"""
     # Import the data
-    admin_info = import_administrative_info(real_cmd_data)
+    admin_info = import_administrative_info(real_cmd_data, test_collection)
     
     # Verify CollectionAdministrativeInfo relationships
-    # 1. licenses relationship
+    # 1. collection relationship
+    assert admin_info.collection == test_collection
+    
+    # 2. licenses relationship
     assert admin_info.licenses.exists()
     license = admin_info.licenses.first()
-    # Verify the reverse relationship works
-    assert license.collection_licenses.filter(pk=admin_info.pk).exists()
     
-    # 2. rights_holders relationship
+    # Verify the reverse relationship works - the related_name in the model is 'licenses'
+    assert admin_info in license.licenses.all()
+    
+    # 3. rights_holders relationship
     assert admin_info.rights_holders.exists()
     rights_holder = admin_info.rights_holders.first()
-    # Verify the reverse relationship works
-    assert rights_holder.collection_rights_holders.filter(pk=admin_info.pk).exists()
+    # Verify the reverse relationship works - the related_name in the model is 'rights_holders'
+    assert admin_info in rights_holder.rights_holders.all()
     
-    # 3. is_identical_to relationship (should be empty in test data)
+    # 4. is_identical_to relationship (should be empty in test data)
     assert not admin_info.is_identical_to.exists()
     
     # Verify CollectionRightsHolder relationships
@@ -223,11 +236,11 @@ def test_relationships_are_created(real_cmd_data):
     assert rights_holder.rights_holder_identifiers.exists()
     identifier = rights_holder.rights_holder_identifiers.first()
     # Verify the reverse relationship works
-    assert identifier.collection_rights_holders.filter(pk=rights_holder.pk).exists()
+    assert rights_holder in identifier.rights_holders_identifiers.all()
 
 
 @pytest.mark.django_db
-def test_multiple_licenses(mock_admin_info, mock_cmd_data):
+def test_multiple_licenses(mock_admin_info, mock_cmd_data, test_collection):
     """Test handling of multiple licenses"""
     # Create mock admin info with multiple licenses
     licenses = [
@@ -243,30 +256,32 @@ def test_multiple_licenses(mock_admin_info, mock_cmd_data):
     admin_info = mock_admin_info(licenses=licenses)
     
     # Import and verify
-    result = import_administrative_info(mock_cmd_data(admin_info))
+    result = import_administrative_info(mock_cmd_data(admin_info), test_collection)
     assert result.licenses.count() == 2
+    assert result.collection == test_collection
     
     # Verify both licenses were created correctly
     licenses = result.licenses.all()
-    assert licenses[0].license_name == "First License"
-    assert licenses[0].license_identifier == "LICENSE-1.0"
-    assert licenses[1].license_name == "Second License"
-    assert licenses[1].license_identifier == "LICENSE-2.0"
+    assert licenses[0].license_name == 'First License'
+    assert licenses[0].license_identifier == 'LICENSE-1.0'
+    assert licenses[1].license_name == 'Second License'
+    assert licenses[1].license_identifier == 'LICENSE-2.0'
 
 
 @pytest.mark.django_db
-def test_missing_license_data(mock_admin_info, mock_cmd_data):
+def test_missing_license_data(mock_admin_info, mock_cmd_data, test_collection):
     """Test handling of missing license data"""
     # Create mock admin info with no licenses
     admin_info = mock_admin_info(licenses=[])
     
     # Import and verify
-    result = import_administrative_info(mock_cmd_data(admin_info))
+    result = import_administrative_info(mock_cmd_data(admin_info), test_collection)
     assert result.licenses.count() == 0
+    assert result.collection == test_collection
 
 
 @pytest.mark.django_db
-def test_invalid_data_handling(mock_admin_info, mock_cmd_data):
+def test_invalid_data_handling(mock_admin_info, mock_cmd_data, test_collection):
     """Test handling of invalid data"""
     # Test with invalid license data
     invalid_license = type('License', (), {
@@ -276,8 +291,9 @@ def test_invalid_data_handling(mock_admin_info, mock_cmd_data):
     admin_info = mock_admin_info(licenses=[invalid_license])
     
     # Import should still work but create empty license
-    result = import_administrative_info(mock_cmd_data(admin_info))
+    result = import_administrative_info(mock_cmd_data(admin_info), test_collection)
+    assert result.collection == test_collection
     assert result.licenses.count() == 1
     license = result.licenses.first()
-    assert license.license_name == ""  # Should be converted to empty string
-    assert license.license_identifier == ""  # Should be preserved as empty string
+    assert license.license_name == ''  # Empty string fallback
+    assert license.license_identifier == ''  # Empty is allowed

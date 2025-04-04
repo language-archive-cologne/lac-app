@@ -1,11 +1,5 @@
 from django.db import models
 from lacos.blam.models.base_repository import Repository
-from lacos.blam.models.collection.collection_header import CollectionHeader
-from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo
-from lacos.blam.models.collection.collection_publication_info import CollectionPublicationInfo
-from lacos.blam.models.collection.collection_administrative_info import CollectionAdministrativeInfo
-from lacos.blam.models.collection.collection_structural_info import CollectionStructuralInfo
-from lacos.blam.models.base_project_info import ProjectInfo
 
 
 class Collection(Repository):
@@ -13,46 +7,37 @@ class Collection(Repository):
     Concrete implementation of Repository for collections.
     A collection is a curated set of bundles that form a meaningful unit.
     """
-
-    base_header = models.ForeignKey(
-        CollectionHeader,
-        on_delete=models.CASCADE,
-        related_name='collection_header_info'
-    )
-    general_info = models.ForeignKey(
-        CollectionGeneralInfo,
-        on_delete=models.CASCADE,
-        related_name='collection_general_info'
-    )
-    publication_info = models.ForeignKey(
-        CollectionPublicationInfo,
-        on_delete=models.CASCADE,
-        related_name='collection_publication_info'
-    )
-    project_info = models.ForeignKey(
-        ProjectInfo,
-        on_delete=models.CASCADE,
-        related_name='collection_project_info',
-        null=True,
-        blank=True,
-        help_text="Project information (optional)"
-    )
+    @property
+    def base_header(self):
+        """Get the collection header"""
+        return self.header.first()
     
-    administrative_info = models.ForeignKey(
-        CollectionAdministrativeInfo,
-        on_delete=models.CASCADE,
-        related_name='collection_administrative_info'
-    )
-    structural_info = models.ForeignKey(
-        CollectionStructuralInfo,
-        on_delete=models.CASCADE,
-        related_name='collection_structural_info',
-        help_text="Structural information about the collection"
-    )
+    @property
+    def get_general_info(self):
+        """Get the collection general info"""
+        return self.general_info.first()
+    
+    @property
+    def get_publication_info(self):
+        """Get the collection publication info"""
+        return self.publication_info.first()
+    
+    @property
+    def get_administrative_info(self):
+        """Get the collection administrative info"""
+        return self.administrative_info.first()
+    
+    @property
+    def get_structural_info(self):
+        """Get the collection structural info"""
+        return self.structural_info.first()
+    
+    @property
+    def get_project_info(self):
+        """Get the collection project info"""
+        return self.project_info.first()
 
     class Meta:
         verbose_name = "Collection"
         verbose_name_plural = "Collections"
 
-    def __str__(self):
-        return self.general_info.display_title if hasattr(self, 'general_info') else f"Collection {self.id}"

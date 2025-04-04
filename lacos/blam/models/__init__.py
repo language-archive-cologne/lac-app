@@ -1,6 +1,5 @@
 
 from .base_model import *
-from .base_repository import *
 from .base_administrative_info import *
 from .base_project_info import *
 from .base_general_info import *

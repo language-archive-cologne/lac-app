@@ -17,9 +17,14 @@ class CollectionGeneralInfo(GeneralInfo):
     Extends the abstract GeneralInfo model to provide collection-specific
     general information and metadata.
     """
+    collection = models.ForeignKey(
+        'Collection',
+        on_delete=models.CASCADE,
+        related_name='general_info'
+    )
     keywords = models.ManyToManyField('CollectionKeyword', blank=True)
     object_languages = models.ManyToManyField('CollectionObjectLanguage', blank=True)
-    location = models.ForeignKey('CollectionLocation', on_delete=models.CASCADE, related_name='collection_general_info')
+    location = models.ForeignKey('CollectionLocation', on_delete=models.CASCADE, related_name='location')
 
     class Meta:
         verbose_name = "Collection General Info"

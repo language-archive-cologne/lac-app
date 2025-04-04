@@ -47,6 +47,30 @@ def move_to_production(request, folder_path):
             logger.info(f"Production bucket contents after copy ({len(production_contents)} items):")
             for item in production_contents:
                 logger.info(f"  {item.get('path')} - {'folder' if item.get('is_dir', False) else 'file'}")
+            
+            # Trigger the ingestion pipeline for the copied collection
+            try:
+                # Import the task function
+                from lacos.ingest.tasks import process_s3_prefix
+                
+                # Ensure folder_path ends with a slash for proper prefix handling
+                prefix = folder_path.rstrip('/') + '/'
+                
+                # Launch the ingestion task
+                task_result = process_s3_prefix(
+                    bucket=bucket_service.production_bucket,
+                    prefix=prefix
+                )
+                
+                logger.info(f"Triggered ingestion pipeline for {bucket_service.production_bucket}/{prefix}, task: {task_result}")
+                
+                # Add a message about ingestion being triggered
+                messages.info(request, f"Triggered ingestion pipeline for collection '{folder_path}'")
+                
+            except Exception as e:
+                # Log the error but don't fail the move operation
+                logger.error(f"Error triggering ingestion for {folder_path}: {str(e)}")
+                messages.warning(request, f"Moved to production successfully, but failed to trigger ingestion: {str(e)}")
         
         # Check if this is an HTMX request
         is_htmx = request.headers.get('HX-Request') == 'true'

@@ -3,11 +3,12 @@ from lacos.blam.models.collection.collection_structural_info import (
     CollectionStructuralInfo,
     CollectionAdditionalMetadataFile
 )
+from lacos.blam.models.collection.collection_repository import Collection
 from blam_schemas.collection.blam_collection_repository_v1_0 import Cmd
 
 
 @transaction.atomic
-def import_structural_info(collection_schema: Cmd) -> CollectionStructuralInfo:
+def import_structural_info(collection_schema: Cmd, collection: Collection) -> CollectionStructuralInfo:
     """
     Import structural info from a BLAM collection repository schema to Django models.
     
@@ -20,6 +21,7 @@ def import_structural_info(collection_schema: Cmd) -> CollectionStructuralInfo:
     
     Args:
         collection_schema: The BLAM collection repository schema containing structural info.
+        collection: The Collection instance to attach this structural info to.
         
     Returns:
         A fully populated CollectionStructuralInfo instance with all related objects.
@@ -27,8 +29,14 @@ def import_structural_info(collection_schema: Cmd) -> CollectionStructuralInfo:
     # Extract the structural info section from the schema
     structural_info_schema = collection_schema.components.blam_collection_repository_v1_0.collection_structural_info
     
-    # Create the structural info model
-    structural_info = CollectionStructuralInfo.objects.create()
+    # Try to find an existing structural info for this collection or create a new one
+    try:
+        structural_info = CollectionStructuralInfo.objects.get(collection=collection)
+        # Clear existing additional metadata files to avoid duplicates
+        structural_info.additional_metadata_files.clear()
+    except CollectionStructuralInfo.DoesNotExist:
+        # Create the structural info model with reference to collection
+        structural_info = CollectionStructuralInfo.objects.create(collection=collection)
     
     # Import additional metadata files if they exist
     if hasattr(structural_info_schema, 'collection_additional_metadata_file') and structural_info_schema.collection_additional_metadata_file:

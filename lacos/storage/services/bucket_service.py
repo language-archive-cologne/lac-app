@@ -10,13 +10,16 @@ from botocore.exceptions import ClientError
 from django.conf import settings
 import boto3
 from django.core.management import call_command
-from io import StringIO
-import sys
+
 
 from .base_storage_service import BaseStorageService
 from .collection_service import CollectionService
 from .upload_service import UploadService
 from .ocfl_service import OCFLService
+
+# Import BLAM models for direct access
+from lacos.blam.models.collection.collection_repository import Collection
+from lacos.blam.models.bundle.bundle_repository import Bundle
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +69,76 @@ class BucketService(BaseStorageService):
         logger.info("BucketService initialized")
         self.initialized = True
     
+    def is_blam_object(self, bucket_name: str, path: str) -> Dict[str, Any]:
+        """
+        Check if a path corresponds to a BLAM model (Collection or Bundle).
+        
+        Args:
+            bucket_name (str): The bucket name 
+            path (str): The path to check
+            
+        Returns:
+            Dict with keys:
+                is_blam_object (bool): Whether this is a BLAM object
+                blam_type (str, optional): "collection" or "bundle" if applicable
+                blam_id (str, optional): The database ID if applicable
+        """
+        result = {
+            "is_blam_object": False,
+            "blam_type": None,
+            "blam_id": None
+        }
+        
+        # Only check production bucket
+        if bucket_name != self.production_bucket:
+            return result
+            
+        try:
+            # Check for collection path pattern
+            if self.collection_service.is_collection_path(path):
+                # Extract the collection name
+                collection_name = path.rstrip('/').split('/')[-1]
+                
+                # Query the database for a matching collection
+                try:
+                    collection = Collection.objects.filter(
+                        general_info__directory_name=collection_name
+                    ).first()
+                    
+                    if collection:
+                        result["is_blam_object"] = True
+                        result["blam_type"] = "collection"
+                        result["blam_id"] = str(collection.pk)
+                        logger.info(f"Identified path {path} as Collection with ID {collection.pk}")
+                        return result
+                except Exception as e:
+                    logger.error(f"Error querying Collection for path {path}: {str(e)}")
+            
+            # Check if this might be a bundle
+            parts = path.rstrip('/').split('/')
+            if len(parts) >= 2:
+                bundle_name = parts[-1]
+                
+                # Query the database for a matching bundle
+                try:
+                    bundle = Bundle.objects.filter(
+                        general_info__directory_name=bundle_name
+                    ).first()
+                    
+                    if bundle:
+                        result["is_blam_object"] = True
+                        result["blam_type"] = "bundle"
+                        result["blam_id"] = str(bundle.pk)
+                        logger.info(f"Identified path {path} as Bundle with ID {bundle.pk}")
+                        return result
+                except Exception as e:
+                    logger.error(f"Error querying Bundle for path {path}: {str(e)}")
+                    
+        except Exception as e:
+            logger.error(f"Error in is_blam_object for path {path}: {str(e)}")
+            
+        return result
+    
     def get_root_level_items(self, bucket_name: str) -> Dict[str, Any]:
         """
         Get only the root level items (files and folders) from a bucket.
@@ -80,21 +153,31 @@ class BucketService(BaseStorageService):
         try:
             contents = self.collection_service.list_bucket_contents(bucket_name)
             
+            # Process items to add BLAM object information
+            processed_children = []
+            for item in contents:
+                child = {
+                    "type": "folder" if item["is_dir"] else "file",
+                    "name": item["name"],
+                    "path": item["path"],
+                    "size": item.get("size"),
+                    "last_modified": item.get("last_modified"),
+                }
+                
+                # If it's a folder, check if it's a BLAM object
+                if item["is_dir"]:
+                    blam_info = self.is_blam_object(bucket_name, item["path"])
+                    if blam_info["is_blam_object"]:
+                        child.update(blam_info)
+                
+                processed_children.append(child)
+            
             # Transform the contents into the expected structure
             return {
                 "type": "folder",
                 "name": bucket_name,
                 "path": "",
-                "children": [
-                    {
-                        "type": "folder" if item["is_dir"] else "file",
-                        "name": item["name"],
-                        "path": item["path"],
-                        "size": item.get("size"),
-                        "last_modified": item.get("last_modified"),
-                    }
-                    for item in contents
-                ]
+                "children": processed_children
             }
         except Exception as e:
             logger.error(f"Error getting root level items for bucket '{bucket_name}': {str(e)}")
@@ -115,17 +198,26 @@ class BucketService(BaseStorageService):
         try:
             contents = self.collection_service.list_bucket_contents(bucket_name, folder_path)
             
-            # Transform the contents into the expected structure
-            return [
-                {
+            # Transform the contents and add BLAM object information
+            processed_contents = []
+            for item in contents:
+                result = {
                     "type": "folder" if item["is_dir"] else "file",
                     "name": item["name"],
                     "path": item["path"],
                     "size": item.get("size"),
                     "last_modified": item.get("last_modified"),
                 }
-                for item in contents
-            ]
+                
+                # If it's a folder, check if it's a BLAM object
+                if item["is_dir"]:
+                    blam_info = self.is_blam_object(bucket_name, item["path"])
+                    if blam_info["is_blam_object"]:
+                        result.update(blam_info)
+                
+                processed_contents.append(result)
+            
+            return processed_contents
         except Exception as e:
             logger.error(f"Error getting folder contents for '{folder_path}' in bucket '{bucket_name}': {str(e)}")
             return []

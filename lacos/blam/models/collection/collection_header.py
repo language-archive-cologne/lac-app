@@ -7,6 +7,12 @@ class CollectionHeader(MdHeader):
     Contains metadata about the metadata document itself, plus
     collection-specific header information.
     """
+
+    collection = models.ForeignKey(
+        'Collection',
+        on_delete=models.CASCADE,
+        related_name='header'
+    )
     md_collection_display_name = models.CharField(
         max_length=255,
         null=True,

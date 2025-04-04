@@ -12,7 +12,14 @@ from lacos.blam.models.collection.collection_structural_info import (
     CollectionStructuralInfo,
     CollectionAdditionalMetadataFile
 )
+from lacos.blam.models.collection.collection_repository import Collection
 from blam_schemas.collection.blam_collection_repository_v1_0 import Cmd
+
+
+@pytest.fixture
+def test_collection():
+    """Create a test collection for testing."""
+    return Collection.objects.create(identifier="test-collection-structural-info")
 
 
 @pytest.fixture
@@ -88,28 +95,34 @@ def test_structural_info_section_in_cmd_data(real_cmd_data):
 
 
 @pytest.mark.django_db
-def test_import_structural_info_full_process(real_cmd_data):
+def test_import_structural_info_full_process(real_cmd_data, test_collection):
     """Test the full import_structural_info function with data from algerien.xml."""
     # Call the function we're testing
-    structural_info = import_structural_info(real_cmd_data)
+    structural_info = import_structural_info(real_cmd_data, test_collection)
     
     # Verify the model was created with correct data
     assert isinstance(structural_info, CollectionStructuralInfo)
     assert structural_info.pk is not None
+    assert structural_info.collection == test_collection
     
     # Verify no additional metadata files (algerien.xml doesn't have any)
     assert structural_info.additional_metadata_files.count() == 0
+    
+    # Test that importing again doesn't create a duplicate
+    structural_info2 = import_structural_info(real_cmd_data, test_collection)
+    assert structural_info.pk == structural_info2.pk
+    assert CollectionStructuralInfo.objects.filter(collection=test_collection).count() == 1
 
 
 @pytest.mark.django_db
-def test_import_additional_metadata_files_function():
+def test_import_additional_metadata_files_function(test_collection):
     """
     Test the import_additional_metadata_files function.
     
     Note: algerien.xml doesn't have metadata files, so we create a mock schema.
     """
     # Create a structural info to add metadata files to
-    structural_info = CollectionStructuralInfo.objects.create()
+    structural_info = CollectionStructuralInfo.objects.create(collection=test_collection)
     
     # Create a mock schema with metadata files (since algerien.xml doesn't have any)
     class MockMetadataFile:
@@ -145,4 +158,7 @@ def test_import_additional_metadata_files_function():
     assert metadata_file.file_pid == "test:pid:123"
     assert metadata_file.mime_type == "application/xml"
     assert metadata_file.is_metadata_for == "collection"
-    assert metadata_file.file_description == "Test metadata file" 
+    assert metadata_file.file_description == "Test metadata file"
+    
+    # Verify collection relationship
+    assert structural_info.collection == test_collection 

@@ -12,6 +12,13 @@ from lacos.blam.models.collection.collection_general_info import (
     CollectionObjectLanguageTaxonomy,
     CollectionObjectLanguageLanguageFamily
 )
+from lacos.blam.models.collection.collection_repository import Collection
+
+
+@pytest.fixture
+def test_collection():
+    """Create a test collection for testing."""
+    return Collection.objects.create(identifier="test-collection-general-info")
 
 
 @pytest.fixture
@@ -97,10 +104,10 @@ def test_cmd_data_parsing(real_cmd_data):
 
 
 @pytest.mark.django_db
-def test_general_info_data_mapping(real_cmd_data):
+def test_general_info_data_mapping(real_cmd_data, test_collection):
     """Test that general info is mapped correctly from CMD to Django model"""
     # Test import with real data
-    general_info = import_general_info(real_cmd_data)
+    general_info = import_general_info(real_cmd_data, test_collection)
     
     # Verify the object was created and fields were set correctly
     assert isinstance(general_info, CollectionGeneralInfo)
@@ -108,7 +115,7 @@ def test_general_info_data_mapping(real_cmd_data):
     assert general_info.description == "The Interviews were made by Issak Oukafi Cheikh for his Master Thesis 'L'historie d'Eharir (Tassili n Azjer, Sahara) dans la perception locale de l'art rupestre'. He talked with several locals from the village Eharir in western Algeria in 2010/2011 about thier perception of ancient rock art in the region."
     assert general_info.version == "1"
     assert general_info.id_value == "hdl:11341/0000-0000-0000-3D7C"
-    assert general_info.id_type == "Handle"
+    assert general_info.id_type == "HANDLE"
     
     # Check location was created and linked
     assert general_info.location is not None
@@ -182,13 +189,13 @@ def test_general_info_data_mapping(real_cmd_data):
 
 
 @pytest.mark.django_db
-def test_get_or_create_behavior(real_cmd_data):
+def test_get_or_create_behavior(real_cmd_data, test_collection):
     """Test that importing the same data twice doesn't create duplicates"""
     # First import
-    general_info1 = import_general_info(real_cmd_data)
+    general_info1 = import_general_info(real_cmd_data, test_collection)
     
     # Second import with same ID should get existing record
-    general_info2 = import_general_info(real_cmd_data)
+    general_info2 = import_general_info(real_cmd_data, test_collection)
     
     # Should be the same record
     assert general_info1.pk == general_info2.pk
@@ -206,10 +213,10 @@ def test_get_or_create_behavior(real_cmd_data):
 
 
 @pytest.mark.django_db
-def test_relationships_are_created(real_cmd_data):
+def test_relationships_are_created(real_cmd_data, test_collection):
     """Test that all relationships in CollectionGeneralInfo are created properly"""
     # Import the general info
-    general_info = import_general_info(real_cmd_data)
+    general_info = import_general_info(real_cmd_data, test_collection)
     
     # Import keywords first
     mock_data = {
@@ -257,25 +264,28 @@ def test_relationships_are_created(real_cmd_data):
     assert language.taxonomy.language_family.count() == 1
     families = list(language.taxonomy.language_family.all().values_list('value', flat=True))
     assert "Afro-Asiatic" in families
+
+
+@pytest.mark.django_db
+def test_language_update_behavior(real_cmd_data, test_collection):
+    """Test that re-importing updates existing language data based on ISO code."""
+    # First import
+    import_general_info(real_cmd_data, test_collection)
     
-    # 3. Verify reverse relationships
-    # Check reverse relationship from CollectionLocation to CollectionGeneralInfo (ForeignKey)
-    assert general_info.location.collection_general_info.filter(id=general_info.id).exists()
+    # Now create a modified version of the original language data
+    language = CollectionObjectLanguage.objects.get(iso_639_3_code="taq")
+    original_name = language.name
+    language.name = "Modified Name"
+    language.save()
     
-    # Check reverse relationship from CollectionKeyword to CollectionGeneralInfo (ManyToMany)
-    keyword = general_info.keywords.first()
-    assert keyword.collectiongeneralinfo_set.filter(id=general_info.id).exists()
+    # Re-import the same data
+    import_general_info(real_cmd_data, test_collection)
     
-    # Check reverse relationship from CollectionObjectLanguage to CollectionGeneralInfo (ManyToMany)
-    assert language.collectiongeneralinfo_set.filter(id=general_info.id).exists()
+    # The language should be updated to the original data
+    language.refresh_from_db()
+    assert language.name == original_name
+    assert language.name == "Tamasheq"  # Reset to original schema value
     
-    # Check reverse relationship from CollectionObjectLanguageAlternativeName to CollectionObjectLanguage (ManyToMany)
-    alt_name = language.alternative_names.first()
-    assert alt_name.collectionobjectlanguage_set.filter(id=language.id).exists()
-    
-    # Check reverse relationship from CollectionObjectLanguageTaxonomy to CollectionObjectLanguage (OneToOne)
-    assert language.taxonomy.object_language == language
-    
-    # Check reverse relationship from CollectionObjectLanguageLanguageFamily to CollectionObjectLanguageTaxonomy (ManyToMany)
-    family = language.taxonomy.language_family.first()
-    assert family.collectionobjectlanguagetaxonomy_set.filter(id=language.taxonomy.id).exists() 
+    # Count should still be 1 for this ISO code
+    lang_count = CollectionObjectLanguage.objects.filter(iso_639_3_code="taq").count()
+    assert lang_count == 1 

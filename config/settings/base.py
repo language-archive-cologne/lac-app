@@ -82,6 +82,7 @@ THIRD_PARTY_APPS = [
     "rest_framework.authtoken",
     "corsheaders",
     "drf_spectacular",
+    "huey.contrib.djhuey",
 ]
 
 LOCAL_APPS = [
@@ -89,6 +90,7 @@ LOCAL_APPS = [
     "lacos.blam",
     "lacos.storage",
     "lacos.rest",
+    "lacos.ingest",
 ]
 # https://docs.djangoproject.com/en/dev/ref/settings/#installed-apps
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -269,6 +271,38 @@ LOGGING = {
 REDIS_URL = env("REDIS_URL", default="redis://redis:6379/0")
 REDIS_SSL = REDIS_URL.startswith("rediss://")
 
+# Huey (Task Queue) Configuration
+# ------------------------------------------------------------------------------
+HUEY = {
+    'huey_class': 'huey.RedisHuey',
+    'name': 'lacos',
+    'results': True,
+    'store_none': False,
+    'immediate': DEBUG,  # If DEBUG=True, run synchronously
+    'utc': True,
+    'blocking': True,
+    'connection': {
+        'url': REDIS_URL,
+    },
+    'consumer': {
+        'workers': 2,
+        'worker_type': 'thread',
+        'initial_delay': 0.1,  # Smallest polling interval
+        'backoff': 1.15,  # Exponential backoff rate
+        'max_delay': 10.0,  # Max polling interval
+        'scheduler_interval': 1,  # Check schedule every second
+        'periodic': True,  # Enable crontab feature
+        'check_worker_health': True,  # Enable worker health checks
+        'health_check_interval': 1,  # Check worker health every second
+    },
+}
+
+# Collection Path Structure Configuration
+# ------------------------------------------------------------------------------
+# Path patterns for collections, bundles, and resources
+COLLECTION_PATH_PATTERN = env("COLLECTION_PATH_PATTERN")
+BUNDLE_PATH_PATTERN = env("BUNDLE_PATH_PATTERN")
+RESOURCE_PATH_PATTERN = env("RESOURCE_PATH_PATTERN")
 
 # django-allauth
 # ------------------------------------------------------------------------------

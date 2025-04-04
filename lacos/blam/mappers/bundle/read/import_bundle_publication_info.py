@@ -6,15 +6,19 @@ from lacos.blam.models.bundle.bundle_publication_info import (
 from blam_schemas.bundle.blam_bundle_repository_v1_0 import (
     Cmd, CreatorNameIdentifierIdentifierType, ContributorNameIdentifierIdentifierType
 )
+from lacos.blam.models.base_indentifiers import PersonIdentifierTypeChoices
+import logging
 
+logger = logging.getLogger(__name__)
 
 @transaction.atomic
-def import_publication_info(cmd_data: Cmd) -> Optional[BundlePublicationInfo]:
+def import_publication_info(cmd_data: Cmd, bundle: 'Bundle') -> Optional[BundlePublicationInfo]:
     """
     Import publication info from CMD object to Django models.
     
     Args:
         cmd_data: The CMD object containing bundle publication information
+        bundle: The Bundle instance to associate the publication info with
         
     Returns:
         BundlePublicationInfo object or None if publication info is missing
@@ -52,19 +56,63 @@ def import_publication_info(cmd_data: Cmd) -> Optional[BundlePublicationInfo]:
     # Get or create publication info using publication_year and data_provider as unique identifiers
     data_provider = pub_info.bundle_data_provider if hasattr(pub_info, 'bundle_data_provider') else None
     
-    bundle_pub_info, created = BundlePublicationInfo.objects.get_or_create(
-        publication_year=pub_year,
-        data_provider=data_provider
-    )
-    
-    # Import creators
+    # Extract primary creator identifier and type for the main record
+    primary_identifier = ''
+    primary_identifier_type = '' # Default to empty strings for required fields
+    first_creator_data = None
+    if hasattr(pub_info, 'bundle_creators') and pub_info.bundle_creators and pub_info.bundle_creators.bundle_creator:
+        first_creator_data = pub_info.bundle_creators.bundle_creator[0]
+        if first_creator_data.creator_name_identifier:
+            # Prioritize ORCID/ISNI, then first available
+            found_id = False
+            for identifier in first_creator_data.creator_name_identifier:
+                id_val = getattr(identifier, 'value', '')
+                id_type_enum = getattr(identifier, 'identifier_type', None)
+
+                if id_type_enum == CreatorNameIdentifierIdentifierType.ORCID:
+                    primary_identifier = id_val
+                    primary_identifier_type = PersonIdentifierTypeChoices.ORCID.value
+                    found_id = True
+                    break
+                elif id_type_enum == CreatorNameIdentifierIdentifierType.ISNI:
+                    primary_identifier = id_val
+                    primary_identifier_type = PersonIdentifierTypeChoices.ISNI.value
+                    found_id = True
+                    break
+            # If no ORCID/ISNI, take the first one if it exists
+            if not found_id and first_creator_data.creator_name_identifier:
+                identifier = first_creator_data.creator_name_identifier[0]
+                primary_identifier = getattr(identifier, 'value', '')
+                id_type_enum = getattr(identifier, 'identifier_type', None)
+                # Map enum to string value
+                if id_type_enum == CreatorNameIdentifierIdentifierType.EMAIL:
+                     primary_identifier_type = PersonIdentifierTypeChoices.EMAIL.value
+                elif id_type_enum: # Other type specified
+                     primary_identifier_type = PersonIdentifierTypeChoices.OTHER.value # Or map specific schema types if needed
+                else: # No type specified
+                     primary_identifier_type = PersonIdentifierTypeChoices.OTHER.value # Default if type is missing
+
+    # Always create a new record for each bundle import
+    try:
+        bundle_pub_info = BundlePublicationInfo.objects.create(
+            publication_year=pub_year,
+            data_provider=data_provider,
+            identifier=primary_identifier, # Use extracted or empty string
+            identifier_type=primary_identifier_type, # Use extracted or empty/default string
+            bundle=bundle  # Set the bundle directly
+        )
+    except Exception as e:
+        logger.error(f"Failed to create BundlePublicationInfo: {e}", exc_info=True)
+        return None # Or re-raise error
+
+    # Import creators (linking to the new bundle_pub_info)
     if hasattr(pub_info, 'bundle_creators') and pub_info.bundle_creators:
         import_creators(bundle_pub_info, pub_info.bundle_creators.bundle_creator)
         
-    # Import contributors
+    # Import contributors (linking to the new bundle_pub_info)
     if hasattr(pub_info, 'bundle_contributors') and pub_info.bundle_contributors:
         import_contributors(bundle_pub_info, pub_info.bundle_contributors.bundle_contributor)
-        
+    
     return bundle_pub_info
 
 
@@ -85,8 +133,6 @@ def import_creators(bundle_pub_info: BundlePublicationInfo, creators_data: List)
             family_name=creator_data.creator_name.creator_family_name,
             given_name=creator_data.creator_name.creator_given_name or "",
             defaults={
-                'name_identifier': None,
-                'name_identifier_type': None,
                 'affiliation': None
             }
         )

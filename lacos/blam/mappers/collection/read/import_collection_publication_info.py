@@ -4,6 +4,7 @@ from lacos.blam.models.collection.collection_publication_info import (
     CollectionCreator,
     CollectionContributor
 )
+from lacos.blam.models.collection.collection_repository import Collection
 from blam_schemas.collection.blam_collection_repository_v1_0 import (
     Cmd,
     CreatorNameIdentifierIdentifierType,
@@ -12,7 +13,7 @@ from blam_schemas.collection.blam_collection_repository_v1_0 import (
 
 
 @transaction.atomic
-def import_publication_info(collection_schema: Cmd) -> CollectionPublicationInfo:
+def import_publication_info(collection_schema: Cmd, collection: Collection) -> CollectionPublicationInfo:
     """
     Import publication info from a BLAM collection repository schema to Django models.
     
@@ -25,6 +26,7 @@ def import_publication_info(collection_schema: Cmd) -> CollectionPublicationInfo
     
     Args:
         collection_schema: The BLAM collection repository schema containing publication info.
+        collection: The Collection instance to attach this publication info to.
         
     Returns:
         A fully populated CollectionPublicationInfo instance with all related objects.
@@ -33,7 +35,7 @@ def import_publication_info(collection_schema: Cmd) -> CollectionPublicationInfo
     publication_info_schema = collection_schema.components.blam_collection_repository_v1_0.collection_publication_info
     
     # Create and populate the publication info model
-    publication_info = create_base_publication_info(publication_info_schema)
+    publication_info = create_base_publication_info(publication_info_schema, collection)
     
     # Import creators
     import_creators(publication_info, publication_info_schema)
@@ -46,18 +48,21 @@ def import_publication_info(collection_schema: Cmd) -> CollectionPublicationInfo
     return publication_info
 
 
-def create_base_publication_info(publication_info_schema) -> CollectionPublicationInfo:
+def create_base_publication_info(publication_info_schema, collection: Collection) -> CollectionPublicationInfo:
     """
     Create and populate the base publication info model.
     
     Args:
         publication_info_schema: The publication info section of the BLAM collection repository schema.
+        collection: The Collection instance to attach this publication info to.
         
     Returns:
         A CollectionPublicationInfo instance with basic fields populated.
     """
     # Prepare publication info data
-    publication_info_data = {}
+    publication_info_data = {
+        'collection': collection  # Set the reference to the collection
+    }
     
     # Set the publication year
     if publication_info_schema.collection_publication_year:
@@ -77,18 +82,21 @@ def create_base_publication_info(publication_info_schema) -> CollectionPublicati
     else:
         publication_info_data['data_provider'] = ""  # Required field, use empty string if missing
     
-    # Try to find an existing publication info with the same year and provider
-    publication_info, created = CollectionPublicationInfo.objects.get_or_create(
-        publication_year=publication_info_data['publication_year'],
-        data_provider=publication_info_data['data_provider'],
-        defaults=publication_info_data
-    )
-    
-    # Update fields that might have changed
-    if not created:
-        for key, value in publication_info_data.items():
-            setattr(publication_info, key, value)
+    # Try to find an existing publication info for this collection
+    try:
+        publication_info = CollectionPublicationInfo.objects.get(
+            collection=collection
+        )
+        
+        # Update fields that might have changed
+        if 'publication_year' in publication_info_data:
+            publication_info.publication_year = publication_info_data['publication_year']
+        if 'data_provider' in publication_info_data:
+            publication_info.data_provider = publication_info_data['data_provider']
         publication_info.save()
+    except CollectionPublicationInfo.DoesNotExist:
+        # Create new if it doesn't exist
+        publication_info = CollectionPublicationInfo.objects.create(**publication_info_data)
     
     return publication_info
 
@@ -187,16 +195,18 @@ def import_contributors(publication_info: CollectionPublicationInfo, publication
         display_name = f"{given_name} {family_name}".strip()
         contributor_data['contributor_display_name'] = display_name
         
-        # Try to find an existing contributor with the same display name, or create a new one
+        # Try to find an existing contributor with the same family and given name, or create a new one
         contributor, created = CollectionContributor.objects.get_or_create(
-            contributor_display_name=contributor_data['contributor_display_name'],
-            defaults=contributor_data
+            family_name=contributor_data['family_name'],
+            given_name=contributor_data.get('given_name', ''),
+            defaults={
+                'contributor_display_name': contributor_data['contributor_display_name']
+            }
         )
         
-        # Update fields that might have changed
-        if not created:
-            for key, value in contributor_data.items():
-                setattr(contributor, key, value)
+        # Add role if it exists
+        if hasattr(contributor_schema, 'contributor_role') and contributor_schema.contributor_role:
+            contributor.role = contributor_schema.contributor_role
             contributor.save()
         
         # Add affiliations if they exist

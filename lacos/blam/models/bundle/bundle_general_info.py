@@ -17,6 +17,11 @@ class BundleGeneralInfo(GeneralInfo):
     Extends the abstract GeneralInfo model with bundle-specific fields
     and relationships.
     """
+    bundle = models.ForeignKey(
+        'Bundle',
+        on_delete=models.CASCADE,
+        related_name='general_info'
+    )
     keywords = models.ManyToManyField('BundleKeyword', blank=True)
     object_languages = models.ManyToManyField('BundleObjectLanguage', blank=True)
     location = models.ForeignKey('BundleLocation', on_delete=models.CASCADE, related_name='bundle_general_info')
@@ -54,13 +59,8 @@ class BundleObjectLanguage(ObjectLanguage):
     """
     Concrete implementation of ObjectLanguage for Bundle resources.
     
-    Links language information to specific bundles.
+    Represents a unique language entry.
     """
-    bundle = models.ForeignKey(
-        'BundleGeneralInfo',
-        on_delete=models.CASCADE,
-        related_name='bundle_object_languages'
-    )
     alternative_names = models.ManyToManyField('BundleObjectLanguageAlternativeName', blank=True)
     
     class Meta:

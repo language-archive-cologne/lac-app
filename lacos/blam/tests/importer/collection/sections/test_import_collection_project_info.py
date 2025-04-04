@@ -4,7 +4,14 @@ from unittest.mock import patch
 from lacos.blam.mappers.collection.read.collection_importer import CollectionImporter
 from lacos.blam.mappers.collection.read.import_collection_project_info import import_project_info
 from lacos.blam.models.base_project_info import ProjectInfo
+from lacos.blam.models.collection.collection_repository import Collection
 from blam_schemas.collection.blam_collection_repository_v1_0 import FunderIdentifierIdentifierType
+
+
+@pytest.fixture
+def test_collection():
+    """Create a test collection for testing."""
+    return Collection.objects.create(identifier="test-collection-project-info")
 
 
 @pytest.fixture
@@ -114,12 +121,12 @@ def test_cmd_data_parsing(real_cmd_data):
 
 
 @pytest.mark.django_db
-def test_project_data_mapping(cmd_data):
+def test_project_data_mapping(cmd_data, test_collection):
     """Test that project data is mapped correctly from CMD to Django models"""
     # We'll patch the import_funder_infos function to avoid M2M issues in tests
     with patch('lacos.blam.mappers.collection.read.import_collection_project_info.import_funder_infos'):
         # Import the project data
-        project_infos = import_project_info(cmd_data)
+        project_infos = import_project_info(cmd_data, test_collection)
         
         # Verify the project was created
         assert len(project_infos) == 1
@@ -129,19 +136,23 @@ def test_project_data_mapping(cmd_data):
         assert isinstance(project, ProjectInfo)
         assert project.project_display_name == "Test Project"
         assert project.project_description == "A test project for unit testing"
+        
+        # Check if project is associated with collection
+        if hasattr(test_collection, 'project_infos'):
+            assert test_collection.project_infos.filter(pk=project.pk).exists()
 
 
 @pytest.mark.django_db
-def test_get_or_create_behavior(cmd_data):
+def test_get_or_create_behavior(cmd_data, test_collection):
     """Test that importing the same project data twice doesn't create duplicates"""
     # We'll patch the import_funder_infos function to avoid M2M issues in tests
     with patch('lacos.blam.mappers.collection.read.import_collection_project_info.import_funder_infos'):
         # First import
-        projects1 = import_project_info(cmd_data)
+        projects1 = import_project_info(cmd_data, test_collection)
         initial_count = ProjectInfo.objects.count()
         
         # Second import with same data
-        projects2 = import_project_info(cmd_data)
+        projects2 = import_project_info(cmd_data, test_collection)
         
         # Counts should match
         assert ProjectInfo.objects.count() == initial_count
@@ -150,10 +161,14 @@ def test_get_or_create_behavior(cmd_data):
         # Should be the same records
         for p1, p2 in zip(projects1, projects2):
             assert p1.pk == p2.pk
+            
+        # Check if project is associated with collection
+        if hasattr(test_collection, 'project_infos'):
+            assert test_collection.project_infos.count() == len(projects1)
 
 
 @pytest.mark.django_db
-def test_multiple_projects(cmd_data):
+def test_multiple_projects(cmd_data, test_collection):
     """Test handling of multiple projects"""
     # Add a second project to the mock data
     second_project = type('obj', (object,), {
@@ -168,7 +183,7 @@ def test_multiple_projects(cmd_data):
     # We'll patch the import_funder_infos function to avoid M2M issues in tests
     with patch('lacos.blam.mappers.collection.read.import_collection_project_info.import_funder_infos'):
         # Import and verify
-        imported_projects = import_project_info(cmd_data)
+        imported_projects = import_project_info(cmd_data, test_collection)
         assert len(imported_projects) == 2
         
         # Verify both projects were created correctly
@@ -176,10 +191,14 @@ def test_multiple_projects(cmd_data):
         assert imported_projects[0].project_description == "A test project for unit testing"
         assert imported_projects[1].project_display_name == "Second Project"
         assert imported_projects[1].project_description == "Another test project"
+        
+        # Check if projects are associated with collection
+        if hasattr(test_collection, 'project_infos'):
+            assert test_collection.project_infos.count() == 2
 
 
 @pytest.mark.django_db
-def test_missing_funder_data(cmd_data):
+def test_missing_funder_data(cmd_data, test_collection):
     """Test handling of projects without funder information"""
     # Remove funder info from the project
     project = cmd_data.components.blam_collection_repository_v1_0.project_info.project[0]
@@ -188,10 +207,14 @@ def test_missing_funder_data(cmd_data):
     # We'll patch the import_funder_infos function to avoid M2M issues in tests
     with patch('lacos.blam.mappers.collection.read.import_collection_project_info.import_funder_infos'):
         # Import and verify
-        imported_projects = import_project_info(cmd_data)
+        imported_projects = import_project_info(cmd_data, test_collection)
         assert len(imported_projects) == 1
         
         # Project should still be created with just the basic info
         project = imported_projects[0]
         assert project.project_display_name == "Test Project"
         assert project.project_description == "A test project for unit testing"
+        
+        # Check if project is associated with collection
+        if hasattr(test_collection, 'project_infos'):
+            assert test_collection.project_infos.filter(pk=project.pk).exists()

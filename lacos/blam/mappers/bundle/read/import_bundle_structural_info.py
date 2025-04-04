@@ -1,6 +1,7 @@
-from typing import Optional, List, Tuple
+from typing import Optional, List
 from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist
+from lacos.blam.models.bundle import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import (
     BundleStructuralInfo,
     BundleAdditionalMetadataFile,
@@ -13,13 +14,16 @@ from lacos.blam.models.bundle.bundle_structural_info import (
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo
 from blam_schemas.bundle.blam_bundle_repository_v1_0 import (
-    Cmd, BundleIsMemberOfCollectionIdentifierType
+    Cmd
 )
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
+import logging # Make sure logging is imported
+
+logger = logging.getLogger(__name__) # Add logger instance
 
 
 @transaction.atomic
-def import_structural_info(cmd_data: Cmd, collection_identifier: str, identifier_type: str) -> Optional[BundleStructuralInfo]:
+def import_structural_info(cmd_data: Cmd, collection_identifier: str, identifier_type: str, bundle: 'Bundle') -> Optional[BundleStructuralInfo]:
     """
     Import structural info from CMD object to Django models.
     
@@ -27,6 +31,7 @@ def import_structural_info(cmd_data: Cmd, collection_identifier: str, identifier
         cmd_data: The CMD object containing bundle structural information
         collection_identifier: The identifier value (e.g., DOI, Handle) of the collection
         identifier_type: The type of identifier (e.g., "DOI", "Handle")
+        bundle: The Bundle instance to associate the structural info with
         
     Returns:
         BundleStructuralInfo object or None if structural info is missing
@@ -52,7 +57,8 @@ def import_structural_info(cmd_data: Cmd, collection_identifier: str, identifier
     
     # Create structural info first
     bundle_struct_info, created = BundleStructuralInfo.objects.get_or_create(
-        is_member_of_collection=collection
+        is_member_of_collection=collection,
+        bundle=bundle
     )
     
     # Import optional components only if they exist
@@ -100,34 +106,74 @@ def import_additional_metadata_files(
 
 
 def import_bundle_resources(
-    bundle_struct_info: BundleStructuralInfo, 
-    resources_data
+    bundle_struct_info: BundleStructuralInfo,
+    resources_data # This is the parsed XML data for <BundleResources>
 ) -> None:
     """
     Import bundle resources from CMD data to Django models.
     
     Args:
         bundle_struct_info: The BundleStructuralInfo object to link resources to
-        resources_data: Resources data from the CMD object
+        resources_data: Resources data from the CMD object (nested within struct info)
     """
-    # Get or create bundle resources container
-    # Since there's no clear unique identifier in the schema for BundleResources,
-    # we'll create a relationship with the structural info
-    bundle_resources, created = BundleResources.objects.get_or_create(
-        defaults={}  # No additional fields to set
-    )
+    logger.debug(f"Entering import_bundle_resources for bundle {bundle_struct_info.bundle.id}")
+    logger.debug(f"Type of received resources_data: {type(resources_data)}")
+    logger.debug(f"Received resources_data: {resources_data!r}") # Log the representation
     
-    # Import media resources
-    if resources_data.media_resource:
+    # Check for specific resource attributes before the if conditions
+    has_media = hasattr(resources_data, 'media_resource') and resources_data.media_resource
+    has_written = hasattr(resources_data, 'written_resource') and resources_data.written_resource
+    has_other = hasattr(resources_data, 'other_resource') and resources_data.other_resource
+    logger.debug(f"Resources data has media: {bool(has_media)}, written: {bool(has_written)}, other: {bool(has_other)}")
+    if has_media:
+        logger.debug(f"Media resource list type: {type(resources_data.media_resource)}, Length: {len(resources_data.media_resource) if isinstance(resources_data.media_resource, list) else 'N/A'}")
+    if has_written:
+        logger.debug(f"Written resource list type: {type(resources_data.written_resource)}, Length: {len(resources_data.written_resource) if isinstance(resources_data.written_resource, list) else 'N/A'}")
+        
+    # Get or create the associated BundleResources instance via the relationship
+    try:
+        # Check for existing bundle resources
+        bundle_resources = BundleResources.objects.filter(bundle=bundle_struct_info.bundle).first()
+        if not bundle_resources:
+            # Create a new BundleResources if one doesn't exist
+            logger.debug(f"Creating new BundleResources for bundle {bundle_struct_info.bundle.id}")
+            bundle_resources = BundleResources.objects.create(bundle=bundle_struct_info.bundle)
+        else:
+            logger.debug(f"Found existing BundleResources (ID: {bundle_resources.id}) for bundle {bundle_struct_info.bundle.id}")
+            
+    except Exception as e:
+        logger.error(f"Error getting/creating BundleResources for bundle {bundle_struct_info.bundle.id}: {e}", exc_info=True)
+        # Create a new BundleResources if there was an error
+        logger.debug(f"Attempting to create new BundleResources after error for bundle {bundle_struct_info.bundle.id}")
+        bundle_resources = BundleResources.objects.create(bundle=bundle_struct_info.bundle)
+
+    # Ensure resources_data is not None before accessing attributes
+    if not resources_data:
+        logger.debug("resources_data is None or empty, skipping resource import.")
+        return # If no <BundleResources> in XML, nothing more to do
+
+    # Import media resources if present in XML data
+    if has_media:
+        logger.info(f"Importing {len(resources_data.media_resource)} media resource(s)...")
         import_media_resources(bundle_resources, resources_data.media_resource)
-    
-    # Import written resources
-    if resources_data.written_resource:
+    else:
+        logger.debug("No media resources found in resources_data.")
+
+    # Import written resources if present in XML data
+    if has_written:
+        logger.info(f"Importing {len(resources_data.written_resource)} written resource(s)...")
         import_written_resources(bundle_resources, resources_data.written_resource)
-    
-    # Import other resources
-    if resources_data.other_resource:
+    else:
+        logger.debug("No written resources found in resources_data.")
+
+    # Import other resources if present in XML data
+    if has_other:
+        logger.info(f"Importing {len(resources_data.other_resource)} other resource(s)...")
         import_other_resources(bundle_resources, resources_data.other_resource)
+    else:
+        logger.debug("No other resources found in resources_data.")
+    
+    logger.debug(f"Finished import_bundle_resources for bundle {bundle_struct_info.bundle.id}")
 
 
 def import_media_resources(
@@ -162,6 +208,12 @@ def import_media_resources(
             media_resource.save()
             
         bundle_resources.bundle_media_resources.add(media_resource)
+        # Log count immediately after adding
+        try:
+            count_after_add = bundle_resources.bundle_media_resources.count()
+            logger.debug(f"(Importer) Added MediaResource {media_resource.id}. BundleResources {bundle_resources.id} now has {count_after_add} media resources.")
+        except Exception as log_e:
+            logger.error(f"(Importer) Error logging count after adding MediaResource {media_resource.id}: {log_e}")
 
 
 def import_written_resources(
@@ -203,6 +255,12 @@ def import_written_resources(
                 )
         
         bundle_resources.bundle_written_resources.add(written_resource)
+        # Log count immediately after adding
+        try:
+            count_after_add = bundle_resources.bundle_written_resources.count()
+            logger.debug(f"(Importer) Added WrittenResource {written_resource.id}. BundleResources {bundle_resources.id} now has {count_after_add} written resources.")
+        except Exception as log_e:
+            logger.error(f"(Importer) Error logging count after adding WrittenResource {written_resource.id}: {log_e}")
 
 
 def import_other_resources(
@@ -235,3 +293,9 @@ def import_other_resources(
             other_resource.save()
             
         bundle_resources.bundle_other_resources.add(other_resource)
+        # Log count immediately after adding
+        try:
+            count_after_add = bundle_resources.bundle_other_resources.count()
+            logger.debug(f"(Importer) Added OtherResource {other_resource.id}. BundleResources {bundle_resources.id} now has {count_after_add} other resources.")
+        except Exception as log_e:
+            logger.error(f"(Importer) Error logging count after adding OtherResource {other_resource.id}: {log_e}")

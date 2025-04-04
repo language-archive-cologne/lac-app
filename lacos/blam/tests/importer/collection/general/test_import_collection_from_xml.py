@@ -4,6 +4,8 @@ from django.core.exceptions import ValidationError
 from lacos.blam.mappers.collection.read.collection_importer import CollectionImporter
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.collection.collection_structural_info import CollectionStructuralInfo
+import datetime
+from datetime import date
 
 
 @pytest.fixture
@@ -81,26 +83,40 @@ def test_import_from_xml_valid_content(algerien_xml_content):
     
     # Verify collection was created with correct data
     assert isinstance(collection, Collection)
-    assert collection.general_info.display_title == "Interviews about Rock Art"
-    assert collection.base_header.md_self_link == "hdl:11341/0000-0000-0000-3D7C"
     
-    # Verify structural info was created
-    assert collection.structural_info is not None
-    assert isinstance(collection.structural_info, CollectionStructuralInfo)
+    # Collection.general_info is now a RelatedManager, get the first item
+    general_info = collection.general_info.first()
+    assert general_info is not None
+    assert general_info.display_title == "Interviews about Rock Art"
+    
+    # Base header is now accessed through a RelatedManager
+    base_header = collection.header.first()  # assuming header is the related_name
+    assert base_header is not None
+    assert base_header.md_self_link == "hdl:11341/0000-0000-0000-3D7C"
+    
+    # Verify structural info was created (also a RelatedManager)
+    structural_info = collection.structural_info.first()
+    assert structural_info is not None
+    assert isinstance(structural_info, CollectionStructuralInfo)
     
     # In the updated architecture, we don't check members directly on the collection
     # Instead, bundles reference collections, and this would be part of a separate test
     # that verifies bundles are properly linked to this collection
     
-    # Verify publication info
-    assert collection.publication_info is not None
-    assert collection.publication_info.publication_year == 2022
-    assert collection.publication_info.data_provider == "FAIR.rdm im SPP2143 \"Entangled Africa\""
+    # Verify publication info (RelatedManager)
+    publication_info = collection.publication_info.first()
+    assert publication_info is not None
+    assert publication_info.publication_year == 2022
+    assert publication_info.data_provider == "FAIR.rdm im SPP2143 \"Entangled Africa\""
     
-    # Verify administrative info
-    assert collection.administrative_info is not None
-    assert collection.administrative_info.access_level == "public"
-    assert collection.administrative_info.availability_date == "2022-10-26"
+    # Verify administrative info (RelatedManager)
+    administrative_info = collection.administrative_info.first()
+    assert administrative_info is not None
+    assert administrative_info.access_level == "public"
+    
+    # Check that the availability date is correct (it's a date object, not a string)
+    expected_date = date(2022, 10, 26)
+    assert administrative_info.availability_date == expected_date
 
 
 @pytest.mark.django_db

@@ -211,17 +211,7 @@ def mark_uploads_complete(request):
         total_size = 0
         
         for s3_key in s3_keys:
-            # Log the exact head_object request being made
-            logger.info(f"Checking S3 key: {s3_key} in bucket: {upload_service.ingest_bucket}")
-            try:
-                # Directly test the S3 client
-                response = upload_service.s3_client.head_object(
-                    Bucket=upload_service.ingest_bucket,
-                    Key=s3_key
-                )
-                logger.info(f"S3 head_object response: {response}")
-            except Exception as e:
-                logger.error(f"Error in head_object: {str(e)}")
+            logger.info(f"Verifying upload for S3 key: {s3_key}")
             
             # Get the verification result from the service
             result = upload_service.mark_upload_complete(s3_key)
@@ -247,7 +237,7 @@ def mark_uploads_complete(request):
             else:
                 total_failed += 1
                 success = False
-            
+        
         # Format the total size as a human-readable string
         total_size_formatted = "0 B"
         if total_size > 0:

@@ -10,10 +10,17 @@ from lacos.blam.models.collection.collection_publication_info import (
     CollectionCreator,
     CollectionContributor
 )
+from lacos.blam.models.collection.collection_repository import Collection
 from blam_schemas.collection.blam_collection_repository_v1_0 import (
     CreatorNameIdentifierIdentifierType,
     ContributorNameIdentifierIdentifierType
 )
+
+
+@pytest.fixture
+def test_collection():
+    """Create a test collection for testing."""
+    return Collection.objects.create(identifier="test-collection-publication-info")
 
 
 @pytest.fixture
@@ -154,15 +161,16 @@ def test_cmd_data_parsing(real_cmd_data):
 
 
 @pytest.mark.django_db
-def test_publication_info_data_mapping(real_cmd_data):
+def test_publication_info_data_mapping(real_cmd_data, test_collection):
     """Test that publication info is mapped correctly from CMD to Django model"""
     # Test import with real data
-    pub_info = import_publication_info(real_cmd_data)
+    pub_info = import_publication_info(real_cmd_data, test_collection)
     
     # Verify the object was created and fields were set correctly
     assert isinstance(pub_info, CollectionPublicationInfo)
     assert pub_info.publication_year == 2022
     assert pub_info.data_provider == "FAIR.rdm im SPP2143 \"Entangled Africa\""
+    assert pub_info.collection == test_collection
     
     # Verify creators were created
     assert pub_info.creators.count() == 1
@@ -186,19 +194,19 @@ def test_publication_info_data_mapping(real_cmd_data):
 
 
 @pytest.mark.django_db
-def test_get_or_create_behavior(real_cmd_data):
+def test_get_or_create_behavior(real_cmd_data, test_collection):
     """Test that importing the same data twice doesn't create duplicates"""
     # First import
-    pub_info1 = import_publication_info(real_cmd_data)
+    pub_info1 = import_publication_info(real_cmd_data, test_collection)
     
-    # Second import with same data should get existing record
-    pub_info2 = import_publication_info(real_cmd_data)
+    # Second import with same collection should get existing record
+    pub_info2 = import_publication_info(real_cmd_data, test_collection)
     
     # Should be the same record
     assert pub_info1.pk == pub_info2.pk
     
     # Count should still be 1
-    count = CollectionPublicationInfo.objects.count()
+    count = CollectionPublicationInfo.objects.filter(collection=test_collection).count()
     assert count == 1
     
     # Verify related objects weren't duplicated
@@ -207,7 +215,7 @@ def test_get_or_create_behavior(real_cmd_data):
 
 
 @pytest.mark.django_db
-def test_multiple_creators(mock_creator, mock_publication_info, mock_cmd_data):
+def test_multiple_creators(mock_creator, mock_publication_info, mock_cmd_data, test_collection):
     """Test handling of multiple creators"""
     # Create mock creators with real data structure
     creators = [
@@ -219,8 +227,9 @@ def test_multiple_creators(mock_creator, mock_publication_info, mock_cmd_data):
     pub_info = mock_publication_info(creators=creators)
     
     # Import and verify
-    result = import_publication_info(mock_cmd_data(pub_info))
+    result = import_publication_info(mock_cmd_data(pub_info), test_collection)
     assert result.creators.count() == 2
+    assert result.collection == test_collection
     
     # Verify both creators were created correctly
     creators = result.creators.all()
@@ -233,7 +242,7 @@ def test_multiple_creators(mock_creator, mock_publication_info, mock_cmd_data):
 
 
 @pytest.mark.django_db
-def test_creator_identifiers(mock_creator, mock_publication_info, mock_cmd_data):
+def test_creator_identifiers(mock_creator, mock_publication_info, mock_cmd_data, test_collection):
     """Test handling of creator identifiers"""
     # Create creator with ORCID identifier (like in real data)
     identifiers = [
@@ -248,66 +257,57 @@ def test_creator_identifiers(mock_creator, mock_publication_info, mock_cmd_data)
     pub_info = mock_publication_info(creators=[creator])
     
     # Import and verify
-    result = import_publication_info(mock_cmd_data(pub_info))
-    creator = result.creators.first()
-    
-    assert creator.name_identifier == '0000-0002-8200-0199'
-    assert creator.name_identifier_type == 'orcid'
+    result = import_publication_info(mock_cmd_data(pub_info), test_collection)
+    assert result.collection == test_collection
+    db_creator = result.creators.first()
+    assert db_creator.name_identifier == "0000-0002-8200-0199"
+    assert db_creator.name_identifier_type == "orcid"
 
 
 @pytest.mark.django_db
-def test_contributors(mock_contributor, mock_publication_info, mock_cmd_data):
+def test_contributors(mock_contributor, mock_publication_info, mock_cmd_data, test_collection):
     """Test handling of contributors"""
-    # Create mock contributor with real data structure
-    contributor = mock_contributor(
-        family_name="Lammers",
-        given_name="Lukas",
-        role="Data Steward",
-        affiliations=["FAIR.rdm im SPP2143 \"Entangled Africa\""],
-        identifiers=[
-            type('Identifier', (), {
-                'identifier_type': ContributorNameIdentifierIdentifierType.ORCID,
-                'value': '0000-0002-8200-0199'
-            })()
-        ]
-    )
+    # Create two contributors
+    contributors = [
+        mock_contributor(family_name="Lammers", given_name="Lukas"),
+        mock_contributor(family_name="Doe", given_name="Jane", role="Curator")
+    ]
     
-    # Create publication info with contributor
-    pub_info = mock_publication_info(contributors=[contributor])
+    # Create publication info with multiple contributors
+    pub_info = mock_publication_info(contributors=contributors)
     
     # Import and verify
-    result = import_publication_info(mock_cmd_data(pub_info))
-    assert result.contributors.count() == 1
+    result = import_publication_info(mock_cmd_data(pub_info), test_collection)
+    assert result.contributors.count() == 2
+    assert result.collection == test_collection
     
-    # Verify contributor was created correctly
-    contributor = result.contributors.first()
-    assert contributor.family_name == "Lammers"
-    assert contributor.given_name == "Lukas"
-    assert contributor.contributor_display_name == "Lukas Lammers"
-    assert contributor.affiliation == "FAIR.rdm im SPP2143 \"Entangled Africa\""
-    assert contributor.name_identifier == '0000-0002-8200-0199'
-    assert contributor.name_identifier_type == 'orcid'
+    # Verify both contributors were created correctly
+    db_contributors = result.contributors.all()
+    assert db_contributors[0].family_name == "Lammers"
+    assert db_contributors[0].given_name == "Lukas"
+    assert db_contributors[0].contributor_display_name == "Lukas Lammers"
+    assert db_contributors[0].affiliation == "FAIR.rdm im SPP2143 \"Entangled Africa\""
+    assert db_contributors[0].name_identifier == "0000-0002-8200-0199"
+    assert db_contributors[0].name_identifier_type == "orcid"
+    
+    assert db_contributors[1].family_name == "Doe"
+    assert db_contributors[1].given_name == "Jane"
+    assert db_contributors[1].contributor_display_name == "Jane Doe"
+    assert db_contributors[1].affiliation == "FAIR.rdm im SPP2143 \"Entangled Africa\""
+    assert db_contributors[1].name_identifier == "0000-0002-8200-0199"  # Same as in fixture
+    assert db_contributors[1].name_identifier_type == "orcid"
 
 
 @pytest.mark.django_db
-def test_missing_data_handling(mock_publication_info, mock_cmd_data):
-    """Test handling of missing data"""
-    # Create publication info with minimal data
-    pub_info = mock_publication_info(
-        year=None,
-        data_provider=None,
-        creators=[],
-        contributors=[]
-    )
+def test_missing_data_handling(mock_publication_info, mock_cmd_data, test_collection):
+    """Test handling of missing data in publication info"""
+    # Create publication info with missing fields
+    pub_info = mock_publication_info(year=None, data_provider=None)
     
-    # Import should still work with missing data
-    result = import_publication_info(mock_cmd_data(pub_info))
-    assert isinstance(result, CollectionPublicationInfo)
+    # Import and verify
+    result = import_publication_info(mock_cmd_data(pub_info), test_collection)
     
-    # Publication year should be set to current year
-    assert result.publication_year == datetime.now().year
-    
-    # Other fields should be empty
-    assert result.data_provider == ""  # Empty string for required field
-    assert result.creators.count() == 0
-    assert result.contributors.count() == 0 
+    # Verify default values
+    assert result.publication_year == datetime.now().year  # Default to current year
+    assert result.data_provider == ""  # Default to empty string
+    assert result.collection == test_collection 
