@@ -4,6 +4,7 @@ from lacos.blam.models.base_project_info import (
     FunderInfo,
     FunderIdentifier
 )
+from lacos.blam.models.collection.collection_repository import Collection
 from blam_schemas.collection.blam_collection_repository_v1_0 import (
     Cmd,
     FunderIdentifierIdentifierType
@@ -11,7 +12,7 @@ from blam_schemas.collection.blam_collection_repository_v1_0 import (
 
 
 @transaction.atomic
-def import_project_info(collection_schema: Cmd) -> list[ProjectInfo]:
+def import_project_info(collection_schema: Cmd, collection: Collection) -> list[ProjectInfo]:
     """
     Import project info from a BLAM collection repository schema to Django models.
     
@@ -24,6 +25,7 @@ def import_project_info(collection_schema: Cmd) -> list[ProjectInfo]:
     
     Args:
         collection_schema: The BLAM collection repository schema containing project info.
+        collection: The Collection instance to attach these project infos to.
         
     Returns:
         A list of ProjectInfo instances with all related objects.
@@ -55,6 +57,15 @@ def import_project_info(collection_schema: Cmd) -> list[ProjectInfo]:
             import_funder_infos(project_info, project_schema.funder_infos)
         
         project_infos.append(project_info)
+    
+    # Associate all project infos with the collection
+    # Clear existing project infos to avoid duplicates
+    if hasattr(collection, 'project_infos'):
+        collection.project_infos.clear()
+        
+        # Add all project infos to the collection
+        for project_info in project_infos:
+            collection.project_infos.add(project_info)
     
     return project_infos
 

@@ -15,12 +15,13 @@ from lacos.blam.models.base_indentifiers import FunderIdentifierTypeChoices
 
 
 @transaction.atomic
-def import_project_info(cmd_data: Cmd) -> List[ProjectInfo]:
+def import_project_info(cmd_data: Cmd, bundle: 'Bundle') -> List[ProjectInfo]:
     """
     Import project information from BLAM schema to Django models.
     
     Args:
         cmd_data: The parsed BLAM bundle repository schema data
+        bundle: The Bundle instance to associate the project info with
         
     Returns:
         List of created or updated ProjectInfo instances
@@ -40,6 +41,9 @@ def import_project_info(cmd_data: Cmd) -> List[ProjectInfo]:
     for project_data in project_info_data.project:
         project = create_or_update_project(project_data)
         projects.append(project)
+        
+        # Associate the project with the bundle
+        bundle.projects.add(project)
     
     return projects
 

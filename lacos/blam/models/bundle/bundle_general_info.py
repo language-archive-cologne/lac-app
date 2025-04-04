@@ -17,6 +17,11 @@ class BundleGeneralInfo(GeneralInfo):
     Extends the abstract GeneralInfo model with bundle-specific fields
     and relationships.
     """
+    bundle = models.ForeignKey(
+        'Bundle',
+        on_delete=models.CASCADE,
+        related_name='general_info'
+    )
     keywords = models.ManyToManyField('BundleKeyword', blank=True)
     object_languages = models.ManyToManyField('BundleObjectLanguage', blank=True)
     location = models.ForeignKey('BundleLocation', on_delete=models.CASCADE, related_name='bundle_general_info')

@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from lacos.blam.mappers.bundle.read.bundle_importer import BundleImporter
 from lacos.blam.mappers.bundle.read.import_bundle_administrative_info import import_administrative_info
+from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_administrative_info import (
     BundleAdministrativeInfo,
     BundleIdenticalResource,
@@ -11,6 +12,11 @@ from lacos.blam.models.bundle.bundle_administrative_info import (
     BundleRightsHolderIdentifier
 )
 
+
+@pytest.fixture
+def test_bundle():
+    """Create a test bundle for testing."""
+    return Bundle.objects.create()
 
 @pytest.fixture
 def real_bundle_xml():
@@ -64,10 +70,10 @@ def test_cmd_data_parsing(real_cmd_data):
 
 
 @pytest.mark.django_db
-def test_administrative_info_data_mapping(real_cmd_data):
+def test_administrative_info_data_mapping(real_cmd_data, test_bundle):
     """Test that administrative info is mapped correctly from CMD to Django model"""
     # Test import with real data
-    admin_info = import_administrative_info(real_cmd_data)
+    admin_info = import_administrative_info(real_cmd_data, test_bundle)
     
     # Verify the object was created and fields were set correctly
     assert isinstance(admin_info, BundleAdministrativeInfo)
@@ -90,16 +96,20 @@ def test_administrative_info_data_mapping(real_cmd_data):
     identifier = rights_holder.rights_holder_identifiers.first()
     assert identifier.identifier == "http://www.isni.org/0000000114600742"
     assert identifier.identifier_type == "ISNI"
+    
+    # Verify the association with the bundle
+    assert test_bundle.administrative_info.count() == 1
+    assert test_bundle.administrative_info.first() == admin_info
 
 
 @pytest.mark.django_db
-def test_get_or_create_behavior(real_cmd_data):
+def test_get_or_create_behavior(real_cmd_data, test_bundle):
     """Test that importing the same data twice doesn't create duplicates"""
     # First import
-    admin_info1 = import_administrative_info(real_cmd_data)
+    admin_info1 = import_administrative_info(real_cmd_data, test_bundle)
     
     # Second import with same data should get existing record
-    admin_info2 = import_administrative_info(real_cmd_data)
+    admin_info2 = import_administrative_info(real_cmd_data, test_bundle)
     
     # Should be the same record
     assert admin_info1.pk == admin_info2.pk
@@ -111,4 +121,7 @@ def test_get_or_create_behavior(real_cmd_data):
     # Verify related objects weren't duplicated
     assert BundleLicense.objects.count() == 1
     assert BundleRightsHolder.objects.count() == 1
-    assert BundleRightsHolderIdentifier.objects.count() == 1 
+    assert BundleRightsHolderIdentifier.objects.count() == 1
+    
+    # Should only have one admin_info related to the bundle
+    assert test_bundle.administrative_info.count() == 1 

@@ -43,7 +43,7 @@ class CollectionRightsHolder(RightsHolder):
     rights_holder_identifiers = models.ManyToManyField(
         'CollectionRightsHolderIdentifier',
         blank=True,
-        related_name='collection_rights_holders',
+        related_name='rights_holders_identifiers',
         help_text="Identifiers for the rights holder"
     )
 
@@ -57,20 +57,27 @@ class CollectionAdministrativeInfo(AdministrativeInfo):
     Concrete model for administrative metadata for collections that will be publicly communicated,
     especially in regard to metacatalogues and user interfaces.
     """
+
+    collection = models.ForeignKey(
+        'Collection',
+        on_delete=models.CASCADE,
+        related_name='administrative_info'
+    )
+    
     is_identical_to = models.ManyToManyField(
         'CollectionIdenticalResource',
         blank=True,
-        related_name='collection_identical_resources',
+        related_name='identical_resources',
         help_text="URIs that uniquely identify identical resources"
     )
     licenses = models.ManyToManyField(
         'CollectionLicense',
-        related_name='collection_licenses',
+        related_name='licenses',
         help_text="Licenses under which the resource is available"
     )
     rights_holders = models.ManyToManyField(
         'CollectionRightsHolder',
-        related_name='collection_rights_holders',
+        related_name='rights_holders',
         help_text="Individuals or institutions owning or managing the rights over the resource"
     )
 

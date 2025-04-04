@@ -14,7 +14,7 @@ from blam_schemas.bundle.blam_bundle_repository_v1_0 import (
 
 
 @transaction.atomic
-def import_administrative_info(bundle_schema: Cmd) -> BundleAdministrativeInfo:
+def import_administrative_info(bundle_schema: Cmd, bundle: 'Bundle') -> BundleAdministrativeInfo:
     """
     Import administrative info from a BLAM bundle repository schema to a Django model.
     
@@ -27,6 +27,7 @@ def import_administrative_info(bundle_schema: Cmd) -> BundleAdministrativeInfo:
     
     Args:
         bundle_schema: The BLAM bundle repository schema containing administrative info.
+        bundle: The Bundle instance to associate the administrative info with.
         
     Returns:
         A fully populated BundleAdministrativeInfo instance with all related objects.
@@ -39,13 +40,17 @@ def import_administrative_info(bundle_schema: Cmd) -> BundleAdministrativeInfo:
     if admin_info_schema.availability_date:
         date_str = f"{admin_info_schema.availability_date.year}-{admin_info_schema.availability_date.month:02d}-{admin_info_schema.availability_date.day:02d}"
     
-    # Try to find an existing record with the same date
-    existing_records = BundleAdministrativeInfo.objects.filter(availability_date=date_str)
+    # Try to find an existing record with the same date and bundle
+    existing_records = BundleAdministrativeInfo.objects.filter(
+        availability_date=date_str,
+        bundle=bundle
+    )
+    
     if existing_records.exists():
         admin_info = existing_records.first()
     else:
         # Create and populate the administrative info model
-        admin_info = create_base_administrative_info(admin_info_schema)
+        admin_info = create_base_administrative_info(admin_info_schema, bundle)
         
         # Import related objects
         import_identical_resources(admin_info, admin_info_schema)
@@ -55,12 +60,13 @@ def import_administrative_info(bundle_schema: Cmd) -> BundleAdministrativeInfo:
     return admin_info
 
 
-def create_base_administrative_info(admin_info_schema) -> BundleAdministrativeInfo:
+def create_base_administrative_info(admin_info_schema, bundle: 'Bundle') -> BundleAdministrativeInfo:
     """
     Create and populate the base administrative info model.
     
     Args:
         admin_info_schema: The administrative info section of the BLAM bundle repository schema.
+        bundle: The Bundle instance to associate the administrative info with.
         
     Returns:
         A BundleAdministrativeInfo instance with basic fields populated.
@@ -76,6 +82,9 @@ def create_base_administrative_info(admin_info_schema) -> BundleAdministrativeIn
     # Set the derivation URI if it exists
     if admin_info_schema.bundle_is_derivation_of:
         admin_info.is_derivation_of = admin_info_schema.bundle_is_derivation_of
+    
+    # Set the bundle reference
+    admin_info.bundle = bundle
     
     # Save the model to get an ID for many-to-many relationships
     admin_info.save()

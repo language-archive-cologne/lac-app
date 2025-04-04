@@ -9,7 +9,11 @@ class CollectionPublicationInfo(PublicationInfo):
     Extends the abstract PublicationInfo model with collection-specific fields
     and relationships.
     """
-
+    collection = models.ForeignKey(
+        'Collection',
+        on_delete=models.CASCADE,
+        related_name='publication_info'
+    )
     creators = models.ManyToManyField('CollectionCreator', blank=True)
     contributors = models.ManyToManyField('CollectionContributor', blank=True)
     

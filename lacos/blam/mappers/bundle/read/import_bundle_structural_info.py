@@ -1,6 +1,7 @@
-from typing import Optional, List, Tuple
+from typing import Optional, List
 from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist
+from lacos.blam.models.bundle import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import (
     BundleStructuralInfo,
     BundleAdditionalMetadataFile,
@@ -13,13 +14,13 @@ from lacos.blam.models.bundle.bundle_structural_info import (
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo
 from blam_schemas.bundle.blam_bundle_repository_v1_0 import (
-    Cmd, BundleIsMemberOfCollectionIdentifierType
+    Cmd
 )
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
 
 
 @transaction.atomic
-def import_structural_info(cmd_data: Cmd, collection_identifier: str, identifier_type: str) -> Optional[BundleStructuralInfo]:
+def import_structural_info(cmd_data: Cmd, collection_identifier: str, identifier_type: str, bundle: 'Bundle') -> Optional[BundleStructuralInfo]:
     """
     Import structural info from CMD object to Django models.
     
@@ -27,6 +28,7 @@ def import_structural_info(cmd_data: Cmd, collection_identifier: str, identifier
         cmd_data: The CMD object containing bundle structural information
         collection_identifier: The identifier value (e.g., DOI, Handle) of the collection
         identifier_type: The type of identifier (e.g., "DOI", "Handle")
+        bundle: The Bundle instance to associate the structural info with
         
     Returns:
         BundleStructuralInfo object or None if structural info is missing
@@ -52,7 +54,8 @@ def import_structural_info(cmd_data: Cmd, collection_identifier: str, identifier
     
     # Create structural info first
     bundle_struct_info, created = BundleStructuralInfo.objects.get_or_create(
-        is_member_of_collection=collection
+        is_member_of_collection=collection,
+        bundle=bundle
     )
     
     # Import optional components only if they exist
@@ -111,12 +114,15 @@ def import_bundle_resources(
         resources_data: Resources data from the CMD object (nested within struct info)
     """
     # Get or create the associated BundleResources instance via the relationship
-    if bundle_struct_info.resources is None:
-        bundle_resources = BundleResources.objects.create() # Create a new one
-        bundle_struct_info.resources = bundle_resources    # Assign it
-        bundle_struct_info.save(update_fields=['resources']) # Save just the link
-    else:
-        bundle_resources = bundle_struct_info.resources # Use the existing one
+    try:
+        # Check for existing bundle resources
+        bundle_resources = BundleResources.objects.filter(bundle=bundle_struct_info.bundle).first()
+        if not bundle_resources:
+            # Create a new BundleResources if one doesn't exist
+            bundle_resources = BundleResources.objects.create(bundle=bundle_struct_info.bundle)
+    except Exception as e:
+        # Create a new BundleResources if there was an error
+        bundle_resources = BundleResources.objects.create(bundle=bundle_struct_info.bundle)
 
     # Ensure resources_data is not None before accessing attributes
     if not resources_data:

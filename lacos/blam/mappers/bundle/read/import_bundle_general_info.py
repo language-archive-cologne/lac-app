@@ -18,12 +18,13 @@ from lacos.blam.models.bundle.bundle_general_info import (
 
 
 @transaction.atomic
-def import_general_info(cmd_data: Cmd) -> BundleGeneralInfo:
+def import_general_info(cmd_data: Cmd, bundle: 'Bundle') -> BundleGeneralInfo:
     """
     Import bundle general information from BLAM schema to Django models.
     
     Args:
         cmd_data: The parsed BLAM bundle repository schema data
+        bundle: The Bundle instance to associate the general info with
         
     Returns:
         The created BundleGeneralInfo instance
@@ -34,7 +35,7 @@ def import_general_info(cmd_data: Cmd) -> BundleGeneralInfo:
     location = create_bundle_location(bundle_info.bundle_location)
     
     # Create the main general info record
-    general_info = create_bundle_general_info(bundle_info, location)
+    general_info = create_bundle_general_info(bundle_info, location, bundle)
     
     # Import keywords if present
     if bundle_info.bundle_keywords:
@@ -46,13 +47,14 @@ def import_general_info(cmd_data: Cmd) -> BundleGeneralInfo:
     return general_info
 
 
-def create_bundle_general_info(bundle_info: Any, location: BundleLocation) -> BundleGeneralInfo:
+def create_bundle_general_info(bundle_info: Any, location: BundleLocation, bundle: 'Bundle' = None) -> BundleGeneralInfo:
     """
     Create a BundleGeneralInfo instance from schema data.
     
     Args:
         bundle_info: The bundle general info data from the schema
         location: The previously created BundleLocation instance
+        bundle: The Bundle instance to associate the general info with
         
     Returns:
         The created BundleGeneralInfo instance
@@ -63,12 +65,14 @@ def create_bundle_general_info(bundle_info: Any, location: BundleLocation) -> Bu
     general_info, created = BundleGeneralInfo.objects.get_or_create(
         id_value=id_value,
         id_type=id_type,
+        bundle=bundle,
         defaults={
             'display_title': bundle_info.bundle_display_title,
             'description': bundle_info.bundle_description,
             'version': bundle_info.bundle_version,
             'recording_date': parse_recording_date(bundle_info.bundle_recording_date.value),
-            'location': location
+            'location': location,
+            'bundle': bundle
         }
     )
     return general_info

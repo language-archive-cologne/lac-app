@@ -6,11 +6,12 @@ from lacos.blam.models.bundle.bundle_header import BundleHeader
 
 logger = logging.getLogger(__name__)
 
-def import_bundle_header(cmd_data: Cmd) -> Optional[BundleHeader]:
+def import_bundle_header(cmd_data: Cmd, bundle: 'Bundle') -> Optional[BundleHeader]:
     """Imports the CMDI header information from Cmd data into a BundleHeader model.
 
     Args:
         cmd_data: The parsed Cmd data object.
+        bundle: The Bundle instance to associate the header with.
 
     Returns:
         The created or updated BundleHeader instance, or None if header data is missing.
@@ -44,6 +45,7 @@ def import_bundle_header(cmd_data: Cmd) -> Optional[BundleHeader]:
         'md_creator': md_creator,
         'md_creation_date': python_date_obj, # Use the converted date object
         'md_profile': md_profile,
+        'bundle': bundle,  # Add the bundle reference
         # Add other fields from MdHeader if they exist in cmd_data.header
         # Currently, md_license fields are handled separately or ignored
     }
@@ -56,8 +58,9 @@ def import_bundle_header(cmd_data: Cmd) -> Optional[BundleHeader]:
             md_self_link=md_self_link,
             defaults=header_defaults
         )
+        
         status = "created" if created else "updated"
-        logger.info(f"BundleHeader with self-link '{md_self_link}' {status}.")
+        logger.info(f"BundleHeader with self-link '{md_self_link}' {status} and associated with bundle.")
         return bundle_header
     except Exception as e:
         logger.error(f"Failed to create or update BundleHeader with self-link '{md_self_link}': {e}", exc_info=True)

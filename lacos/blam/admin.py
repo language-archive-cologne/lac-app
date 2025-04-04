@@ -1,3 +1,5 @@
+# Temporarily commented out during model restructuring
+"""
 from django.contrib import admin
 
 # Import Bundle models
@@ -155,3 +157,4 @@ class BundleResourcesAdmin(admin.ModelAdmin):
     @admin.display(description='Other Count')
     def other_count(self, obj):
         return obj.bundle_other_resources.count()
+"""

@@ -6,6 +6,7 @@ from lacos.blam.models.collection.collection_administrative_info import (
     CollectionRightsHolder,
     CollectionRightsHolderIdentifier
 )
+from lacos.blam.models.collection.collection_repository import Collection
 from blam_schemas.collection.blam_collection_repository_v1_0 import (
     Cmd
 )
@@ -13,7 +14,7 @@ from lacos.blam.mappers.collection.read.import_collection_license import create_
 
 
 @transaction.atomic
-def import_administrative_info(collection_schema: Cmd) -> CollectionAdministrativeInfo:
+def import_administrative_info(collection_schema: Cmd, collection: Collection) -> CollectionAdministrativeInfo:
     """
     Import administrative info from a BLAM collection repository schema to a Django model.
     
@@ -26,6 +27,7 @@ def import_administrative_info(collection_schema: Cmd) -> CollectionAdministrati
     
     Args:
         collection_schema: The BLAM collection repository schema containing administrative info.
+        collection: The Collection instance to attach this administrative info to.
         
     Returns:
         A fully populated CollectionAdministrativeInfo instance with all related objects.
@@ -33,8 +35,8 @@ def import_administrative_info(collection_schema: Cmd) -> CollectionAdministrati
     # Extract the administrative info section from the schema
     admin_info_schema = collection_schema.components.blam_collection_repository_v1_0.collection_administrative_info
     
-    # Create and populate the administrative info model
-    admin_info = create_base_administrative_info(admin_info_schema)
+    # Create and populate the administrative info model with reference to collection
+    admin_info = create_base_administrative_info(admin_info_schema, collection)
     
     # Import related objects
     import_identical_resources(admin_info, admin_info_schema)
@@ -45,18 +47,21 @@ def import_administrative_info(collection_schema: Cmd) -> CollectionAdministrati
     return admin_info
 
 
-def create_base_administrative_info(admin_info_schema) -> CollectionAdministrativeInfo:
+def create_base_administrative_info(admin_info_schema, collection: Collection) -> CollectionAdministrativeInfo:
     """
     Create and populate the base administrative info model.
     
     Args:
         admin_info_schema: The administrative info section of the BLAM collection repository schema.
+        collection: The Collection instance to attach this administrative info to.
         
     Returns:
         A CollectionAdministrativeInfo instance with basic fields populated.
     """
     # Prepare administrative info data
-    admin_info_data = {}
+    admin_info_data = {
+        'collection': collection  # Set the reference to the collection
+    }
     
     # Set the availability date
     if admin_info_schema.availability_date:
@@ -67,11 +72,22 @@ def create_base_administrative_info(admin_info_schema) -> CollectionAdministrati
     if admin_info_schema.collection_is_derivation_of:
         admin_info_data['is_derivation_of'] = admin_info_schema.collection_is_derivation_of
     
-    # Get or create administrative info using availability_date as a unique field
-    admin_info, created = CollectionAdministrativeInfo.objects.get_or_create(
-        availability_date=admin_info_data['availability_date'],
-        defaults=admin_info_data
-    )
+    # Get or create administrative info using collection and availability_date as unique fields
+    # Try to find an existing administrative info for this collection
+    try:
+        admin_info = CollectionAdministrativeInfo.objects.get(
+            collection=collection
+        )
+        
+        # Update fields if it exists
+        if 'availability_date' in admin_info_data:
+            admin_info.availability_date = admin_info_data['availability_date']
+        if 'is_derivation_of' in admin_info_data:
+            admin_info.is_derivation_of = admin_info_data['is_derivation_of']
+        admin_info.save()
+    except CollectionAdministrativeInfo.DoesNotExist:
+        # Create new if it doesn't exist
+        admin_info = CollectionAdministrativeInfo.objects.create(**admin_info_data)
     
     return admin_info
 

@@ -1,15 +1,29 @@
 import pytest
-from unittest.mock import patch
+from django.test import TestCase
+from unittest.mock import patch, MagicMock
+from xsdata.formats.dataclass.parsers import XmlParser
+import os
+import datetime
 
+from lacos.blam.models.bundle.bundle_repository import Bundle
+from lacos.blam.models.bundle.bundle_publication_info import (
+    BundlePublicationInfo
+)
+from blam_schemas.bundle.blam_bundle_repository_v1_0 import Cmd
 from lacos.blam.mappers.bundle.read.bundle_importer import BundleImporter
 from lacos.blam.mappers.bundle.read.import_bundle_publication_info import import_publication_info
-from lacos.blam.models.bundle.bundle_publication_info import BundlePublicationInfo, BundleCreator
 
+
+# --- Fixtures ---
+
+@pytest.fixture
+def test_bundle():
+    """Create a test bundle for testing."""
+    return Bundle.objects.create()
 
 @pytest.fixture
 def real_bundle_xml():
     """Get the XML content from a real bundle file in the data directory."""
-    import os
     xml_path = os.path.join('data', 'zaghawa', 'zag_eoi_20141009_1', 'v1', 'content', 'zag_eoi_20141009_1.xml')
     
     try:
@@ -60,10 +74,10 @@ def test_cmd_data_parsing(real_cmd_data):
 
 
 @pytest.mark.django_db
-def test_publication_info_data_mapping(real_cmd_data):
+def test_publication_info_data_mapping(real_cmd_data, test_bundle):
     """Test that publication info is mapped correctly from CMD to Django model"""
     # Test import with real data
-    pub_info = import_publication_info(real_cmd_data)
+    pub_info = import_publication_info(real_cmd_data, test_bundle)
     
     # Verify the object was created
     assert isinstance(pub_info, BundlePublicationInfo)

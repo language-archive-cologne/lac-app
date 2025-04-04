@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from blam_schemas.bundle.blam_bundle_repository_v1_0 import Cmd, BundleIdIdentifierType
 from lacos.blam.mappers.bundle.read.import_bundle_general_info import import_general_info
+from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_general_info import (
     BundleGeneralInfo,
     BundleKeyword,
@@ -10,6 +11,11 @@ from lacos.blam.models.bundle.bundle_general_info import (
     BundleObjectLanguage,
 )
 
+
+@pytest.fixture
+def test_bundle():
+    """Create a test bundle for testing."""
+    return Bundle.objects.create()
 
 @pytest.fixture
 def real_bundle_xml():
@@ -186,10 +192,10 @@ def test_cmd_data_parsing(real_cmd_data):
 
 
 @pytest.mark.django_db
-def test_general_info_data_mapping(real_cmd_data):
+def test_general_info_data_mapping(real_cmd_data, test_bundle):
     """Test that general info is mapped correctly from CMD to Django model"""
     # Test import with real data
-    general_info = import_general_info(real_cmd_data)
+    general_info = import_general_info(real_cmd_data, test_bundle)
     
     # Verify the object was created and fields were set correctly
     assert isinstance(general_info, BundleGeneralInfo)
@@ -198,6 +204,10 @@ def test_general_info_data_mapping(real_cmd_data):
     assert general_info.version == "1"
     assert general_info.id_value == "hdl:11341/00-0000-0000-0000-1AE5-2"
     assert general_info.id_type == "HANDLE"
+    
+    # Verify the association with the bundle
+    assert test_bundle.general_info.count() == 1
+    assert test_bundle.general_info.first() == general_info
     
     # Check location was created and linked
     assert general_info.location is not None
@@ -240,13 +250,13 @@ def test_general_info_data_mapping(real_cmd_data):
 
 
 @pytest.mark.django_db
-def test_get_or_create_behavior(real_cmd_data):
+def test_get_or_create_behavior(real_cmd_data, test_bundle):
     """Test that importing the same data twice doesn't create duplicates"""
     # First import
-    general_info1 = import_general_info(real_cmd_data)
+    general_info1 = import_general_info(real_cmd_data, test_bundle)
     
     # Second import with same ID should get existing record
-    general_info2 = import_general_info(real_cmd_data)
+    general_info2 = import_general_info(real_cmd_data, test_bundle)
     
     # Should be the same record
     assert general_info1.pk == general_info2.pk
@@ -259,10 +269,10 @@ def test_get_or_create_behavior(real_cmd_data):
 
 
 @pytest.mark.django_db
-def test_language_update_behavior(real_cmd_data):
+def test_language_update_behavior(real_cmd_data, test_bundle):
     """Test that re-importing updates existing language data based on ISO code."""
     # First import
-    import_general_info(real_cmd_data)
+    import_general_info(real_cmd_data, test_bundle)
     assert BundleObjectLanguage.objects.count() == 1
     lang1 = BundleObjectLanguage.objects.get(iso_639_3_code='zag')
     assert lang1.name == "Beria" 
@@ -275,7 +285,7 @@ def test_language_update_behavior(real_cmd_data):
     bundle_info_schema.bundle_object_languages.bundle_object_language[0].object_language_glottolog_code.value = "xxxx1111"
 
     # Second import (using the modified cmd_data)
-    import_general_info(real_cmd_data)
+    import_general_info(real_cmd_data, test_bundle)
     
     # Count should still be 1 (no new language created)
     assert BundleObjectLanguage.objects.count() == 1

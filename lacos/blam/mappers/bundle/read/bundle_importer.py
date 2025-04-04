@@ -53,6 +53,22 @@ class BundleImporter:
         return cls._import_cmd_to_models(cmd_data)
     
     @classmethod
+    def _create_bundle(cls, cmd_data: Cmd) -> Bundle:
+        """
+        Create a new Bundle for the import process
+        
+        Args:
+            cmd_data: The validated CMD data
+            
+        Returns:
+            A new Bundle instance
+        """
+        # Simply create a new Bundle for this import
+        bundle = Bundle.objects.create()
+        logger.info(f"Created new Bundle with ID {bundle.id}")
+        return bundle
+
+    @classmethod
     def _import_cmd_to_models(cls, cmd_data: Cmd) -> Bundle:
         """
         Converts Cmd object to Django models
@@ -61,50 +77,55 @@ class BundleImporter:
             cmd_data: The validated CMD data object
             
         Returns:
-            The created Bundle instance
+            The created or updated Bundle instance
         """
-        # Import header first, as it's required
-        header = import_bundle_header(cmd_data)
-        if not header:
-            # Decide how to handle missing header: raise error or return None/empty?
-            logger.error("Bundle import failed: Could not import BundleHeader.")
-            raise ValidationError("Bundle import failed due to missing or invalid header information.")
-            # Or return None, depending on desired behavior
+        # First, create a new Bundle
+        bundle = cls._create_bundle(cmd_data)
+        
+        try:
+            # Import header first, as it's required
+            header = import_bundle_header(cmd_data, bundle)
+            if not header:
+                # Decide how to handle missing header: raise error or return None/empty?
+                logger.error("Bundle import failed: Could not import BundleHeader.")
+                raise ValidationError("Bundle import failed due to missing or invalid header information.")
+                # Or return None, depending on desired behavior
 
-        # Import other components
-        general_info = cls._import_general_info(cmd_data)
-        publication_info = cls._import_publication_info(cmd_data)
-        administrative_info = cls._import_administrative_info(cmd_data)
-        structural_info = cls._import_structural_info(cmd_data)
-        
-        # Create or update bundle, passing the header
-        bundle = cls._create_or_update_bundle(
-            header, # Pass header
-            general_info, 
-            publication_info, 
-            administrative_info, 
-            structural_info
-        )
-        
-        return bundle
+            # Import other components, passing the bundle instance
+            general_info = cls._import_general_info(cmd_data, bundle)
+            publication_info = cls._import_publication_info(cmd_data, bundle)
+            administrative_info = cls._import_administrative_info(cmd_data, bundle)
+            structural_info = cls._import_structural_info(cmd_data, bundle)
+            
+            # No need to call _create_or_update_bundle since the bundle was already created
+            # and all relations have been established
+            
+            logger.info(f"Bundle import completed for '{header.md_self_link}'.")
+            return bundle
+            
+        except Exception as e:
+            # If any error occurs, the transaction will be rolled back automatically
+            # No need to manually delete the bundle
+            logger.error(f"Error during bundle import: {e}", exc_info=True)
+            raise e
     
     @classmethod
-    def _import_general_info(cls, cmd_data: Cmd):
+    def _import_general_info(cls, cmd_data: Cmd, bundle: Bundle):
         """Import general info from CMD data"""
-        return import_general_info(cmd_data)
+        return import_general_info(cmd_data, bundle)
     
     @classmethod
-    def _import_publication_info(cls, cmd_data: Cmd):
+    def _import_publication_info(cls, cmd_data: Cmd, bundle: Bundle):
         """Import publication info from CMD data"""
-        return import_publication_info(cmd_data)
+        return import_publication_info(cmd_data, bundle)
     
     @classmethod
-    def _import_administrative_info(cls, cmd_data: Cmd):
+    def _import_administrative_info(cls, cmd_data: Cmd, bundle: Bundle):
         """Import administrative info from CMD data"""
-        return import_administrative_info(cmd_data)
+        return import_administrative_info(cmd_data, bundle)
     
     @classmethod
-    def _import_structural_info(cls, cmd_data: Cmd) -> Optional['BundleStructuralInfo']:
+    def _import_structural_info(cls, cmd_data: Cmd, bundle: Bundle) -> Optional['BundleStructuralInfo']:
         """Import structural info from CMD data"""
         try:
             # Navigate through parsed XML data
@@ -146,7 +167,8 @@ class BundleImporter:
             return import_structural_info(
                 cmd_data,
                 collection_identifier_value,
-                collection_identifier_type_str
+                collection_identifier_type_str,
+                bundle
             )
         except AttributeError as e:
             logger.error(f"Could not extract collection reference from bundle CMD data: {e}", exc_info=True)
@@ -159,46 +181,3 @@ class BundleImporter:
             # Catch any other unexpected errors during extraction or import
             logger.error(f"Unexpected error during structural info import: {e}", exc_info=True)
             return None
-    
-
-    @classmethod
-    def _create_or_update_bundle(
-        cls, 
-        header, # Add header parameter
-        general_info, 
-        publication_info, 
-        administrative_info, 
-        structural_info
-    ) -> Bundle:
-        """Create or update a Bundle with the imported components"""
-        # Bundle data now includes the required base_header
-        bundle_data = {
-            'base_header': header,
-            'general_info': general_info,
-            'publication_info': publication_info,
-            'administrative_info': administrative_info,
-        }
-        
-        # Add structural_info model instance if it was successfully imported
-        if structural_info is not None:
-            bundle_data['structural_info'] = structural_info
-        
-        # Create or get bundle using the header's unique self-link as the identifier
-        # The defaults dictionary will contain all other fields for creation/update
-        bundle, created = Bundle.objects.update_or_create(
-            base_header=header, # Use header for lookup
-            defaults=bundle_data
-        )
-        
-        # No need for the manual update loop anymore, update_or_create handles it.
-        # if not created:
-        #     for field, value in bundle_data.items():
-        #         # Be careful not to overwrite the lookup key (base_header)
-        #         if field != 'base_header': 
-        #              setattr(bundle, field, value)
-        #     bundle.save()
-            
-        status = "created" if created else "updated"
-        logger.info(f"Bundle linked to header '{header.md_self_link}' {status}.")
-
-        return bundle

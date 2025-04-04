@@ -8,6 +8,7 @@ from lacos.blam.models.collection.collection_general_info import (
     CollectionObjectLanguageLanguageFamily,
     CollectionObjectLanguageTaxonomy
 )
+from lacos.blam.models.collection.collection_repository import Collection
 from blam_schemas.collection.blam_collection_repository_v1_0 import (
     Cmd
 )
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 @transaction.atomic
-def import_general_info(collection_schema: Cmd) -> CollectionGeneralInfo:
+def import_general_info(collection_schema: Cmd, collection: Collection) -> CollectionGeneralInfo:
     """
     Import general info from a BLAM collection repository schema to Django models.
     
@@ -31,6 +32,7 @@ def import_general_info(collection_schema: Cmd) -> CollectionGeneralInfo:
     
     Args:
         collection_schema: The BLAM collection repository schema containing general info.
+        collection: The Collection instance to attach this general info to.
         
     Returns:
         A fully populated CollectionGeneralInfo instance with all related objects.
@@ -41,8 +43,8 @@ def import_general_info(collection_schema: Cmd) -> CollectionGeneralInfo:
     # Create location first since it's required by general info
     location = create_location(general_info_schema.collection_location)
     
-    # Create base general info
-    general_info = create_base_general_info(general_info_schema, location)
+    # Create base general info with reference to collection
+    general_info = create_base_general_info(general_info_schema, location, collection)
     
     # Import related objects
     import_keywords(general_info, general_info_schema.collection_keywords)
@@ -118,13 +120,14 @@ def create_location(location_schema) -> CollectionLocation:
     return location
 
 
-def create_base_general_info(general_info_schema, location: CollectionLocation) -> CollectionGeneralInfo:
+def create_base_general_info(general_info_schema, location: CollectionLocation, collection: Collection) -> CollectionGeneralInfo:
     """
     Create and populate the base general info model.
     
     Args:
         general_info_schema: The general info section of the BLAM collection repository schema.
         location: The CollectionLocation instance to associate with the general info.
+        collection: The Collection instance to attach this general info to.
         
     Returns:
         A CollectionGeneralInfo instance with basic fields populated.
@@ -162,26 +165,30 @@ def create_base_general_info(general_info_schema, location: CollectionLocation) 
         logger.warning("No Collection ID found in schema.")
         # Handle missing ID entirely? Maybe raise error depending on requirements
 
-    # Create base general info using the mapped id_type_str
-    general_info, created = CollectionGeneralInfo.objects.get_or_create(
-        id_value=id_value,
-        defaults={
-            "display_title": display_title,
-            "description": description,
-            "version": version,
-            "id_type": id_type_str, # Use the mapped string value
-            "location": location,
-        },
-    )
-    
-    # Update fields if the record already existed
-    if not created:
+    try:
+        # Try to find an existing general info for this collection
+        general_info = CollectionGeneralInfo.objects.get(collection=collection)
+        
+        # Update fields
         general_info.display_title = display_title
         general_info.description = description
         general_info.version = version
-        general_info.id_type = id_type_str # Ensure update uses the mapped string value
+        general_info.id_type = id_type_str
+        general_info.id_value = id_value
         general_info.location = location
         general_info.save()
+        
+    except CollectionGeneralInfo.DoesNotExist:
+        # Create a new general info if one doesn't exist
+        general_info = CollectionGeneralInfo.objects.create(
+            collection=collection,
+            display_title=display_title,
+            description=description,
+            version=version,
+            id_type=id_type_str,
+            id_value=id_value,
+            location=location
+        )
     
     return general_info
 

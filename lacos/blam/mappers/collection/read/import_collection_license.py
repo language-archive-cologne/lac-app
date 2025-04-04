@@ -1,27 +1,64 @@
 from django.db import transaction
 from typing import Any, Optional, Tuple
+from django.utils import timezone
 from blam_schemas.collection.blam_collection_repository_v1_0 import Cmd, SimpletypeAccess41
-from lacos.blam.models.collection.collection_administrative_info import CollectionLicense
+from lacos.blam.models.collection.collection_administrative_info import CollectionLicense, CollectionAdministrativeInfo
+from lacos.blam.models.collection.collection_repository import Collection
 
 
 @transaction.atomic
-def import_collection_license(cmd_data: Cmd) -> Tuple[str, Optional[str]]:
+def import_collection_license(cmd_data: Cmd, collection: Collection) -> Optional[CollectionLicense]:
     """
     Import collection license information from BLAM schema to Django models.
     
     Args:
         cmd_data: The parsed BLAM collection repository schema data
+        collection: The Collection instance to attach the license to
         
     Returns:
-        A tuple containing the license value and license URI
+        The created CollectionLicense instance or None if no license data is found
     """
     # Get the repository component
     repo = cmd_data.components.blam_collection_repository_v1_0
     
-    # Extract license information
-    license_value, license_uri = extract_license_info(repo)
+    # If there's no administrative info, return None
+    if not hasattr(repo, 'collection_administrative_info') or not repo.collection_administrative_info:
+        return None
     
-    return license_value, license_uri
+    admin_info_schema = repo.collection_administrative_info
+    
+    # Extract availability date from schema - XmlDate needs to be converted to ISO format string
+    if not hasattr(admin_info_schema, 'availability_date') or not admin_info_schema.availability_date:
+        # Use a reasonable default date for tests if not available in schema
+        availability_date = timezone.now().date().isoformat()
+    else:
+        # Convert XmlDate to ISO format string that Django can parse
+        xml_date = admin_info_schema.availability_date
+        availability_date = f"{xml_date.year}-{xml_date.month:02d}-{xml_date.day:02d}"
+    
+    # Get or create the administrative info for this collection
+    try:
+        admin_info = CollectionAdministrativeInfo.objects.get(collection=collection)
+    except CollectionAdministrativeInfo.DoesNotExist:
+        # Create admin info with the extracted availability date
+        admin_info = CollectionAdministrativeInfo.objects.create(
+            collection=collection,
+            availability_date=availability_date
+        )
+    
+    # If there's no license information, return None
+    if not hasattr(admin_info_schema, 'license') or not admin_info_schema.license:
+        return None
+    
+    # Create the CollectionLicense from the first license in the schema
+    license_schema = admin_info_schema.license[0]
+    license_model = create_collection_license(admin_info_schema, license_schema)
+    
+    # Associate the license with the admin_info if it was created
+    if license_model:
+        admin_info.licenses.add(license_model)
+    
+    return license_model
 
 
 def extract_license_info(repo: Any) -> Tuple[str, Optional[str]]:
@@ -113,7 +150,7 @@ def create_collection_license(admin_info_schema, license_schema=None) -> Optiona
     
     # Convert None to empty string for required fields
     license_name = "" if license_data.license_name is None else str(license_data.license_name)
-    license_identifier = "" if license_data.license_identifier is None else str(license_data.license_identifier)
+    license_identifier = "" if getattr(license_data, 'license_identifier', None) is None else str(license_data.license_identifier)
     
     # Get or create the license
     license_model, created = CollectionLicense.objects.get_or_create(

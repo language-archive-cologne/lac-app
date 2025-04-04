@@ -12,12 +12,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 @transaction.atomic
-def import_publication_info(cmd_data: Cmd) -> Optional[BundlePublicationInfo]:
+def import_publication_info(cmd_data: Cmd, bundle: 'Bundle') -> Optional[BundlePublicationInfo]:
     """
     Import publication info from CMD object to Django models.
     
     Args:
         cmd_data: The CMD object containing bundle publication information
+        bundle: The Bundle instance to associate the publication info with
         
     Returns:
         BundlePublicationInfo object or None if publication info is missing
@@ -97,7 +98,8 @@ def import_publication_info(cmd_data: Cmd) -> Optional[BundlePublicationInfo]:
             publication_year=pub_year,
             data_provider=data_provider,
             identifier=primary_identifier, # Use extracted or empty string
-            identifier_type=primary_identifier_type # Use extracted or empty/default string
+            identifier_type=primary_identifier_type, # Use extracted or empty/default string
+            bundle=bundle  # Set the bundle directly
         )
     except Exception as e:
         logger.error(f"Failed to create BundlePublicationInfo: {e}", exc_info=True)
@@ -110,7 +112,7 @@ def import_publication_info(cmd_data: Cmd) -> Optional[BundlePublicationInfo]:
     # Import contributors (linking to the new bundle_pub_info)
     if hasattr(pub_info, 'bundle_contributors') and pub_info.bundle_contributors:
         import_contributors(bundle_pub_info, pub_info.bundle_contributors.bundle_contributor)
-        
+    
     return bundle_pub_info
 
 

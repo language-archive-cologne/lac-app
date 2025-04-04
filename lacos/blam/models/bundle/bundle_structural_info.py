@@ -7,16 +7,15 @@ class BundleStructuralInfo(StructuralInfo):
     """
     Concrete implementation of StructuralInfo for bundles
     """
+    bundle = models.ForeignKey(
+        'Bundle',
+        on_delete=models.CASCADE,
+        related_name='structural_info'
+    )
     is_member_of_collection = models.ForeignKey('blam.Collection', on_delete=models.CASCADE, related_name='bundle_collection')
     additional_metadata_files = models.ManyToManyField('BundleAdditionalMetadataFile', blank=True)
     bundle_topics = models.ManyToManyField('BundleTopic', blank=True)
-    resources = models.OneToOneField(
-        'BundleResources',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='structural_info'
-    )
+
     
     class Meta:
         verbose_name = "Bundle Structural Info"
@@ -126,6 +125,12 @@ class BundleResources(models.Model):
     """
     The BundleResources component contains metadata about files contained in the bundle.
     """
+    bundle = models.ForeignKey(
+        'Bundle',
+        on_delete=models.CASCADE,
+        related_name='resources'
+    )
+    
     bundle_media_resources = models.ManyToManyField('MediaResource', blank=True)
     bundle_written_resources = models.ManyToManyField('WrittenResource', blank=True)
     bundle_other_resources = models.ManyToManyField('OtherResource', blank=True)

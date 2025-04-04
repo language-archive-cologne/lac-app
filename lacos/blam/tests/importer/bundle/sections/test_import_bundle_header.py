@@ -3,6 +3,7 @@ import os
 from unittest.mock import patch
 
 # Models and Schemas
+from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_header import BundleHeader
 from blam_schemas.bundle.blam_bundle_repository_v1_0 import Cmd
 from xsdata.formats.dataclass.parsers import XmlParser
@@ -13,6 +14,11 @@ from lacos.blam.mappers.bundle.read.import_bundle_header import import_bundle_he
 
 
 # --- Fixtures ---
+
+@pytest.fixture
+def test_bundle():
+    """Create a test bundle for testing."""
+    return Bundle.objects.create()
 
 @pytest.fixture
 def real_bundle_xml():
@@ -45,20 +51,23 @@ def real_cmd_data(real_bundle_xml):
 # --- Test Cases ---
 
 @pytest.mark.django_db
-def test_import_bundle_header_creates_object(real_cmd_data):
+def test_import_bundle_header_creates_object(real_cmd_data, test_bundle):
     """Verify that a BundleHeader object is created in the database."""
-    header = import_bundle_header(real_cmd_data)
+    header = import_bundle_header(real_cmd_data, test_bundle)
 
     assert header is not None
     assert isinstance(header, BundleHeader)
     assert header.id is not None  # Check if it has been saved to DB
     assert BundleHeader.objects.count() == 1
+    # Verify the association with the bundle
+    assert test_bundle.header.count() == 1
+    assert test_bundle.header.first() == header
 
 
 @pytest.mark.django_db
-def test_import_bundle_header_maps_data_correctly(real_cmd_data):
+def test_import_bundle_header_maps_data_correctly(real_cmd_data, test_bundle):
     """Verify that data from the XML header is mapped correctly to model fields."""
-    header = import_bundle_header(real_cmd_data)
+    header = import_bundle_header(real_cmd_data, test_bundle)
     xml_header = real_cmd_data.header
 
     assert header is not None
@@ -70,35 +79,38 @@ def test_import_bundle_header_maps_data_correctly(real_cmd_data):
 
 
 @pytest.mark.django_db
-def test_import_bundle_header_handles_missing_header():
+def test_import_bundle_header_handles_missing_header(test_bundle):
     """Verify behavior when the Cmd object has no header."""
     # Create a minimal Cmd object without a header
     cmd_data = Cmd()
     cmd_data.header = None # Explicitly set to None
 
-    header = import_bundle_header(cmd_data)
+    header = import_bundle_header(cmd_data, test_bundle)
     assert header is None
     assert BundleHeader.objects.count() == 0
+    assert test_bundle.header.count() == 0
 
 
 @pytest.mark.django_db
-def test_import_bundle_header_handles_missing_self_link(real_cmd_data):
+def test_import_bundle_header_handles_missing_self_link(real_cmd_data, test_bundle):
     """Verify behavior when MdSelfLink is missing in the header."""
     real_cmd_data.header.md_self_link = None # Simulate missing self link
 
-    header = import_bundle_header(real_cmd_data)
+    header = import_bundle_header(real_cmd_data, test_bundle)
     assert header is None
     assert BundleHeader.objects.count() == 0
+    assert test_bundle.header.count() == 0
 
 
 @pytest.mark.django_db
-def test_import_bundle_header_updates_existing(real_cmd_data):
+def test_import_bundle_header_updates_existing(real_cmd_data, test_bundle):
     """Verify that calling the function again updates the existing header based on md_self_link."""
     # 1. Import for the first time
-    header1 = import_bundle_header(real_cmd_data)
+    header1 = import_bundle_header(real_cmd_data, test_bundle)
     assert header1 is not None
     assert header1.md_creator == "Language Archive Cologne"
     assert BundleHeader.objects.count() == 1
+    assert test_bundle.header.count() == 1
 
     # 2. Modify the data in the Cmd object (simulate an updated XML)
     new_creator = "Updated Creator Name"
@@ -108,9 +120,10 @@ def test_import_bundle_header_updates_existing(real_cmd_data):
     real_cmd_data.header.md_creation_date.value = XmlDate.from_string(new_date_str)
 
     # 3. Import again
-    header2 = import_bundle_header(real_cmd_data)
+    header2 = import_bundle_header(real_cmd_data, test_bundle)
     assert header2 is not None
     assert BundleHeader.objects.count() == 1 # Should still be only one record
+    assert test_bundle.header.count() == 1 # Still only one header in the bundle
 
     # 4. Verify it's the same object and it has been updated
     assert header1.id == header2.id
