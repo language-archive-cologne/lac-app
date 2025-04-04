@@ -19,7 +19,7 @@ from lacos.blam.mappers.bundle.read.import_bundle_publication_info import import
 @pytest.fixture
 def test_bundle():
     """Create a test bundle for testing."""
-    return Bundle.objects.create()
+    return Bundle.objects.create(identifier="test-publication-info-bundle")
 
 @pytest.fixture
 def real_bundle_xml():

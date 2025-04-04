@@ -16,7 +16,7 @@ from lacos.blam.models.bundle.bundle_administrative_info import (
 @pytest.fixture
 def test_bundle():
     """Create a test bundle for testing."""
-    return Bundle.objects.create()
+    return Bundle.objects.create(identifier="test-administrative-info-bundle")
 
 @pytest.fixture
 def real_bundle_xml():

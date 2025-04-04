@@ -11,8 +11,8 @@ from lacos.blam.models.collection.collection_repository import Collection
 
 @pytest.fixture
 def test_collection():
-    """Create a test collection for testing"""
-    return Collection.objects.create()
+    """Create a test collection for testing."""
+    return Collection.objects.create(identifier="test-collection-header")
 
 
 @pytest.fixture

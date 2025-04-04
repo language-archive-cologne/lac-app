@@ -159,8 +159,8 @@ def create_collection_license(admin_info_schema, license_schema=None) -> Optiona
         defaults={'access': access}
     )
     
-    # Update access if the license already existed
-    if not created:
+    # Update access if needed
+    if not created and license_model.access != access:
         license_model.access = access
         license_model.save()
     

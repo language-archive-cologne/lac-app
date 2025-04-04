@@ -3,6 +3,7 @@ from typing import Any, Optional, List
 from django.db import transaction
 from django.core.exceptions import ValidationError
 import logging
+import uuid
 
 from lacos.blam.models.collection.collection_repository import Collection
 from blam_schemas.collection.blam_collection_repository_v1_0 import Cmd
@@ -56,9 +57,26 @@ class CollectionImporter:
         # Validate the XML content
         cmd_data = cls.validate_xml(xml_content)
         
-        # Import the CMD data to Django models
+        # Extract the MD self link identifier from the header
+        md_self_link = None
+        if cmd_data.header and cmd_data.header.md_self_link:
+            md_self_link = cmd_data.header.md_self_link.value
+            
+            # If we have an md_self_link, check if a collection already exists
+            existing_collection = Collection.objects.filter(identifier=md_self_link).first()
+            if existing_collection:
+                logger.info(f"Found existing collection with identifier {md_self_link}, returning without changes")
+                return existing_collection
+        
+        # Create a new collection with the components
         collection = cls._import_cmd_to_models(cmd_data)
         
+        # Set the identifier on the collection
+        if md_self_link:
+            collection.identifier = md_self_link
+            collection.save(update_fields=['identifier'])
+        
+        logger.info(f"Collection import completed for '{md_self_link}'.")
         return collection
     
     @classmethod
@@ -76,7 +94,7 @@ class CollectionImporter:
         collection = cls._create_collection(cmd_data)
         
         try:
-            # Then import all components, passing the collection to each import function
+            #  import all components, passing the collection to each import function
             cls._import_header(cmd_data, collection)
             cls._import_general_info(cmd_data, collection)
             cls._import_publication_info(cmd_data, collection)
@@ -110,8 +128,9 @@ class CollectionImporter:
         Returns:
             A new Collection instance
         """
-        # Simply create a new Collection for this import
-        collection = Collection.objects.create()
+        # Create a new collection with a temporary identifier
+        # This will be replaced with the proper md_self_link in import_from_xml
+        collection = Collection.objects.create(identifier=f"temp-collection-{uuid.uuid4()}")
         logger.info(f"Created new Collection with ID {collection.id}")
         return collection
     

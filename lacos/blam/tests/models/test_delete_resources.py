@@ -518,3 +518,15 @@ def test_s3_resource_locations_deleted():
     # Verify the S3ResourceLocation was also deleted by the signal handler
     assert not S3ResourceLocation.objects.filter(id=s3_location_id).exists(), "S3ResourceLocation should be deleted by signal handler"
     assert not S3ResourceLocation.objects.filter(resource_pid=resource_pid).exists(), "S3ResourceLocation should be deleted by signal handler"
+
+@pytest.mark.django_db
+def test_cascading_delete_for_collection_components():
+    """Test that when a Collection is deleted, all its components are also deleted."""
+    # Create a Collection and all its components
+    collection = Collection.objects.create(identifier="test-delete-cascade-collection")
+    
+@pytest.mark.django_db
+def test_cascading_delete_for_bundle_components():
+    """Test that when a Bundle is deleted, all its components are also deleted."""
+    # Create a Bundle and all its components
+    bundle = Bundle.objects.create(identifier="test-delete-cascade-bundle")

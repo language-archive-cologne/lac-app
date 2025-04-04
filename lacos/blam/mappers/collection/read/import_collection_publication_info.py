@@ -195,16 +195,18 @@ def import_contributors(publication_info: CollectionPublicationInfo, publication
         display_name = f"{given_name} {family_name}".strip()
         contributor_data['contributor_display_name'] = display_name
         
-        # Try to find an existing contributor with the same display name, or create a new one
+        # Try to find an existing contributor with the same family and given name, or create a new one
         contributor, created = CollectionContributor.objects.get_or_create(
-            contributor_display_name=contributor_data['contributor_display_name'],
-            defaults=contributor_data
+            family_name=contributor_data['family_name'],
+            given_name=contributor_data.get('given_name', ''),
+            defaults={
+                'contributor_display_name': contributor_data['contributor_display_name']
+            }
         )
         
-        # Update fields that might have changed
-        if not created:
-            for key, value in contributor_data.items():
-                setattr(contributor, key, value)
+        # Add role if it exists
+        if hasattr(contributor_schema, 'contributor_role') and contributor_schema.contributor_role:
+            contributor.role = contributor_schema.contributor_role
             contributor.save()
         
         # Add affiliations if they exist

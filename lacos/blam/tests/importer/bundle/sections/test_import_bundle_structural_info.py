@@ -108,7 +108,7 @@ def db_collection():
 @pytest.fixture
 def test_bundle():
     """Create a test bundle for testing."""
-    return Bundle.objects.create()
+    return Bundle.objects.create(identifier="test-structural-info-bundle")
 
 
 @pytest.mark.django_db

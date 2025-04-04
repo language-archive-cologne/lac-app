@@ -3,6 +3,7 @@ from typing import Any, Optional, List
 from django.db import transaction
 from django.core.exceptions import ValidationError
 import logging
+import uuid
 
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
@@ -47,10 +48,31 @@ class BundleImporter:
             xml_content: The XML content to import
             
         Returns:
-            The created Bundle instance
+            The created or existing Bundle instance
         """
+        # Validate the XML content
         cmd_data = cls.validate_xml(xml_content)
-        return cls._import_cmd_to_models(cmd_data)
+        
+        # Extract the MD self link identifier from the header
+        md_self_link = None
+        if cmd_data.header and cmd_data.header.md_self_link:
+            md_self_link = cmd_data.header.md_self_link.value
+            
+            # If we have an md_self_link, check if a bundle already exists
+            existing_bundle = Bundle.objects.filter(identifier=md_self_link).first()
+            if existing_bundle:
+                logger.info(f"Found existing bundle with identifier {md_self_link}, returning without changes")
+                return existing_bundle
+        
+        # No existing bundle found, create a new one
+        bundle = cls._import_cmd_to_models(cmd_data)
+        
+        # Set the identifier on the bundle
+        if md_self_link:
+            bundle.identifier = md_self_link
+            bundle.save(update_fields=['identifier'])
+        
+        return bundle
     
     @classmethod
     def _create_bundle(cls, cmd_data: Cmd) -> Bundle:
@@ -63,8 +85,9 @@ class BundleImporter:
         Returns:
             A new Bundle instance
         """
-        # Simply create a new Bundle for this import
-        bundle = Bundle.objects.create()
+        # Create a new bundle with a temporary identifier
+        # This will be replaced with the proper md_self_link in import_from_xml
+        bundle = Bundle.objects.create(identifier=f"temp-bundle-{uuid.uuid4()}")
         logger.info(f"Created new Bundle with ID {bundle.id}")
         return bundle
 
@@ -92,10 +115,10 @@ class BundleImporter:
                 # Or return None, depending on desired behavior
 
             # Import other components, passing the bundle instance
-            general_info = cls._import_general_info(cmd_data, bundle)
-            publication_info = cls._import_publication_info(cmd_data, bundle)
-            administrative_info = cls._import_administrative_info(cmd_data, bundle)
-            structural_info = cls._import_structural_info(cmd_data, bundle)
+            cls._import_general_info(cmd_data, bundle)
+            cls._import_publication_info(cmd_data, bundle)
+            cls._import_administrative_info(cmd_data, bundle)
+            cls._import_structural_info(cmd_data, bundle)
             
             # No need to call _create_or_update_bundle since the bundle was already created
             # and all relations have been established

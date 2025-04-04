@@ -26,7 +26,7 @@ from lacos.blam.models.bundle.bundle_header import BundleHeader
 @pytest.fixture
 def test_bundle():
     """Create a test bundle for testing."""
-    return Bundle.objects.create()
+    return Bundle.objects.create(identifier="test-identifier-1")
 
 
 @pytest.fixture
@@ -297,7 +297,7 @@ def test_full_bundle_import(real_bundle_xml, create_test_collection):
     test_collection = create_test_collection(collection_id, identifier_type)
     
     # Create a Bundle first
-    test_bundle = Bundle.objects.create()
+    test_bundle = Bundle.objects.create(identifier="test-bundle-full-import")
     
     # Create a BundleHeader to use in our test
     bundle_header = BundleHeader.objects.create(
@@ -340,3 +340,16 @@ def test_full_bundle_import(real_bundle_xml, create_test_collection):
     # Remove MD License assertions
     # assert bundle.base_header.md_license == repo.mdlicense.value
     # assert bundle.base_header.md_license_uri == repo.mdlicense.uri 
+
+@pytest.mark.django_db
+def test_bundle_structural_info_creation(real_cmd_data, test_bundle):
+    """Test that BundleStructuralInfo is created correctly when a Bundle is imported."""
+    # Setup test: Create a Collection with the same identifier as in the XML
+    # Get the identifier from the XML structure
+    repo_info = real_cmd_data.components.blam_bundle_repository_v1_0
+    struct_info_data = repo_info.bundle_structural_info
+    collection_ref = struct_info_data.bundle_is_member_of_collection
+    collection_identifier = collection_ref.value
+    
+    # Create a collection with that identifier
+    collection = Collection.objects.create(identifier=collection_identifier) 

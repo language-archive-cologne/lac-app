@@ -1,10 +1,12 @@
-from lacos.blam.models.base_model import BaseModel
+from lacos.blam.models.base_repository import Repository
 
 
-class Bundle(BaseModel):
+class Bundle(Repository):
     """
     Concrete implementation of Repository for bundles.
     A bundle is a coherent set of data and metadata files that form a meaningful unit.
+    It is a member of a collection.
+
     """
     @property
     def base_header(self):

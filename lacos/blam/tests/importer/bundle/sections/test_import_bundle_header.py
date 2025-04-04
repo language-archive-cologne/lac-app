@@ -18,7 +18,7 @@ from lacos.blam.mappers.bundle.read.import_bundle_header import import_bundle_he
 @pytest.fixture
 def test_bundle():
     """Create a test bundle for testing."""
-    return Bundle.objects.create()
+    return Bundle.objects.create(identifier="test-header-bundle")
 
 @pytest.fixture
 def real_bundle_xml():

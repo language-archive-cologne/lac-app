@@ -12,8 +12,8 @@ from blam_schemas.collection.blam_collection_repository_v1_0 import SimpletypeAc
 
 @pytest.fixture
 def test_collection():
-    """Create a test collection for testing"""
-    return Collection.objects.create()
+    """Create a test collection for testing."""
+    return Collection.objects.create(identifier="test-collection-license")
 
 
 @pytest.fixture
