@@ -387,6 +387,56 @@ def test_create_resource_location_for_multiple_object_types(mock_s3):
         identifier="test-mapping-bundle"
     )
     
-    # Additional setup can be done here if needed by the test
+    # Create structural info that links bundle to collection
+    objects['struct_info'] = BundleStructuralInfo.objects.create(
+        bundle=objects['bundle'],
+        is_member_of_collection=objects['collection']
+    )
     
-    # Rest of the test should work as is after these objects are created
+    # Create BundleResources container
+    objects['resources_container'] = BundleResources.objects.create(
+        bundle=objects['bundle']
+    )
+    
+    # Create media resource and link it to the bundle
+    media_resource = MediaResource.objects.create(
+        file_name="test-mapping.wav",
+        mime_type="audio/wav",
+        file_pid="hdl:test/mapping-resource"
+    )
+    objects['resources_container'].bundle_media_resources.add(media_resource)
+    
+    # Create the service and register objects
+    service = ResourceMappingService(skip_bucket_check=True)
+    
+    # Register collection
+    collection_location = service.register_s3_location(
+        objects['collection'], 
+        bucket="test-bucket",
+        key=f"collections/{objects['collection'].id}/"
+    )
+    assert collection_location.s3_bucket == "test-bucket"
+    assert collection_location.s3_key == f"collections/{objects['collection'].id}/"
+    
+    # Register bundle
+    bundle_location = service.register_s3_location(
+        objects['bundle'], 
+        bucket="test-bucket",
+        key=f"collections/{objects['collection'].id}/bundles/{objects['bundle'].id}/"
+    )
+    assert bundle_location.s3_bucket == "test-bucket"
+    assert bundle_location.s3_key == f"collections/{objects['collection'].id}/bundles/{objects['bundle'].id}/"
+    
+    # Register media resource
+    resource_location = service.register_s3_location(
+        media_resource, 
+        bucket="test-bucket",
+        key=f"collections/{objects['collection'].id}/bundles/{objects['bundle'].id}/resources/{media_resource.file_name}"
+    )
+    assert resource_location.s3_bucket == "test-bucket"
+    assert resource_location.s3_key == f"collections/{objects['collection'].id}/bundles/{objects['bundle'].id}/resources/{media_resource.file_name}"
+    
+    # Test that we can retrieve the locations
+    assert service.get_s3_location(objects['collection']) == collection_location
+    assert service.get_s3_location(objects['bundle']) == bundle_location
+    assert service.get_s3_location(media_resource) == resource_location
