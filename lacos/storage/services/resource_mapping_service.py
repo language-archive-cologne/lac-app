@@ -61,50 +61,62 @@ class ResourceMappingService(BaseStorageService):
             
         elif isinstance(obj, Bundle):
             # Ensure structural_info and collection link exist
-            if hasattr(obj, 'structural_info') and obj.structural_info and \
-               hasattr(obj.structural_info, 'is_member_of_collection') and obj.structural_info.is_member_of_collection:
-                collection = obj.structural_info.is_member_of_collection
-                # Use UUIDs for path consistency
-                return f'collections/{collection.id}/bundles/{obj.id}/'
-            else:
-                logger.warning(f"Bundle {obj.id} is missing structural info or collection link. Cannot construct S3 path.")
-                return None
+            if obj.structural_info.exists():
+                si = obj.structural_info.first()
+                if si.is_member_of_collection:
+                    collection = si.is_member_of_collection
+                    # Use UUIDs for path consistency
+                    return f'collections/{collection.id}/bundles/{obj.id}/'
+            
+            logger.warning(f"Bundle {obj.id} is missing structural info or collection link. Cannot construct S3 path.")
+            return None
                 
         # --- Corrected Logic for Resource Types --- 
         elif isinstance(obj, (MediaResource, WrittenResource, OtherResource)):
             bundle = None
             try:
                 # Get the BundleResources container(s) via the reverse M2M.
-                # Assuming a resource belongs to only one BundleResources container.
                 bundle_resources_container = obj.bundleresources_set.first()
+                
+                # Debug logging
+                logger.info(f"Resource type: {type(obj).__name__}, ID: {obj.id}")
+                logger.info(f"BundleResources containers: {obj.bundleresources_set.count()}")
+                if bundle_resources_container:
+                    logger.info(f"First container ID: {bundle_resources_container.id}, bundle ID: {bundle_resources_container.bundle_id}")
 
                 if bundle_resources_container:
-                    # Get the BundleStructuralInfo via the reverse O2O (using related_name='structural_info')
-                    struct_info = bundle_resources_container.structural_info
-
-                    if struct_info:
-                        # Query the Bundle model to find the one linked to this struct_info
-                        bundle = Bundle.objects.filter(structural_info=struct_info).first()
-                        # bundle = struct_info.bundle # This failed due to missing attribute
+                    # Directly access the bundle via the foreign key
+                    bundle = bundle_resources_container.bundle
+                    logger.info(f"Found bundle ID: {bundle.id if bundle else None}")
+                    
+                    # Get structural info if it exists
+                    if bundle:
+                        logger.info(f"Bundle has structural_info: {bundle.structural_info.count()}")
+                        si = bundle.structural_info.first()
+                        if si:
+                            logger.info(f"StructInfo collection: {si.is_member_of_collection_id}")
+                            collection = si.is_member_of_collection
+                            if collection and hasattr(obj, 'file_name') and obj.file_name:
+                                # Use UUIDs for path consistency
+                                return f'collections/{collection.id}/bundles/{bundle.id}/resources/{obj.file_name}'
 
             except Exception as e: # Catch broader exceptions during traversal/query
                  # Handle cases where relations might not exist or query fails
                  logger.warning(f"Could not find related Bundle for resource {type(obj).__name__} (ID: {obj.id}). Check model relations: {e}", exc_info=False)
                  bundle = None # Ensure bundle is None if any step failed
                  
-            # Proceed if bundle was found
-            if bundle and hasattr(bundle, 'structural_info') and hasattr(bundle.structural_info, 'is_member_of_collection'):
-                 collection = bundle.structural_info.is_member_of_collection
-                 if hasattr(obj, 'file_name') and obj.file_name:
-                     # Use UUIDs for path consistency
-                     return f'collections/{collection.id}/bundles/{bundle.id}/resources/{obj.file_name}'
-                 else:
-                     logger.warning(f"Resource {type(obj).__name__} (ID: {obj.id}) lacks a file_name attribute.")
-                     return None
-            else:
-                 # Log if bundle couldn't be determined for a resource type object
-                 logger.warning(f"Failed to determine valid Bundle/Collection path for resource {type(obj).__name__} (ID: {obj.id}).")
-                 return None
+            # Only if relationships are correctly detected but somehow invalid, we'll reach this section
+            if bundle and hasattr(obj, 'file_name') and obj.file_name:
+                # Find collection through structural_info
+                si = bundle.structural_info.first()
+                if si and si.is_member_of_collection:
+                    collection = si.is_member_of_collection
+                    # Use UUIDs for path consistency
+                    return f'collections/{collection.id}/bundles/{bundle.id}/resources/{obj.file_name}'
+                
+            # Log if bundle couldn't be determined for a resource type object
+            logger.warning(f"Failed to determine valid Bundle/Collection path for resource {type(obj).__name__} (ID: {obj.id}).")
+            return None
                  
         else:
             # Default case if object type is not recognized

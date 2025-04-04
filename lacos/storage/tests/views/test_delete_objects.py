@@ -34,16 +34,18 @@ def authenticated_client(admin_user):
 
 @pytest.fixture
 def test_collection():
-    """Create a test collection."""
-    return Collection.objects.create(title="Test Collection")
+    """Create a test collection for testing."""
+    return Collection.objects.create(
+        identifier="test-delete-collection",
+        title="Test Collection"
+    )
 
 
 @pytest.fixture
-def test_bundle(test_collection):
-    """Create a test bundle in the test collection."""
+def test_bundle():
+    """Create a test bundle for testing."""
     return Bundle.objects.create(
-        title="Test Bundle",
-        collection=test_collection
+        identifier="test-delete-bundle"
     )
 
 
