@@ -43,10 +43,9 @@ class CleanupService:
         
         try:
             with transaction.atomic():
-                # 1. Find bundles with structural_info but no resources
+                # 1. Find bundles with no resources
                 bundles_missing_resources = Bundle.objects.filter(
-                    structural_info__isnull=False, 
-                    structural_info__resources__isnull=True
+                    resources__isnull=True
                 )
                 stats['bundles_without_resources'] = bundles_missing_resources.count()
                 logger.info(f"Found {stats['bundles_without_resources']} bundles without resources")
@@ -55,10 +54,7 @@ class CleanupService:
                 for bundle in bundles_missing_resources:
                     try:
                         # Create a new resources container
-                        resources = BundleResources.objects.create()
-                        # Link it to the bundle's structural info
-                        bundle.structural_info.resources = resources
-                        bundle.structural_info.save()
+                        resources = BundleResources.objects.create(bundle=bundle)
                         stats['fixed_resources'] += 1
                         logger.debug(f"Created resources container for bundle {bundle.id}")
                     except Exception as e:
@@ -67,9 +63,9 @@ class CleanupService:
                         logger.debug(traceback.format_exc())
                         stats['errors'].append(f"Bundle {bundle.id}: {str(e)}")
                 
-                # 2. Find orphaned resource containers (not linked to any structural info)
+                # 2. Find orphaned resource containers (not linked to any bundle)
                 orphaned_resources = BundleResources.objects.filter(
-                    structural_info__isnull=True
+                    bundle__isnull=True
                 )
                 stats['orphaned_resources_removed'] = orphaned_resources.count()
                 logger.info(f"Found {stats['orphaned_resources_removed']} orphaned resource containers")
@@ -234,19 +230,20 @@ class CleanupService:
                 'administrative_info': CollectionAdministrativeInfo.objects.count(),
                 'structural_info': CollectionStructuralInfo.objects.count(),
                 'project_info': ProjectInfo.objects.count(),
-                'orphaned_headers': CollectionHeader.objects.filter(collection_header_info__isnull=True).count(),
-                'orphaned_general_info': CollectionGeneralInfo.objects.filter(collection_general_info__isnull=True).count(),
-                'orphaned_publication_info': CollectionPublicationInfo.objects.filter(collection_publication_info__isnull=True).count(),
-                'orphaned_administrative_info': CollectionAdministrativeInfo.objects.filter(collection_administrative_info__isnull=True).count(),
-                'orphaned_structural_info': CollectionStructuralInfo.objects.filter(collection_structural_info__isnull=True).count(),
-                'orphaned_project_info': ProjectInfo.objects.filter(collection_project_info__isnull=True).count()
+                'orphaned_headers': CollectionHeader.objects.filter(collection__isnull=True).count(),
+                'orphaned_general_info': CollectionGeneralInfo.objects.filter(collection__isnull=True).count(),
+                'orphaned_publication_info': CollectionPublicationInfo.objects.filter(collection__isnull=True).count(),
+                'orphaned_administrative_info': CollectionAdministrativeInfo.objects.filter(collection__isnull=True).count(),
+                'orphaned_structural_info': CollectionStructuralInfo.objects.filter(collection__isnull=True).count(),
+                'orphaned_project_info': ProjectInfo.objects.filter(funder_infos__isnull=True).count()
             },
             'bundles': {
                 'total': Bundle.objects.count(),
                 'with_collections': Bundle.objects.filter(structural_info__is_member_of_collection__isnull=False).count(),
                 'without_collections': Bundle.objects.filter(structural_info__is_member_of_collection__isnull=True).count(),
-                'with_resources': Bundle.objects.filter(structural_info__resources__isnull=False).count(),
-                'without_resources': Bundle.objects.filter(structural_info__isnull=False, structural_info__resources__isnull=True).count()
+                'with_resources': Bundle.objects.filter(resources__isnull=False).count(),
+                'without_resources': Bundle.objects.filter(resources__isnull=True).count(),
+                'with_structural_info': Bundle.objects.filter(structural_info__isnull=False).count(),
             },
             'resources': {
                 'total_containers': BundleResources.objects.count(),
@@ -256,9 +253,6 @@ class CleanupService:
                 'total_resources': MediaResource.objects.count() + WrittenResource.objects.count() + OtherResource.objects.count()
             }
         }
-        
-        # Get bundles with structural info
-        stats['bundles']['with_structural_info'] = Bundle.objects.filter(structural_info__isnull=False).count()
         
         # Get empty resource containers
         empty_resources = BundleResources.objects.annotate(
@@ -466,7 +460,7 @@ class CleanupService:
             with transaction.atomic():
                 # Find headers not linked to any collection
                 orphaned_headers = CollectionHeader.objects.filter(
-                    collection_header_info__isnull=True
+                    collection__isnull=True
                 )
                 stats['orphaned_headers_removed'] = orphaned_headers.count()
                 logger.info(f"Found {stats['orphaned_headers_removed']} orphaned collection headers")
@@ -507,7 +501,7 @@ class CleanupService:
             with transaction.atomic():
                 # Find publication info records not linked to any collection
                 orphaned_pub_info = CollectionPublicationInfo.objects.filter(
-                    collection_publication_info__isnull=True
+                    collection__isnull=True
                 )
                 stats['orphaned_publication_info_removed'] = orphaned_pub_info.count()
                 logger.info(f"Found {stats['orphaned_publication_info_removed']} orphaned collection publication info records")
@@ -548,7 +542,7 @@ class CleanupService:
             with transaction.atomic():
                 # Find general info records not linked to any collection
                 orphaned_gen_info = CollectionGeneralInfo.objects.filter(
-                    collection_general_info__isnull=True
+                    collection__isnull=True
                 )
                 stats['orphaned_general_info_removed'] = orphaned_gen_info.count()
                 logger.info(f"Found {stats['orphaned_general_info_removed']} orphaned collection general info records")
@@ -589,7 +583,7 @@ class CleanupService:
             with transaction.atomic():
                 # Find administrative info records not linked to any collection
                 orphaned_admin_info = CollectionAdministrativeInfo.objects.filter(
-                    collection_administrative_info__isnull=True
+                    collection__isnull=True
                 )
                 stats['orphaned_admin_info_removed'] = orphaned_admin_info.count()
                 logger.info(f"Found {stats['orphaned_admin_info_removed']} orphaned collection administrative info records")
@@ -630,7 +624,7 @@ class CleanupService:
             with transaction.atomic():
                 # Find structural info records not linked to any collection
                 orphaned_struct_info = CollectionStructuralInfo.objects.filter(
-                    collection_structural_info__isnull=True
+                    collection__isnull=True
                 )
                 stats['orphaned_structural_info_removed'] = orphaned_struct_info.count()
                 logger.info(f"Found {stats['orphaned_structural_info_removed']} orphaned collection structural info records")
@@ -671,7 +665,7 @@ class CleanupService:
             with transaction.atomic():
                 # Find project info records not linked to any collection
                 orphaned_proj_info = ProjectInfo.objects.filter(
-                    collection_project_info__isnull=True
+                    funder_infos__isnull=True
                 )
                 stats['orphaned_project_info_removed'] = orphaned_proj_info.count()
                 logger.info(f"Found {stats['orphaned_project_info_removed']} orphaned project info records")

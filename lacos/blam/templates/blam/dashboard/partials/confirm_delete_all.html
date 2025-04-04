@@ -4,7 +4,7 @@
             <div class="flex justify-between items-center pb-3 border-b bg-red-600 -m-5 p-5 rounded-t-md">
                 <h3 class="text-xl font-medium text-white">Confirm Database Reset</h3>
                 <button type="button" class="text-white bg-transparent hover:bg-red-700 rounded-lg p-1.5 ml-auto inline-flex items-center"
-                        onclick="document.getElementById('confirm-modal').innerHTML = ''; document.getElementById('confirm-modal').classList.add('hidden');">
+                        onclick="document.getElementById('confirm-modal-wrapper').classList.add('hidden');">
                     <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                         <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
                     </svg>
@@ -25,9 +25,9 @@
                 
                 <form hx-post="{{ action_url }}" 
                       hx-target="#results-container" 
-                      hx-swap="innerHTML">
+                      hx-swap="innerHTML"
+                      hx-on::after-request="document.getElementById('confirm-modal-wrapper').classList.add('hidden');">
                     {% csrf_token %}
-                    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
                     <div class="flex items-center mb-4">
                         <input id="confirmDeleteCheck" name="confirm" type="checkbox" required class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
                         <label for="confirmDeleteCheck" class="ml-2 text-sm font-medium text-gray-900">
@@ -39,7 +39,7 @@
                         <button 
                             type="button" 
                             class="px-4 py-2 bg-gray-500 text-white text-base font-medium rounded-md shadow-sm hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-300"
-                            onclick="document.getElementById('confirm-modal').innerHTML = ''; document.getElementById('confirm-modal').classList.add('hidden');">
+                            onclick="document.getElementById('confirm-modal-wrapper').classList.add('hidden');">
                             Cancel
                         </button>
                         <button 
@@ -59,7 +59,4 @@
             </div>
         </div>
     </div>
-</div>
-<script>
-    document.getElementById('confirm-modal').classList.remove('hidden');
-</script> 
+</div> 

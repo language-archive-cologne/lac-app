@@ -5,6 +5,13 @@
 
 {% block content %}
 <div class="container mx-auto px-4 py-6" hx-boost="true">
+    <!-- Configure HTMX to include CSRF token in all requests -->
+    <script>
+        document.body.addEventListener('htmx:configRequest', function(evt) {
+            evt.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
+        });
+    </script>
+    
     <!-- Add HTMX Debugging -->
     <script>
         htmx.logAll();
@@ -230,8 +237,28 @@
     <div id="results-container" class="mb-8"></div>
     
     <!-- Confirm Modal -->
-    <div id="confirm-modal" class="hidden"></div>
+    <div id="confirm-modal-wrapper" class="hidden fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
+        <div id="confirm-modal" class="bg-white rounded-lg shadow-lg p-6 max-w-lg w-full mx-4">
+            <!-- Content will be loaded here by HTMX -->
+        </div>
+    </div>
 </div>
+
+<script>
+    // Show modal when content is loaded via HTMX
+    document.body.addEventListener('htmx:afterSwap', function(event) {
+        if (event.detail.target.id === 'confirm-modal') {
+            document.getElementById('confirm-modal-wrapper').classList.remove('hidden');
+        }
+    });
+
+    // Hide modal when clicking outside of it
+    document.getElementById('confirm-modal-wrapper').addEventListener('click', function(event) {
+        if (event.target === this) {
+            this.classList.add('hidden');
+        }
+    });
+</script>
 {% endblock %}
 
 {% block extra_js %}

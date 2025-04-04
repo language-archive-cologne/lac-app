@@ -6,6 +6,7 @@ from django.urls import reverse_lazy
 from django.contrib import messages
 from django.shortcuts import redirect
 from django.template.loader import render_to_string
+import logging
 
 from lacos.blam.services.cleanup_service import CleanupService
 
@@ -94,8 +95,25 @@ class DatabaseDeleteConfirmView(LoginRequiredMixin, UserPassesTestMixin, View):
         Handle POST request to confirm and execute deletion of all BLAM data.
         Returns HTML response for HTMX with deletion results.
         """
+        # Debug logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"DatabaseDeleteConfirmView: Received POST request with data: {request.POST}")
+        
+        if 'confirm' not in request.POST or not request.POST.get('confirm'):
+            logger.warning("DatabaseDeleteConfirmView: Confirmation checkbox not checked")
+            message = "Deletion not confirmed. Please check the confirmation checkbox."
+            html = render_to_string('blam/dashboard/partials/delete_results.html', {
+                'message': message,
+                'operation': 'all',
+                'errors': ['Confirmation checkbox not checked']
+            })
+            return HttpResponse(html)
+        
+        logger.info("DatabaseDeleteConfirmView: Starting deletion of all data")
+        
         # Run the deletion operation
         results = CleanupService.delete_all_data()
+        logger.info(f"DatabaseDeleteConfirmView: Deletion completed with results: {results}")
         
         # Extract counts for a summary message
         deleted = results['deleted']
@@ -107,13 +125,19 @@ class DatabaseDeleteConfirmView(LoginRequiredMixin, UserPassesTestMixin, View):
         errors = results.get('errors', [])
         if errors:
             message += f" Encountered {len(errors)} errors during deletion."
+            logger.warning(f"DatabaseDeleteConfirmView: Encountered errors during deletion: {errors}")
         
         # Return HTML for results
         html = render_to_string('blam/dashboard/partials/delete_results.html', {
             'message': message,
             'deleted': deleted,
             'errors': errors,
-            'operation': 'all'
+            'operation': 'all',
+            'debug': {
+                'request_post': dict(request.POST),
+                'results_summary': results,
+                'csrf_token': request.META.get('CSRF_COOKIE', 'Not found')
+            }
         })
         
         return HttpResponse(html)
