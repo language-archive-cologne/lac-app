@@ -4,6 +4,12 @@ from django.db import transaction
 from django.db.models import Count, Q
 
 from lacos.blam.models.collection.collection_repository import Collection
+from lacos.blam.models.collection.collection_header import CollectionHeader
+from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo
+from lacos.blam.models.collection.collection_publication_info import CollectionPublicationInfo
+from lacos.blam.models.collection.collection_administrative_info import CollectionAdministrativeInfo
+from lacos.blam.models.collection.collection_structural_info import CollectionStructuralInfo
+from lacos.blam.models.base_project_info import ProjectInfo
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import (
     BundleStructuralInfo, BundleResources, MediaResource, WrittenResource, OtherResource
@@ -192,7 +198,13 @@ class CleanupService:
         
         results = {
             'bundle_resources': CleanupService.cleanup_bundle_resources(),
-            'collection_bundle_links': CleanupService.fix_collection_bundle_links()
+            'collection_bundle_links': CleanupService.fix_collection_bundle_links(),
+            'orphaned_headers': CleanupService.cleanup_orphaned_headers(),
+            'orphaned_publication_info': CleanupService.cleanup_orphaned_publication_info(),
+            'orphaned_general_info': CleanupService.cleanup_orphaned_general_info(),
+            'orphaned_admin_info': CleanupService.cleanup_orphaned_admin_info(),
+            'orphaned_structural_info': CleanupService.cleanup_orphaned_structural_info(),
+            'orphaned_project_info': CleanupService.cleanup_orphaned_project_info()
         }
         
         logger.info("Full cleanup process completed")
@@ -214,6 +226,20 @@ class CleanupService:
             'collections': {
                 'total': Collection.objects.count(),
                 'with_bundles': Collection.objects.filter(bundle_collection__isnull=False).distinct().count()
+            },
+            'collection_metadata': {
+                'headers': CollectionHeader.objects.count(),
+                'general_info': CollectionGeneralInfo.objects.count(),
+                'publication_info': CollectionPublicationInfo.objects.count(),
+                'administrative_info': CollectionAdministrativeInfo.objects.count(),
+                'structural_info': CollectionStructuralInfo.objects.count(),
+                'project_info': ProjectInfo.objects.count(),
+                'orphaned_headers': CollectionHeader.objects.filter(collection_header_info__isnull=True).count(),
+                'orphaned_general_info': CollectionGeneralInfo.objects.filter(collection_general_info__isnull=True).count(),
+                'orphaned_publication_info': CollectionPublicationInfo.objects.filter(collection_publication_info__isnull=True).count(),
+                'orphaned_administrative_info': CollectionAdministrativeInfo.objects.filter(collection_administrative_info__isnull=True).count(),
+                'orphaned_structural_info': CollectionStructuralInfo.objects.filter(collection_structural_info__isnull=True).count(),
+                'orphaned_project_info': ProjectInfo.objects.filter(collection_project_info__isnull=True).count()
             },
             'bundles': {
                 'total': Bundle.objects.count(),
@@ -414,6 +440,252 @@ class CleanupService:
                 logger.warning(f"Successfully deleted all bundles and resources: {stats}")
         except Exception as e:
             error_msg = f"Error during bundles deletion: {e}"
+            logger.error(error_msg)
+            logger.debug(traceback.format_exc())
+            stats['errors'].append(f"Global error: {str(e)}")
+        
+        return stats
+
+    @staticmethod
+    def cleanup_orphaned_headers():
+        """
+        Cleanup orphaned collection headers.
+        
+        Returns:
+            dict: Statistics about the cleanup operations performed
+        """
+        stats = {
+            'orphaned_headers_removed': 0,
+            'fixed_headers': 0,
+            'errors': []
+        }
+        
+        logger.info("Starting cleanup of orphaned collection headers...")
+        
+        try:
+            with transaction.atomic():
+                # Find headers not linked to any collection
+                orphaned_headers = CollectionHeader.objects.filter(
+                    collection_header_info__isnull=True
+                )
+                stats['orphaned_headers_removed'] = orphaned_headers.count()
+                logger.info(f"Found {stats['orphaned_headers_removed']} orphaned collection headers")
+                
+                # Delete orphaned headers
+                if stats['orphaned_headers_removed'] > 0:
+                    logger.warning(f"Deleting {stats['orphaned_headers_removed']} orphaned collection headers")
+                    orphaned_headers.delete()
+                
+                # Log summary
+                logger.info(f"Collection headers cleanup completed: {stats}")
+                
+        except Exception as e:
+            error_msg = f"Error during collection headers cleanup: {e}"
+            logger.error(error_msg)
+            logger.debug(traceback.format_exc())
+            stats['errors'].append(f"Global error: {str(e)}")
+        
+        return stats
+    
+    @staticmethod
+    def cleanup_orphaned_publication_info():
+        """
+        Cleanup orphaned collection publication info records.
+        
+        Returns:
+            dict: Statistics about the cleanup operations performed
+        """
+        stats = {
+            'orphaned_publication_info_removed': 0,
+            'fixed_publication_info': 0,
+            'errors': []
+        }
+        
+        logger.info("Starting cleanup of orphaned collection publication info records...")
+        
+        try:
+            with transaction.atomic():
+                # Find publication info records not linked to any collection
+                orphaned_pub_info = CollectionPublicationInfo.objects.filter(
+                    collection_publication_info__isnull=True
+                )
+                stats['orphaned_publication_info_removed'] = orphaned_pub_info.count()
+                logger.info(f"Found {stats['orphaned_publication_info_removed']} orphaned collection publication info records")
+                
+                # Delete orphaned publication info records
+                if stats['orphaned_publication_info_removed'] > 0:
+                    logger.warning(f"Deleting {stats['orphaned_publication_info_removed']} orphaned collection publication info records")
+                    orphaned_pub_info.delete()
+                
+                # Log summary
+                logger.info(f"Collection publication info cleanup completed: {stats}")
+                
+        except Exception as e:
+            error_msg = f"Error during collection publication info cleanup: {e}"
+            logger.error(error_msg)
+            logger.debug(traceback.format_exc())
+            stats['errors'].append(f"Global error: {str(e)}")
+        
+        return stats
+    
+    @staticmethod
+    def cleanup_orphaned_general_info():
+        """
+        Cleanup orphaned collection general info records.
+        
+        Returns:
+            dict: Statistics about the cleanup operations performed
+        """
+        stats = {
+            'orphaned_general_info_removed': 0,
+            'fixed_general_info': 0,
+            'errors': []
+        }
+        
+        logger.info("Starting cleanup of orphaned collection general info records...")
+        
+        try:
+            with transaction.atomic():
+                # Find general info records not linked to any collection
+                orphaned_gen_info = CollectionGeneralInfo.objects.filter(
+                    collection_general_info__isnull=True
+                )
+                stats['orphaned_general_info_removed'] = orphaned_gen_info.count()
+                logger.info(f"Found {stats['orphaned_general_info_removed']} orphaned collection general info records")
+                
+                # Delete orphaned general info records
+                if stats['orphaned_general_info_removed'] > 0:
+                    logger.warning(f"Deleting {stats['orphaned_general_info_removed']} orphaned collection general info records")
+                    orphaned_gen_info.delete()
+                
+                # Log summary
+                logger.info(f"Collection general info cleanup completed: {stats}")
+                
+        except Exception as e:
+            error_msg = f"Error during collection general info cleanup: {e}"
+            logger.error(error_msg)
+            logger.debug(traceback.format_exc())
+            stats['errors'].append(f"Global error: {str(e)}")
+        
+        return stats
+    
+    @staticmethod
+    def cleanup_orphaned_admin_info():
+        """
+        Cleanup orphaned collection administrative info records.
+        
+        Returns:
+            dict: Statistics about the cleanup operations performed
+        """
+        stats = {
+            'orphaned_admin_info_removed': 0,
+            'fixed_admin_info': 0,
+            'errors': []
+        }
+        
+        logger.info("Starting cleanup of orphaned collection administrative info records...")
+        
+        try:
+            with transaction.atomic():
+                # Find administrative info records not linked to any collection
+                orphaned_admin_info = CollectionAdministrativeInfo.objects.filter(
+                    collection_administrative_info__isnull=True
+                )
+                stats['orphaned_admin_info_removed'] = orphaned_admin_info.count()
+                logger.info(f"Found {stats['orphaned_admin_info_removed']} orphaned collection administrative info records")
+                
+                # Delete orphaned administrative info records
+                if stats['orphaned_admin_info_removed'] > 0:
+                    logger.warning(f"Deleting {stats['orphaned_admin_info_removed']} orphaned collection administrative info records")
+                    orphaned_admin_info.delete()
+                
+                # Log summary
+                logger.info(f"Collection administrative info cleanup completed: {stats}")
+                
+        except Exception as e:
+            error_msg = f"Error during collection administrative info cleanup: {e}"
+            logger.error(error_msg)
+            logger.debug(traceback.format_exc())
+            stats['errors'].append(f"Global error: {str(e)}")
+        
+        return stats
+    
+    @staticmethod
+    def cleanup_orphaned_structural_info():
+        """
+        Cleanup orphaned collection structural info records.
+        
+        Returns:
+            dict: Statistics about the cleanup operations performed
+        """
+        stats = {
+            'orphaned_structural_info_removed': 0,
+            'fixed_structural_info': 0,
+            'errors': []
+        }
+        
+        logger.info("Starting cleanup of orphaned collection structural info records...")
+        
+        try:
+            with transaction.atomic():
+                # Find structural info records not linked to any collection
+                orphaned_struct_info = CollectionStructuralInfo.objects.filter(
+                    collection_structural_info__isnull=True
+                )
+                stats['orphaned_structural_info_removed'] = orphaned_struct_info.count()
+                logger.info(f"Found {stats['orphaned_structural_info_removed']} orphaned collection structural info records")
+                
+                # Delete orphaned structural info records
+                if stats['orphaned_structural_info_removed'] > 0:
+                    logger.warning(f"Deleting {stats['orphaned_structural_info_removed']} orphaned collection structural info records")
+                    orphaned_struct_info.delete()
+                
+                # Log summary
+                logger.info(f"Collection structural info cleanup completed: {stats}")
+                
+        except Exception as e:
+            error_msg = f"Error during collection structural info cleanup: {e}"
+            logger.error(error_msg)
+            logger.debug(traceback.format_exc())
+            stats['errors'].append(f"Global error: {str(e)}")
+        
+        return stats
+    
+    @staticmethod
+    def cleanup_orphaned_project_info():
+        """
+        Cleanup orphaned project info records.
+        
+        Returns:
+            dict: Statistics about the cleanup operations performed
+        """
+        stats = {
+            'orphaned_project_info_removed': 0,
+            'fixed_project_info': 0,
+            'errors': []
+        }
+        
+        logger.info("Starting cleanup of orphaned project info records...")
+        
+        try:
+            with transaction.atomic():
+                # Find project info records not linked to any collection
+                orphaned_proj_info = ProjectInfo.objects.filter(
+                    collection_project_info__isnull=True
+                )
+                stats['orphaned_project_info_removed'] = orphaned_proj_info.count()
+                logger.info(f"Found {stats['orphaned_project_info_removed']} orphaned project info records")
+                
+                # Delete orphaned project info records
+                if stats['orphaned_project_info_removed'] > 0:
+                    logger.warning(f"Deleting {stats['orphaned_project_info_removed']} orphaned project info records")
+                    orphaned_proj_info.delete()
+                
+                # Log summary
+                logger.info(f"Project info cleanup completed: {stats}")
+                
+        except Exception as e:
+            error_msg = f"Error during project info cleanup: {e}"
             logger.error(error_msg)
             logger.debug(traceback.format_exc())
             stats['errors'].append(f"Global error: {str(e)}")

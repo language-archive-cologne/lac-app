@@ -12,7 +12,7 @@ class BundleStructuralInfo(StructuralInfo):
     bundle_topics = models.ManyToManyField('BundleTopic', blank=True)
     resources = models.OneToOneField(
         'BundleResources',
-        on_delete=models.SET_NULL,  # Or CASCADE if resources should be deleted with struct info
+        on_delete=models.CASCADE,
         null=True,
         blank=True,
         related_name='structural_info'

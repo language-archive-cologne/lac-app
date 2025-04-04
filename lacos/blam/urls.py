@@ -10,6 +10,7 @@ from .views.admin_views import (
     DatabaseDeleteCollectionsConfirmView,
     DatabaseDeleteBundlesConfirmView
 )
+from .views.crud import delete_blam_model
 
 # Admin/archivist routes
 urlpatterns = [
@@ -24,4 +25,7 @@ urlpatterns = [
     path('admin/delete-collections/confirm/', DatabaseDeleteCollectionsConfirmView.as_view(), name='database_delete_collections_confirm'),
     path('admin/delete-bundles/', DatabaseDeleteBundlesView.as_view(), name='database_delete_bundles'),
     path('admin/delete-bundles/confirm/', DatabaseDeleteBundlesConfirmView.as_view(), name='database_delete_bundles_confirm'),
+    
+    # API endpoints for file browser integration
+    path('delete-model/<str:model_type>/<uuid:object_id>/', delete_blam_model, name='delete_model'),
 ] 
