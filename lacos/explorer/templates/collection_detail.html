@@ -1,36 +1,191 @@
 {% extends "explorer_base.html" %}
 {% load i18n %}
 
-{% block title %}{% blocktranslate with name=collection.name %}Collection: {{ name }}{% endblocktranslate %} - {{ block.super }}{% endblock title %}
+{% block title %}
+  {% if collection.get_general_info.display_title %}
+    {{ collection.get_general_info.display_title }}
+  {% elif collection.get_general_info.title %}
+    {{ collection.get_general_info.title }}
+  {% else %}
+    {{ collection.identifier }}
+  {% endif %} - {{ block.super }}
+{% endblock title %}
 
 {% block explorer_content %}
-  {# Optional: Add Breadcrumbs here #}
   <div class="mb-4">
-    <a href="{% url 'explorer:collection_list' %}" class="text-blue-600 hover:underline">&larr; {% translate "Back to Collections" %}</a>
+    <a href="{% url 'explorer:collection_list' %}" class="inline-flex items-center text-blue-600 hover:text-blue-800">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+      </svg>
+      {% translate "Back to Collections" %}
+    </a>
   </div>
 
-  <h2 class="text-xl font-medium text-gray-700 mb-2">{{ collection.name }}</h2>
-  {% if collection.description %}
-    <p class="text-gray-600 mb-4">{{ collection.description }}</p>
-  {% endif %}
-
-  <h3 class="text-lg font-medium text-gray-700 mb-3">{% translate "Bundles in this Collection" %}</h3>
-
-  {% with bundles=collection.bundles.all %} {# Or use bundle_list if passed separately #}
-    {% if bundles %}
-      <ul class="space-y-2">
-        {% for bundle in bundles %}
-          <li class="bg-white p-3 rounded shadow-sm hover:shadow-md transition-shadow duration-200">
-            <a href="{{ bundle.get_absolute_url }}" class="text-blue-600 hover:underline">
-              {{ bundle.name }} {# Assuming bundle has a 'name' attribute #}
-            </a>
-            {# Add more bundle details if needed #}
-          </li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <p class="text-gray-500">{% translate "No bundles found in this collection." %}</p>
-    {% endif %}
-  {% endwith %}
+  <div class="bg-white shadow overflow-hidden sm:rounded-lg mb-8">
+    <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+      <h1 class="text-2xl font-medium text-gray-800">
+        {% if collection.get_general_info.display_title %}
+          {{ collection.get_general_info.display_title }}
+        {% elif collection.get_general_info.title %}
+          {{ collection.get_general_info.title }}
+        {% else %}
+          {{ collection.identifier }}
+        {% endif %}
+      </h1>
+      <p class="mt-1 max-w-2xl text-sm text-gray-500">{% translate "Collection Details" %}</p>
+    </div>
+    
+    <div class="px-4 py-5 sm:p-6">
+      <!-- Collection Info -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <h2 class="text-lg font-medium text-gray-700 mb-2">{% translate "General Information" %}</h2>
+          <dl class="space-y-3">
+            {% if collection.get_general_info.description %}
+              <div>
+                <dt class="text-sm font-medium text-gray-500">{% translate "Description" %}</dt>
+                <dd class="mt-1 text-sm text-gray-900">{{ collection.get_general_info.description }}</dd>
+              </div>
+            {% endif %}
+            
+            {% if collection.get_general_info.object_languages.all %}
+              <div>
+                <dt class="text-sm font-medium text-gray-500">{% translate "Languages" %}</dt>
+                <dd class="mt-1 text-sm text-gray-900">
+                  <div class="flex flex-wrap gap-1">
+                    {% for language in collection.get_general_info.object_languages.all %}
+                      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                        {{ language.name }}
+                        {% if language.iso_639_3_code %}<span class="ml-1 text-blue-500 text-xs">[{{ language.iso_639_3_code }}]</span>{% endif %}
+                      </span>
+                    {% endfor %}
+                  </div>
+                </dd>
+              </div>
+            {% endif %}
+            
+            {% if collection.formatted_location %}
+              <div>
+                <dt class="text-sm font-medium text-gray-500">{% translate "Location" %}</dt>
+                <dd class="mt-1 text-sm text-gray-900">{{ collection.formatted_location }}</dd>
+              </div>
+            {% endif %}
+            
+            {% if collection.get_general_info.recording_date %}
+              <div>
+                <dt class="text-sm font-medium text-gray-500">{% translate "Recording Date" %}</dt>
+                <dd class="mt-1 text-sm text-gray-900">{{ collection.get_general_info.recording_date|date:"F Y" }}</dd>
+              </div>
+            {% endif %}
+          </dl>
+        </div>
+        
+        <div>
+          <h2 class="text-lg font-medium text-gray-700 mb-2">{% translate "Publication Information" %}</h2>
+          <dl class="space-y-3">
+            {% if collection.publication_info.first and collection.publication_info.first.publication_year %}
+              <div>
+                <dt class="text-sm font-medium text-gray-500">{% translate "Publication Year" %}</dt>
+                <dd class="mt-1 text-sm text-gray-900">{{ collection.publication_info.first.publication_year }}</dd>
+              </div>
+            {% endif %}
+            
+            {% if collection.publication_info.first and collection.publication_info.first.data_provider %}
+              <div>
+                <dt class="text-sm font-medium text-gray-500">{% translate "Data Provider" %}</dt>
+                <dd class="mt-1 text-sm text-gray-900">{{ collection.publication_info.first.data_provider }}</dd>
+              </div>
+            {% endif %}
+            
+            {% if collection.publication_info.first and collection.publication_info.first.creators.all %}
+              <div>
+                <dt class="text-sm font-medium text-gray-500">{% translate "Researchers" %}</dt>
+                <dd class="mt-1 text-sm text-gray-900">
+                  {% for creator in collection.publication_info.first.creators.all %}
+                    <div class="mb-2">
+                      <div class="font-medium">{{ creator.given_name }} {{ creator.family_name }}</div>
+                      {% if creator.affiliation %}
+                        <div class="text-xs text-gray-500">{{ creator.affiliation }}</div>
+                      {% endif %}
+                    </div>
+                  {% endfor %}
+                </dd>
+              </div>
+            {% endif %}
+          </dl>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Bundles Section -->
+  <div class="mb-6">
+    <h2 class="text-xl font-medium text-gray-700 mb-4">{% translate "Bundles in this Collection" %}</h2>
+    
+    {% with bundles=collection.bundle_collection.all %}
+      {% if bundles %}
+        <div class="bg-white shadow overflow-hidden rounded-lg">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% translate "Bundle Name" %}</th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% translate "Description" %}</th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% translate "Topics" %}</th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% translate "Files" %}</th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              {% for bundle_info in bundles %}
+                {% with bundle=bundle_info.bundle %}
+                  <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4">
+                      <div class="text-sm font-medium text-blue-600 hover:text-blue-900">
+                        <a href="#">
+                          {% if bundle.get_general_info.display_title %}
+                            {{ bundle.get_general_info.display_title }}
+                          {% elif bundle.get_general_info.title %}
+                            {{ bundle.get_general_info.title }}
+                          {% else %}
+                            {{ bundle.identifier }}
+                          {% endif %}
+                        </a>
+                      </div>
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-500">
+                      {% if bundle.get_general_info.description %}
+                        {{ bundle.get_general_info.description|truncatewords:15 }}
+                      {% endif %}
+                    </td>
+                    <td class="px-6 py-4">
+                      {% if bundle_info.bundle_topics.all %}
+                        <div class="flex flex-wrap gap-1">
+                          {% for topic in bundle_info.bundle_topics.all %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                              {{ topic.name }}
+                            </span>
+                          {% endfor %}
+                        </div>
+                      {% endif %}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-500">
+                      {% with resource_count=bundle.resources.count %}
+                        {% if resource_count > 0 %}
+                          {{ resource_count }} file{{ resource_count|pluralize }}
+                        {% else %}
+                          -
+                        {% endif %}
+                      {% endwith %}
+                    </td>
+                  </tr>
+                {% endwith %}
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="text-gray-500">{% translate "No bundles available for this collection." %}</p>
+      {% endif %}
+    {% endwith %}
+  </div>
 
 {% endblock explorer_content %}

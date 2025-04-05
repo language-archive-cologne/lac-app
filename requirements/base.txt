@@ -26,3 +26,5 @@ xsdata==24.12 # https://github.com/xsdata/xsdata
 boto3==1.37.9
 #huey
 huey==2.5.3 # https://github.com/coleifer/huey
+#geopy 2.4.1 
+geopy==2.4.1 # https://github.com/geopy/geopy
