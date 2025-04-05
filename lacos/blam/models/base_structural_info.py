@@ -1,4 +1,5 @@
 from django.db import models
+from lacos.blam.models.base_model import BaseModel
 
 class StructuralInfo(models.Model):
     """
@@ -9,7 +10,7 @@ class StructuralInfo(models.Model):
     class Meta:
         abstract = True
 
-class AdditionalMetadataFile(models.Model):
+class AdditionalMetadataFile(BaseModel):
     """
     Abstract model for additional metadata files associated with the resource.
     """

@@ -1,6 +1,7 @@
 from django.db import models
 from lacos.blam.models.base_structural_info import AdditionalMetadataFile, StructuralInfo
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
+from lacos.blam.models.base_model import BaseModel
 
 
 class BundleStructuralInfo(StructuralInfo):
@@ -30,7 +31,7 @@ class BundleAdditionalMetadataFile(AdditionalMetadataFile):
         verbose_name_plural = "Bundle Additional Metadata Files"
 
 
-class BundleTopic(models.Model):
+class BundleTopic(BaseModel):
     """
     A term that occurs as a BundleKeyword in a subset of bundles and defines 
     a meaningful subsection of the bundle.
@@ -50,7 +51,7 @@ class BundleTopic(models.Model):
         return self.name
 
 
-class BundleTopics(models.Model):
+class BundleTopics(BaseModel):
     """
     Model for managing topics associated with a bundle.
     """
@@ -71,7 +72,7 @@ class BundleTopics(models.Model):
         verbose_name_plural = "Bundle Topics"
 
 
-class BundleMembers(models.Model):
+class BundleMembers(BaseModel):
     """
     The BundleMembers component contains elements referencing the resources of the bundle.
     """
@@ -87,7 +88,7 @@ class BundleMembers(models.Model):
         verbose_name_plural = "Bundle Members"
 
 
-class BundleHasBundleMember(models.Model):
+class BundleHasBundleMember(BaseModel):
     """
     References to a resource contained in the bundle. Based on the `hasBundleMember` 
     relationship of the Fedora Relationship Ontology.
@@ -121,7 +122,7 @@ class BundleHasBundleMember(models.Model):
         ordering = ['order']
 
 
-class BundleResources(models.Model):
+class BundleResources(BaseModel):
     """
     The BundleResources component contains metadata about files contained in the bundle.
     """
@@ -140,7 +141,7 @@ class BundleResources(models.Model):
         verbose_name_plural = "Bundle Resources"
 
 
-class MediaResource(models.Model):
+class MediaResource(BaseModel):
     """
     The MediaResource component contains metadata about media files contained in the bundle.
     """
@@ -175,7 +176,7 @@ class MediaResource(models.Model):
         verbose_name_plural = "Media Resources"
 
 
-class WrittenResource(models.Model):
+class WrittenResource(BaseModel):
     """
     The WrittenResource component contains metadata about annotation files and 
     other character encoded information contained in the bundle.
@@ -206,7 +207,7 @@ class WrittenResource(models.Model):
         verbose_name_plural = "Written Resources"
 
 
-class WrittenResourceAnnotation(models.Model):
+class WrittenResourceAnnotation(BaseModel):
     """
     Represents the IsAnnotationOf relationship for a WrittenResource.
     """
@@ -227,7 +228,7 @@ class WrittenResourceAnnotation(models.Model):
         verbose_name_plural = "Written Resource Annotations"
 
 
-class OtherResource(models.Model):
+class OtherResource(BaseModel):
     """
     The OtherResource component contains metadata about additional files contained in the bundle
     that are not covered by the BundleAdditionalMetadataFile, MediaResource, and WrittenResource components.

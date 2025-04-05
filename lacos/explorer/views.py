@@ -1,12 +1,16 @@
 import logging
-from django.views.generic import DetailView, ListView
+from django.views.generic import DetailView, ListView, View
 from geopy.geocoders import Nominatim
 from django.core.cache import cache
 from functools import lru_cache
 import re
+from django.urls import reverse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.http import HttpResponse, Http404
+from urllib.parse import unquote
 
 # Assuming your Collection model is here. Adjust if necessary.
-from lacos.blam.models import Collection
+from lacos.blam.models import Collection, Bundle
 
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
@@ -142,10 +146,242 @@ class CollectionDetailView(DetailView):
             self.object.formatted_location = get_formatted_location(location)
         else:
             self.object.formatted_location = ""
+            
+        # Get all resources from bundles in this collection
+        context['collection_media_resources'] = []
+        context['collection_written_resources'] = []
+        context['collection_other_resources'] = []
+        context['collection_metadata_files'] = []
+        
+        # Get bundles in this collection
+        bundles = Bundle.objects.filter(structural_info__is_member_of_collection=self.object)
+        
+        # Collect resources from all bundles
+        for bundle in bundles:
+            if bundle.resources.first():
+                resources = bundle.resources.first()
+                context['collection_media_resources'].extend(resources.bundle_media_resources.all())
+                context['collection_written_resources'].extend(resources.bundle_written_resources.all())
+                context['collection_other_resources'].extend(resources.bundle_other_resources.all())
+                
+            if hasattr(bundle, 'structural_info') and bundle.structural_info.first():
+                context['collection_metadata_files'].extend(bundle.structural_info.first().additional_metadata_files.all())
+                
         return context
 
-    # If you need to pass bundles separately:
-    # def get_context_data(self, **kwargs):
-    #     context = super().get_context_data(**kwargs)
-    #     context["bundle_list"] = self.object.bundles.all() # Adjust bundle relation if needed
-    #     return context 
+
+class BundleDetailView(DetailView):
+    model = Bundle
+    template_name = "bundle_detail.html"
+    context_object_name = "bundle"
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Get the collection this bundle belongs to
+        if hasattr(self.object, 'structural_info') and self.object.structural_info.first():
+            context['collection'] = self.object.structural_info.first().is_member_of_collection
+        
+        # Add formatted location
+        if self.object.get_general_info and self.object.get_general_info.location:
+            location = self.object.get_general_info.location
+            self.object.formatted_location = get_formatted_location(location)
+        else:
+            self.object.formatted_location = ""
+            
+        # Get all resources
+        context['media_resources'] = []
+        context['written_resources'] = []
+        context['other_resources'] = []
+        context['metadata_files'] = []
+        
+        if self.object.resources.first():
+            resources = self.object.resources.first()
+            context['media_resources'] = resources.bundle_media_resources.all()
+            context['written_resources'] = resources.bundle_written_resources.all()
+            context['other_resources'] = resources.bundle_other_resources.all()
+            
+        if hasattr(self.object, 'structural_info') and self.object.structural_info.first():
+            context['metadata_files'] = self.object.structural_info.first().additional_metadata_files.all()
+            
+        return context
+
+
+class BundleResourcesView(View):
+    """View for accessing bundle resources directly or listing them"""
+    
+    def get(self, request, pk, resource_id=None):
+        bundle = get_object_or_404(Bundle, pk=pk)
+        
+        # If a specific resource is requested, try to serve it directly
+        if resource_id:
+            try:
+                # URL decode the resource_id since it may contain special characters
+                decoded_resource_id = unquote(resource_id)
+                
+                # Remove the 'ID_' prefix if it exists
+                if decoded_resource_id.startswith('ID_'):
+                    decoded_resource_id = decoded_resource_id[3:]
+                
+                # Use the ResourceMappingService to get a direct S3 URL
+                from lacos.storage.services.resource_mapping_service import ResourceMappingService
+                
+                # Initialize the service
+                resource_service = ResourceMappingService()
+                
+                # Generate a presigned URL directly from the PID
+                presigned_url = resource_service.get_resource_url_by_pid(decoded_resource_id)
+                
+                # Redirect to the presigned URL
+                return redirect(presigned_url)
+                
+            except ValueError as e:
+                logger.error(f"Resource mapping service error: {e}")
+                raise Http404(f"Resource {resource_id} not found or cannot be accessed")
+            except Exception as e:
+                logger.error(f"Error accessing resource: {e}")
+                return HttpResponse(f"Error accessing resource: {str(e)}", status=500)
+        
+        # If no specific resource is requested, show the resources list view
+        context = {
+            'bundle': bundle,
+            'media_resources': [],
+            'written_resources': [],
+            'other_resources': [],
+            'metadata_files': []
+        }
+        
+        if bundle.resources.first():
+            resources = bundle.resources.first()
+            context['media_resources'] = resources.bundle_media_resources.all()
+            context['written_resources'] = resources.bundle_written_resources.all()
+            context['other_resources'] = resources.bundle_other_resources.all()
+            
+        if hasattr(bundle, 'structural_info') and bundle.structural_info.first():
+            context['collection'] = bundle.structural_info.first().is_member_of_collection
+            context['metadata_files'] = bundle.structural_info.first().additional_metadata_files.all()
+        
+        return render(request, 'bundle_resources.html', context)
+
+
+class ResourceAccessView(View):
+    """View for accessing resources either through direct download or streaming"""
+    
+    def get(self, request, bundle_id, resource_id):
+        bundle = get_object_or_404(Bundle, pk=bundle_id)
+        action = request.GET.get('action', 'download')  # Default to download if no action specified
+        
+        try:
+            # Find the resource by its ID (UUID) first
+            from django.contrib.contenttypes.models import ContentType
+            from lacos.storage.models.s3_resource_location import S3ResourceLocation
+            
+            # Get the resource
+            resource = None
+            resource_pid = None
+            mime_type = None
+            
+            # Check in media resources
+            if bundle.resources.first():
+                for r in bundle.resources.first().bundle_media_resources.all():
+                    if r.id == resource_id:
+                        resource = r
+                        mime_type = r.mime_type
+                        break
+                
+                if not resource:
+                    for r in bundle.resources.first().bundle_written_resources.all():
+                        if r.id == resource_id:
+                            resource = r
+                            mime_type = r.mime_type
+                            break
+                
+                if not resource:
+                    for r in bundle.resources.first().bundle_other_resources.all():
+                        if r.id == resource_id:
+                            resource = r
+                            mime_type = r.mime_type
+                            break
+            
+            # Check in metadata files
+            if not resource and hasattr(bundle, 'structural_info') and bundle.structural_info.first():
+                for r in bundle.structural_info.first().additional_metadata_files.all():
+                    if r.id == resource_id:
+                        resource = r
+                        mime_type = r.mime_type
+                        break
+            
+            if not resource:
+                raise Http404(f"Resource with id {resource_id} not found in bundle {bundle_id}")
+            
+            # Get the PID from the resource
+            resource_pid = resource.file_pid
+            
+            # Use the ResourceMappingService to get a direct S3 URL
+            from lacos.storage.services.resource_mapping_service import ResourceMappingService
+            from urllib.parse import urlparse
+            import mimetypes
+            import requests
+            
+            # Initialize the service
+            resource_service = ResourceMappingService()
+            
+            # Generate a presigned URL directly from the PID
+            presigned_url = resource_service.get_resource_url_by_pid(resource_pid)
+            
+            # For direct download, just redirect to the presigned URL
+            if action == 'download':
+                return redirect(presigned_url)
+            
+            # For streaming/viewing, handle based on the mime type
+            if mime_type and (mime_type.startswith('audio/') or mime_type.startswith('video/')):
+                # Handle range requests for audio/video files
+                range_header = request.META.get('HTTP_RANGE', None)
+                
+                if range_header:
+                    # Forward the range request to S3
+                    headers = {'Range': range_header}
+                    response = requests.get(presigned_url, headers=headers, stream=True)
+                    
+                    # Create streaming response with the same headers
+                    from django.http import StreamingHttpResponse
+                    streaming_response = StreamingHttpResponse(
+                        streaming_content=response.iter_content(chunk_size=8192),
+                        content_type=mime_type,
+                        status=response.status_code
+                    )
+                    
+                    # Copy relevant headers from the S3 response
+                    for header in ['Content-Range', 'Content-Length', 'Accept-Ranges', 'Content-Type']:
+                        if header in response.headers:
+                            streaming_response[header] = response.headers[header]
+                    
+                    return streaming_response
+                else:
+                    # Initial request without range header
+                    response = requests.head(presigned_url)
+                    content_length = response.headers.get('Content-Length', 0)
+                    
+                    from django.http import StreamingHttpResponse
+                    streaming_response = StreamingHttpResponse(
+                        streaming_content=requests.get(presigned_url, stream=True).iter_content(chunk_size=8192),
+                        content_type=mime_type
+                    )
+                    
+                    streaming_response['Content-Length'] = content_length
+                    streaming_response['Accept-Ranges'] = 'bytes'
+                    return streaming_response
+            
+            elif mime_type and (mime_type.startswith('image/') or mime_type == 'application/pdf'):
+                # For images and PDFs, redirect to view in browser
+                return redirect(presigned_url)
+            else:
+                # For other file types, default to download
+                return redirect(presigned_url)
+                
+        except ValueError as e:
+            logger.error(f"Resource mapping service error: {e}")
+            raise Http404(f"Resource {resource_id} not found or cannot be accessed")
+        except Exception as e:
+            logger.error(f"Error accessing resource: {e}")
+            return HttpResponse(f"Error accessing resource: {str(e)}", status=500) 

@@ -1,0 +1,326 @@
+{% extends "explorer_base.html" %}
+{% load i18n %}
+{% load explorer_extras %}
+
+{% block title %}
+  {% if bundle.get_general_info.display_title %}
+    {{ bundle.get_general_info.display_title }}
+  {% elif bundle.get_general_info.title %}
+    {{ bundle.get_general_info.title }}
+  {% else %}
+    {{ bundle.identifier }}
+  {% endif %} - {{ block.super }}
+{% endblock title %}
+
+{% block explorer_content %}
+  <div class="mb-4">
+    {% if collection %}
+      <a href="{% url 'explorer:collection_detail' pk=collection.pk %}" class="inline-flex items-center text-blue-600 hover:text-blue-800">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+        </svg>
+        {% translate "Back to Collection" %}
+      </a>
+    {% else %}
+      <a href="{% url 'explorer:collection_list' %}" class="inline-flex items-center text-blue-600 hover:text-blue-800">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+        </svg>
+        {% translate "Back to Collections" %}
+      </a>
+    {% endif %}
+  </div>
+
+  <!-- Bundle Info Section -->
+  <div class="bg-white shadow overflow-hidden sm:rounded-lg mb-8">
+    <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+      <h1 class="text-2xl font-medium text-gray-800">
+        {% if bundle.get_general_info.display_title %}
+          {{ bundle.get_general_info.display_title }}
+        {% elif bundle.get_general_info.title %}
+          {{ bundle.get_general_info.title }}
+        {% else %}
+          {{ bundle.identifier }}
+        {% endif %}
+      </h1>
+      <p class="mt-1 max-w-2xl text-sm text-gray-500">{% translate "Bundle Details" %}</p>
+    </div>
+    
+    <div class="px-4 py-5 sm:p-6">
+      <div class="space-y-4">
+        {% if bundle.get_general_info.description %}
+          <div>
+            <h2 class="text-lg font-medium text-gray-700 mb-2">{% translate "Description" %}</h2>
+            <p class="text-gray-700">{{ bundle.get_general_info.description|urlize_text }}</p>
+          </div>
+        {% endif %}
+        
+        {% if bundle.formatted_location %}
+          <div>
+            <h2 class="text-lg font-medium text-gray-700 mb-2">{% translate "Location" %}</h2>
+            <p class="text-gray-700">{{ bundle.formatted_location }}</p>
+          </div>
+        {% endif %}
+        
+        {% if bundle.structural_info.first and bundle.structural_info.first.bundle_topics.all %}
+          <div>
+            <h2 class="text-lg font-medium text-gray-700 mb-2">{% translate "Topics" %}</h2>
+            <div class="flex flex-wrap gap-2">
+              {% for topic in bundle.structural_info.first.bundle_topics.all %}
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-sm font-medium bg-green-100 text-green-800">
+                  {{ topic.name }}
+                </span>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  
+  <!-- Resources Sections -->
+  {% if media_resources or written_resources or other_resources %}
+    <div class="bg-white shadow overflow-hidden sm:rounded-lg mb-8">
+      <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+        <h2 class="text-xl font-medium text-gray-700">{% translate "Bundle Resources" %}</h2>
+        <p class="mt-1 text-sm text-gray-500">{% translate "Access the files contained in this bundle" %}</p>
+      </div>
+      
+      <!-- Media Resources -->
+      {% if media_resources %}
+        <div class="px-4 py-5 sm:p-6 border-b border-gray-100">
+          <h3 class="text-lg font-medium text-gray-700 mb-3">{% translate "Media Resources" %}</h3>
+          <div class="space-y-4">
+            {% for resource in media_resources %}
+              <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div class="flex-1">
+                  <div class="text-sm font-medium text-gray-900">{{ resource.file_name }}</div>
+                  <div class="text-xs text-gray-500">{{ resource.mime_type }}</div>
+                  {% if resource.file_description %}
+                    <div class="mt-1 text-sm text-gray-600">{{ resource.file_description }}</div>
+                  {% endif %}
+                </div>
+                <div>
+                  <div class="flex space-x-2">
+                    <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}" 
+                       class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" 
+                       target="_blank">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      {% translate "Download" %}
+                    </a>
+                    
+                    {% if resource.mime_type and resource.mime_type|slice:":6" == "audio/" or resource.mime_type|slice:":6" == "video/" %}
+                    <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play" 
+                       class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500" 
+                       target="_blank">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {% translate "Play" %}
+                    </a>
+                    {% elif resource.mime_type and resource.mime_type|slice:":6" == "image/" or resource.mime_type == "application/pdf" %}
+                    <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view" 
+                       class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md bg-purple-600 text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500" 
+                       target="_blank">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                      {% translate "View" %}
+                    </a>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+      
+      <!-- Written Resources -->
+      {% if written_resources %}
+        <div class="px-4 py-5 sm:p-6 border-b border-gray-100">
+          <h3 class="text-lg font-medium text-gray-700 mb-3">{% translate "Written Resources" %}</h3>
+          <div class="space-y-4">
+            {% for resource in written_resources %}
+              <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div class="flex-1">
+                  <div class="text-sm font-medium text-gray-900">{{ resource.file_name }}</div>
+                  <div class="text-xs text-gray-500">{{ resource.mime_type }}</div>
+                  {% if resource.file_description %}
+                    <div class="mt-1 text-sm text-gray-600">{{ resource.file_description }}</div>
+                  {% endif %}
+                </div>
+                <div>
+                  <div class="flex space-x-2">
+                    <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}" 
+                       class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" 
+                       target="_blank">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      {% translate "Download" %}
+                    </a>
+                    
+                    {% if resource.mime_type and resource.mime_type|slice:":6" == "audio/" or resource.mime_type|slice:":6" == "video/" %}
+                    <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play" 
+                       class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500" 
+                       target="_blank">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {% translate "Play" %}
+                    </a>
+                    {% elif resource.mime_type and resource.mime_type|slice:":6" == "image/" or resource.mime_type == "application/pdf" %}
+                    <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view" 
+                       class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md bg-purple-600 text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500" 
+                       target="_blank">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                      {% translate "View" %}
+                    </a>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+      
+      <!-- Other Resources -->
+      {% if other_resources %}
+        <div class="px-4 py-5 sm:p-6">
+          <h3 class="text-lg font-medium text-gray-700 mb-3">{% translate "Other Resources" %}</h3>
+          <div class="space-y-4">
+            {% for resource in other_resources %}
+              <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div class="flex-1">
+                  <div class="text-sm font-medium text-gray-900">{{ resource.file_name }}</div>
+                  <div class="text-xs text-gray-500">{{ resource.mime_type }}</div>
+                  {% if resource.file_description %}
+                    <div class="mt-1 text-sm text-gray-600">{{ resource.file_description }}</div>
+                  {% endif %}
+                </div>
+                <div>
+                  <div class="flex space-x-2">
+                    <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}" 
+                       class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" 
+                       target="_blank">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      {% translate "Download" %}
+                    </a>
+                    
+                    {% if resource.mime_type and resource.mime_type|slice:":6" == "audio/" or resource.mime_type|slice:":6" == "video/" %}
+                    <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play" 
+                       class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500" 
+                       target="_blank">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {% translate "Play" %}
+                    </a>
+                    {% elif resource.mime_type and resource.mime_type|slice:":6" == "image/" or resource.mime_type == "application/pdf" %}
+                    <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view" 
+                       class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md bg-purple-600 text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500" 
+                       target="_blank">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                      {% translate "View" %}
+                    </a>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+  
+  <!-- Metadata Files -->
+  {% if metadata_files %}
+    <div class="bg-white shadow overflow-hidden sm:rounded-lg mb-8">
+      <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+        <h2 class="text-xl font-medium text-gray-700">{% translate "Metadata Files" %}</h2>
+        <p class="mt-1 text-sm text-gray-500">{% translate "Additional metadata associated with this bundle" %}</p>
+      </div>
+      
+      <div class="px-4 py-5 sm:p-6">
+        <div class="space-y-4">
+          {% for metadata_file in metadata_files %}
+            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div class="flex-1">
+                <div class="text-sm font-medium text-gray-900">{{ metadata_file.file_name }}</div>
+                <div class="text-xs text-gray-500">{{ metadata_file.mime_type }}</div>
+                {% if metadata_file.file_description %}
+                  <div class="mt-1 text-sm text-gray-600">{{ metadata_file.file_description }}</div>
+                {% endif %}
+              </div>
+              <div>
+                <div class="flex space-x-2">
+                  <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=metadata_file.id %}" 
+                     class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" 
+                     target="_blank">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    {% translate "Download" %}
+                  </a>
+                  
+                  {% if metadata_file.mime_type and metadata_file.mime_type|slice:":6" == "audio/" or metadata_file.mime_type|slice:":6" == "video/" %}
+                  <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=metadata_file.id %}?action=play" 
+                     class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500" 
+                     target="_blank">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {% translate "Play" %}
+                  </a>
+                  {% elif metadata_file.mime_type and metadata_file.mime_type|slice:":6" == "image/" or metadata_file.mime_type == "application/pdf" %}
+                  <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=metadata_file.id %}?action=view" 
+                     class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md bg-purple-600 text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500" 
+                     target="_blank">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    {% translate "View" %}
+                  </a>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  {% endif %}
+  
+  {% if not media_resources and not written_resources and not other_resources and not metadata_files %}
+    <div class="bg-white shadow overflow-hidden sm:rounded-lg mb-8">
+      <div class="px-4 py-5 sm:px-6">
+        <div class="text-center py-8">
+          <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+          </svg>
+          <h3 class="mt-2 text-sm font-medium text-gray-900">{% translate "No resources found" %}</h3>
+          <p class="mt-1 text-sm text-gray-500">{% translate "This bundle does not contain any accessible resources." %}</p>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+{% endblock explorer_content %}
