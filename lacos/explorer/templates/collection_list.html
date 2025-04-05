@@ -1,5 +1,6 @@
 {% extends "explorer_base.html" %}
 {% load i18n %}
+{% load explorer_extras %}
 
 {% block title %}{% translate "Collections" %} - {{ block.super }}{% endblock title %}
 
@@ -48,7 +49,7 @@
               </td>
               <td class="px-6 py-4 text-sm text-gray-500">
                 {% if collection.get_general_info and collection.get_general_info.description %}
-                  {{ collection.get_general_info.description|truncatewords:10 }}
+                  {{ collection.get_general_info.description|truncatewords:10|urlize_text }}
                 {% endif %}
               </td>
               <td class="px-6 py-4 text-sm text-gray-500">

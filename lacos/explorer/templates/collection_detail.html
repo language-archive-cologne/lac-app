@@ -1,5 +1,6 @@
 {% extends "explorer_base.html" %}
 {% load i18n %}
+{% load explorer_extras %}
 
 {% block title %}
   {% if collection.get_general_info.display_title %}
@@ -44,7 +45,7 @@
             {% if collection.get_general_info.description %}
               <div>
                 <dt class="text-sm font-medium text-gray-500">{% translate "Description" %}</dt>
-                <dd class="mt-1 text-sm text-gray-900">{{ collection.get_general_info.description }}</dd>
+                <dd class="mt-1 text-sm text-gray-900">{{ collection.get_general_info.description|urlize_text }}</dd>
               </div>
             {% endif %}
             
@@ -153,7 +154,7 @@
                     </td>
                     <td class="px-6 py-4 text-sm text-gray-500">
                       {% if bundle.get_general_info.description %}
-                        {{ bundle.get_general_info.description|truncatewords:15 }}
+                        {{ bundle.get_general_info.description|truncatewords:15|urlize_text }}
                       {% endif %}
                     </td>
                     <td class="px-6 py-4">
