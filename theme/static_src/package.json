@@ -9,6 +9,7 @@
   "dependencies": {
     "tailwindcss": "^3.3.3",
     "autoprefixer": "^10.4.14",
-    "postcss": "^8.4.24"
+    "postcss": "^8.4.24",
+    "daisyui": "^4.7.2"
   }
 }

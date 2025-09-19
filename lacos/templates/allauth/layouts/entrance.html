@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load i18n %}
-{% block bodyclass %}bg-light{% endblock bodyclass %}
+{% block bodyclass %}min-h-screen bg-base-200{% endblock bodyclass %}
 
 {% block css %}{{ block.super }}{% endblock css %}
 {% block title %}
@@ -9,23 +9,24 @@
   {% endblock head_title %}
 {% endblock title %}
 {% block body %}
-  <div class="d-flex justify-content-center h-100 py-4">
-    <div class="col-md-4 py-4 my-4 px-4">
-      {% if messages %}
-        {% for message in messages %}
-          <div class="alert alert-dismissible {% if message.tags %}alert-{{ message.tags }}{% endif %}">
-            {{ message }}
-            <button type="button"
-                    class="btn-close"
-                    data-bs-dismiss="alert"
-                    aria-label="Close"></button>
-          </div>
-        {% endfor %}
-      {% endif %}
-      {% block content %}
-      {% endblock content %}
-      {% block extra_body %}
-      {% endblock extra_body %}
+  <div class="hero min-h-screen bg-base-200">
+    <div class="hero-content flex-col lg:flex-row-reverse">
+      <div class="card flex-shrink-0 w-full max-w-sm shadow-2xl bg-base-100">
+        <div class="card-body">
+          {% if messages %}
+            {% for message in messages %}
+              <div class="alert {% if message.tags == 'error' %}alert-error{% elif message.tags == 'success' %}alert-success{% elif message.tags == 'warning' %}alert-warning{% else %}alert-info{% endif %} mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <span>{{ message }}</span>
+              </div>
+            {% endfor %}
+          {% endif %}
+          {% block content %}
+          {% endblock content %}
+          {% block extra_body %}
+          {% endblock extra_body %}
+        </div>
+      </div>
     </div>
   </div>
 {% endblock body %}

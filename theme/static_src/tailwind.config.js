@@ -14,5 +14,10 @@ module.exports = {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    require("daisyui"),
+  ],
+  daisyui: {
+    themes: ["corporate", "dark"], // You can customize themes here
+  },
 }
