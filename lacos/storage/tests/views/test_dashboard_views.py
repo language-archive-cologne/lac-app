@@ -13,9 +13,11 @@ def test_archivist_dashboard_success(mock_render, mock_bucket_service, prepared_
     mock_instance = mock_bucket_service.return_value
     mock_instance.ingest_bucket = 'test-ingest-bucket'
     mock_instance.production_bucket = 'test-production-bucket'
-    mock_instance.get_root_level_items.side_effect = [
-        # Mock response for ingest bucket
-        {
+    mock_instance.get_all_accessible_buckets.return_value = ['test-ingest-bucket', 'test-production-bucket']
+    mock_instance.ocfl_buckets = ['test-production-bucket']
+
+    bucket_structures = {
+        'test-ingest-bucket': {
             "type": "folder",
             "name": "test-ingest-bucket",
             "path": "",
@@ -24,8 +26,7 @@ def test_archivist_dashboard_success(mock_render, mock_bucket_service, prepared_
                 {"type": "file", "name": "test.jpg", "path": "test.jpg"}
             ]
         },
-        # Mock response for production bucket
-        {
+        'test-production-bucket': {
             "type": "folder",
             "name": "test-production-bucket",
             "path": "",
@@ -34,7 +35,12 @@ def test_archivist_dashboard_success(mock_render, mock_bucket_service, prepared_
                 {"type": "file", "name": "prod.jpg", "path": "prod.jpg"}
             ]
         }
-    ]
+    }
+
+    def mock_get_root_items(bucket_name):
+        return bucket_structures[bucket_name]
+
+    mock_instance.get_root_level_items.side_effect = mock_get_root_items
     
     # Create request with success message
     request = prepared_request('/storage/dashboard/', method='get', data={'message': 'Test message'})
@@ -43,8 +49,8 @@ def test_archivist_dashboard_success(mock_render, mock_bucket_service, prepared_
     archivist_dashboard(request)
     
     # Assert service was called with correct parameters
-    mock_instance.get_root_level_items.assert_any_call('test-ingest-bucket')
-    mock_instance.get_root_level_items.assert_any_call('test-production-bucket')
+    # The view now calls get_root_level_items for each accessible bucket
+    assert mock_instance.get_root_level_items.call_count == 2
     
     # Check that the correct template was rendered with the right context
     mock_render.assert_called_once()
@@ -75,12 +81,18 @@ def test_archivist_dashboard_empty_buckets(mock_render, mock_bucket_service, pre
     mock_instance = mock_bucket_service.return_value
     mock_instance.ingest_bucket = 'test-ingest-bucket'
     mock_instance.production_bucket = 'test-production-bucket'
-    mock_instance.get_root_level_items.side_effect = [
-        # Empty ingest bucket
-        {"type": "folder", "name": "test-ingest-bucket", "path": "", "children": []},
-        # Empty production bucket
-        {"type": "folder", "name": "test-production-bucket", "path": "", "children": []}
-    ]
+    mock_instance.get_all_accessible_buckets.return_value = ['test-ingest-bucket', 'test-production-bucket']
+    mock_instance.ocfl_buckets = []
+
+    bucket_structures = {
+        'test-ingest-bucket': {"type": "folder", "name": "test-ingest-bucket", "path": "", "children": []},
+        'test-production-bucket': {"type": "folder", "name": "test-production-bucket", "path": "", "children": []}
+    }
+
+    def mock_get_root_items(bucket_name):
+        return bucket_structures[bucket_name]
+
+    mock_instance.get_root_level_items.side_effect = mock_get_root_items
     
     request = prepared_request('/storage/dashboard/')
     archivist_dashboard(request)
@@ -97,6 +109,8 @@ def test_archivist_dashboard_error_handling(mock_render, mock_bucket_service, pr
     mock_instance = mock_bucket_service.return_value
     mock_instance.ingest_bucket = 'test-ingest-bucket'
     mock_instance.production_bucket = 'test-production-bucket'
+    mock_instance.get_all_accessible_buckets.return_value = ['test-ingest-bucket', 'test-production-bucket']
+    mock_instance.ocfl_buckets = []
     mock_instance.get_root_level_items.side_effect = Exception("Service error")
     
     request = prepared_request('/storage/dashboard/')

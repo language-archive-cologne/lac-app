@@ -18,6 +18,24 @@ module.exports = {
     require("daisyui"),
   ],
   daisyui: {
-    themes: ["corporate", "dark"], // You can customize themes here
+    themes: [
+      "corporate",
+      "dark",
+      {
+        "lacos": {
+          "primary": "#3b82f6",
+          "secondary": "#1e40af",
+          "accent": "#06b6d4",
+          "neutral": "#32475b",  // Your navbar color
+          "base-100": "#ffffff",
+          "base-200": "#f9fafb",
+          "base-300": "#32475b", // Use your color for navbar background
+          "info": "#3abff8",
+          "success": "#36d399",
+          "warning": "#fbbd23",
+          "error": "#f87272",
+        },
+      },
+    ],
   },
 }

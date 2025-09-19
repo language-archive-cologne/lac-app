@@ -1,0 +1,30 @@
+<!-- Bucket Content Partial -->
+<div class="card-header px-6 py-4 border-b border-base-300">
+    <div class="flex items-center justify-between">
+        <h2 class="text-xl font-semibold" id="current-bucket-title">
+            {{ bucket_name }}
+        </h2>
+        <div class="text-sm text-base-content/70" id="bucket-info">
+            <span class="text-base-content/70">{{ structure.children|length }} items</span>
+        </div>
+    </div>
+</div>
+
+<div class="card-body p-6">
+    <div id="bucket-folder-structure" class="min-h-[400px]">
+        {% if structure.children %}
+            {% include "dashboard/folder_structure_partial.html" with structure=structure bucket_type=bucket_name %}
+        {% else %}
+            <div class="text-center py-12">
+                <div class="text-base-content/50 mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                </div>
+                <h3 class="text-lg font-medium text-base-content/70 mb-2">Empty bucket</h3>
+                <p class="text-base-content/50 mb-4">No files or folders in {{ bucket_name }}</p>
+                <button class="btn btn-primary" onclick="showUploadModal()">Upload Files</button>
+            </div>
+        {% endif %}
+    </div>
+</div>

@@ -1,35 +1,40 @@
 {% load static %}
 <!-- Footer -->
-<footer class="text-white mt-auto py-6" style="background-color: #32475b;">
-    <div class="container mx-auto px-6">
+<footer class="footer bg-neutral text-neutral-content p-6 mt-auto">
+    <div class="container mx-auto">
         <!-- Partner Logos -->
-        <section class="py-1 mt-3">
-            <div class="grid grid-cols-2 justify-center items-center gap-12 md:grid-cols-3 xl:grid-cols-none xl:flex xl:justify-between">
-                <a href="http://ifl.phil-fak.uni-koeln.de" target="_blank" class="flex justify-center items-center">
-                    <img src="/static/images/uzk_logo.png" alt="University of Cologne" class="h-6 w-auto max-h-6">
+        <section class="mb-6">
+            <div class="flex flex-wrap items-center justify-center gap-8 lg:justify-between">
+                <a href="http://ifl.phil-fak.uni-koeln.de" target="_blank"
+                   class="flex items-center justify-center hover:opacity-80 transition-opacity p-2">
+                    <img src="/static/images/uzk_logo.png" alt="University of Cologne" class="h-8 w-auto object-contain">
                 </a>
-                <a href="http://dch.phil-fak.uni-koeln.de" target="_blank" class="flex justify-center items-center">
-                    <img src="/static/images/dch_logo.png" alt="DCH" class="h-8">
+                <a href="http://dch.phil-fak.uni-koeln.de" target="_blank"
+                   class="flex items-center justify-center hover:opacity-80 transition-opacity p-2">
+                    <img src="/static/images/dch_logo.png" alt="DCH" class="h-8 w-auto object-contain">
                 </a>
-                <a href="https://rrzk.uni-koeln.de" target="_blank" class="flex justify-center items-center">
-                    <img src="/static/images/rrzk_logo.png" alt="RRZK" class="h-8">
+                <a href="https://rrzk.uni-koeln.de" target="_blank"
+                   class="flex items-center justify-center hover:opacity-80 transition-opacity p-2">
+                    <img src="/static/images/rrzk_logo.png" alt="RRZK" class="h-8 w-auto object-contain">
                 </a>
-                <a href="https://www.clarin.eu" target="_blank" class="flex justify-center items-center">
-                    <img src="/static/images/clarin_logo.png" alt="CLARIN" class="h-8">
+                <a href="https://www.clarin.eu" target="_blank"
+                   class="flex items-center justify-center hover:opacity-80 transition-opacity p-2">
+                    <img src="/static/images/clarin_logo.png" alt="CLARIN" class="h-8 w-auto object-contain">
                 </a>
             </div>
         </section>
 
         <!-- Copyright and Links -->
-        <div class="mt-3 flex justify-between items-center">
+        <div class="divider opacity-30"></div>
+        <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
             <nav>
-                <ul class="flex space-x-6">
-                    <li><a href="/privacy-policy" class="hover:text-blue-200">Privacy Policy</a></li>
-                    <li><a href="/imprint" class="hover:text-blue-200">Imprint</a></li>
-                    <li><a href="/contact" class="hover:text-blue-200">Contact</a></li>
+                <ul class="flex flex-wrap justify-center sm:justify-start gap-6">
+                    <li><a href="/privacy-policy" class="link link-hover text-sm">Privacy Policy</a></li>
+                    <li><a href="/imprint" class="link link-hover text-sm">Imprint</a></li>
+                    <li><a href="/contact" class="link link-hover text-sm">Contact</a></li>
                 </ul>
             </nav>
-            <small>© University of Cologne</small>
+            <div class="text-sm opacity-80 text-white">© University of Cologne</div>
         </div>
     </div>
 </footer>

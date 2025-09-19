@@ -48,40 +48,47 @@ class BaseStorageService:
         # This helps us decide how to handle URLs for browser access
         self.in_container = self._is_running_in_container()
         
-        # Initialize both buckets
+        # Initialize workspace buckets (flexible configuration)
+        self.workspace_buckets = self._get_workspace_buckets()
+        # OCFL buckets will be determined dynamically
+
+        # Initialize legacy buckets for backward compatibility
         self.ingest_bucket = self._get_ingest_bucket_name()
         self.production_bucket = self._get_production_bucket_name()
-        
+
         # Create S3 client
         logger.info(f"Creating S3 client with endpoint URL: {self.endpoint_url}")
         self.s3_client = self._create_s3_client()
-        
+
         logger.info(f"BaseStorageService initialized with {'MinIO' if self.is_minio else 'S3'}")
         logger.info(f"Using endpoint: {self.endpoint_url or 'default S3 endpoint'}")
         logger.info(f"Using region: {self.region}")
-        logger.info(f"Using ingest bucket: {self.ingest_bucket}")
-        logger.info(f"Using production bucket: {self.production_bucket}")
+        logger.info(f"Workspace buckets: {self.workspace_buckets}")
+        logger.info(f"All buckets are OCFL-capable")
+        logger.info(f"Legacy ingest bucket: {self.ingest_bucket}")
+        logger.info(f"Legacy production bucket: {self.production_bucket}")
         
         # Only check buckets if not skipped and not already checked
         if not skip_bucket_check and not self._buckets_checked:
-            logger.info("Ensuring buckets exist...")
-            ingest_bucket_exists = self.ensure_bucket_exists(self.ingest_bucket)
-            production_bucket_exists = self.ensure_bucket_exists(self.production_bucket)
-            
+            logger.info("Ensuring workspace buckets exist...")
+
+            # Ensure all workspace buckets exist
+            for bucket_name in self.workspace_buckets:
+                bucket_exists = self.ensure_bucket_exists(bucket_name)
+                if bucket_exists and bucket_name == self.ingest_bucket:
+                    # Ensure CORS is configured for ingest bucket (needed for direct uploads)
+                    logger.info(f"Ensuring CORS is configured for {bucket_name}...")
+                    cors_result = self.ensure_cors_enabled(bucket_name)
+                    if cors_result["success"]:
+                        if cors_result.get("updated", False):
+                            logger.info(f"✅ CORS configuration for {bucket_name} has been updated")
+                        else:
+                            logger.info(f"✅ CORS configuration for {bucket_name} is already correct")
+                    else:
+                        logger.warning(f"⚠️ Failed to configure CORS for {bucket_name}: {cors_result.get('error', 'Unknown error')}")
+
             # Set the class-level flag
             self._buckets_checked = True
-            
-            # Ensure CORS is configured for the ingest bucket (needed for direct uploads)
-            if ingest_bucket_exists:
-                logger.info("Ensuring CORS is configured for ingest bucket...")
-                cors_result = self.ensure_cors_enabled(self.ingest_bucket)
-                if cors_result["success"]:
-                    if cors_result.get("updated", False):
-                        logger.info("✅ CORS configuration for ingest bucket has been updated")
-                    else:
-                        logger.info("✅ CORS configuration for ingest bucket is already correct")
-                else:
-                    logger.warning(f"⚠️ Failed to configure CORS for ingest bucket: {cors_result.get('error', 'Unknown error')}")
         
         # Mark as initialized
         self.initialized = True
@@ -243,7 +250,34 @@ class BaseStorageService:
         # For production, we should have a setting or environment variable
         logger.warning("No AWS_PRODUCTION_BUCKET_NAME found in settings or environment")
         return 'lacos-production'
-    
+
+    def _get_workspace_buckets(self) -> list:
+        """Get the list of workspace buckets from settings."""
+        workspace_buckets = getattr(settings, 'S3_WORKSPACE_BUCKETS', ['ingest', 'production'])
+        logger.info(f"Loaded workspace buckets from settings: {workspace_buckets}")
+        return workspace_buckets
+
+    @property
+    def ocfl_buckets(self) -> list:
+        """Get all accessible buckets as OCFL-capable buckets."""
+        return self.get_all_accessible_buckets()
+
+    def is_ocfl_bucket(self, bucket_name: str) -> bool:
+        """Check if a bucket allows OCFL operations. All buckets are OCFL-capable."""
+        return True
+
+    def get_all_accessible_buckets(self) -> list:
+        """Get all buckets that exist in MinIO."""
+        try:
+            response = self.s3_client.list_buckets()
+            bucket_names = [bucket['Name'] for bucket in response['Buckets']]
+            logger.info(f"📦 BUCKETS: Found {len(bucket_names)} buckets in MinIO: {bucket_names}")
+            return sorted(bucket_names)
+        except Exception as e:
+            logger.exception(f"❌ Error listing buckets from MinIO: {str(e)}")
+            # Fallback to configured buckets if MinIO is unavailable
+            return self.workspace_buckets.copy()
+
     def _create_s3_client(self):
         """
         Create an S3 client configured for the current environment.

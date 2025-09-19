@@ -38,4 +38,9 @@ urlpatterns = [
 
     # Add new route for dashboard content partials
     path("dashboard-content/<str:bucket_type>/", views.dashboard_content, name="dashboard_content"),
+
+    # HTMX bucket operations
+    path("htmx/bucket-content/<str:bucket_name>/", views.BucketContentHTMXView.as_view(), name="bucket_content_htmx"),
+    path("htmx/create-bucket/", views.CreateBucketHTMXView.as_view(), name="create_bucket_htmx"),
+    path("htmx/delete-bucket/<str:bucket_name>/", views.delete_bucket_htmx, name="delete_bucket_htmx"),
 ] 

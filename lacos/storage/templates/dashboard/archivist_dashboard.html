@@ -1,53 +1,187 @@
 {% extends "base.html" %}
 
-{% block content %}
-{% load static %}
-{# Instead of using 'from', we'll include the template and define a variable for the bucket type #}
+{% block bodyclass %}bg-gray-100 font-normal min-h-screen flex flex-col{% endblock bodyclass %}
 
-<div class="container mx-auto px-4 py-8">
-    <h1 class="text-3xl font-bold mb-8 text-center text-gray-800">Archivist Dashboard</h1>
-    <div id="indicator" class="hidden fixed top-0 left-0 w-full h-1 bg-blue-500"></div>
-    
-    <!-- Add upload button -->
-    <div class="mb-6 flex justify-center">
-        <a href="{% url 'storage:upload_form' %}" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded inline-flex items-center">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-            </svg>
-            Upload Folder to Ingest Bucket
-        </a>
-    </div>
-    
-    <!-- Update the message display section to handle dynamic messages -->
+{% block body %}
+<!-- Navbar -->
+{% include 'navbar.html' %}
+
+<!-- Dashboard Content - Full Height -->
+<div class="flex-grow flex flex-col container mx-auto px-6 py-8">
+{% load static %}
+    <h1 class="text-3xl font-bold mb-8 text-center">Storage Workspace</h1>
+    <div id="indicator" class="loading loading-bar loading-lg fixed top-0 left-0 w-full z-50 hidden"></div>
+
+    <!-- Message display -->
     <div id="message-container" class="mb-6 {% if not message %}hidden{% endif %}">
-        <div id="message-content" class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative">
-            <span class="block sm:inline">{{ message }}</span>
+        <div id="message-content" class="alert alert-success">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>{{ message }}</span>
         </div>
     </div>
-    
-    <div class="flex flex-col md:flex-row gap-8">
-        <div class="w-full md:w-1/2">
-            <h2 class="text-2xl font-semibold mb-4 text-gray-700">Ingest Bucket</h2>
-            <div id="ingest-structure" class="bg-white rounded-lg shadow-md p-4">
-                {% include "dashboard/folder_structure_partial.html" with structure=ingest_structure bucket_type="ingest" %}
+
+    <!-- Bucket Selector Bar -->
+    <div class="card bg-base-100 shadow-xl mb-8">
+        <div class="card-body">
+            <div class="flex flex-col lg:flex-row items-center justify-between gap-4">
+
+                <!-- Bucket Tabs with HTMX -->
+                {% include "dashboard/bucket_tabs_partial.html" with active_bucket=workspace_buckets.0 %}
+
+                <!-- Action Buttons -->
+                <div class="flex gap-2">
+                    <label for="upload-modal" class="btn btn-primary btn-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        Upload
+                    </label>
+
+                    <button
+                        class="btn btn-outline btn-sm"
+                        hx-get="{% url 'storage:archivist_dashboard' %}"
+                        hx-target="body"
+                        hx-indicator="#indicator"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Refresh
+                    </button>
+                </div>
             </div>
         </div>
-        <div class="w-full md:w-1/2">
-            <h2 class="text-2xl font-semibold mb-4 text-gray-700">Production Bucket</h2>
-            <div id="production-structure" class="bg-white rounded-lg shadow-md p-4">
-                {% include "dashboard/folder_structure_partial.html" with structure=production_structure bucket_type="production" %}
-            </div>
+    </div>
+
+    <!-- Single Bucket Content Container -->
+    <div class="card bg-base-100 shadow-xl">
+        <div id="bucket-content">
+            <!-- Initial bucket content -->
+            {% if workspace_buckets %}
+                {% with workspace_buckets.0 as first_bucket %}
+                    {% for bucket, structure in bucket_structures.items %}
+                        {% if bucket == first_bucket %}
+                            {% include "dashboard/bucket_content_partial.html" with structure=structure bucket_name=first_bucket %}
+                        {% endif %}
+                    {% endfor %}
+                {% endwith %}
+            {% else %}
+                <div class="card-body p-6">
+                    <div class="text-center py-12">
+                        <div class="text-base-content/50 mb-4">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-medium text-base-content/70 mb-2">No buckets configured</h3>
+                        <p class="text-base-content/50 mb-4">Create your first bucket to get started</p>
+                        <label for="create-bucket-modal" class="btn btn-primary">Create Bucket</label>
+                    </div>
+                </div>
+            {% endif %}
         </div>
     </div>
 </div>
 
-<!-- Modal -->
-<div id="fileModal" class="modal opacity-0 pointer-events-none fixed w-full h-full top-0 left-0 flex items-center justify-center z-50">
-    <!-- Overlay -->
-    <div class="modal-overlay absolute w-full h-full bg-gray-900 opacity-50"></div>
+<!-- Create Bucket Modal (CSS-only with DaisyUI) -->
+<input type="checkbox" id="create-bucket-modal" class="modal-toggle" />
+<div class="modal" role="dialog">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg mb-4">Create New Bucket</h3>
 
-    <!-- Modal Container -->
-    <div class="modal-container bg-white mx-auto rounded shadow-lg z-50 overflow-hidden">
+        <form hx-post="{% url 'storage:create_bucket_htmx' %}"
+              hx-indicator="#indicator">
+            {% csrf_token %}
+            <!-- Track current active bucket -->
+            <input type="hidden" name="currentActiveBucket" value="{% if workspace_buckets %}{{ workspace_buckets.0 }}{% endif %}" id="current-active-bucket-input" />
+            <div class="form-control w-full mb-4">
+                <label class="label">
+                    <span class="label-text">Bucket Name</span>
+                </label>
+                <input
+                    type="text"
+                    name="bucketName"
+                    placeholder="e.g., user-uploads"
+                    class="input input-bordered w-full"
+                    pattern="[a-z0-9-_]+"
+                    title="Only lowercase letters, numbers, hyphens, and underscores allowed"
+                    required
+                />
+                <label class="label">
+                    <span class="label-text-alt text-base-content/60">Only lowercase letters, numbers, hyphens, and underscores</span>
+                </label>
+            </div>
+
+            <div class="form-control mb-4">
+                <label class="label cursor-pointer">
+                    <span class="label-text">Enable OCFL operations</span>
+                    <input
+                        type="checkbox"
+                        name="enableOCFL"
+                        class="checkbox checkbox-primary"
+                    />
+                </label>
+                <div class="label">
+                    <span class="label-text-alt text-base-content/60">Allow structured data operations on this bucket</span>
+                </div>
+            </div>
+
+            <div class="modal-action">
+                <label for="create-bucket-modal" class="btn">Cancel</label>
+                <button type="submit" class="btn btn-primary">
+                    Create Bucket
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Upload Modal (CSS-only with DaisyUI) -->
+<input type="checkbox" id="upload-modal" class="modal-toggle" />
+<div class="modal" role="dialog">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg mb-4">Upload Files</h3>
+
+        <div class="form-control w-full mb-4">
+            <label class="label">
+                <span class="label-text">Target Bucket</span>
+            </label>
+            <select class="select select-bordered w-full">
+                {% for bucket_name in workspace_buckets %}
+                <option value="{{ bucket_name }}">{{ bucket_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-control w-full mb-4">
+            <label class="label">
+                <span class="label-text">Target Folder (optional)</span>
+            </label>
+            <input
+                type="text"
+                placeholder="e.g., projects/archive"
+                class="input input-bordered w-full"
+            />
+            <label class="label">
+                <span class="label-text-alt text-base-content/60">Leave empty to upload to bucket root</span>
+            </label>
+        </div>
+
+        <div class="modal-action">
+            <label for="upload-modal" class="btn">Cancel</label>
+            <a href="{% url 'storage:upload_form' %}" class="btn btn-primary">
+                Go to Upload Page
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- File Preview Modal -->
+<div id="fileModal" class="modal">
+    <div class="modal-box max-w-4xl">
+        <div class="modal-container bg-white mx-auto rounded shadow-lg z-50 overflow-hidden">
         <!-- Modal Header -->
         <div class="flex justify-between items-center p-4 border-b">
             <p id="modalTitle" class="text-2xl font-bold"></p>
@@ -125,29 +259,84 @@
 </style>
 
 <script type="module">
-import { modalManager } from '/static/js/src/modal.js';
+// Essential JavaScript for file operations only
 import { handleFileViewRequest } from '/static/js/src/file-viewer/file-viewer-handler.js';
 import { toggleFolder, expandAllFolders } from '/static/js/src/folder-manager.js';
 
-// Make them available globally if needed
-window.modalManager = modalManager;
+// Make file operations available globally
 window.handleFileViewRequest = handleFileViewRequest;
 window.toggleFolder = toggleFolder;
 window.expandAllFolders = expandAllFolders;
 
-// Add HTMX event handlers
+// Add HTMX event handlers for file viewing
 document.body.addEventListener('htmx:afterRequest', function (event) {
     if (event.detail.elt.classList.contains('view-icon')) {
         handleFileViewRequest(event);
     }
 });
 
-// Log the folder structure on page load
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Page loaded, folder structure:', {
-        ingest: document.querySelector('#ingest-structure'),
-        production: document.querySelector('#production-structure')
-    });
+// HTMX event handler for modal management
+document.body.addEventListener('htmx:afterRequest', function (event) {
+    // Close modals on successful form submission
+    if (event.detail.xhr && event.detail.xhr.status === 200) {
+        const trigger = event.detail.xhr.getResponseHeader('HX-Trigger');
+        if (trigger) {
+            const triggerData = JSON.parse(trigger);
+            if (triggerData.closeModal) {
+                const modalCheckbox = document.getElementById(triggerData.closeModal);
+                if (modalCheckbox) {
+                    modalCheckbox.checked = false;
+                }
+            }
+        }
+    }
+});
+
+// Track active bucket for bucket creation
+document.body.addEventListener('htmx:afterRequest', function (event) {
+    // Update current active bucket when bucket selector is updated
+    if (event.detail.elt.id === 'bucket-tabs' || event.detail.elt.closest('#bucket-tabs')) {
+        // Find the current active bucket from the dropdown button text
+        const dropdownButton = document.querySelector('#bucket-tabs .btn');
+        if (dropdownButton) {
+            const bucketNameElement = dropdownButton.querySelector('.font-semibold');
+            if (bucketNameElement) {
+                const activeBucketName = bucketNameElement.textContent.trim();
+                const currentActiveInput = document.getElementById('current-active-bucket-input');
+                if (currentActiveInput && activeBucketName !== 'Select Bucket') {
+                    currentActiveInput.value = activeBucketName;
+                }
+            }
+        }
+    }
+});
+
+// Track bucket switches when user clicks bucket dropdown items
+document.body.addEventListener('click', function (event) {
+    // Check if clicked element is a bucket selection link in the dropdown
+    const bucketLink = event.target.closest('#bucket-tabs .dropdown-content a[hx-get]');
+    if (bucketLink) {
+        // Extract bucket name from the link
+        const bucketNameElement = bucketLink.querySelector('.font-semibold');
+        if (bucketNameElement) {
+            const bucketName = bucketNameElement.textContent.trim();
+            const currentActiveInput = document.getElementById('current-active-bucket-input');
+            if (currentActiveInput) {
+                currentActiveInput.value = bucketName;
+            }
+        }
+
+        // Close dropdown after selection
+        setTimeout(() => {
+            const dropdown = bucketLink.closest('.dropdown');
+            if (dropdown) {
+                const dropdownButton = dropdown.querySelector('[tabindex="0"]');
+                if (dropdownButton) {
+                    dropdownButton.blur();
+                }
+            }
+        }, 100);
+    }
 });
 </script>
 
@@ -214,4 +403,8 @@ document.addEventListener('showMessage', function(event) {
 });
 </script>
 
-{% endblock %}
+</div>
+
+<!-- Footer -->
+{% include 'footer.html' %}
+{% endblock body %}

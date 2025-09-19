@@ -1,0 +1,79 @@
+<!-- Bucket Selector Dropdown -->
+<div class="flex items-center gap-4" id="bucket-tabs">
+    <!-- Current Bucket Dropdown -->
+    <div class="dropdown">
+        <label tabindex="0" class="btn btn-lg bg-base-200 hover:bg-base-300 flex items-center gap-3 min-w-64">
+            <!-- Current bucket avatar and info -->
+            <div class="flex items-center gap-3">
+                <div class="avatar placeholder">
+                    <div class="bg-primary text-primary-content rounded-full w-8 h-8">
+                        <span class="text-sm font-bold">{{ active_bucket|slice:":1"|upper|default:"?" }}</span>
+                    </div>
+                </div>
+                <div class="flex flex-col items-start">
+                    <span class="font-semibold">{{ active_bucket|default:"Select Bucket" }}</span>
+                </div>
+            </div>
+            <!-- Dropdown arrow -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+        </label>
+
+        <!-- Dropdown menu -->
+        <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow-lg bg-base-100 rounded-box w-80 mt-2">
+            {% for bucket_name in workspace_buckets %}
+            <li>
+                <a class="flex items-center gap-3 p-3 {% if bucket_name == active_bucket %}bg-primary text-primary-content{% endif %}"
+                   hx-get="{% url 'storage:bucket_content_htmx' bucket_name %}"
+                   hx-target="#bucket-content"
+                   hx-indicator="#indicator"
+                   hx-trigger="click">
+                    <div class="avatar placeholder">
+                        <div class="bg-neutral text-neutral-content rounded-full w-8 h-8">
+                            <span class="text-sm font-bold">{{ bucket_name|slice:":1"|upper }}</span>
+                        </div>
+                    </div>
+                    <div class="flex flex-col items-start flex-grow">
+                        <span class="font-semibold">{{ bucket_name }}</span>
+                        {% if bucket_name == active_bucket %}
+                        <div class="badge badge-primary badge-xs">Current</div>
+                        {% endif %}
+                    </div>
+                </a>
+            </li>
+            {% endfor %}
+
+            <!-- Divider -->
+            <div class="divider my-1"></div>
+
+            <!-- Create New Bucket -->
+            <li>
+                <label for="create-bucket-modal" class="flex items-center gap-3 p-3 hover:bg-success hover:text-success-content cursor-pointer">
+                    <div class="avatar placeholder">
+                        <div class="bg-success text-success-content rounded-full w-8 h-8">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="flex flex-col items-start">
+                        <span class="font-semibold">Create New Bucket</span>
+                        <span class="text-xs opacity-70">Add a new storage bucket</span>
+                    </div>
+                </label>
+            </li>
+        </ul>
+    </div>
+</div>
+
+{% if success_message %}
+<div class="toast toast-top toast-center z-50">
+    <div class="alert alert-success">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>{{ success_message }}</span>
+    </div>
+</div>
+{% endif %}

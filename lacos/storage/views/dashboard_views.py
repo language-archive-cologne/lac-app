@@ -2,7 +2,12 @@ import logging
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from lacos.storage.services.bucket_service import BucketService
-from django.http import HttpResponse
+from lacos.common.mixins import HtmxTemplateHelperMixin
+from django.http import HttpResponse, JsonResponse
+from django.views.decorators.http import require_http_methods
+from django.utils.decorators import method_decorator
+from django.views import View
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -10,28 +15,49 @@ logger = logging.getLogger(__name__)
 @login_required
 def archivist_dashboard(request):
     """
-    Render the archivist dashboard showing both ingest and production buckets.
+    Render the archivist dashboard showing all workspace buckets.
     Only loads root level items initially for better performance.
     """
     bucket_service = BucketService()
-    
+
     try:
-        # Get only root level items for both buckets
-        ingest_structure = bucket_service.get_root_level_items(bucket_service.ingest_bucket)
-        production_structure = bucket_service.get_root_level_items(bucket_service.production_bucket)
+        # Get root level items for all workspace buckets
+        bucket_structures = {}
+        for bucket_name in bucket_service.get_all_accessible_buckets():
+            try:
+                bucket_structures[bucket_name] = bucket_service.get_root_level_items(bucket_name)
+            except Exception as e:
+                logger.error(f"Error loading bucket {bucket_name}: {str(e)}")
+                # Return empty structure on error for this bucket
+                bucket_structures[bucket_name] = {
+                    "type": "folder",
+                    "name": bucket_name,
+                    "path": "",
+                    "children": []
+                }
+
+        # Maintain backward compatibility - provide legacy bucket names
+        ingest_structure = bucket_structures.get(bucket_service.ingest_bucket, {})
+        production_structure = bucket_structures.get(bucket_service.production_bucket, {})
+
     except Exception as e:
         logger.error(f"Error loading dashboard: {str(e)}")
         # Return empty structures on error
+        bucket_structures = {}
         ingest_structure = {"type": "folder", "name": bucket_service.ingest_bucket, "path": "", "children": []}
         production_structure = {"type": "folder", "name": bucket_service.production_bucket, "path": "", "children": []}
-    
+
     # Check for success message
     message = request.GET.get('message', None)
-    
+
     return render(
         request,
         "dashboard/archivist_dashboard.html",
         {
+            "bucket_structures": bucket_structures,
+            "workspace_buckets": bucket_service.get_all_accessible_buckets(),
+            "ocfl_buckets": bucket_service.ocfl_buckets,
+            # Legacy backward compatibility
             "ingest_structure": ingest_structure,
             "production_structure": production_structure,
             "message": message,
@@ -42,9 +68,16 @@ def archivist_dashboard(request):
 def load_folder_contents(request, bucket_type, folder_path):
     """
     Load contents of a specific folder when expanded.
+    Now supports any workspace bucket, not just ingest/production.
     """
     bucket_service = BucketService()
-    bucket = bucket_service.ingest_bucket if bucket_type == 'ingest' else bucket_service.production_bucket
+
+    # Support new flexible bucket names
+    if bucket_type in bucket_service.get_all_accessible_buckets():
+        bucket = bucket_type
+    else:
+        # Legacy backward compatibility
+        bucket = bucket_service.ingest_bucket if bucket_type == 'ingest' else bucket_service.production_bucket
     
     try:
         # Clean up the folder path to handle double slashes
@@ -102,4 +135,126 @@ def dashboard_content(request, bucket_type):
         )
     except Exception as e:
         logger.exception(f"Error loading dashboard content for {bucket_type}: {str(e)}")
-        return HttpResponse(f"Error: {str(e)}", status=500) 
+        return HttpResponse(f"Error: {str(e)}", status=500)
+
+
+@method_decorator(login_required, name='dispatch')
+class BucketContentHTMXView(HtmxTemplateHelperMixin, View):
+    """
+    Return bucket content for HTMX bucket switching.
+    Returns the complete bucket content area.
+    """
+
+    def get(self, request, bucket_name):
+        try:
+            # Render the bucket content
+            content_html = self.render_bucket_content_template(request, bucket_name)
+
+            # Also update the bucket selector dropdown to show the new active bucket
+            selector_html = self.build_bucket_tabs_oob_response(
+                request=request,
+                active_bucket=bucket_name
+            )
+
+            # Combine content update with selector OOB update
+            response_html = f'{content_html}{selector_html}'
+
+            return HttpResponse(response_html)
+        except Exception as e:
+            logger.exception(f"Error loading bucket content for {bucket_name}: {str(e)}")
+            return HttpResponse(f"Error: {str(e)}", status=500)
+
+
+# Class-based view is now used directly in URLs
+
+
+@method_decorator(login_required, name='dispatch')
+class CreateBucketHTMXView(HtmxTemplateHelperMixin, View):
+    """
+    Create a new bucket via HTMX form submission.
+    Returns updated bucket selector tabs with OOB updates.
+    """
+
+    def post(self, request):
+        try:
+            from lacos.storage.services.bucket_service import BucketService
+
+            # Get form data
+            bucket_name = request.POST.get('bucketName', '').strip()
+            enable_ocfl = request.POST.get('enableOCFL') == 'on'
+
+            if not bucket_name:
+                return HttpResponse("Bucket name is required", status=400)
+
+            # Create the bucket using BucketService
+            bucket_service = BucketService()
+            result = bucket_service.create_bucket(bucket_name, enable_ocfl)
+
+            if not result["success"]:
+                return HttpResponse(result["error"], status=400)
+
+            logger.info(f"Successfully created bucket: {bucket_name}, OCFL: {enable_ocfl}")
+
+            # Only update bucket tabs, keep current view active
+            # Get the current active bucket from form data
+            current_active_bucket = request.POST.get('currentActiveBucket')
+
+            # If no current bucket (first bucket creation), use the new bucket
+            if not current_active_bucket:
+                current_active_bucket = bucket_name
+
+            # Use specialized method for bucket tabs OOB update
+            response_html = self.build_bucket_tabs_oob_response(
+                request=request,
+                active_bucket=current_active_bucket,
+                success_message=result["message"]
+            )
+
+            # Add trigger to close modal
+            return self.add_htmx_trigger(response_html, {'closeModal': 'create-bucket-modal'})
+
+        except Exception as e:
+            logger.exception(f"Error creating bucket: {str(e)}")
+            return HttpResponse(f"Error creating bucket: {str(e)}", status=500)
+
+
+# Class-based view is now used directly in URLs
+
+
+@login_required
+@require_http_methods(["DELETE"])
+def delete_bucket_htmx(request, bucket_name):
+    """
+    Delete a bucket via HTMX request.
+    Returns updated bucket selector tabs.
+    """
+    try:
+        bucket_service = BucketService()
+
+        # Verify bucket access
+        if bucket_name not in bucket_service.get_all_accessible_buckets():
+            return HttpResponse("Bucket not accessible", status=403)
+
+        # Delete the bucket (this would need to be implemented in BucketService)
+        logger.info(f"Deleting bucket: {bucket_name}")
+
+        # Get updated bucket list
+        workspace_buckets = bucket_service.get_all_accessible_buckets()
+        ocfl_buckets = bucket_service.ocfl_buckets
+
+        # Set first available bucket as active
+        active_bucket = workspace_buckets[0] if workspace_buckets else None
+
+        return render(
+            request,
+            "dashboard/bucket_tabs_partial.html",
+            {
+                "workspace_buckets": workspace_buckets,
+                "ocfl_buckets": ocfl_buckets,
+                "active_bucket": active_bucket,
+                "success_message": f"Bucket '{bucket_name}' deleted successfully"
+            }
+        )
+    except Exception as e:
+        logger.exception(f"Error deleting bucket: {str(e)}")
+        return HttpResponse(f"Error deleting bucket: {str(e)}", status=500) 

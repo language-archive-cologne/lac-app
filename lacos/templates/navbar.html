@@ -1,127 +1,116 @@
 {% load i18n %}
 {% load static %}
 <!-- Header/Navbar -->
-<nav class="shadow-lg" style="background-color: #32475b;">
-  <div class="container mx-auto px-6 py-4">
-    <div class="flex items-center justify-between">
-      <!-- Logo and Title Section -->
-      <div class="flex items-center gap-6">
-        <!-- Logos with consistent sizing -->
-        <div class="flex items-center gap-4">
-          <a href="{% url 'home' %}" class="flex items-center hover:opacity-90 transition-opacity">
-            <img src="{% static 'images/logo-LAC.png' %}" alt="LAC logo" class="h-8">
-          </a>
-        </div>
-        <a href="{% url 'home' %}" class="text-xl font-medium text-white hover:text-blue-100 transition-colors">
-          Language Archive Cologne
-        </a>
-      </div>
-
-      <!-- Navigation Links -->
-      <div class="hidden md:flex items-center gap-2">
-        <a href="{% url 'home' %}" 
-          class="flex items-center px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 rounded-md transition-colors">
-          <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
-          </svg>
-          Home
-        </a>
-        <a href="{% url 'about' %}" 
-          class="flex items-center px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 rounded-md transition-colors">
-          <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 512 512">
-            <path d="M256 8C119.043 8 8 119.083 8 256c0 136.997 111.043 248 248 248s248-111.003 248-248C504 119.083 392.957 8 256 8zm0 110c23.196 0 42 18.804 42 42s-18.804 42-42 42-42-18.804-42-42 18.804-42 42-42zm56 254c0 6.627-5.373 12-12 12h-88c-6.627 0-12-5.373-12-12v-24c0-6.627 5.373-12 12-12h12v-64h-12c-6.627 0-12-5.373-12-12v-24c0-6.627 5.373-12 12-12h64c6.627 0 12 5.373 12 12v100h12c6.627 0 12 5.373 12 12v24z" />
-          </svg>
-          About
-        </a>
-        <a href="#" 
-          target="_blank"
-          class="flex items-center px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 rounded-md transition-colors">
-          <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 448 512">
-            <path d="M448 360V24c0-13.3-10.7-24-24-24H96C43 0 0 43 0 96v320c0 53 43 96 96 96h328c13.3 0 24-10.7 24-24v-16c0-7.5-3.5-14.3-8.9-18.7-4.2-15.4-4.2-59.3 0-74.7 5.4-4.3 8.9-11.1 8.9-18.6zM128 134c0-3.3 2.7-6 6-6h212c3.3 0 6 2.7 6 6v20c0 3.3-2.7 6-6 6H134c-3.3 0-6-2.7-6-6v-20zm0 64c0-3.3 2.7-6 6-6h212c3.3 0 6 2.7 6 6v20c0 3.3-2.7 6-6 6H134c-3.3 0-6-2.7-6-6v-20zm253.4 250H96c-17.7 0-32-14.3-32-32 0-17.6 14.4-32 32-32h285.4c-1.9 17.1-1.9 46.9 0 64z" />
-          </svg>
-          User Guide
-        </a>
-        <a href="{% url 'storage:archivist_dashboard' %}" 
-          class="flex items-center px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 rounded-md transition-colors">
-          <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-          </svg>
-          Storage
-        </a>
-        <a href="{% url 'blam_archivist_dashboard' %}" 
-          class="flex items-center px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 rounded-md transition-colors">
-          <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804v10a7.968 7.968 0 00-2 0v-10zM15.5 3a9.975 9.975 0 00-4.5 1.073V3a1 1 0 012 0v.073zm-9 0a9.975 9.975 0 014.5 1.073V3a1 1 0 00-2 0v.073z" />
-          </svg>
-          BLAM
-        </a>
+<div class="navbar bg-base-300 shadow-lg text-white">
+  <div class="navbar-start">
+    <!-- Mobile dropdown -->
+    <div class="dropdown lg:hidden">
+      <label tabindex="0" class="btn btn-ghost">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+        </svg>
+      </label>
+      <ul tabindex="0" class="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52">
+        <li><a href="{% url 'home' %}">Home</a></li>
+        <li><a href="{% url 'about' %}">About</a></li>
+        <li><a href="#" target="_blank">User Guide</a></li>
+        <li><a href="{% url 'storage:archivist_dashboard' %}">Storage</a></li>
+        <li><a href="{% url 'blam_archivist_dashboard' %}">BLAM</a></li>
         {% if request.user.is_staff %}
-        <a href="{% url 'admin:index' %}" 
-          class="flex items-center px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 rounded-md transition-colors">
-          <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M4 5h16v2H4V5zm0 5h16v2H4v-2zm0 5h16v2H4v-2z"/>
-          </svg>
-          Admin
-        </a>
+        <li><a href="{% url 'admin:index' %}">Admin</a></li>
         {% endif %}
-        {% if request.user.is_authenticated %}
-          <a href="{% url 'users:detail' request.user.username %}" 
-            class="flex items-center px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 rounded-md transition-colors">
-            <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
-            </svg>
-            {% translate "My Profile" %}
-          </a>
-          <a href="{% url 'account_logout' %}" 
-            class="flex items-center px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 rounded-md transition-colors">
-            <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path fill-rule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h12a1 1 0 001-1V7.414l-5-5H3zm7 5a1 1 0 10-2 0v4.586l-1.293-1.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 12.586V8z" clip-rule="evenodd" />
-            </svg>
-            {% translate "Sign Out" %}
-          </a>
-        {% else %}
-          <a href="{% url 'account_login' %}" 
-            class="flex items-center px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 rounded-md transition-colors">
-            <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 512 512">
-              <path d="M416 448h-84c-6.6 0-12-5.4-12-12v-40c0-6.6 5.4-12 12-12h84c17.7 0 32-14.3 32-32V160c0-17.7-14.3-32-32-32h-84c-6.6 0-12-5.4-12-12V76c0-6.6 5.4-12 12-12h84c53 0 96 43 96 96v192c0 53-43 96-96 96zm-47-201L201 79c-15-15-41-4.5-41 17v96H24c-13.3 0-24 10.7-24 24v96c0 13.3 10.7 24 24 24h136v96c0 21.5 26 32 41 17l168-168c9.3-9.4 9.3-24.6 0-34z" />
-            </svg>
-            {% translate "Sign In" %}
-          </a>
-        {% endif %}
-      </div>
-
-      <!-- Mobile menu button -->
-      <div class="flex items-center md:hidden">
-        <button type="button" class="inline-flex items-center justify-center p-2 rounded-md text-white hover:text-blue-200 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500" aria-controls="mobile-menu" aria-expanded="false">
-          <span class="sr-only">Open main menu</span>
-          <svg class="block h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-          <svg class="hidden h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
+      </ul>
     </div>
+
+    <!-- Logo and Title Section -->
+    <a href="{% url 'home' %}" class="btn btn-ghost normal-case text-xl text-white hover:text-white">
+      <img src="{% static 'images/logo-LAC.png' %}" alt="LAC logo" class="h-8 mr-3">
+      <span class="hidden lg:inline">Language Archive Cologne</span>
+      <span class="lg:hidden">LAC</span>
+    </a>
   </div>
 
-  <!-- Mobile menu -->
-  <div class="md:hidden hidden" id="mobile-menu">
-    <div class="px-2 pt-2 pb-3 space-y-1 border-t border-blue-700">
-      <a href="{% url 'home' %}" class="block px-3 py-2 rounded-md text-base font-medium text-white hover:bg-blue-700">Home</a>
-      <a href="{% url 'about' %}" class="block px-3 py-2 rounded-md text-base font-medium text-white hover:bg-blue-700">About</a>
-      <a href="#" class="block px-3 py-2 rounded-md text-base font-medium text-white hover:bg-blue-700">User Guide</a>
-      <a href="{% url 'storage:archivist_dashboard' %}" class="block px-3 py-2 rounded-md text-base font-medium text-white hover:bg-blue-700">Storage</a>
-      <a href="{% url 'blam_archivist_dashboard' %}" class="block px-3 py-2 rounded-md text-base font-medium text-white hover:bg-blue-700">BLAM</a>
+  <div class="navbar-center hidden lg:flex">
+    <!-- Desktop Navigation Menu -->
+    <ul class="menu menu-horizontal px-1 gap-2">
+
+      <li><a href="{% url 'home' %}" class="btn btn-ghost btn-sm text-white hover:text-white">
+        <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+        </svg>
+        Home
+      </a></li>
+
+      <li><a href="{% url 'about' %}" class="btn btn-ghost btn-sm text-white hover:text-white">
+        <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 512 512">
+          <path d="M256 8C119.043 8 8 119.083 8 256c0 136.997 111.043 248 248 248s248-111.003 248-248C504 119.083 392.957 8 256 8zm0 110c23.196 0 42 18.804 42 42s-18.804 42-42 42-42-18.804-42-42 18.804-42 42-42zm56 254c0 6.627-5.373 12-12 12h-88c-6.627 0-12-5.373-12-12v-24c0-6.627 5.373-12 12-12h12v-64h-12c-6.627 0-12-5.373-12-12v-24c0-6.627 5.373-12 12-12h64c6.627 0 12 5.373 12 12v100h12c6.627 0 12 5.373 12 12v24z" />
+        </svg>
+        About
+      </a></li>
+
+      <li><a href="#" target="_blank" class="btn btn-ghost btn-sm text-white hover:text-white">
+        <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 448 512">
+          <path d="M448 360V24c0-13.3-10.7-24-24-24H96C43 0 0 43 0 96v320c0 53 43 96 96 96h328c13.3 0 24-10.7 24-24v-16c0-7.5-3.5-14.3-8.9-18.7-4.2-15.4-4.2-59.3 0-74.7 5.4-4.3 8.9-11.1 8.9-18.6zM128 134c0-3.3 2.7-6 6-6h212c3.3 0 6 2.7 6 6v20c0 3.3-2.7 6-6 6H134c-3.3 0-6-2.7-6-6v-20zm0 64c0-3.3 2.7-6 6-6h212c3.3 0 6 2.7 6 6v20c0 3.3-2.7 6-6 6H134c-3.3 0-6-2.7-6-6v-20zm253.4 250H96c-17.7 0-32-14.3-32-32 0-17.6 14.4-32 32-32h285.4c-1.9 17.1-1.9 46.9 0 64z" />
+        </svg>
+        User Guide
+      </a></li>
+
+      <li><a href="{% url 'storage:archivist_dashboard' %}" class="btn btn-ghost btn-sm text-white hover:text-white">
+        <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 1 0 01-2-2v-2z" />
+        </svg>
+        Storage
+      </a></li>
+
+      <li><a href="{% url 'blam_archivist_dashboard' %}" class="btn btn-ghost btn-sm text-white hover:text-white">
+        <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804v10a7.968 7.968 0 00-2 0v-10zM15.5 3a9.975 9.975 0 00-4.5 1.073V3a1 1 0 012 0v.073zm-9 0a9.975 9.975 0 014.5 1.073V3a1 1 0 00-2 0v.073z" />
+        </svg>
+        BLAM
+      </a></li>
+
       {% if request.user.is_staff %}
-      <a href="{% url 'admin:index' %}" class="block px-3 py-2 rounded-md text-base font-medium text-white hover:bg-blue-700">Admin</a>
+      <li><a href="{% url 'admin:index' %}" class="btn btn-ghost btn-sm text-white hover:text-white">
+        <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M4 5h16v2H4V5zm0 5h16v2H4v-2zm0 5h16v2H4v-2z"/>
+        </svg>
+        Admin
+      </a></li>
       {% endif %}
-      {% if request.user.is_authenticated %}
-        <a href="{% url 'users:detail' request.user.username %}" class="block px-3 py-2 rounded-md text-base font-medium text-white hover:bg-blue-700">{% translate "My Profile" %}</a>
-        <a href="{% url 'account_logout' %}" class="block px-3 py-2 rounded-md text-base font-medium text-white hover:bg-blue-700">{% translate "Sign Out" %}</a>
-      {% else %}
-        <a href="{% url 'account_login' %}" class="block px-3 py-2 rounded-md text-base font-medium text-white hover:bg-blue-700">{% translate "Sign In" %}</a>
-      {% endif %}
-    </div>
+    </ul>
   </div>
-</nav> 
+
+  <div class="navbar-end">
+    <!-- User menu -->
+    {% if request.user.is_authenticated %}
+    <div class="dropdown dropdown-end">
+      <label tabindex="0" class="btn btn-ghost btn-circle avatar">
+        <div class="w-10 rounded-full bg-neutral text-neutral-content flex items-center justify-center">
+          <span class="text-sm font-bold">{{ request.user.username|slice:":1"|upper }}</span>
+        </div>
+      </label>
+      <ul tabindex="0" class="mt-3 z-[1] p-2 shadow menu menu-sm dropdown-content bg-base-100 rounded-box w-52">
+        <li><a href="{% url 'users:detail' request.user.username %}">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
+          </svg>
+          {% translate "My Profile" %}
+        </a></li>
+        <li><a href="{% url 'account_logout' %}">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h12a1 1 0 001-1V7.414l-5-5H3zm7 5a1 1 0 10-2 0v4.586l-1.293-1.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 12.586V8z" clip-rule="evenodd" />
+          </svg>
+          {% translate "Sign Out" %}
+        </a></li>
+      </ul>
+    </div>
+    {% else %}
+    <a href="{% url 'account_login' %}" class="btn btn-primary btn-sm text-white hover:text-white">
+      <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 512 512">
+        <path d="M416 448h-84c-6.6 0-12-5.4-12-12v-40c0-6.6 5.4-12 12-12h84c17.7 0 32-14.3 32-32V160c0-17.7-14.3-32-32-32h-84c-6.6 0-12-5.4-12-12V76c0-6.6 5.4-12 12-12h84c53 0 96 43 96 96v192c0 53-43 96-96 96zm-47-201L201 79c-15-15-41-4.5-41 17v96H24c-13.3 0-24 10.7-24 24v96c0 13.3 10.7 24 24 24h136v96c0 21.5 26 32 41 17l168-168c9.3-9.4 9.3-24.6 0-34z" />
+      </svg>
+      {% translate "Sign In" %}
+    </a>
+    {% endif %}
+  </div>
+</div> 

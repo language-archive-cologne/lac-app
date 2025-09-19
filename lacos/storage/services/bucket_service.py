@@ -362,13 +362,74 @@ class BucketService(BaseStorageService):
     def delete_file(self, bucket_name, file_path):
         """
         Delete a single file from the specified bucket.
-        
+
         Args:
             bucket_name: The name of the bucket
             file_path: Path to the file to delete
-        
+
         Returns:
             dict: Result of the operation with success flag and error message if applicable
         """
         return self.delete_object(bucket_name, file_path, is_directory=False)
+
+    def create_bucket(self, bucket_name: str, enable_ocfl: bool = False) -> Dict[str, Any]:
+        """
+        Create a new bucket and add it to the workspace buckets.
+
+        Args:
+            bucket_name (str): Name of the bucket to create
+            enable_ocfl (bool): Whether to enable OCFL operations on this bucket
+
+        Returns:
+            Dict[str, Any]: Result with success status and message
+        """
+        logger.info(f"Creating new bucket: {bucket_name}, OCFL: {enable_ocfl}")
+
+        try:
+            # Validate bucket name
+            if not bucket_name or not bucket_name.replace('-', '').replace('_', '').isalnum():
+                return {
+                    "success": False,
+                    "error": "Invalid bucket name. Use only letters, numbers, hyphens, and underscores."
+                }
+
+            # Check if bucket already exists in workspace
+            if bucket_name in self.workspace_buckets:
+                return {
+                    "success": False,
+                    "error": f"Bucket '{bucket_name}' already exists in workspace."
+                }
+
+            # Create the bucket using the base service method
+            bucket_created = self.ensure_bucket_exists(bucket_name)
+
+            if not bucket_created:
+                return {
+                    "success": False,
+                    "error": f"Failed to create bucket '{bucket_name}'"
+                }
+
+            # Add to workspace buckets list (in-memory for this session)
+            # Note: For persistent storage, this would need to be saved to database or config
+            self.workspace_buckets.append(bucket_name)
+
+            # Add to OCFL buckets if requested
+            if enable_ocfl and bucket_name not in self.ocfl_buckets:
+                self.ocfl_buckets.append(bucket_name)
+
+            logger.info(f"Successfully created bucket '{bucket_name}' and added to workspace")
+
+            return {
+                "success": True,
+                "message": f"Bucket '{bucket_name}' created successfully",
+                "bucket_name": bucket_name,
+                "ocfl_enabled": enable_ocfl
+            }
+
+        except Exception as e:
+            logger.exception(f"Error creating bucket {bucket_name}: {str(e)}")
+            return {
+                "success": False,
+                "error": f"Error creating bucket: {str(e)}"
+            }
 

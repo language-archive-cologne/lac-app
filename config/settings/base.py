@@ -87,6 +87,7 @@ THIRD_PARTY_APPS = [
 
 LOCAL_APPS = [
     "lacos.users",
+    "lacos.common",  # Common utilities and mixins
     "lacos.blam",
     "lacos.storage",
     "lacos.rest",
@@ -304,6 +305,20 @@ HUEY = {
 COLLECTION_PATH_PATTERN = env("COLLECTION_PATH_PATTERN")
 BUNDLE_PATH_PATTERN = env("BUNDLE_PATH_PATTERN")
 RESOURCE_PATH_PATTERN = env("RESOURCE_PATH_PATTERN")
+
+# Storage Configuration
+# ------------------------------------------------------------------------------
+# S3/MinIO bucket configuration for flexible workspace access
+# Default workspace buckets - use actual bucket names, can be overridden by environment variables
+S3_WORKSPACE_BUCKETS = env.list("S3_WORKSPACE_BUCKETS", default=["lacos-ingest", "lacos-production"])
+
+# Buckets where OCFL operations are allowed (subset of workspace buckets)
+S3_OCFL_BUCKETS = env.list("S3_OCFL_BUCKETS", default=["lacos-ingest", "lacos-production"])
+
+# Legacy bucket names for backward compatibility
+# These map to the actual bucket names used by the legacy configuration
+S3_INGEST_BUCKET = env("S3_INGEST_BUCKET", default="lacos-ingest")
+S3_PRODUCTION_BUCKET = env("S3_PRODUCTION_BUCKET", default="lacos-production")
 
 # django-allauth
 # ------------------------------------------------------------------------------
