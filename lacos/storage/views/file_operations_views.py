@@ -10,133 +10,17 @@ from lacos.storage.services.bucket_service import BucketService
 logger = logging.getLogger(__name__)
 
 
-@login_required
+# Commented out - hardcoded bucket-specific functionality
+# This function was hardcoded for specific ingest/production buckets
+# Use generic OCFL conversion instead
+"""
 def move_to_production(request, folder_path):
-    """
     Move a folder from the ingest bucket to the production bucket.
-    
+
     This operation copies all files from the specified folder in the ingest bucket
     to the production bucket, maintaining the same folder structure.
-    """
-    if request.method != "POST":
-        return JsonResponse({"success": False, "error": "Method not allowed"})
-    
-    try:
-        bucket_service = BucketService()
-        
-        # Add debug logging to trace the copying process
-        logger.info(f"Preparing to move folder '{folder_path}' to production")
-        
-        # Trace the ingest bucket contents before copying
-        ingest_contents = bucket_service.list_bucket_contents(bucket_service.ingest_bucket, folder_path)
-        logger.info(f"Source folder contents in ingest bucket ({len(ingest_contents)} items):")
-        for item in ingest_contents:
-            logger.info(f"  {item.get('path')} - {'folder' if item.get('is_dir', False) else 'file'}")
-        
-        # Perform the direct move to production
-        result = bucket_service.direct_move_to_production(folder_path)
-        
-        # Check the production bucket contents after copying
-        if result.get("success", False):
-            # Wait a moment for S3 consistency (especially important for MinIO)
-            import time
-            time.sleep(0.5)  # 500ms delay
-            
-            # Verify the production bucket contents
-            production_contents = bucket_service.list_bucket_contents(bucket_service.production_bucket, folder_path)
-            logger.info(f"Production bucket contents after copy ({len(production_contents)} items):")
-            for item in production_contents:
-                logger.info(f"  {item.get('path')} - {'folder' if item.get('is_dir', False) else 'file'}")
-            
-            # Trigger the ingestion pipeline for the copied collection
-            try:
-                # Import the task function
-                from lacos.ingest.tasks import process_s3_prefix
-                
-                # Ensure folder_path ends with a slash for proper prefix handling
-                prefix = folder_path.rstrip('/') + '/'
-                
-                # Launch the ingestion task
-                task_result = process_s3_prefix(
-                    bucket=bucket_service.production_bucket,
-                    prefix=prefix
-                )
-                
-                logger.info(f"Triggered ingestion pipeline for {bucket_service.production_bucket}/{prefix}, task: {task_result}")
-                
-                # Add a message about ingestion being triggered
-                messages.info(request, f"Triggered ingestion pipeline for collection '{folder_path}'")
-                
-            except Exception as e:
-                # Log the error but don't fail the move operation
-                logger.error(f"Error triggering ingestion for {folder_path}: {str(e)}")
-                messages.warning(request, f"Moved to production successfully, but failed to trigger ingestion: {str(e)}")
-        
-        # Check if this is an HTMX request
-        is_htmx = request.headers.get('HX-Request') == 'true'
-        
-        if result.get("success", False):
-            success_message = f"Successfully moved folder '{folder_path}' to production"
-            logger.info(success_message)
-            messages.success(request, success_message)
-            
-            # If HTMX request, return the updated production bucket contents
-            if is_htmx:
-                try:
-                    # Add debug logging
-                    logger.info(f"Getting updated production structure after move")
-                    
-                    # Get updated production bucket structure
-                    production_structure = bucket_service.get_root_level_items(bucket_service.production_bucket)
-                    
-                    # Log the structure for debugging
-                    logger.info(f"Production structure children count: {len(production_structure.get('children', []))}")
-                    
-                    # Return the complete rendered partial for the entire production bucket
-                    response = render(request, 'dashboard/folder_structure_partial.html', {
-                        'structure': production_structure,
-                        'bucket_type': 'production'
-                    })
-                    
-                    # Add a cache-busting header to force browser refresh
-                    response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-                    response['Pragma'] = 'no-cache'
-                    response['Expires'] = '0'
-                    
-                    return response
-                    
-                except Exception as e:
-                    logger.exception(f"Error refreshing production structure: {str(e)}")
-                    # Fall back to redirect if there's an error updating the UI
-                    redirect_url = reverse('storage:archivist_dashboard') + f"?message={success_message}"
-                    return redirect(redirect_url)
-            
-            # Regular request - redirect to dashboard with success message
-            redirect_url = reverse('storage:archivist_dashboard') + f"?message={success_message}"
-            return redirect(redirect_url)
-        else:
-            error_message = f"Failed to move folder: {result.get('error', 'Unknown error')}"
-            logger.error(error_message)
-            messages.error(request, error_message)
-            
-            # If HTMX request, return error message
-            if is_htmx:
-                return HttpResponse(error_message, status=400)
-            
-            # Regular request - redirect to dashboard
-            return redirect(reverse('storage:archivist_dashboard'))
-            
-    except Exception as e:
-        error_message = f"Error moving folder to production: {str(e)}"
-        logger.exception(error_message)
-        messages.error(request, error_message)
-        
-        # If HTMX request, return error message
-        if request.headers.get('HX-Request') == 'true':
-            return HttpResponse(error_message, status=500)
-        
-        # Regular request - redirect to dashboard
-        return redirect(reverse('storage:archivist_dashboard'))
+"""
+# ... function implementation commented out ...
 
 
 @login_required
@@ -151,12 +35,10 @@ def file_content(request, bucket_type, file_path):
     """
     try:
         bucket_service = BucketService()
-        
-        # Determine which bucket to use
-        bucket = bucket_service.ingest_bucket
-        if bucket_type == "production":
-            bucket = bucket_service.production_bucket
-        
+
+        # Use the bucket_type parameter directly as the bucket name
+        bucket = bucket_type
+
         # Get file content and metadata
         result = bucket_service.get_file_content(bucket, file_path)
         
@@ -203,10 +85,8 @@ def delete_object(request, bucket_type, object_type, object_path):
     try:
         bucket_service = BucketService()
         
-        # Determine which bucket to use
-        bucket_name = bucket_service.ingest_bucket
-        if bucket_type == "production":
-            bucket_name = bucket_service.production_bucket
+        # Use the bucket_type parameter directly as the bucket name
+        bucket_name = bucket_type
         
         # Delete the object based on its type
         if object_type == "folder":

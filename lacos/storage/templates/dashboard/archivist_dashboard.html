@@ -217,6 +217,16 @@
     </div>
 </div>
 
+<!-- OCFL Conversion Modal -->
+<input type="checkbox" id="ocfl-conversion-modal" class="modal-toggle" />
+<div class="modal" role="dialog">
+    <div class="modal-box">
+        <div id="ocfl-modal-content">
+            <!-- Content will be loaded via HTMX -->
+        </div>
+    </div>
+</div>
+
 <!-- File Preview Modal -->
 <div id="fileModal" class="modal">
     <div class="modal-box max-w-4xl">
@@ -375,6 +385,33 @@ document.body.addEventListener('click', function (event) {
                 }
             }
         }, 100);
+    }
+});
+
+// Handle OCFL conversion events
+document.body.addEventListener('htmx:afterRequest', function (event) {
+    if (event.detail.xhr && event.detail.xhr.status === 200) {
+        const trigger = event.detail.xhr.getResponseHeader('HX-Trigger');
+        if (trigger) {
+            try {
+                const triggerData = JSON.parse(trigger);
+                if (triggerData.refreshBucketContent) {
+                    // Close the OCFL modal
+                    const modal = document.getElementById('ocfl-conversion-modal');
+                    if (modal) {
+                        modal.checked = false;
+                    }
+
+                    // Refresh the bucket content
+                    const refreshButton = document.querySelector('button[hx-get*="archivist_dashboard"]');
+                    if (refreshButton) {
+                        refreshButton.click();
+                    }
+                }
+            } catch (e) {
+                console.log('Could not parse HX-Trigger header:', e);
+            }
+        }
     }
 });
 </script>
