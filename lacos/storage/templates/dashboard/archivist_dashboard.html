@@ -10,6 +10,9 @@
 <div class="flex-grow flex flex-col container mx-auto px-6 py-8">
 {% load static %}
     <h1 class="text-3xl font-bold mb-8 text-center">Storage Workspace</h1>
+
+    <!-- Include multipart upload handler -->
+    <script src="{% static 'js/upload/multipart-upload.js' %}"></script>
     <div id="indicator" class="loading loading-bar loading-lg fixed top-0 left-0 w-full z-50 hidden"></div>
 
     <!-- Message display -->
@@ -138,42 +141,78 @@
     </div>
 </div>
 
-<!-- Upload Modal (CSS-only with DaisyUI) -->
+<!-- Upload Modal -->
 <input type="checkbox" id="upload-modal" class="modal-toggle" />
 <div class="modal" role="dialog">
-    <div class="modal-box">
+    <div class="modal-box max-w-4xl">
         <h3 class="font-bold text-lg mb-4">Upload Files</h3>
 
-        <div class="form-control w-full mb-4">
-            <label class="label">
-                <span class="label-text">Target Bucket</span>
-            </label>
-            <select class="select select-bordered w-full">
-                {% for bucket_name in workspace_buckets %}
-                <option value="{{ bucket_name }}">{{ bucket_name }}</option>
-                {% endfor %}
-            </select>
+        <!-- File selection area -->
+        <div class="mb-6">
+            <div class="flex gap-4 mb-4">
+                <button type="button" id="modal-files-btn" class="btn btn-sm btn-active" onclick="switchModalToFiles()">Files</button>
+                <button type="button" id="modal-folder-btn" class="btn btn-sm btn-outline" onclick="switchModalToFolder()">Folder</button>
+            </div>
+
+            <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                <input type="file" id="modal-file-picker" class="hidden" multiple>
+                <div class="cursor-pointer" onclick="document.getElementById('modal-file-picker').click()">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                        <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    <p class="mt-1 text-sm text-gray-600">Click to select files</p>
+                    <p class="mt-1 text-xs text-gray-500">Files larger than 100MB will use multipart upload</p>
+                </div>
+            </div>
         </div>
 
-        <div class="form-control w-full mb-4">
-            <label class="label">
-                <span class="label-text">Target Folder (optional)</span>
-            </label>
-            <input
-                type="text"
-                placeholder="e.g., projects/archive"
-                class="input input-bordered w-full"
-            />
-            <label class="label">
-                <span class="label-text-alt text-base-content/60">Leave empty to upload to bucket root</span>
-            </label>
+        <!-- Selected files info -->
+        <div id="modal-files-info" class="mb-6 hidden">
+            <h4 class="font-medium text-gray-700 mb-2">Selected Files:</h4>
+            <div id="modal-files-list" class="max-h-40 overflow-y-auto bg-gray-50 rounded p-3 mb-2">
+                <!-- Files will be listed here -->
+            </div>
+            <div class="text-sm text-gray-600">
+                <span id="modal-file-count">0 files</span> |
+                <span id="modal-total-size">0 B</span> |
+                <span id="modal-multipart-count" class="text-blue-600">0 require multipart</span>
+            </div>
         </div>
+
+        <!-- Target settings -->
+        <div class="grid grid-cols-2 gap-4 mb-6">
+            <div class="form-control">
+                <label class="label"><span class="label-text">Target Bucket</span></label>
+                <select id="modal-bucket-select" class="select select-bordered">
+                    {% for bucket_name in workspace_buckets %}
+                    <option value="{{ bucket_name }}">{{ bucket_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-control">
+                <label class="label"><span class="label-text">Target Folder (optional)</span></label>
+                <input id="modal-folder-input" type="text" placeholder="e.g., projects/archive" class="input input-bordered" />
+            </div>
+        </div>
+
+        <!-- Upload progress -->
+        <div id="modal-upload-progress" class="mb-6 hidden">
+            <div class="mb-2">
+                <div class="flex justify-between text-sm text-gray-600">
+                    <span id="modal-upload-status">Preparing upload...</span>
+                    <span id="modal-upload-percentage">0%</span>
+                </div>
+                <progress id="modal-progress-bar" class="progress w-full" max="100" value="0"></progress>
+            </div>
+            <div id="modal-current-file" class="text-xs text-gray-500"></div>
+        </div>
+
+        <!-- Status messages -->
+        <div id="modal-status-messages" class="mb-4"></div>
 
         <div class="modal-action">
             <label for="upload-modal" class="btn">Cancel</label>
-            <a href="{% url 'storage:upload_form' %}" class="btn btn-primary">
-                Go to Upload Page
-            </a>
+            <button id="modal-upload-btn" class="btn btn-primary" onclick="startModalUpload()" disabled>Upload Files</button>
         </div>
     </div>
 </div>
@@ -401,6 +440,265 @@ document.addEventListener('showMessage', function(event) {
         }, 5000);
     }
 });
+
+// Modal upload functionality
+// Use var to avoid redeclaration errors with HTMX reloads
+var modalSelectedFiles = modalSelectedFiles || [];
+const MULTIPART_THRESHOLD = 100 * 1024 * 1024; // 100MB
+
+function switchModalToFiles() {
+    const input = document.getElementById('modal-file-picker');
+    input.setAttribute('multiple', '');
+    input.removeAttribute('webkitdirectory');
+    input.value = '';
+
+    document.getElementById('modal-files-btn').classList.add('btn-active');
+    document.getElementById('modal-files-btn').classList.remove('btn-outline');
+    document.getElementById('modal-folder-btn').classList.remove('btn-active');
+    document.getElementById('modal-folder-btn').classList.add('btn-outline');
+}
+
+function switchModalToFolder() {
+    const input = document.getElementById('modal-file-picker');
+    input.setAttribute('webkitdirectory', '');
+    input.removeAttribute('multiple');
+    input.value = '';
+
+    document.getElementById('modal-folder-btn').classList.add('btn-active');
+    document.getElementById('modal-folder-btn').classList.remove('btn-outline');
+    document.getElementById('modal-files-btn').classList.remove('btn-active');
+    document.getElementById('modal-files-btn').classList.add('btn-outline');
+}
+
+document.getElementById('modal-file-picker').addEventListener('change', function(e) {
+    modalSelectedFiles = Array.from(e.target.files);
+
+    if (modalSelectedFiles.length > 0) {
+        displayModalFileInfo();
+        document.getElementById('modal-upload-btn').disabled = false;
+    } else {
+        document.getElementById('modal-files-info').classList.add('hidden');
+        document.getElementById('modal-upload-btn').disabled = true;
+    }
+});
+
+function displayModalFileInfo() {
+    const filesInfo = document.getElementById('modal-files-info');
+    const filesList = document.getElementById('modal-files-list');
+    const fileCount = document.getElementById('modal-file-count');
+    const totalSize = document.getElementById('modal-total-size');
+    const multipartCount = document.getElementById('modal-multipart-count');
+
+    filesInfo.classList.remove('hidden');
+
+    let total = 0;
+    let multipart = 0;
+
+    filesList.innerHTML = '';
+    modalSelectedFiles.forEach(file => {
+        total += file.size;
+        if (file.size > MULTIPART_THRESHOLD) multipart++;
+
+        const item = document.createElement('div');
+        item.className = 'text-sm py-1 flex justify-between';
+        item.innerHTML = `
+            <span class="truncate flex-1">${file.webkitRelativePath || file.name}</span>
+            <span class="text-gray-500 ml-2">${formatFileSize(file.size)}</span>
+            ${file.size > MULTIPART_THRESHOLD ? '<span class="text-blue-600 ml-2">MP</span>' : ''}
+        `;
+        filesList.appendChild(item);
+    });
+
+    fileCount.textContent = `${modalSelectedFiles.length} files`;
+    totalSize.textContent = formatFileSize(total);
+    multipartCount.textContent = `${multipart} require multipart`;
+}
+
+function formatFileSize(bytes) {
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let size = bytes;
+    let unitIndex = 0;
+
+    while (size >= 1024 && unitIndex < units.length - 1) {
+        size /= 1024;
+        unitIndex++;
+    }
+
+    return unitIndex === 0 ? `${size} ${units[unitIndex]}` : `${size.toFixed(2)} ${units[unitIndex]}`;
+}
+
+async function startModalUpload() {
+    const bucket = document.getElementById('modal-bucket-select').value;
+    const folder = document.getElementById('modal-folder-input').value;
+
+    if (modalSelectedFiles.length === 0) {
+        showModalMessage('error', 'Please select files to upload');
+        return;
+    }
+
+    const uploadBtn = document.getElementById('modal-upload-btn');
+    uploadBtn.disabled = true;
+    uploadBtn.textContent = 'Uploading...';
+
+    const progressContainer = document.getElementById('modal-upload-progress');
+    progressContainer.classList.remove('hidden');
+
+    try {
+        const filesMetadata = modalSelectedFiles.map(file => ({
+            file_name: file.name,
+            file_type: file.type || 'application/octet-stream',
+            file_size: file.size,
+            path: file.webkitRelativePath || file.name
+        }));
+
+        console.log('Making API call to:', '/storage/presigned-urls/');
+        console.log('Files metadata:', filesMetadata);
+        console.log('CSRF token:', getCsrfToken());
+
+        let response;
+        try {
+            response = await fetch('/storage/presigned-urls/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCsrfToken()
+                },
+                body: JSON.stringify({
+                    folder_name: folder,
+                    bucket_name: bucket,
+                    files_metadata: filesMetadata
+                })
+            });
+        } catch (networkError) {
+            console.error('Network error during fetch:', networkError);
+            throw new Error(`Network error: ${networkError.message}`);
+        }
+
+        console.log('Response status:', response.status);
+
+        if (!response.ok) {
+            console.error('HTTP Error:', response.status, response.statusText);
+            const errorText = await response.text();
+            console.error('Error response:', errorText);
+            throw new Error(`Server error: ${response.status}`);
+        }
+
+        const result = await response.json();
+        console.log('Server response:', result);
+
+        if (!result.success) throw new Error(result.error || 'Failed to get upload URLs');
+
+        await uploadModalFiles(modalSelectedFiles, result.presigned_posts);
+
+        showModalMessage('success', `Successfully uploaded ${modalSelectedFiles.length} files`);
+
+        // Reset modal
+        document.getElementById('modal-file-picker').value = '';
+        modalSelectedFiles = [];
+        document.getElementById('modal-files-info').classList.add('hidden');
+        document.getElementById('modal-folder-input').value = '';
+
+        // Refresh dashboard
+        setTimeout(() => {
+            document.querySelector('[hx-get="/storage/dashboard/"]').click();
+            document.getElementById('upload-modal').checked = false;
+        }, 2000);
+
+    } catch (error) {
+        showModalMessage('error', `Upload failed: ${error.message}`);
+    } finally {
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = 'Upload Files';
+        progressContainer.classList.add('hidden');
+    }
+}
+
+async function uploadModalFiles(files, presignedPosts) {
+    const totalFiles = files.length;
+
+    for (let i = 0; i < totalFiles; i++) {
+        const file = files[i];
+        const config = presignedPosts[i];
+        const fileName = file.webkitRelativePath || file.name;
+
+        updateModalProgress(((i / totalFiles) * 100), `Uploading ${fileName}...`);
+
+        if (config.upload_type === 'multipart') {
+            await uploadModalMultipartFile(file, config, i, totalFiles);
+        } else {
+            await uploadModalSingleFile(file, config);
+        }
+
+        updateModalProgress(((i + 1) / totalFiles) * 100, `Completed ${i + 1} of ${totalFiles} files`);
+    }
+}
+
+async function uploadModalSingleFile(file, config) {
+    const formData = new FormData();
+    Object.entries(config.presigned_post.fields).forEach(([key, value]) => {
+        formData.append(key, value);
+    });
+    formData.append('file', file);
+
+    const response = await fetch(config.presigned_post.url, {
+        method: 'POST',
+        body: formData
+    });
+
+    if (!response.ok) throw new Error(`S3 upload failed: ${response.status}`);
+}
+
+async function uploadModalMultipartFile(file, config, fileIndex, totalFiles) {
+    // Simple multipart implementation for modal
+    const handler = new MultipartUploadHandler(file, {
+        onProgress: (progress) => {
+            const overallProgress = ((fileIndex / totalFiles) * 100) + (progress.percent / totalFiles);
+            updateModalProgress(overallProgress, `Uploading ${file.name} (part ${progress.loaded}/${progress.total})...`);
+        }
+    });
+
+    await handler.upload(config);
+}
+
+function updateModalProgress(percent, status) {
+    document.getElementById('modal-progress-bar').value = percent;
+    document.getElementById('modal-upload-percentage').textContent = `${Math.round(percent)}%`;
+    document.getElementById('modal-upload-status').textContent = status;
+}
+
+function showModalMessage(type, message) {
+    const container = document.getElementById('modal-status-messages');
+    const alertClass = type === 'success' ? 'alert-success' : 'alert-error';
+
+    container.innerHTML = `<div class="alert ${alertClass}"><span>${message}</span></div>`;
+    setTimeout(() => container.innerHTML = '', 5000);
+}
+
+function getCsrfToken() {
+    // Try multiple ways to get CSRF token
+    const csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
+    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    const csrfCookie = getCookie('csrftoken');
+
+    const token = csrfInput?.value || csrfMeta?.content || csrfCookie || '';
+    console.log('CSRF token found:', token ? 'Yes' : 'No');
+    return token;
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let cookie of cookies) {
+            cookie = cookie.trim();
+            if (cookie.startsWith(name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
 </script>
 
 </div>

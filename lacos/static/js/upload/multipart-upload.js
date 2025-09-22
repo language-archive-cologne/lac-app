@@ -3,7 +3,9 @@
  * Handles large file uploads using S3 multipart upload with HTMX integration
  */
 
-class MultipartUploadHandler {
+// Prevent redeclaration errors
+if (typeof MultipartUploadHandler === 'undefined') {
+    window.MultipartUploadHandler = class MultipartUploadHandler {
     constructor(file, options = {}) {
         this.file = file;
         this.uploadId = null;
@@ -202,8 +204,11 @@ class MultipartUploadHandler {
     }
 }
 
+} // End of MultipartUploadHandler class definition check
+
 // Integration with existing upload system
-async function handleLargeFileUpload(file, folderName) {
+if (typeof handleLargeFileUpload === 'undefined') {
+    window.handleLargeFileUpload = async function(file, folderName) {
     const FILE_SIZE_THRESHOLD = 100 * 1024 * 1024; // 100MB
 
     // Check if file needs multipart upload
@@ -264,10 +269,12 @@ async function handleLargeFileUpload(file, folderName) {
     }
 
     return false; // Fall back to normal upload
-}
+    }; // End of handleLargeFileUpload function
+} // End of handleLargeFileUpload check
 
 // Helper function to update progress bar
-function updateUploadProgress(percent) {
+if (typeof updateUploadProgress === 'undefined') {
+    window.updateUploadProgress = function(percent) {
     const progressBar = document.getElementById('upload-progress');
     const progressText = document.getElementById('upload-progress-text');
 
@@ -278,7 +285,8 @@ function updateUploadProgress(percent) {
     if (progressText) {
         progressText.textContent = `${Math.round(percent)}%`;
     }
-}
+    }; // End of updateUploadProgress function
+} // End of updateUploadProgress check
 
 // Export for use in other scripts
 if (typeof module !== 'undefined' && module.exports) {
