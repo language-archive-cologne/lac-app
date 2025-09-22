@@ -68,70 +68,54 @@ class UploadService(BaseStorageService):
         # Just return the clean file name if no prefix
         return clean_file_name
 
-    def generate_presigned_post(self, file_name: str, file_type: str, path_prefix: Optional[str] = None, 
-                             expiration: int = 3600, use_multipart: bool = True, part_count: int = 10) -> Dict[str, Any]:
+    def generate_presigned_post(self, file_name: str, file_type: str, path_prefix: Optional[str] = None,
+                             expiration: int = 3600, file_size: int = 0) -> Dict[str, Any]:
         """
         Generate a presigned URL for direct upload to S3.
-        
+        Auto-detects if multipart is needed based on file size.
+
         Args:
             file_name: The name of the file to upload
             file_type: The MIME type of the file
             path_prefix: Optional prefix for the S3 key
             expiration: Expiration time in seconds
-            use_multipart: Whether to use multipart upload (default: True)
-            part_count: Number of parts for multipart upload (default: 10)
-            
+            file_size: Size of the file in bytes (for auto multipart detection)
+
         Returns:
             Dictionary with presigned post data
         """
         try:
             # Generate a unique key for the file
             file_key = self._generate_file_key(file_name, path_prefix)
-            
+
             logger.info(f"Generating presigned upload URL for {file_key}")
-            
-            # If multipart upload is requested, use that flow
-            if use_multipart:
-                # Initialize multipart upload
-                init_result = self.initialize_multipart_upload(
-                    file_name=file_name,
-                    file_type=file_type,
-                    path_prefix=path_prefix
-                )
-                
-                if init_result['success']:
-                    # Get presigned URLs for parts
-                    parts_result = self.get_upload_part_urls(
-                        s3_key=init_result['s3_key'],
-                        upload_id=init_result['upload_id'],
-                        part_count=part_count,
-                        expiration=expiration
+
+            # Check if multipart is needed based on file size
+            if file_size > 0:
+                parts_info = self.calculate_multipart_parts(file_size)
+                if parts_info['should_use_multipart']:
+                    logger.info(f"File size {file_size} exceeds threshold, using multipart upload")
+
+                    # Initialize multipart upload
+                    init_result = self.initialize_multipart_upload(
+                        file_name=file_name,
+                        file_type=file_type,
+                        path_prefix=path_prefix
                     )
-                    
-                    if parts_result['success']:
-                        # Create a presigned post structure for multipart upload
-                        presigned_post = {
-                            'url': parts_result['presigned_urls'][0]['url'],  # Use first part's URL
-                            'fields': {
-                                'uploadId': init_result['upload_id'],
-                                'key': init_result['s3_key'],
-                                'Content-Type': file_type
-                            }
-                        }
-                        
+
+                    if init_result['success']:
                         return {
                             'success': True,
                             'file_name': file_name,
-                            's3_key': file_key,
+                            's3_key': init_result['s3_key'],
                             'file_type': file_type,
                             'upload_type': 'multipart',
                             'upload_id': init_result['upload_id'],
-                            'presigned_urls': parts_result['presigned_urls'],
-                            'presigned_post': presigned_post,  # Include presigned_post for consistency
+                            'parts_info': parts_info,
                             'expires_in': expiration
                         }
-            
-            # Fall back to single-part upload if multipart is disabled or failed
+
+            # Single-part upload for smaller files or when multipart is not needed
             # Use the presigned client if available, otherwise use the regular client
             client = getattr(self, 'presigned_client', self.s3_client)
             
@@ -196,21 +180,18 @@ class UploadService(BaseStorageService):
         # Join everything together
         return " \\\n  ".join(curl_cmd)
     
-    def generate_batch_presigned_posts(self, files_metadata: List[Dict[str, str]], 
+    def generate_batch_presigned_posts(self, files_metadata: List[Dict[str, str]],
                                     path_prefix: Optional[str] = None,
-                                    expiration: int = 3600,
-                                    use_multipart: bool = True,
-                                    part_count: int = 10) -> Dict[str, Any]:
+                                    expiration: int = 3600) -> Dict[str, Any]:
         """
         Generate multiple presigned URLs for direct upload to S3.
-        
+        Auto-detects multipart needs based on file size.
+
         Args:
-            files_metadata (List[Dict[str, str]]): List of dictionaries with file_name and file_type for each file.
+            files_metadata (List[Dict[str, str]]): List of dictionaries with file_name, file_type, and optionally file_size.
                            May include 'path' to specify a file-specific path.
             path_prefix (str, optional): Folder path to prepend to all file paths
             expiration (int): Time in seconds for the URLs to be valid (default 1 hour)
-            use_multipart (bool): Whether to use multipart upload (default: True)
-            part_count (int): Number of parts for multipart upload (default: 10)
             
         Returns:
             Dict[str, Any]: Dictionary containing the presigned URL data for all files or error information
@@ -245,31 +226,40 @@ class UploadService(BaseStorageService):
                 file_type=file_type,
                 path_prefix=effective_path_prefix,
                 expiration=expiration,
-                use_multipart=use_multipart,
-                part_count=part_count
+                file_size=file_meta.get('file_size', 0)  # Pass file size for multipart detection
             )
             
             # Validate the result has all required fields
             if result['success']:
-                # Extra validation to ensure presigned_post is properly structured
-                if 'presigned_post' not in result:
-                    logger.error(f"Missing presigned_post in result for {file_name}")
-                    failures.append({
-                        'file_meta': file_meta,
-                        'error': "Missing presigned_post in server response"
-                    })
-                    continue
-                    
-                # Validate that presigned_post has url and fields
-                presigned_post = result['presigned_post']
-                if not isinstance(presigned_post, dict) or 'url' not in presigned_post or 'fields' not in presigned_post:
-                    logger.error(f"Invalid presigned_post structure for {file_name}: {presigned_post}")
-                    failures.append({
-                        'file_meta': file_meta,
-                        'error': f"Invalid presigned_post format. Keys: {list(presigned_post.keys()) if isinstance(presigned_post, dict) else 'not a dict'}"
-                    })
-                    continue
-                
+                # For multipart uploads, we won't have presigned_post but will have upload_id and parts_info
+                if result.get('upload_type') == 'multipart':
+                    if 'upload_id' not in result or 'parts_info' not in result:
+                        logger.error(f"Missing multipart fields in result for {file_name}")
+                        failures.append({
+                            'file_meta': file_meta,
+                            'error': "Missing multipart upload fields in server response"
+                        })
+                        continue
+                else:
+                    # For single uploads, validate presigned_post structure
+                    if 'presigned_post' not in result:
+                        logger.error(f"Missing presigned_post in result for {file_name}")
+                        failures.append({
+                            'file_meta': file_meta,
+                            'error': "Missing presigned_post in server response"
+                        })
+                        continue
+
+                    # Validate that presigned_post has url and fields
+                    presigned_post = result['presigned_post']
+                    if not isinstance(presigned_post, dict) or 'url' not in presigned_post or 'fields' not in presigned_post:
+                        logger.error(f"Invalid presigned_post structure for {file_name}: {presigned_post}")
+                        failures.append({
+                            'file_meta': file_meta,
+                            'error': f"Invalid presigned_post format. Keys: {list(presigned_post.keys()) if isinstance(presigned_post, dict) else 'not a dict'}"
+                        })
+                        continue
+
                 results.append(result)
             else:
                 failures.append({
@@ -420,6 +410,194 @@ class UploadService(BaseStorageService):
             return f"{int(size)} {units[unit_index]}"
         else:
             return f"{size:.2f} {units[unit_index]}"
+
+    def _get_multipart_threshold(self) -> int:
+        """
+        Resolve the multipart threshold from settings, defaulting to 100MB.
+        A higher value means more uploads will use single-part.
+        """
+        try:
+            from django.conf import settings
+            cfg = getattr(settings, 'MULTIPART_UPLOAD_SETTINGS', {}) or {}
+            # Default to 100MB if not configured
+            return int(cfg.get('multipart_threshold', 100 * 1024 * 1024))
+        except Exception:
+            return 100 * 1024 * 1024
+
+    def calculate_optimal_chunk_size(self, file_size: int) -> int:
+        """
+        Calculate optimal chunk size based on file size using dynamic sizing.
+
+        AWS Best Practices (2024):
+        - Use multipart for files > 100MB
+        - Minimum part size: 5MB (except last part)
+        - Maximum parts: 10,000
+        - Optimal chunk sizes: 16-128MB for most use cases
+
+        Dynamic Algorithm:
+        - 100-500MB: Use 25MB chunks (4-20 parts)
+        - 500MB-1GB: Use 50MB chunks (10-20 parts)
+        - 1GB-5GB: Use 100MB chunks (10-50 parts)
+        - 5GB-50GB: Use 250MB chunks (20-200 parts)
+        - >50GB: Calculate to keep parts around 500-1000
+        """
+        MB = 1024 * 1024
+        GB = 1024 * MB
+
+        # Log file size for debugging
+        size_mb = file_size / MB
+        size_gb = file_size / GB
+        if size_gb >= 1:
+            logger.debug(f"Calculating multipart chunks for {size_gb:.2f}GB file")
+        else:
+            logger.debug(f"Calculating multipart chunks for {size_mb:.1f}MB file")
+
+        # Optimized chunk sizes to minimize parts while maintaining performance
+        if file_size <= 500 * MB:
+            # 100-500MB: Use 25MB chunks (results in 4-20 parts)
+            chunk_size = 25 * MB
+            logger.debug(f"Using 25MB chunks for small file ({size_mb:.1f}MB)")
+        elif file_size <= 1 * GB:
+            # 500MB-1GB: Use 50MB chunks (results in 10-20 parts)
+            chunk_size = 50 * MB
+            logger.debug(f"Using 50MB chunks for medium file ({size_mb:.1f}MB)")
+        elif file_size <= 5 * GB:
+            # 1GB-5GB: Use 100MB chunks (results in 10-50 parts)
+            chunk_size = 100 * MB
+            logger.debug(f"Using 100MB chunks for large file ({size_gb:.2f}GB)")
+        elif file_size <= 50 * GB:
+            # 5GB-50GB: Use 250MB chunks (results in 20-200 parts)
+            chunk_size = 250 * MB
+            logger.debug(f"Using 250MB chunks for very large file ({size_gb:.2f}GB)")
+        else:
+            # >50GB: Calculate to keep parts around 500-1000
+            target_parts = 750  # Aim for middle of range
+            chunk_size = (file_size + target_parts - 1) // target_parts
+            # Round up to nearest 50MB for consistency
+            chunk_size = ((chunk_size + (50 * MB) - 1) // (50 * MB)) * (50 * MB)
+            logger.debug(f"Using dynamic {chunk_size/MB:.0f}MB chunks for huge file ({size_gb:.2f}GB)")
+
+        return chunk_size
+
+    def calculate_multipart_parts(self, file_size: int, chunk_size: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Calculate optimal multipart upload parameters using dynamic sizing.
+
+        Args:
+            file_size: Size of the file in bytes
+            chunk_size: Desired chunk size in bytes (optional, overrides dynamic sizing)
+
+        Returns:
+            Dict with multipart calculation results
+        """
+        # S3 limits for multipart uploads
+        min_part_size = 5 * 1024 * 1024  # 5MB minimum
+        max_parts = 10000  # Maximum number of parts
+
+        # If chunk_size not provided, try to get it from settings first, then fall back to intelligent dynamic sizing
+        if chunk_size is None:
+            try:
+                from django.conf import settings
+                configured_chunk = int(settings.MULTIPART_UPLOAD_SETTINGS.get('chunk_size', 0))
+                if configured_chunk > 0:
+                    chunk_size = configured_chunk
+                    logger.debug(f"Using configured chunk size: {chunk_size/(1024*1024):.0f}MB")
+            except Exception:
+                pass
+
+        # If still no chunk_size, use intelligent dynamic sizing
+        if chunk_size is None or chunk_size == 0:
+            chunk_size = self.calculate_optimal_chunk_size(file_size)
+
+        # Enforce S3 minimum part size
+        if chunk_size < min_part_size:
+            chunk_size = min_part_size
+
+        # Calculate number of parts
+        part_count = (file_size + chunk_size - 1) // chunk_size
+
+        # If too many parts, increase chunk size to stay well under 10,000 limit
+        if part_count > max_parts:
+            logger.warning(f"Part count {part_count} exceeds S3 limit, adjusting chunk size")
+            # Leave some headroom (use 9,500 as practical limit)
+            practical_max = 9500
+            chunk_size = (file_size + practical_max - 1) // practical_max
+            # Round up to nearest 10MB for efficiency
+            mb = 1024 * 1024
+            chunk_size = ((chunk_size + (10 * mb) - 1) // (10 * mb)) * (10 * mb)
+            part_count = (file_size + chunk_size - 1) // chunk_size
+            logger.info(f"Adjusted to {chunk_size/mb:.0f}MB chunks to stay under part limit")
+
+        # Log final calculation
+        mb = 1024 * 1024
+        logger.debug(f"Multipart calculation complete: {part_count} parts × {chunk_size/mb:.1f}MB chunks = {file_size/mb:.1f}MB total")
+
+        # Decide whether to use multipart based on configured threshold
+        threshold = self._get_multipart_threshold()
+
+        return {
+            'should_use_multipart': file_size > threshold,
+            'part_count': int(part_count),
+            'chunk_size': int(chunk_size),
+            'last_part_size': int(file_size % chunk_size if file_size % chunk_size > 0 else chunk_size),
+            'total_size': int(file_size),
+            'part_numbers': list(range(1, int(part_count) + 1))
+        }
+
+    def validate_file_upload(
+        self,
+        file_name: str,
+        file_size: int,
+        content_type: str,
+        allowed_types: Optional[List[str]] = None,
+        max_file_size: Optional[int] = None,
+        min_file_size: int = 1
+    ) -> Dict[str, Any]:
+        """
+        Validate file upload parameters.
+
+        Args:
+            file_name: Name of the file
+            file_size: Size of the file in bytes
+            content_type: MIME type of the file
+            allowed_types: List of allowed MIME types
+            max_file_size: Maximum file size in bytes
+            min_file_size: Minimum file size in bytes
+
+        Returns:
+            Dict with validation result
+        """
+        errors = []
+        warnings = []
+
+        # File size validation
+        if file_size < min_file_size:
+            errors.append(f"File size must be at least {min_file_size} bytes")
+
+        if max_file_size and file_size > max_file_size:
+            errors.append(f"File size {file_size} exceeds maximum allowed size of {max_file_size} bytes")
+
+        # File name validation
+        if not file_name or file_name.strip() == '':
+            errors.append("File name cannot be empty")
+
+        # Content type validation
+        if allowed_types and content_type not in allowed_types:
+            errors.append(f"Content type '{content_type}' not allowed. Allowed types: {', '.join(allowed_types)}")
+
+        # Large file recommendation
+        single_upload_limit = 5 * 1024 * 1024 * 1024  # 5GB (S3 single PUT limit)
+        if file_size > single_upload_limit:
+            warnings.append("File exceeds single-upload limit; multipart is required.")
+
+        threshold = self._get_multipart_threshold()
+
+        return {
+            'valid': len(errors) == 0,
+            'errors': errors,
+            'warnings': warnings,
+            'should_use_multipart': file_size > threshold
+        }
 
     # ----- Multipart Upload Methods -----
 

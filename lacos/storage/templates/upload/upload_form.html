@@ -76,14 +76,12 @@
     </div>
 </div>
 
-<!-- Include the S3 client and multipart upload handler scripts -->
-<script src="{% static 'js/src/s3/s3-client.js' %}"></script>
-<script src="{% static 'js/src/s3/multipart-upload.js' %}"></script>
+<!-- Include the multipart upload handler script -->
+<script src="{% static 'js/upload/multipart-upload.js' %}"></script>
 
 <script>
-// Initialize upload handler once when the page loads
-const s3Client = new S3Client();
-const uploadHandler = new MultipartUploadHandler(s3Client);
+// File size threshold for multipart upload (100MB)
+const MULTIPART_THRESHOLD = 100 * 1024 * 1024;
 
 // Update progress bar and text
 window.updateUploadProgress = function(message, percentage) {

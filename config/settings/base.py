@@ -320,6 +320,15 @@ S3_OCFL_BUCKETS = env.list("S3_OCFL_BUCKETS", default=["lacos-ingest", "lacos-pr
 S3_INGEST_BUCKET = env("S3_INGEST_BUCKET", default="lacos-ingest")
 S3_PRODUCTION_BUCKET = env("S3_PRODUCTION_BUCKET", default="lacos-production")
 
+# Multipart Upload Configuration
+# ------------------------------------------------------------------------------
+MULTIPART_UPLOAD_SETTINGS = {
+    'multipart_threshold': env.int('MULTIPART_THRESHOLD', default=100 * 1024 * 1024),  # 100MB default
+    'chunk_size': env.int('MULTIPART_CHUNK_SIZE', default=0),  # 0 means use dynamic sizing
+    'max_parts': 10000,  # S3 limit
+    'min_part_size': 5 * 1024 * 1024,  # 5MB - S3 minimum
+}
+
 # django-allauth
 # ------------------------------------------------------------------------------
 ACCOUNT_ALLOW_REGISTRATION = False
