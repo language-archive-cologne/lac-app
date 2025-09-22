@@ -323,8 +323,7 @@ S3_PRODUCTION_BUCKET = env("S3_PRODUCTION_BUCKET", default="lacos-production")
 # Multipart Upload Configuration
 # ------------------------------------------------------------------------------
 MULTIPART_UPLOAD_SETTINGS = {
-    # File size thresholds (matches arkumu configuration)
-    # Set to 5GB to match arkumu's approach - forces single uploads for most files
+    # File size thresholds - 5GB forces single uploads for most files
     'multipart_threshold': env.int('MULTIPART_THRESHOLD', default=5 * 1024 * 1024 * 1024),  # 5GB (S3 single upload limit)
     'chunk_size': env.int('MULTIPART_CHUNK_SIZE', default=0),  # 0 means use dynamic sizing
     'max_parts': 10000,  # S3 limit
