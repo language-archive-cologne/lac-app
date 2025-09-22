@@ -69,7 +69,7 @@ class UploadService(BaseStorageService):
         return clean_file_name
 
     def generate_presigned_post(self, file_name: str, file_type: str, path_prefix: Optional[str] = None,
-                             expiration: int = 3600, file_size: int = 0) -> Dict[str, Any]:
+                             expiration: int = 3600, file_size: int = 0, bucket_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Generate a presigned URL for direct upload to S3.
         Auto-detects if multipart is needed based on file size.
@@ -118,10 +118,13 @@ class UploadService(BaseStorageService):
             # Single-part upload for smaller files or when multipart is not needed
             # Use the presigned client if available, otherwise use the regular client
             client = getattr(self, 'presigned_client', self.s3_client)
-            
+
+            # Use provided bucket or fall back to default ingest bucket
+            target_bucket = bucket_name or self.ingest_bucket
+
             # Generate the presigned POST data
             presigned_post = client.generate_presigned_post(
-                Bucket=self.ingest_bucket,
+                Bucket=target_bucket,
                 Key=file_key,
                 Fields={
                     'Content-Type': file_type
@@ -182,7 +185,7 @@ class UploadService(BaseStorageService):
     
     def generate_batch_presigned_posts(self, files_metadata: List[Dict[str, str]],
                                     path_prefix: Optional[str] = None,
-                                    expiration: int = 3600) -> Dict[str, Any]:
+                                    expiration: int = 3600, bucket_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Generate multiple presigned URLs for direct upload to S3.
         Auto-detects multipart needs based on file size.
@@ -226,7 +229,8 @@ class UploadService(BaseStorageService):
                 file_type=file_type,
                 path_prefix=effective_path_prefix,
                 expiration=expiration,
-                file_size=file_meta.get('file_size', 0)  # Pass file size for multipart detection
+                file_size=file_meta.get('file_size', 0),  # Pass file size for multipart detection
+                bucket_name=bucket_name  # Pass bucket name
             )
             
             # Validate the result has all required fields

@@ -209,7 +209,7 @@ if (typeof MultipartUploadHandler === 'undefined') {
 // Integration with existing upload system
 if (typeof handleLargeFileUpload === 'undefined') {
     window.handleLargeFileUpload = async function(file, folderName) {
-    const FILE_SIZE_THRESHOLD = 100 * 1024 * 1024; // 100MB
+    const FILE_SIZE_THRESHOLD = 5 * 1024 * 1024 * 1024; // 5GB (matches arkumu)
 
     // Check if file needs multipart upload
     if (file.size <= FILE_SIZE_THRESHOLD) {

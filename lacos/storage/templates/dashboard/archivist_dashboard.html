@@ -444,7 +444,7 @@ document.addEventListener('showMessage', function(event) {
 // Modal upload functionality
 // Use var to avoid redeclaration errors with HTMX reloads
 var modalSelectedFiles = modalSelectedFiles || [];
-const MULTIPART_THRESHOLD = 100 * 1024 * 1024; // 100MB
+var MULTIPART_THRESHOLD = window.MULTIPART_THRESHOLD || 5 * 1024 * 1024 * 1024; // 5GB (matches arkumu)
 
 function switchModalToFiles() {
     const input = document.getElementById('modal-file-picker');

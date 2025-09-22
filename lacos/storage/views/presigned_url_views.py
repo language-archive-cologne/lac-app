@@ -58,6 +58,7 @@ def get_presigned_urls(request):
         try:
             data = json.loads(request.body)
             folder_name = data.get('folder_name')
+            bucket_name = data.get('bucket_name')
             files_metadata = data.get('files_metadata')
             files_json = json.dumps(files_metadata) if files_metadata else None
         except json.JSONDecodeError:
@@ -65,6 +66,7 @@ def get_presigned_urls(request):
     else:
         # Get from regular form data
         folder_name = request.POST.get("folder_name")
+        bucket_name = request.POST.get("bucket_name")
         files_json = request.POST.get("files_metadata")
     
     is_htmx = request.headers.get('HX-Request') == 'true'
@@ -117,6 +119,7 @@ def get_presigned_urls(request):
         result = upload_service.generate_batch_presigned_posts(
             files_metadata=files_metadata,
             path_prefix=folder_name,
+            bucket_name=bucket_name,
             expiration=3600  # 1 hour expiration
         )
         
