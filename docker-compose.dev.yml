@@ -1,0 +1,93 @@
+volumes:
+  lacos_dev_postgres_data: {}
+  lacos_dev_postgres_data_backups: {}
+  lacos_dev_redis_data: {}
+
+networks:
+  lacos_dev_network:
+    driver: bridge
+
+services:
+  django:
+    build:
+      context: .
+      dockerfile: ./compose/local/django/Dockerfile
+    image: lacos_dev_django
+    container_name: lacos_dev_django
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - .:/app:z
+    env_file:
+      - ./.envs/.dev/.django
+      - ./.envs/.dev/.postgres
+      - ./.envs/.dev/.storage
+      - ./.envs/.dev/.docker
+    ports:
+      - '8102:8000'
+    command: /start
+    networks:
+      - lacos_dev_network
+    dns:
+      - ${DNS_PRIMARY}
+      - ${DNS_SECONDARY}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "${S3_HOSTNAME}:${S3_IP}"
+
+  postgres:
+    build:
+      context: .
+      dockerfile: ./compose/production/postgres/Dockerfile
+    image: lacos_dev_postgres
+    container_name: lacos_dev_postgres
+    restart: unless-stopped
+    volumes:
+      - lacos_dev_postgres_data:/var/lib/postgresql/data
+      - lacos_dev_postgres_data_backups:/backups
+    env_file:
+      - ./.envs/.dev/.postgres
+    ports:
+      - '5433:5432'
+    networks:
+      - lacos_dev_network
+
+  redis:
+    image: "redis:latest"
+    container_name: lacos_dev_redis
+    restart: unless-stopped
+    volumes:
+      - lacos_dev_redis_data:/data
+    ports:
+      - '6370:6379'
+    networks:
+      - lacos_dev_network
+
+  huey:
+    build:
+      context: .
+      dockerfile: ./compose/local/django/Dockerfile
+    image: lacos_dev_huey
+    container_name: lacos_dev_huey
+    restart: unless-stopped
+    depends_on:
+      - django
+      - redis
+    volumes:
+      - .:/app:z
+    env_file:
+      - ./.envs/.dev/.django
+      - ./.envs/.dev/.postgres
+      - ./.envs/.dev/.storage
+      - ./.envs/.dev/.docker
+    command: /bin/sh -c "python manage.py run_huey"
+    networks:
+      - lacos_dev_network
+    dns:
+      - ${DNS_PRIMARY}
+      - ${DNS_SECONDARY}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "${S3_HOSTNAME}:${S3_IP}"
