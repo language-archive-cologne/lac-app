@@ -1,9 +1,10 @@
 import logging
+import ast
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from lacos.storage.services.bucket_service import BucketService
 from lacos.common.mixins import HtmxTemplateHelperMixin
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse, RawPostDataException
 from django.views.decorators.http import require_http_methods
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -257,4 +258,67 @@ def delete_bucket_htmx(request, bucket_name):
         )
     except Exception as e:
         logger.exception(f"Error deleting bucket: {str(e)}")
-        return HttpResponse(f"Error deleting bucket: {str(e)}", status=500) 
+        return HttpResponse(f"Error deleting bucket: {str(e)}", status=500)
+
+
+@method_decorator(login_required, name='dispatch')
+class RenameBucketHTMXView(HtmxTemplateHelperMixin, View):
+    """Handle HTMX bucket rename requests."""
+
+    def post(self, request, bucket_name):
+        try:
+            new_name = ''
+            try:
+                if request.body:
+                    raw_body = request.body.decode(request.encoding or 'utf-8')
+                    if request.content_type == 'application/json':
+                        payload = json.loads(raw_body)
+                        new_name = (payload.get('prompt') or payload.get('newName') or '').strip()
+                    elif request.content_type in ('application/x-www-form-urlencoded', 'multipart/form-data'):
+                        from django.http import QueryDict
+                        form_data = QueryDict(raw_body)
+                        new_name = (form_data.get('prompt') or form_data.get('newName') or '').strip()
+                        if not new_name and raw_body.startswith('{'):
+                            try:
+                                parsed = json.loads(raw_body)
+                            except ValueError:
+                                try:
+                                    parsed = ast.literal_eval(raw_body)
+                                except (ValueError, SyntaxError):
+                                    parsed = {}
+                            new_name = (parsed.get('prompt') or parsed.get('newName') or '').strip()
+            except (ValueError, TypeError, RawPostDataException):
+                new_name = ''
+
+            if not new_name:
+                new_name = (request.POST.get('prompt') or request.POST.get('newName') or '').strip()
+            if not new_name:
+                return HttpResponse("Bucket name is required", status=400)
+
+            bucket_service = BucketService()
+            result = bucket_service.rename_bucket(bucket_name, new_name)
+
+            if not result.get('success'):
+                return HttpResponse(result.get('error', 'Rename failed'), status=400)
+
+            content_html = self.render_bucket_content_template(request, new_name)
+
+            response_html = self.build_bucket_tabs_oob_response(
+                main_html=content_html,
+                request=request,
+                active_bucket=new_name,
+                success_message=result.get('message')
+            )
+
+            response = HttpResponse(response_html)
+            response['HX-Trigger'] = json.dumps({
+                'bucketRenamed': {
+                    'oldName': bucket_name,
+                    'newName': new_name,
+                }
+            })
+            return response
+
+        except Exception as e:
+            logger.exception(f"Error renaming bucket {bucket_name}: {str(e)}")
+            return HttpResponse(f"Error renaming bucket: {str(e)}", status=500)

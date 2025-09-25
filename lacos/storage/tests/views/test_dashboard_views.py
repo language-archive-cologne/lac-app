@@ -1,7 +1,11 @@
 import pytest
 from unittest.mock import patch, MagicMock
 
-from lacos.storage.views.dashboard_views import archivist_dashboard, load_folder_contents
+from lacos.storage.views.dashboard_views import (
+    archivist_dashboard,
+    load_folder_contents,
+    RenameBucketHTMXView,
+)
 
 # Note: fixtures are now imported from conftest.py automatically
 
@@ -192,6 +196,41 @@ def test_load_folder_contents_empty_folder(mock_render, mock_bucket_service, pre
     mock_render.assert_called_once()
     context = mock_render.call_args[0][2]
     assert len(context['folder_contents']) == 0
+
+
+@patch('lacos.storage.views.dashboard_views.BucketService')
+@patch.object(RenameBucketHTMXView, 'render_bucket_content_template', return_value='bucket-html')
+@patch.object(RenameBucketHTMXView, 'build_bucket_tabs_oob_response', return_value='combined-html')
+def test_rename_bucket_htmx_success(mock_build, mock_render_content, MockBucketService, prepared_request):
+    mock_service = MockBucketService.return_value
+    mock_service.rename_bucket.return_value = {
+        'success': True,
+        'message': 'renamed',
+        'bucket_name': 'new-bucket'
+    }
+
+    request = prepared_request('/storage/htmx/rename-bucket/old-bucket/', method='post', htmx=True, data={'prompt': 'new-bucket'})
+
+    response = RenameBucketHTMXView.as_view()(request, bucket_name='old-bucket')
+
+    mock_service.rename_bucket.assert_called_once_with('old-bucket', 'new-bucket')
+    mock_render_content.assert_called_once()
+    assert response.status_code == 200
+    assert response.content.decode() == 'combined-html'
+
+
+@patch('lacos.storage.views.dashboard_views.BucketService')
+@patch.object(RenameBucketHTMXView, 'render_bucket_content_template', return_value='bucket-html')
+def test_rename_bucket_htmx_failure(mock_render_content, MockBucketService, prepared_request):
+    mock_service = MockBucketService.return_value
+    mock_service.rename_bucket.return_value = {'success': False, 'error': 'Conflict'}
+
+    request = prepared_request('/storage/htmx/rename-bucket/old/', method='post', htmx=True, data={'prompt': 'exists'})
+
+    response = RenameBucketHTMXView.as_view()(request, bucket_name='old')
+
+    assert response.status_code == 400
+    assert 'Conflict' in response.content.decode()
 
 @patch('lacos.storage.views.dashboard_views.BucketService')
 @patch('lacos.storage.views.dashboard_views.render')

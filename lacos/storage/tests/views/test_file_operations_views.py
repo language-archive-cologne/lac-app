@@ -1,13 +1,12 @@
 import pytest
 import json
 from unittest.mock import patch, MagicMock, Mock
-from django.urls import reverse
 from django.test import RequestFactory
 from django.http import HttpResponse, JsonResponse
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.sessions.middleware import SessionMiddleware
 
-from lacos.storage.views.file_operations_views import move_to_production, delete_object
+from lacos.storage.views.file_operations_views import delete_object, RenameObjectHTMXView
 
 
 @pytest.fixture
@@ -71,181 +70,46 @@ def mock_bucket_service():
 
 
 @patch('lacos.storage.views.file_operations_views.BucketService')
-@patch('lacos.storage.views.file_operations_views.render')
-@patch('lacos.storage.views.file_operations_views.redirect')
-def test_move_to_production_success_with_ingestion(
-    mock_redirect, mock_render, MockBucketService, 
-    prepared_request, mock_bucket_service
-):
-    """Test successful move to production with ingestion trigger."""
-    # Set up mocks
-    MockBucketService.return_value = mock_bucket_service
-    mock_bucket_service.direct_move_to_production.return_value = {'success': True}
-    mock_render.return_value = HttpResponse('Success')
-    
-    # Create request
-    request = prepared_request('/storage/move-to-production/test-collection/', 
-                             method='post', htmx=True)
-    
-    # Mock the import and the process_s3_prefix function
-    mock_process = MagicMock(return_value='fake-task-id')
-    
-    # Patch the modules that get imported inside the function
-    with patch.dict('sys.modules', {
-        'lacos.ingest.tasks': MagicMock(process_s3_prefix=mock_process)
-    }):
-        # Call the view
-        response = move_to_production(request, 'test-collection')
-    
-    # Verify bucket service calls
-    mock_bucket_service.list_bucket_contents.assert_any_call('ingest-bucket', 'test-collection')
-    mock_bucket_service.direct_move_to_production.assert_called_once_with('test-collection')
-    
-    # Verify ingestion was triggered
-    mock_process.assert_called_once_with(
-        bucket='production-bucket',
-        prefix='test-collection/'
+@patch.object(RenameObjectHTMXView, 'render_bucket_content_template', return_value='rendered-html')
+def test_rename_object_folder_success(mock_render_content, MockBucketService, prepared_request):
+    request = prepared_request(
+        '/storage/rename-object/bucket/folder/old/path/',
+        method='post',
+        htmx=True,
+        data={'prompt': 'Renamed'}
     )
-    
-    # Verify render was called for HTMX request
-    mock_render.assert_called_once()
-    
-    # Verify we didn't redirect (since it was an HTMX request)
-    mock_redirect.assert_not_called()
-    
-    # Verify response
+
+    mock_service = MockBucketService.return_value
+    mock_service.rename_folder.return_value = {'success': True}
+
+    response = RenameObjectHTMXView.as_view()(request, bucket_name='bucket', object_type='folder', object_path='old/path/')
+
+    mock_service.rename_folder.assert_called_once_with('bucket', 'old/path/', 'Renamed')
     assert response.status_code == 200
+    assert response.content.decode() == 'rendered-html'
 
 
 @patch('lacos.storage.views.file_operations_views.BucketService')
-@patch('lacos.storage.views.file_operations_views.render')
-@patch('lacos.storage.views.file_operations_views.redirect')
-def test_move_to_production_success_regular_request(
-    mock_redirect, mock_render, MockBucketService, 
-    prepared_request, mock_bucket_service
-):
-    """Test successful move to production with regular (non-HTMX) request."""
-    # Set up mocks
-    MockBucketService.return_value = mock_bucket_service
-    mock_bucket_service.direct_move_to_production.return_value = {'success': True}
-    mock_redirect.return_value = HttpResponse('Redirected')
-    
-    # Create request (no HTMX header)
-    request = prepared_request('/storage/move-to-production/test-collection/', 
-                             method='post', htmx=False)
-    
-    # Mock the import and the process_s3_prefix function
-    mock_process = MagicMock(return_value='fake-task-id')
-    
-    # Patch the modules that get imported inside the function
-    with patch.dict('sys.modules', {
-        'lacos.ingest.tasks': MagicMock(process_s3_prefix=mock_process)
-    }):
-        # Call the view
-        move_to_production(request, 'test-collection')
-    
-    # Verify ingestion was triggered
-    mock_process.assert_called_once()
-    
-    # Verify we redirected for non-HTMX request
-    mock_redirect.assert_called_once()
-    
-    # Verify render was not called for redirects
-    mock_render.assert_not_called()
+@patch.object(RenameObjectHTMXView, 'render_bucket_content_template', return_value='rendered-html')
+def test_rename_object_file_failure(mock_render_content, MockBucketService, prepared_request):
+    request = prepared_request(
+        '/storage/rename-object/bucket/file/folder/file.txt',
+        method='post',
+        htmx=True,
+        data={'prompt': 'file.txt'}
+    )
 
+    mock_service = MockBucketService.return_value
+    mock_service.rename_file.return_value = {'success': False, 'error': 'exists'}
 
-@patch('lacos.storage.views.file_operations_views.BucketService')
-def test_move_to_production_failed_move(
-    MockBucketService, prepared_request, mock_bucket_service
-):
-    """Test failed move to production."""
-    # Set up mocks
-    MockBucketService.return_value = mock_bucket_service
-    # Simulate failed move
-    mock_bucket_service.direct_move_to_production.return_value = {
-        'success': False, 
-        'error': 'Test error'
-    }
-    
-    # Create request
-    request = prepared_request('/storage/move-to-production/test-collection/', 
-                             method='post', htmx=True)
-    
-    # Create a mock for process_s3_prefix but it should never be called
-    mock_process = MagicMock()
-    
-    # Patch the modules that get imported inside the function
-    with patch.dict('sys.modules', {
-        'lacos.ingest.tasks': MagicMock(process_s3_prefix=mock_process)
-    }):
-        # Call the view
-        response = move_to_production(request, 'test-collection')
-    
-    # Verify ingestion was NOT triggered
-    mock_process.assert_not_called()
-    
-    # Verify error response
+    response = RenameObjectHTMXView.as_view()(request, bucket_name='bucket', object_type='file', object_path='folder/file.txt')
+
+    mock_service.rename_file.assert_called_once_with('bucket', 'folder/file.txt', 'file.txt')
     assert response.status_code == 400
-    assert 'Test error' in response.content.decode()
+    assert 'exists' in response.content.decode()
 
 
-@patch('lacos.storage.views.file_operations_views.BucketService')
-@patch('lacos.storage.views.file_operations_views.render')
-def test_move_to_production_success_ingestion_failure(
-    mock_render, MockBucketService, prepared_request, mock_bucket_service
-):
-    """Test successful move but failed ingestion."""
-    # Set up mocks
-    MockBucketService.return_value = mock_bucket_service
-    mock_bucket_service.direct_move_to_production.return_value = {'success': True}
-    mock_render.return_value = HttpResponse('Success')
     
-    # Create request
-    request = prepared_request('/storage/move-to-production/test-collection/', 
-                             method='post', htmx=True)
-    
-    # Mock the import but make process_s3_prefix raise an exception
-    mock_process = MagicMock(side_effect=Exception('Ingestion error'))
-    
-    # Patch the modules that get imported inside the function
-    with patch.dict('sys.modules', {
-        'lacos.ingest.tasks': MagicMock(process_s3_prefix=mock_process)
-    }):
-        # Call the view
-        response = move_to_production(request, 'test-collection')
-    
-    # Verify ingestion was attempted
-    mock_process.assert_called_once()
-    
-    # Verify move was still successful
-    assert response.status_code == 200
-    
-    # Verify that at least one warning message was added
-    messages = [m.message for m in request._messages]
-    assert any('failed to trigger ingestion' in str(m).lower() for m in messages)
-
-
-@patch('lacos.storage.views.file_operations_views.BucketService')
-def test_move_to_production_method_not_allowed(
-    MockBucketService, prepared_request
-):
-    """Test GET request is rejected."""
-    # Create GET request
-    request = prepared_request('/storage/move-to-production/test-collection/', 
-                             method='get')
-    
-    # Call the view
-    response = move_to_production(request, 'test-collection')
-    
-    # Verify response is a JsonResponse with the expected data
-    assert isinstance(response, JsonResponse)
-    
-    # Parse the JSON content
-    response_data = json.loads(response.content.decode('utf-8'))
-    assert response_data['success'] is False
-    assert 'Method not allowed' in response_data['error']
-
-
 # Tests for delete_object view
 
 @patch('lacos.storage.views.file_operations_views.BucketService')

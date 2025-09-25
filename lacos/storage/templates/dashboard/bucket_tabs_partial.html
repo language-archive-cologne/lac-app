@@ -47,6 +47,31 @@
             <!-- Divider -->
             <div class="divider my-1"></div>
 
+            {% if active_bucket %}
+            <li>
+                <button
+                    class="flex items-center gap-3 p-3 hover:bg-base-200"
+                    hx-post="{% url 'storage:rename_bucket_htmx' active_bucket %}"
+                    hx-target="#bucket-content"
+                    hx-indicator="#indicator"
+                    hx-prompt="Enter a new bucket name"
+                    hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                >
+                    <div class="avatar placeholder">
+                        <div class="bg-info text-info-content rounded-full w-8 h-8">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5h2m-1-1v2m-6 6h.01M7 7h.01M7 5h.01M5 7h.01M5 5h.01M19 11h2m-1-1v2m-6 6h.01M17 17h.01M17 19h.01M19 17h.01M19 19h.01M9 15l6-6m2-2l3-3" />
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="flex flex-col items-start">
+                        <span class="font-semibold">Rename Current Bucket</span>
+                        <span class="text-xs opacity-70">Rename '{{ active_bucket }}'</span>
+                    </div>
+                </button>
+            </li>
+            {% endif %}
+
             <!-- Create New Bucket -->
             <li>
                 <label for="create-bucket-modal" class="flex items-center gap-3 p-3 hover:bg-success hover:text-success-content cursor-pointer">

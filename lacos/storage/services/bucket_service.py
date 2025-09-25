@@ -156,10 +156,13 @@ class BucketService(BaseStorageService):
             # Process items to add BLAM object information
             processed_children = []
             for item in contents:
+                parent_info = self._split_parent_child(item["path"] if item["is_dir"] else item["path"])
+
                 child = {
                     "type": "folder" if item["is_dir"] else "file",
                     "name": item["name"],
                     "path": item["path"],
+                    "parent_path": parent_info["parent"],
                     "size": item.get("size"),
                     "last_modified": item.get("last_modified"),
                 }
@@ -201,10 +204,13 @@ class BucketService(BaseStorageService):
             # Transform the contents and add BLAM object information
             processed_contents = []
             for item in contents:
+                parent_info = self._split_parent_child(item["path"] if item["is_dir"] else item["path"])
+
                 result = {
                     "type": "folder" if item["is_dir"] else "file",
                     "name": item["name"],
                     "path": item["path"],
+                    "parent_path": parent_info["parent"],
                     "size": item.get("size"),
                     "last_modified": item.get("last_modified"),
                 }
@@ -238,6 +244,211 @@ class BucketService(BaseStorageService):
     def find_ocfl_objects(self, bucket_name: str, prefix: str = "") -> List[str]:
         """Delegate to collection service to find all OCFL objects in a bucket/prefix."""
         return self.collection_service.find_ocfl_objects(bucket_name, prefix)
+
+    # -------------------------------------------------------------------------
+    # Rename operations
+    # -------------------------------------------------------------------------
+
+    def _is_valid_bucket_name(self, bucket_name: str) -> bool:
+        """Validate bucket name allowing letters, numbers, hyphens, and underscores."""
+        if not bucket_name:
+            return False
+        sanitized = bucket_name.replace('-', '').replace('_', '')
+        return sanitized.isalnum()
+
+    def _split_parent_child(self, path: str) -> Dict[str, str]:
+        """Return parent prefix and child name for a given S3 path."""
+        if not path:
+            return {"parent": "", "name": ""}
+
+        normalized = path.strip('/')
+        if not normalized:
+            return {"parent": "", "name": ""}
+
+        if '/' not in normalized:
+            return {"parent": "", "name": normalized}
+
+        parent, name = normalized.rsplit('/', 1)
+        return {"parent": f"{parent}/", "name": name}
+
+    def rename_bucket(self, current_bucket: str, new_bucket: str) -> Dict[str, Any]:
+        """Rename a bucket by copying all objects to a new bucket and deleting the old one."""
+        try:
+            current_bucket = current_bucket.strip()
+            new_bucket = new_bucket.strip()
+
+            if not current_bucket:
+                return {"success": False, "error": "Current bucket name is required"}
+
+            if not new_bucket:
+                return {"success": False, "error": "New bucket name is required"}
+
+            if current_bucket == new_bucket:
+                return {"success": False, "error": "New bucket name must be different"}
+
+            if not self._is_valid_bucket_name(new_bucket):
+                return {
+                    "success": False,
+                    "error": "Invalid bucket name. Use only letters, numbers, hyphens, and underscores."
+                }
+
+            accessible = self.get_all_accessible_buckets()
+            if current_bucket not in accessible:
+                return {"success": False, "error": f"Bucket '{current_bucket}' is not accessible"}
+
+            if new_bucket in accessible:
+                return {"success": False, "error": f"Bucket '{new_bucket}' already exists"}
+
+            if not self.ensure_bucket_exists(new_bucket):
+                return {"success": False, "error": f"Failed to create bucket '{new_bucket}'"}
+
+            paginator = self.s3_client.get_paginator("list_objects_v2")
+            copied_objects = 0
+
+            for page in paginator.paginate(Bucket=current_bucket):
+                for obj in page.get("Contents", []):
+                    key = obj["Key"]
+                    self.s3_client.copy_object(
+                        Bucket=new_bucket,
+                        CopySource={"Bucket": current_bucket, "Key": key},
+                        Key=key
+                    )
+                    self.s3_client.delete_object(Bucket=current_bucket, Key=key)
+                    copied_objects += 1
+
+            # Delete the now-empty bucket
+            self.s3_client.delete_bucket(Bucket=current_bucket)
+
+            # Update in-memory workspace buckets (if configured)
+            if current_bucket in self.workspace_buckets:
+                self.workspace_buckets = [new_bucket if b == current_bucket else b for b in self.workspace_buckets]
+            elif new_bucket not in self.workspace_buckets:
+                self.workspace_buckets.append(new_bucket)
+
+            message = f"Bucket '{current_bucket}' renamed to '{new_bucket}'"
+            return {
+                "success": True,
+                "message": message,
+                "objects_moved": copied_objects,
+                "bucket_name": new_bucket
+            }
+
+        except ClientError as e:
+            logger.error(f"Error renaming bucket {current_bucket} -> {new_bucket}: {str(e)}")
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            logger.exception(f"Unexpected error renaming bucket {current_bucket}")
+            return {"success": False, "error": str(e)}
+
+    def rename_folder(self, bucket_name: str, old_path: str, new_name: str) -> Dict[str, Any]:
+        """Rename a folder within a bucket by copying to a new prefix and deleting the old."""
+        try:
+            new_name = new_name.strip()
+            if not new_name:
+                return {"success": False, "error": "New folder name is required"}
+
+            if '/' in new_name:
+                return {"success": False, "error": "Folder name must not contain '/'"}
+
+            old_prefix = old_path if old_path.endswith('/') else f"{old_path}/"
+            parent = self._split_parent_child(old_prefix)
+            if not parent['name']:
+                return {"success": False, "error": "Invalid folder path"}
+
+            if parent['name'] == new_name:
+                return {"success": True, "message": "Folder name unchanged"}
+
+            new_prefix = f"{parent['parent']}{new_name}/"
+
+            # Ensure target prefix does not already exist
+            existing = self.s3_client.list_objects_v2(
+                Bucket=bucket_name,
+                Prefix=new_prefix,
+                MaxKeys=1
+            )
+            if existing.get('KeyCount', 0) > 0:
+                return {"success": False, "error": f"Folder '{new_name}' already exists"}
+
+            paginator = self.s3_client.get_paginator("list_objects_v2")
+            moved = 0
+
+            for page in paginator.paginate(Bucket=bucket_name, Prefix=old_prefix):
+                for obj in page.get("Contents", []):
+                    old_key = obj["Key"]
+                    suffix = old_key[len(old_prefix):]
+                    new_key = f"{new_prefix}{suffix}" if suffix else new_prefix
+
+                    self.s3_client.copy_object(
+                        Bucket=bucket_name,
+                        CopySource={"Bucket": bucket_name, "Key": old_key},
+                        Key=new_key
+                    )
+                    self.s3_client.delete_object(Bucket=bucket_name, Key=old_key)
+                    moved += 1
+
+            if moved == 0:
+                return {"success": True, "message": "Folder was empty", "folder_path": new_prefix}
+
+            return {
+                "success": True,
+                "message": f"Folder renamed to '{new_name}'",
+                "folder_path": new_prefix,
+                "objects_moved": moved
+            }
+
+        except ClientError as e:
+            logger.error(f"Error renaming folder {old_path} -> {new_name}: {str(e)}")
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            logger.exception(f"Unexpected error renaming folder {old_path}")
+            return {"success": False, "error": str(e)}
+
+    def rename_file(self, bucket_name: str, file_path: str, new_name: str) -> Dict[str, Any]:
+        """Rename a single file within a bucket."""
+        try:
+            new_name = new_name.strip()
+            if not new_name:
+                return {"success": False, "error": "New file name is required"}
+
+            if '/' in new_name:
+                return {"success": False, "error": "File name must not contain '/'"}
+
+            parent = self._split_parent_child(file_path)
+            if not parent['name']:
+                return {"success": False, "error": "Invalid file path"}
+
+            if parent['name'] == new_name:
+                return {"success": True, "message": "File name unchanged"}
+
+            new_key = f"{parent['parent']}{new_name}"
+
+            # Ensure target does not already exist
+            try:
+                self.s3_client.head_object(Bucket=bucket_name, Key=new_key)
+                return {"success": False, "error": f"File '{new_name}' already exists"}
+            except ClientError as head_error:
+                if head_error.response['Error']['Code'] not in ('404', 'NoSuchKey'):
+                    raise
+
+            self.s3_client.copy_object(
+                Bucket=bucket_name,
+                CopySource={"Bucket": bucket_name, "Key": file_path},
+                Key=new_key
+            )
+            self.s3_client.delete_object(Bucket=bucket_name, Key=file_path)
+
+            return {
+                "success": True,
+                "message": f"File renamed to '{new_name}'",
+                "file_path": new_key
+            }
+
+        except ClientError as e:
+            logger.error(f"Error renaming file {file_path} -> {new_name}: {str(e)}")
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            logger.exception(f"Unexpected error renaming file {file_path}")
+            return {"success": False, "error": str(e)}
     
     def list_bucket_contents(self, bucket_name: str, prefix: str = "") -> List[Dict[str, any]]:
         """Delegate to collection service to list bucket contents."""
@@ -432,4 +643,3 @@ class BucketService(BaseStorageService):
                 "success": False,
                 "error": f"Error creating bucket: {str(e)}"
             }
-

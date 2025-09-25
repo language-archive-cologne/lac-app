@@ -30,6 +30,20 @@ Template for displaying root level items and folders with lazy loading
                         </span>
                         
                         <div class="ml-auto flex items-center space-x-2">
+                            <!-- Rename folder button -->
+                            <button class="text-slate-500 hover:text-slate-700"
+                                    title="Rename Folder"
+                                    hx-post="{% url 'storage:rename_object_htmx' bucket_type 'folder' item.path %}"
+                                    hx-target="#bucket-content"
+                                    hx-swap="innerHTML"
+                                    hx-indicator="#indicator"
+                                    hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                                    hx-prompt="Enter a new folder name">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5h2m-1-1v2m6 11l2 2m0 0l-3.586-3.586a2 2 0 01-.414-.586L15 15l1.828-1.828a2 2 0 01.586-.414L21 12l-2 2m0 0l-2 2" />
+                                </svg>
+                            </button>
+
                             <!-- Convert to OCFL button - available for ALL buckets -->
                             <button class="text-purple-500 hover:text-purple-700"
                                     title="Convert to OCFL Format"
@@ -100,6 +114,19 @@ Template for displaying root level items and folders with lazy loading
                         </span>
 
                         <div class="flex items-center space-x-1 mr-3">
+                            <button hx-post="{% url 'storage:rename_object_htmx' bucket_type 'file' item.path %}"
+                                    hx-target="#bucket-content"
+                                    hx-swap="innerHTML"
+                                    hx-indicator="#indicator"
+                                    hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                                    hx-prompt="Enter a new file name"
+                                    class="text-slate-500 hover:text-slate-700"
+                                    title="Rename File">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5h2m-1-1v2m8 9l2 2m0 0l-3.586-3.586a2 2 0 01-.414-.586L15 11l1.828-1.828a2 2 0 01.586-.414L21 9l-2 2m0 0l-2 2" />
+                                </svg>
+                            </button>
+
                             <button hx-get="{% url 'storage:file_content' bucket_type=bucket_type file_path=item.path %}"
                                     class="view-icon text-blue-500 hover:text-blue-700" title="View File">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

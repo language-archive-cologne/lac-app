@@ -1,26 +1,15 @@
 import logging
-from django.shortcuts import render, redirect
+import json
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, HttpResponse
-from django.urls import reverse
+from django.utils.decorators import method_decorator
+from django.views import View
 
 from lacos.storage.services.bucket_service import BucketService
+from lacos.common.mixins.htmx_template_helpers import HtmxTemplateHelperMixin
 
 logger = logging.getLogger(__name__)
-
-
-# Commented out - hardcoded bucket-specific functionality
-# This function was hardcoded for specific ingest/production buckets
-# Use generic OCFL conversion instead
-"""
-def move_to_production(request, folder_path):
-    Move a folder from the ingest bucket to the production bucket.
-
-    This operation copies all files from the specified folder in the ingest bucket
-    to the production bucket, maintaining the same folder structure.
-"""
-# ... function implementation commented out ...
 
 
 @login_required
@@ -66,6 +55,42 @@ def file_content(request, bucket_type, file_path):
         return HttpResponse(error_message, status=500)
 
 
+@method_decorator(login_required, name='dispatch')
+class RenameObjectHTMXView(HtmxTemplateHelperMixin, View):
+    """HTMX endpoint for renaming files and folders within a bucket."""
+
+    def post(self, request, bucket_name, object_type, object_path):
+        bucket_service = BucketService()
+
+        new_name = (request.POST.get('prompt') or request.POST.get('newName') or '').strip()
+        if not new_name:
+            return HttpResponse("A new name is required", status=400)
+
+        if object_type not in {'file', 'folder'}:
+            return HttpResponse("Invalid object type", status=400)
+
+        if object_type == 'folder':
+            result = bucket_service.rename_folder(bucket_name, object_path, new_name)
+        else:
+            result = bucket_service.rename_file(bucket_name, object_path, new_name)
+
+        if not result.get('success'):
+            return HttpResponse(result.get('error', 'Rename failed'), status=400)
+
+        content_html = self.render_bucket_content_template(request, bucket_name)
+
+        response = HttpResponse(content_html)
+        response['HX-Trigger'] = json.dumps({
+            'objectRenamed': {
+                'bucket': bucket_name,
+                'objectType': object_type,
+                'oldPath': object_path,
+                'newName': new_name,
+            }
+        })
+        return response
+
+
 @login_required
 def delete_object(request, bucket_type, object_type, object_path):
     """
@@ -85,8 +110,15 @@ def delete_object(request, bucket_type, object_type, object_path):
     try:
         bucket_service = BucketService()
         
-        # Use the bucket_type parameter directly as the bucket name
-        bucket_name = bucket_type
+        accessible_buckets = bucket_service.get_all_accessible_buckets()
+        if isinstance(accessible_buckets, (list, tuple, set)) and bucket_type in accessible_buckets:
+            bucket_name = bucket_type
+        elif bucket_type == 'ingest':
+            bucket_name = bucket_service.ingest_bucket
+        elif bucket_type == 'production':
+            bucket_name = bucket_service.production_bucket
+        else:
+            bucket_name = bucket_type
         
         # Delete the object based on its type
         if object_type == "folder":

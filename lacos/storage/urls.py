@@ -32,6 +32,7 @@ urlpatterns = [
     # File operations
     path("file-content/<str:bucket_type>/<path:file_path>/", views.file_content, name="file_content"),
     path("delete/<str:bucket_type>/<str:object_type>/<path:object_path>/", views.delete_object, name="delete_object"),
+    path("htmx/rename-object/<str:bucket_name>/<str:object_type>/<path:object_path>/", views.RenameObjectHTMXView.as_view(), name="rename_object_htmx"),
     path("debug/presigned-url/", direct_upload_views.debug_presigned_url, name="debug_presigned_url"),
     path("upload/debug-error/", direct_upload_views.debug_upload_error, name="debug_upload_error"),
 
@@ -42,6 +43,7 @@ urlpatterns = [
     path("htmx/bucket-content/<str:bucket_name>/", views.BucketContentHTMXView.as_view(), name="bucket_content_htmx"),
     path("htmx/create-bucket/", views.CreateBucketHTMXView.as_view(), name="create_bucket_htmx"),
     path("htmx/delete-bucket/<str:bucket_name>/", views.delete_bucket_htmx, name="delete_bucket_htmx"),
+    path("htmx/rename-bucket/<str:bucket_name>/", views.RenameBucketHTMXView.as_view(), name="rename_bucket_htmx"),
 
     # OCFL conversion operations
     path("ocfl/modal/<str:bucket_name>/<path:folder_path>/", views.ocfl_conversion_modal, name="ocfl_conversion_modal"),
