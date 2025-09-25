@@ -1,0 +1,35 @@
+<div id="rename-object-modal-wrapper"{% if oob %} hx-swap-oob="outerHTML"{% endif %}>
+    <input type="checkbox" id="rename-object-modal" class="modal-toggle" {% if modal_open %}checked{% endif %} />
+    <div class="modal" role="dialog">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg mb-2">Rename {{ object_type|title }}</h3>
+            <p class="text-sm text-base-content/70 mb-1">Current name: <span class="font-semibold">{{ current_name }}</span></p>
+            <p class="text-xs text-base-content/50 mb-4">Bucket: <span class="font-mono">{{ bucket_name }}</span></p>
+            <form hx-post="{{ form_action }}"
+                  hx-target="#bucket-content"
+                  hx-swap="innerHTML"
+                  hx-indicator="#indicator"
+                  hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+                {% csrf_token %}
+                <input type="hidden" name="objectPath" value="{{ object_path }}" />
+                {% if error %}
+                    <div class="alert alert-error mb-3">
+                        <span>{{ error }}</span>
+                    </div>
+                {% endif %}
+                <div class="form-control mb-4">
+                    <label class="label"><span class="label-text">New Name</span></label>
+                    <input type="text"
+                           name="newName"
+                           value="{{ new_name|default:current_name }}"
+                           class="input input-bordered"
+                           required>
+                </div>
+                <div class="modal-action">
+                    <label for="rename-object-modal" class="btn">Cancel</label>
+                    <button type="submit" class="btn btn-primary">Rename</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

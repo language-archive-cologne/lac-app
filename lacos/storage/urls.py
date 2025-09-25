@@ -33,6 +33,8 @@ urlpatterns = [
     path("file-content/<str:bucket_type>/<path:file_path>/", views.file_content, name="file_content"),
     path("delete/<str:bucket_type>/<str:object_type>/<path:object_path>/", views.delete_object, name="delete_object"),
     path("htmx/rename-object/<str:bucket_name>/<str:object_type>/<path:object_path>/", views.RenameObjectHTMXView.as_view(), name="rename_object_htmx"),
+    path("htmx/rename-bucket-modal/<str:bucket_name>/", views.RenameBucketModalHTMXView.as_view(), name="rename_bucket_modal_htmx"),
+    path("htmx/rename-object-modal/<str:bucket_name>/<str:object_type>/<path:object_path>/", views.RenameObjectModalHTMXView.as_view(), name="rename_object_modal_htmx"),
     path("debug/presigned-url/", direct_upload_views.debug_presigned_url, name="debug_presigned_url"),
     path("upload/debug-error/", direct_upload_views.debug_upload_error, name="debug_upload_error"),
 

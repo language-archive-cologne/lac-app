@@ -141,6 +141,10 @@
     </div>
 </div>
 
+{% include "dashboard/partials/rename_bucket_modal.html" with modal_open=False oob=False form_action="" current_name="" new_name="" error=None csrf_token=csrf_token %}
+
+{% include "dashboard/partials/rename_object_modal.html" with modal_open=False oob=False form_action="" current_name="" new_name="" object_type="item" object_path="" bucket_name="" error=None csrf_token=csrf_token %}
+
 <!-- Upload Modal -->
 <input type="checkbox" id="upload-modal" class="modal-toggle" />
 <div class="modal" role="dialog">

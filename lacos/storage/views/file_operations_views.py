@@ -2,9 +2,12 @@ import logging
 import json
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse, HttpResponse
+from django.http import JsonResponse, HttpResponse, QueryDict
 from django.utils.decorators import method_decorator
 from django.views import View
+from django.template.loader import render_to_string
+from django.middleware.csrf import get_token
+from django.urls import reverse
 
 from lacos.storage.services.bucket_service import BucketService
 from lacos.common.mixins.htmx_template_helpers import HtmxTemplateHelperMixin
@@ -62,12 +65,58 @@ class RenameObjectHTMXView(HtmxTemplateHelperMixin, View):
     def post(self, request, bucket_name, object_type, object_path):
         bucket_service = BucketService()
 
-        new_name = (request.POST.get('prompt') or request.POST.get('newName') or '').strip()
+        new_name = (request.POST.get('newName') or request.POST.get('prompt') or '').strip()
+        if not new_name and request.body:
+            try:
+                raw_body = request.body.decode(request.encoding or 'utf-8')
+                if request.content_type == 'application/json':
+                    payload = json.loads(raw_body)
+                    new_name = (payload.get('newName') or payload.get('prompt') or '').strip()
+                elif request.content_type in ('application/x-www-form-urlencoded', 'multipart/form-data'):
+                    form_data = QueryDict(raw_body)
+                    new_name = (form_data.get('newName') or form_data.get('prompt') or '').strip()
+            except (ValueError, TypeError):
+                new_name = ''
+
+        current_name = object_path.rstrip('/').split('/')[-1]
+
         if not new_name:
-            return HttpResponse("A new name is required", status=400)
+            error_html = render_to_string(
+                'dashboard/partials/rename_object_modal.html',
+                {
+                    'modal_open': True,
+                    'form_action': reverse('storage:rename_object_htmx', args=[bucket_name, object_type, object_path]),
+                    'current_name': current_name,
+                    'new_name': '',
+                    'object_type': object_type,
+                    'object_path': object_path,
+                    'bucket_name': bucket_name,
+                    'error': 'A new name is required',
+                    'oob': False,
+                    'csrf_token': get_token(request),
+                },
+                request=request,
+            )
+            return HttpResponse(error_html, status=400)
 
         if object_type not in {'file', 'folder'}:
-            return HttpResponse("Invalid object type", status=400)
+            error_html = render_to_string(
+                'dashboard/partials/rename_object_modal.html',
+                {
+                    'modal_open': True,
+                    'form_action': reverse('storage:rename_object_htmx', args=[bucket_name, object_type, object_path]),
+                    'current_name': current_name,
+                    'new_name': new_name,
+                    'object_type': object_type,
+                    'object_path': object_path,
+                    'bucket_name': bucket_name,
+                    'error': 'Invalid object type',
+                    'oob': False,
+                    'csrf_token': get_token(request),
+                },
+                request=request,
+            )
+            return HttpResponse(error_html, status=400)
 
         if object_type == 'folder':
             result = bucket_service.rename_folder(bucket_name, object_path, new_name)
@@ -75,20 +124,45 @@ class RenameObjectHTMXView(HtmxTemplateHelperMixin, View):
             result = bucket_service.rename_file(bucket_name, object_path, new_name)
 
         if not result.get('success'):
-            return HttpResponse(result.get('error', 'Rename failed'), status=400)
+            error_html = render_to_string(
+                'dashboard/partials/rename_object_modal.html',
+                {
+                    'modal_open': True,
+                    'form_action': reverse('storage:rename_object_htmx', args=[bucket_name, object_type, object_path]),
+                    'current_name': current_name,
+                    'new_name': new_name,
+                    'object_type': object_type,
+                    'object_path': object_path,
+                    'bucket_name': bucket_name,
+                    'error': result.get('error', 'Rename failed'),
+                    'oob': False,
+                    'csrf_token': get_token(request),
+                },
+                request=request,
+            )
+            return HttpResponse(error_html, status=400)
+
+        updated_path = result.get('folder_path') or result.get('file_path') or object_path
 
         content_html = self.render_bucket_content_template(request, bucket_name)
+        modal_html = render_to_string(
+            'dashboard/partials/rename_object_modal.html',
+            {
+                'modal_open': False,
+                'form_action': reverse('storage:rename_object_htmx', args=[bucket_name, object_type, updated_path]),
+                'current_name': new_name,
+                'new_name': '',
+                'object_type': object_type,
+                'object_path': updated_path,
+                'bucket_name': bucket_name,
+                'error': None,
+                'oob': True,
+                'csrf_token': get_token(request),
+            },
+            request=request,
+        )
 
-        response = HttpResponse(content_html)
-        response['HX-Trigger'] = json.dumps({
-            'objectRenamed': {
-                'bucket': bucket_name,
-                'objectType': object_type,
-                'oldPath': object_path,
-                'newName': new_name,
-            }
-        })
-        return response
+        return HttpResponse(content_html + modal_html)
 
 
 @login_required

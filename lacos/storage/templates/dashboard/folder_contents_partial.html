@@ -29,21 +29,6 @@ Template for loading folder contents lazily
                     </span>
                     
                     <div class="ml-auto flex items-center space-x-2">
-                        {% if bucket_type == 'ingest' %}
-                            <form hx-post="{% url 'storage:move_to_production' folder_path=item.path %}" 
-                                  hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-                                  hx-confirm="Are you sure you want to move this folder to production? This will be a direct copy without any OCFL transformation."
-                                  hx-target="#production-structure"
-                                  hx-swap="innerHTML"
-                                  hx-indicator="#loading-indicator"
-                                  class="inline">
-                                <button type="submit" class="text-blue-500 hover:text-blue-700" title="Move to Production (Direct Copy)">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path>
-                                    </svg>
-                                </button>
-                            </form>
-                        {% endif %}
                         
                         {% if item.is_blam_object %}
                             <!-- Delete button for BLAM objects (Collection or Bundle) -->

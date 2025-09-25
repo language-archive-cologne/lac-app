@@ -1,0 +1,36 @@
+<div id="rename-bucket-modal-wrapper"{% if oob %} hx-swap-oob="outerHTML"{% endif %}>
+    <input type="checkbox" id="rename-bucket-modal" class="modal-toggle" {% if modal_open %}checked{% endif %} />
+    <div class="modal" role="dialog">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg mb-4">Rename Bucket</h3>
+            <form hx-post="{{ form_action }}"
+                  hx-target="#bucket-content"
+                  hx-swap="innerHTML"
+                  hx-indicator="#indicator"
+                  hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+                {% csrf_token %}
+                <input type="hidden" name="currentName" value="{{ current_name }}" />
+                <p class="mb-2 text-sm text-base-content/70">Current name: <span class="font-semibold">{{ current_name }}</span></p>
+                {% if error %}
+                    <div class="alert alert-error mb-3">
+                        <span>{{ error }}</span>
+                    </div>
+                {% endif %}
+                <div class="form-control mb-4">
+                    <label class="label"><span class="label-text">New Bucket Name</span></label>
+                    <input type="text"
+                           name="newName"
+                           value="{{ new_name|default:current_name }}"
+                           class="input input-bordered"
+                           pattern="[a-z0-9-_]+"
+                           title="Only lowercase letters, numbers, hyphens, and underscores allowed"
+                           required>
+                </div>
+                <div class="modal-action">
+                    <label for="rename-bucket-modal" class="btn">Cancel</label>
+                    <button type="submit" class="btn btn-primary">Rename</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

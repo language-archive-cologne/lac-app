@@ -5,6 +5,8 @@ from lacos.storage.views.dashboard_views import (
     archivist_dashboard,
     load_folder_contents,
     RenameBucketHTMXView,
+    RenameBucketModalHTMXView,
+    RenameObjectModalHTMXView,
 )
 
 # Note: fixtures are now imported from conftest.py automatically
@@ -198,10 +200,11 @@ def test_load_folder_contents_empty_folder(mock_render, mock_bucket_service, pre
     assert len(context['folder_contents']) == 0
 
 
+@patch('lacos.storage.views.dashboard_views.get_token', return_value='csrf-token')
 @patch('lacos.storage.views.dashboard_views.BucketService')
 @patch.object(RenameBucketHTMXView, 'render_bucket_content_template', return_value='bucket-html')
 @patch.object(RenameBucketHTMXView, 'build_bucket_tabs_oob_response', return_value='combined-html')
-def test_rename_bucket_htmx_success(mock_build, mock_render_content, MockBucketService, prepared_request):
+def test_rename_bucket_htmx_success(mock_build, mock_render_content, MockBucketService, mock_get_token, prepared_request):
     mock_service = MockBucketService.return_value
     mock_service.rename_bucket.return_value = {
         'success': True,
@@ -209,28 +212,55 @@ def test_rename_bucket_htmx_success(mock_build, mock_render_content, MockBucketS
         'bucket_name': 'new-bucket'
     }
 
-    request = prepared_request('/storage/htmx/rename-bucket/old-bucket/', method='post', htmx=True, data={'prompt': 'new-bucket'})
+    request = prepared_request('/storage/htmx/rename-bucket/old-bucket/', method='post', htmx=True, data={'newName': 'new-bucket'})
 
     response = RenameBucketHTMXView.as_view()(request, bucket_name='old-bucket')
 
     mock_service.rename_bucket.assert_called_once_with('old-bucket', 'new-bucket')
     mock_render_content.assert_called_once()
     assert response.status_code == 200
-    assert response.content.decode() == 'combined-html'
+    content = response.content.decode()
+    assert content.startswith('combined-html')
+    assert 'rename-bucket-modal-wrapper' in content
+    assert 'hx-swap-oob="outerHTML"' in content
 
 
+@patch('lacos.storage.views.dashboard_views.get_token', return_value='csrf-token')
 @patch('lacos.storage.views.dashboard_views.BucketService')
 @patch.object(RenameBucketHTMXView, 'render_bucket_content_template', return_value='bucket-html')
-def test_rename_bucket_htmx_failure(mock_render_content, MockBucketService, prepared_request):
+def test_rename_bucket_htmx_failure(mock_render_content, MockBucketService, mock_get_token, prepared_request):
     mock_service = MockBucketService.return_value
     mock_service.rename_bucket.return_value = {'success': False, 'error': 'Conflict'}
 
-    request = prepared_request('/storage/htmx/rename-bucket/old/', method='post', htmx=True, data={'prompt': 'exists'})
+    request = prepared_request('/storage/htmx/rename-bucket/old/', method='post', htmx=True, data={'newName': 'exists'})
 
     response = RenameBucketHTMXView.as_view()(request, bucket_name='old')
 
     assert response.status_code == 400
-    assert 'Conflict' in response.content.decode()
+    mock_render_content.assert_not_called()
+    content = response.content.decode()
+    assert 'Conflict' in content
+    assert 'rename-bucket-modal-wrapper' in content
+
+
+@patch('lacos.storage.views.dashboard_views.get_token', return_value='csrf-token')
+def test_rename_bucket_modal_htmx(mock_get_token, prepared_request):
+    request = prepared_request('/storage/htmx/rename-bucket-modal/demo/', method='get', htmx=True)
+    response = RenameBucketModalHTMXView.as_view()(request, bucket_name='demo')
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert 'rename-bucket-modal-wrapper' in content
+    assert 'demo' in content
+
+
+@patch('lacos.storage.views.dashboard_views.get_token', return_value='csrf-token')
+def test_rename_object_modal_htmx(mock_get_token, prepared_request):
+    request = prepared_request('/storage/htmx/rename-object-modal/bucket/folder/path/to/item/', method='get', htmx=True)
+    response = RenameObjectModalHTMXView.as_view()(request, bucket_name='bucket', object_type='folder', object_path='path/to/item/')
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert 'rename-object-modal-wrapper' in content
+    assert 'item' in content
 
 @patch('lacos.storage.views.dashboard_views.BucketService')
 @patch('lacos.storage.views.dashboard_views.render')

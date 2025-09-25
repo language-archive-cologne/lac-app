@@ -4,10 +4,13 @@ from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from lacos.storage.services.bucket_service import BucketService
 from lacos.common.mixins import HtmxTemplateHelperMixin
-from django.http import HttpResponse, JsonResponse, RawPostDataException
+from django.http import HttpResponse, JsonResponse, QueryDict
 from django.views.decorators.http import require_http_methods
 from django.utils.decorators import method_decorator
 from django.views import View
+from django.template.loader import render_to_string
+from django.middleware.csrf import get_token
+from django.urls import reverse
 import json
 
 logger = logging.getLogger(__name__)
@@ -262,22 +265,67 @@ def delete_bucket_htmx(request, bucket_name):
 
 
 @method_decorator(login_required, name='dispatch')
+class RenameBucketModalHTMXView(HtmxTemplateHelperMixin, View):
+    """Serve the bucket rename modal populated with current values."""
+
+    def get(self, request, bucket_name):
+        html = render_to_string(
+            'dashboard/partials/rename_bucket_modal.html',
+            {
+                'modal_open': True,
+                'form_action': reverse('storage:rename_bucket_htmx', args=[bucket_name]),
+                'current_name': bucket_name,
+                'new_name': bucket_name,
+                'error': None,
+                'oob': False,
+                'csrf_token': get_token(request),
+            },
+            request=request,
+        )
+        return HttpResponse(html)
+
+
+@method_decorator(login_required, name='dispatch')
+class RenameObjectModalHTMXView(HtmxTemplateHelperMixin, View):
+    """Serve the folder/file rename modal with the selected item."""
+
+    def get(self, request, bucket_name, object_type, object_path):
+        object_name = object_path.rstrip('/').split('/')[-1]
+        html = render_to_string(
+            'dashboard/partials/rename_object_modal.html',
+            {
+                'modal_open': True,
+                'form_action': reverse('storage:rename_object_htmx', args=[bucket_name, object_type, object_path]),
+                'current_name': object_name,
+                'new_name': object_name,
+                'object_type': object_type,
+                'object_path': object_path,
+                'bucket_name': bucket_name,
+                'error': None,
+                'oob': False,
+                'csrf_token': get_token(request),
+            },
+            request=request,
+        )
+        return HttpResponse(html)
+
+
+@method_decorator(login_required, name='dispatch')
 class RenameBucketHTMXView(HtmxTemplateHelperMixin, View):
     """Handle HTMX bucket rename requests."""
 
     def post(self, request, bucket_name):
         try:
-            new_name = ''
-            try:
-                if request.body:
+            new_name = (request.POST.get('newName') or request.POST.get('prompt') or '').strip()
+            if not new_name and request.body:
+                try:
                     raw_body = request.body.decode(request.encoding or 'utf-8')
                     if request.content_type == 'application/json':
                         payload = json.loads(raw_body)
-                        new_name = (payload.get('prompt') or payload.get('newName') or '').strip()
+                        new_name = (payload.get('newName') or payload.get('prompt') or '').strip()
                     elif request.content_type in ('application/x-www-form-urlencoded', 'multipart/form-data'):
-                        from django.http import QueryDict
                         form_data = QueryDict(raw_body)
-                        new_name = (form_data.get('prompt') or form_data.get('newName') or '').strip()
+                        new_name = (form_data.get('newName') or form_data.get('prompt') or '').strip()
                         if not new_name and raw_body.startswith('{'):
                             try:
                                 parsed = json.loads(raw_body)
@@ -286,20 +334,44 @@ class RenameBucketHTMXView(HtmxTemplateHelperMixin, View):
                                     parsed = ast.literal_eval(raw_body)
                                 except (ValueError, SyntaxError):
                                     parsed = {}
-                            new_name = (parsed.get('prompt') or parsed.get('newName') or '').strip()
-            except (ValueError, TypeError, RawPostDataException):
-                new_name = ''
+                            new_name = (parsed.get('newName') or parsed.get('prompt') or '').strip()
+                except (ValueError, TypeError):
+                    new_name = ''
 
             if not new_name:
-                new_name = (request.POST.get('prompt') or request.POST.get('newName') or '').strip()
-            if not new_name:
-                return HttpResponse("Bucket name is required", status=400)
+                error_html = render_to_string(
+                    'dashboard/partials/rename_bucket_modal.html',
+                    {
+                        'modal_open': True,
+                        'form_action': reverse('storage:rename_bucket_htmx', args=[bucket_name]),
+                        'current_name': bucket_name,
+                        'new_name': '',
+                        'error': 'Bucket name is required',
+                        'oob': False,
+                        'csrf_token': get_token(request),
+                    },
+                    request=request,
+                )
+                return HttpResponse(error_html, status=400)
 
             bucket_service = BucketService()
             result = bucket_service.rename_bucket(bucket_name, new_name)
 
             if not result.get('success'):
-                return HttpResponse(result.get('error', 'Rename failed'), status=400)
+                error_html = render_to_string(
+                    'dashboard/partials/rename_bucket_modal.html',
+                    {
+                        'modal_open': True,
+                        'form_action': reverse('storage:rename_bucket_htmx', args=[bucket_name]),
+                        'current_name': bucket_name,
+                        'new_name': new_name,
+                        'error': result.get('error', 'Rename failed'),
+                        'oob': False,
+                        'csrf_token': get_token(request),
+                    },
+                    request=request,
+                )
+                return HttpResponse(error_html, status=400)
 
             content_html = self.render_bucket_content_template(request, new_name)
 
@@ -310,14 +382,21 @@ class RenameBucketHTMXView(HtmxTemplateHelperMixin, View):
                 success_message=result.get('message')
             )
 
-            response = HttpResponse(response_html)
-            response['HX-Trigger'] = json.dumps({
-                'bucketRenamed': {
-                    'oldName': bucket_name,
-                    'newName': new_name,
-                }
-            })
-            return response
+            modal_html = render_to_string(
+                'dashboard/partials/rename_bucket_modal.html',
+                {
+                    'modal_open': False,
+                    'form_action': reverse('storage:rename_bucket_htmx', args=[new_name]),
+                    'current_name': new_name,
+                    'new_name': '',
+                    'error': None,
+                    'oob': True,
+                    'csrf_token': get_token(request),
+                },
+                request=request,
+            )
+
+            return HttpResponse(response_html + modal_html)
 
         except Exception as e:
             logger.exception(f"Error renaming bucket {bucket_name}: {str(e)}")

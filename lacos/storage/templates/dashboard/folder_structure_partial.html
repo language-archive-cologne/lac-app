@@ -32,13 +32,12 @@ Template for displaying root level items and folders with lazy loading
                         <div class="ml-auto flex items-center space-x-2">
                             <!-- Rename folder button -->
                             <button class="text-slate-500 hover:text-slate-700"
+                                    type="button"
                                     title="Rename Folder"
-                                    hx-post="{% url 'storage:rename_object_htmx' bucket_type 'folder' item.path %}"
-                                    hx-target="#bucket-content"
-                                    hx-swap="innerHTML"
-                                    hx-indicator="#indicator"
-                                    hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-                                    hx-prompt="Enter a new folder name">
+                                    hx-get="{% url 'storage:rename_object_modal_htmx' bucket_type 'folder' item.path %}"
+                                    hx-target="#rename-object-modal-wrapper"
+                                    hx-swap="outerHTML"
+                                    hx-indicator="#indicator">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5h2m-1-1v2m6 11l2 2m0 0l-3.586-3.586a2 2 0 01-.414-.586L15 15l1.828-1.828a2 2 0 01.586-.414L21 12l-2 2m0 0l-2 2" />
                                 </svg>
@@ -114,14 +113,13 @@ Template for displaying root level items and folders with lazy loading
                         </span>
 
                         <div class="flex items-center space-x-1 mr-3">
-                            <button hx-post="{% url 'storage:rename_object_htmx' bucket_type 'file' item.path %}"
-                                    hx-target="#bucket-content"
-                                    hx-swap="innerHTML"
-                                    hx-indicator="#indicator"
-                                    hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-                                    hx-prompt="Enter a new file name"
-                                    class="text-slate-500 hover:text-slate-700"
-                                    title="Rename File">
+                            <button class="text-slate-500 hover:text-slate-700"
+                                    type="button"
+                                    title="Rename File"
+                                    hx-get="{% url 'storage:rename_object_modal_htmx' bucket_type 'file' item.path %}"
+                                    hx-target="#rename-object-modal-wrapper"
+                                    hx-swap="outerHTML"
+                                    hx-indicator="#indicator">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5h2m-1-1v2m8 9l2 2m0 0l-3.586-3.586a2 2 0 01-.414-.586L15 11l1.828-1.828a2 2 0 01.586-.414L21 9l-2 2m0 0l-2 2" />
                                 </svg>

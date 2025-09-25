@@ -69,14 +69,15 @@ def mock_bucket_service():
     return mock_service
 
 
+@patch('lacos.storage.views.file_operations_views.get_token', return_value='csrf-token')
 @patch('lacos.storage.views.file_operations_views.BucketService')
 @patch.object(RenameObjectHTMXView, 'render_bucket_content_template', return_value='rendered-html')
-def test_rename_object_folder_success(mock_render_content, MockBucketService, prepared_request):
+def test_rename_object_folder_success(mock_render_content, MockBucketService, mock_get_token, prepared_request):
     request = prepared_request(
         '/storage/rename-object/bucket/folder/old/path/',
         method='post',
         htmx=True,
-        data={'prompt': 'Renamed'}
+        data={'newName': 'Renamed'}
     )
 
     mock_service = MockBucketService.return_value
@@ -86,17 +87,20 @@ def test_rename_object_folder_success(mock_render_content, MockBucketService, pr
 
     mock_service.rename_folder.assert_called_once_with('bucket', 'old/path/', 'Renamed')
     assert response.status_code == 200
-    assert response.content.decode() == 'rendered-html'
+    content = response.content.decode()
+    assert content.startswith('rendered-html')
+    assert 'rename-object-modal-wrapper' in content
 
 
+@patch('lacos.storage.views.file_operations_views.get_token', return_value='csrf-token')
 @patch('lacos.storage.views.file_operations_views.BucketService')
 @patch.object(RenameObjectHTMXView, 'render_bucket_content_template', return_value='rendered-html')
-def test_rename_object_file_failure(mock_render_content, MockBucketService, prepared_request):
+def test_rename_object_file_failure(mock_render_content, MockBucketService, mock_get_token, prepared_request):
     request = prepared_request(
         '/storage/rename-object/bucket/file/folder/file.txt',
         method='post',
         htmx=True,
-        data={'prompt': 'file.txt'}
+        data={'newName': 'file.txt'}
     )
 
     mock_service = MockBucketService.return_value
@@ -106,7 +110,9 @@ def test_rename_object_file_failure(mock_render_content, MockBucketService, prep
 
     mock_service.rename_file.assert_called_once_with('bucket', 'folder/file.txt', 'file.txt')
     assert response.status_code == 400
-    assert 'exists' in response.content.decode()
+    content = response.content.decode()
+    assert 'exists' in content
+    assert 'rename-object-modal-wrapper' in content
 
 
     
