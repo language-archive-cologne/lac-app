@@ -55,8 +55,22 @@ LOGGING = {
 
 # S3 URL overrides
 # ------------------------------------------------------------------------------
-browser_endpoint = env("AWS_S3_BROWSER_ENDPOINT_URL", default=None)
-if browser_endpoint:
-    browser_endpoint = browser_endpoint.rstrip("/")
-    MEDIA_URL = f"{browser_endpoint}/media/"
-    STATIC_URL = f"{browser_endpoint}/static/"
+use_browser_static = env.bool("DJANGO_USE_BROWSER_STATIC", default=False)
+if use_browser_static:
+    browser_endpoint = env("AWS_S3_BROWSER_ENDPOINT_URL", default=None)
+    if browser_endpoint:
+        browser_endpoint = browser_endpoint.rstrip("/")
+        MEDIA_URL = f"{browser_endpoint}/media/"
+        STATIC_URL = f"{browser_endpoint}/static/"
+else:
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+            "OPTIONS": {"location": str(APPS_DIR / "media")},
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
+    MEDIA_URL = "/media/"
+    STATIC_URL = "/static/"

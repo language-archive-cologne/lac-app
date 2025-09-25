@@ -13,6 +13,8 @@ import os
 import sys
 from pathlib import Path
 
+from django.conf import settings
+from django.contrib.staticfiles.handlers import ASGIStaticFilesHandler
 from django.core.asgi import get_asgi_application
 
 # This allows easy placement of apps within the interior
@@ -25,9 +27,10 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.local")
 
 # This application object is used by any ASGI server configured to use this file.
 django_application = get_asgi_application()
-# Apply ASGI middleware here.
-# from helloworld.asgi import HelloWorldApplication
-# application = HelloWorldApplication(application)
+
+if settings.DEBUG:
+    # Serve static assets when running the dev ASGI server
+    django_application = ASGIStaticFilesHandler(django_application)
 
 # Import websocket application here, so apps from django_application are loaded first
 from config.websocket import websocket_application
