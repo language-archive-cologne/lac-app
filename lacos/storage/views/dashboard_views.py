@@ -379,7 +379,7 @@ class RenameBucketHTMXView(HtmxTemplateHelperMixin, View):
                 main_html=content_html,
                 request=request,
                 active_bucket=new_name,
-                success_message=result.get('message')
+                success_message=None
             )
 
             modal_html = render_to_string(
