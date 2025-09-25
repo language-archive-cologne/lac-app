@@ -2,7 +2,7 @@ import pytest
 import tempfile
 import os
 import shutil
-from unittest.mock import Mock, patch, call
+from unittest.mock import Mock, patch, call, mock_open, MagicMock
 from django.test import TestCase
 
 from lacos.storage.services.ocfl_service import OCFLService
@@ -214,13 +214,13 @@ class TestOCFLServiceEnhanced(TestCase):
 
     @patch('lacos.storage.services.ocfl_service.tempfile.TemporaryDirectory')
     @patch('lacos.storage.services.ocfl_service.uuid.uuid4')
-    def test_convert_in_place_success(self, mock_uuid, mock_temp_dir):
+    def test_convert_bundle_to_ocfl_success(self, mock_uuid, mock_temp_dir):
         """Test successful in-place conversion"""
         # Mock UUID for temp folder naming
         mock_uuid.return_value.hex = "abcd1234"
 
         # Mock temporary directory context manager
-        temp_dir_instance = Mock()
+        temp_dir_instance = MagicMock()
         temp_dir_instance.__enter__.return_value = "/tmp/test_workspace"
         temp_dir_instance.__exit__.return_value = None
         mock_temp_dir.return_value = temp_dir_instance
@@ -244,7 +244,7 @@ class TestOCFLServiceEnhanced(TestCase):
             "preserve_items": ["metadata.xml"]
         }
 
-        # Mock the methods used in convert_in_place
+        # Mock the methods used in convert_bundle_to_ocfl
         self.ocfl_service.analyze_folder_structure = Mock(return_value=analysis_result)
         self.ocfl_service.create_conversion_plan = Mock(return_value=conversion_plan)
         self.ocfl_service._perform_atomic_conversion = Mock(return_value={
@@ -255,13 +255,13 @@ class TestOCFLServiceEnhanced(TestCase):
             "preserved_items": ["metadata.xml"]
         })
 
-        result = self.ocfl_service.convert_in_place("test-bucket", "test/folder")
+        result = self.ocfl_service.convert_bundle_to_ocfl("test-bucket", "test/folder")
 
         self.assertTrue(result["success"])
         self.assertEqual(result["conversion_type"], "structured_to_ocfl")
         self.assertEqual(result["files_processed"], 10)
 
-    def test_convert_in_place_already_compliant(self):
+    def test_convert_bundle_to_ocfl_already_compliant(self):
         """Test in-place conversion of already compliant folder"""
         analysis_result = {
             "success": True,
@@ -272,13 +272,13 @@ class TestOCFLServiceEnhanced(TestCase):
 
         self.ocfl_service.analyze_folder_structure = Mock(return_value=analysis_result)
 
-        result = self.ocfl_service.convert_in_place("test-bucket", "test/folder")
+        result = self.ocfl_service.convert_bundle_to_ocfl("test-bucket", "test/folder")
 
         self.assertTrue(result["success"])
-        self.assertEqual(result["message"], "Folder is already OCFL compliant")
+        self.assertEqual(result["message"], "Bundle is already OCFL compliant")
         self.assertFalse(result["needs_conversion"])
 
-    def test_convert_in_place_analysis_failure(self):
+    def test_convert_bundle_to_ocfl_analysis_failure(self):
         """Test in-place conversion when analysis fails"""
         analysis_result = {
             "success": False,
@@ -287,12 +287,12 @@ class TestOCFLServiceEnhanced(TestCase):
 
         self.ocfl_service.analyze_folder_structure = Mock(return_value=analysis_result)
 
-        result = self.ocfl_service.convert_in_place("test-bucket", "test/folder")
+        result = self.ocfl_service.convert_bundle_to_ocfl("test-bucket", "test/folder")
 
         self.assertFalse(result["success"])
         self.assertEqual(result["error"], "Failed to analyze folder")
 
-    def test_convert_in_place_not_feasible(self):
+    def test_convert_bundle_to_ocfl_not_feasible(self):
         """Test in-place conversion when not feasible"""
         analysis_result = {
             "success": True,
@@ -307,7 +307,7 @@ class TestOCFLServiceEnhanced(TestCase):
         self.ocfl_service.analyze_folder_structure = Mock(return_value=analysis_result)
         self.ocfl_service.create_conversion_plan = Mock(return_value=conversion_plan)
 
-        result = self.ocfl_service.convert_in_place("test-bucket", "test/folder")
+        result = self.ocfl_service.convert_bundle_to_ocfl("test-bucket", "test/folder")
 
         self.assertFalse(result["success"])
         self.assertEqual(result["error"], "Conversion not feasible")

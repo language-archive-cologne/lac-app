@@ -82,19 +82,19 @@ class BucketStructureScanner:
         analysis = BucketAnalysis(bucket_name=bucket_name)
 
         try:
-            # Get all top-level folders in bucket
-            folders = self._get_top_level_folders(bucket_name)
-            analysis.total_folders = len(folders)
+            # Get all top-level collections in bucket
+            collections = self._get_top_level_collections(bucket_name)
+            analysis.total_folders = len(collections)
 
-            logger.info(f"Found {len(folders)} top-level folders to analyze")
+            logger.info(f"Found {len(collections)} top-level collections to analyze")
 
             # Initialize structure breakdown
             for structure_type in StructureType:
                 analysis.structure_breakdown[structure_type] = 0
 
-            # Analyze each folder
-            for folder_path in folders:
-                folder_analysis = self.analyze_folder_structure(bucket_name, folder_path)
+            # Analyze each collection
+            for collection_path in collections:
+                folder_analysis = self.analyze_folder_structure(bucket_name, collection_path)
                 analysis.folders.append(folder_analysis)
 
                 # Update counters
@@ -108,7 +108,7 @@ class BucketStructureScanner:
             # Generate overall recommendations
             self._generate_bucket_recommendations(analysis)
 
-            logger.info(f"Completed bucket scan: {analysis.total_folders} folders, {analysis.total_files} files")
+            logger.info(f"Completed bucket scan: {analysis.total_folders} collections, {analysis.total_files} files")
 
         except Exception as e:
             logger.error(f"Error scanning bucket {bucket_name}: {str(e)}")
@@ -271,37 +271,40 @@ class BucketStructureScanner:
 
         return result
 
-    def _get_top_level_folders(self, bucket_name: str) -> List[str]:
-        """Get list of top-level folders in bucket"""
+    def _get_top_level_collections(self, bucket_name: str) -> List[str]:
+        """Get list of top-level collections in bucket"""
         try:
             contents = self.bucket_service.list_bucket_contents(bucket_name, "")
-            folders = []
+            collections = []
 
             for item in contents:
                 if item.get("is_dir", False):
-                    folders.append(item["name"])
+                    collections.append(item["name"])
 
-            return folders
+            return collections
         except Exception as e:
-            logger.error(f"Error getting top-level folders: {str(e)}")
+            logger.error(f"Error getting top-level collections: {str(e)}")
             return []
 
     def _analyze_folder_contents(self, contents: List[Dict], analysis: FolderAnalysis) -> None:
         """Analyze folder contents and populate analysis flags"""
         for item in contents:
+            name = item["name"]
+
+            if name.startswith("0=ocfl_object_"):
+                analysis.has_ocfl_marker = True
+
             if item.get("is_dir", False):
                 # Check for OCFL directories
-                if item["name"].startswith("0=ocfl_object_"):
-                    analysis.has_ocfl_marker = True
-                elif item["name"] == "v1":
+                if name == "v1":
                     analysis.has_version_directory = True
-                elif item["name"] == "content":
+                elif name == "content":
                     analysis.has_content_directory = True
-                elif item["name"] == "Resources":
+                elif name == "Resources":
                     analysis.has_resources_directory = True
             else:
                 # Check for important files
-                filename = item["name"]
+                filename = name
                 analysis.total_files += 1
                 analysis.total_size += item.get("size", 0)
 
@@ -364,7 +367,8 @@ class BucketStructureScanner:
 
     def _generate_bucket_recommendations(self, analysis: BucketAnalysis) -> None:
         """Generate overall bucket conversion recommendations"""
-        total = analysis.total_folders
+        total = analysis.total_folders or len(analysis.folders)
+        analysis.total_folders = total
         if total == 0:
             analysis.recommendations.append("Empty bucket, no conversion needed")
             return
@@ -378,15 +382,15 @@ class BucketStructureScanner:
         full_ocfl_pct = (full_ocfl / total) * 100
         legacy_pct = (legacy / total) * 100
 
-        if full_ocfl_pct > 80:
+        if analysis.blocking_issues:
+            analysis.recommendations.append("Resolve blocking issues before conversion")
+            analysis.conversion_feasibility = "low"
+        elif full_ocfl_pct > 80:
             analysis.recommendations.append("Most folders already OCFL-compliant")
             analysis.conversion_feasibility = "high"
         elif legacy_pct > 60:
             analysis.recommendations.append("Good candidate for batch conversion")
             analysis.conversion_feasibility = "high"
-        elif analysis.blocking_issues:
-            analysis.recommendations.append("Resolve blocking issues before conversion")
-            analysis.conversion_feasibility = "low"
         else:
             analysis.recommendations.append("Mixed structures, recommend phased conversion")
             analysis.conversion_feasibility = "medium"

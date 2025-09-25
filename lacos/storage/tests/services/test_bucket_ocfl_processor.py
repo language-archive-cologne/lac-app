@@ -25,7 +25,7 @@ class TestBucketOCFLProcessor(TestCase):
         self.processor.scanner = Mock(spec=BucketStructureScanner)
         self.processor.fixture_manager = Mock()
 
-    def test_process_entire_bucket_empty(self):
+    def test_process_all_collections_empty(self):
         """Test processing an empty bucket"""
         # Mock empty bucket analysis
         empty_analysis = BucketAnalysis(bucket_name="test-bucket")
@@ -33,13 +33,13 @@ class TestBucketOCFLProcessor(TestCase):
 
         self.processor.scanner.scan_bucket_structures.return_value = empty_analysis
 
-        result = self.processor.process_entire_bucket("test-bucket")
+        result = self.processor.process_all_collections("test-bucket")
 
         self.assertTrue(result["success"])
-        self.assertEqual(result["message"], "No folders found to process")
+        self.assertEqual(result["message"], "No collections found to process")
         self.assertEqual(result["analysis"], empty_analysis)
 
-    def test_process_entire_bucket_not_feasible(self):
+    def test_process_all_collections_not_feasible(self):
         """Test processing when conversion is not feasible"""
         # Mock bucket analysis with blocking issues
         analysis = BucketAnalysis(bucket_name="test-bucket")
@@ -55,13 +55,13 @@ class TestBucketOCFLProcessor(TestCase):
         self.processor.scanner.scan_bucket_structures.return_value = analysis
         self.processor.scanner.validate_conversion_feasibility.return_value = feasibility
 
-        result = self.processor.process_entire_bucket("test-bucket", dry_run=False)
+        result = self.processor.process_all_collections("test-bucket", dry_run=False)
 
         self.assertFalse(result["success"])
         self.assertEqual(result["error"], "Conversion not feasible")
         self.assertEqual(result["feasibility"], feasibility)
 
-    def test_process_entire_bucket_dry_run(self):
+    def test_process_all_collections_dry_run(self):
         """Test dry run processing"""
         # Mock bucket analysis
         analysis = BucketAnalysis(bucket_name="test-bucket")
@@ -74,17 +74,17 @@ class TestBucketOCFLProcessor(TestCase):
         self.processor.scanner.scan_bucket_structures.return_value = analysis
         self.processor.scanner.validate_conversion_feasibility.return_value = feasibility
 
-        result = self.processor.process_entire_bucket("test-bucket", dry_run=True)
+        result = self.processor.process_all_collections("test-bucket", dry_run=True)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["processing_summary"]["total_folders"], 1)
 
         # Verify no actual conversion methods were called
         self.processor.fixture_manager.create_fixture_backup.assert_not_called()
-        self.mock_ocfl_service.convert_in_place.assert_not_called()
+        self.mock_ocfl_service.convert_bundle_to_ocfl.assert_not_called()
 
-    def test_process_entire_bucket_sequential(self):
-        """Test sequential processing of folders"""
+    def test_process_all_collections_sequential(self):
+        """Test sequential processing of collections"""
         # Mock bucket analysis
         analysis = BucketAnalysis(bucket_name="test-bucket")
         folder1 = FolderAnalysis("test/folder1", StructureType.LEGACY_STRUCTURED)
@@ -100,24 +100,24 @@ class TestBucketOCFLProcessor(TestCase):
 
         # Mock successful conversions
         self.processor.fixture_manager.create_fixture_backup.return_value = "backup_123"
-        self.mock_ocfl_service.convert_in_place.return_value = {
+        self.mock_ocfl_service.convert_bundle_to_ocfl.return_value = {
             "success": True,
             "files_processed": 10
         }
 
-        result = self.processor.process_entire_bucket("test-bucket", parallel=False)
+        result = self.processor.process_all_collections("test-bucket", parallel=False)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["processing_summary"]["total_folders"], 2)
         self.assertEqual(result["processing_summary"]["completed"], 2)
         self.assertEqual(result["processing_summary"]["failed"], 0)
 
-        # Verify conversion was called for both folders
-        self.assertEqual(self.mock_ocfl_service.convert_in_place.call_count, 2)
+        # Verify conversion was called for both collections
+        self.assertEqual(self.mock_ocfl_service.convert_bundle_to_ocfl.call_count, 2)
 
     @patch('lacos.storage.services.bucket_ocfl_processor.ThreadPoolExecutor')
-    def test_process_entire_bucket_parallel(self, mock_executor):
-        """Test parallel processing of folders"""
+    def test_process_all_collections_parallel(self, mock_executor):
+        """Test parallel processing of collections"""
         # Mock bucket analysis
         analysis = BucketAnalysis(bucket_name="test-bucket")
         folder1 = FolderAnalysis("test/folder1", StructureType.LEGACY_STRUCTURED)
@@ -158,7 +158,7 @@ class TestBucketOCFLProcessor(TestCase):
         with patch('lacos.storage.services.bucket_ocfl_processor.as_completed') as mock_as_completed:
             mock_as_completed.return_value = [future1, future2]
 
-            result = self.processor.process_entire_bucket("test-bucket", parallel=True)
+            result = self.processor.process_all_collections("test-bucket", parallel=True)
 
             self.assertTrue(result["success"])
             self.assertEqual(result["processing_summary"]["total_folders"], 2)
@@ -189,7 +189,7 @@ class TestBucketOCFLProcessor(TestCase):
 
         # Mock successful backup and conversion
         self.processor.fixture_manager.create_fixture_backup.return_value = "backup_123"
-        self.mock_ocfl_service.convert_in_place.return_value = {
+        self.mock_ocfl_service.convert_bundle_to_ocfl.return_value = {
             "success": True,
             "files_processed": 15,
             "message": "Conversion successful"
@@ -208,7 +208,7 @@ class TestBucketOCFLProcessor(TestCase):
 
         # Mock backup creation but failed conversion
         self.processor.fixture_manager.create_fixture_backup.return_value = "backup_123"
-        self.mock_ocfl_service.convert_in_place.return_value = {
+        self.mock_ocfl_service.convert_bundle_to_ocfl.return_value = {
             "success": False,
             "error": "Conversion failed due to invalid structure"
         }
@@ -225,7 +225,7 @@ class TestBucketOCFLProcessor(TestCase):
 
         # Mock backup failure but successful conversion
         self.processor.fixture_manager.create_fixture_backup.side_effect = Exception("Backup failed")
-        self.mock_ocfl_service.convert_in_place.return_value = {
+        self.mock_ocfl_service.convert_bundle_to_ocfl.return_value = {
             "success": True,
             "files_processed": 10
         }
@@ -241,7 +241,7 @@ class TestBucketOCFLProcessor(TestCase):
         folder = FolderAnalysis("test/folder", StructureType.LEGACY_STRUCTURED)
 
         # Mock exception during processing
-        self.mock_ocfl_service.convert_in_place.side_effect = Exception("Unexpected error")
+        self.mock_ocfl_service.convert_bundle_to_ocfl.side_effect = Exception("Unexpected error")
 
         result = self.processor._process_single_folder("test-bucket", folder, False)
 
@@ -351,6 +351,8 @@ class TestBucketOCFLProcessor(TestCase):
             FolderProcessingResult("folder2", ProcessingStatus.FAILED),
             FolderProcessingResult("folder3", ProcessingStatus.SKIPPED)
         ]
+
+        processing_results[0].backup_id = "backup_1"
 
         processing_results[0].start_time = time.time() - 10
         processing_results[0].end_time = time.time()
@@ -466,9 +468,9 @@ class TestBucketOCFLProcessor(TestCase):
 
         self.processor.scanner.scan_bucket_structures.return_value = analysis
         self.processor.scanner.validate_conversion_feasibility.return_value = feasibility
-        self.mock_ocfl_service.convert_in_place.return_value = {"success": True}
+        self.mock_ocfl_service.convert_bundle_to_ocfl.return_value = {"success": True}
 
-        result = self.processor.process_entire_bucket("test-bucket")
+        result = self.processor.process_all_collections("test-bucket")
 
         self.assertTrue(result["success"])
         # Progress callback should have been called at least once

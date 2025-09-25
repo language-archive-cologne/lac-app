@@ -258,7 +258,7 @@ class Command(BaseCommand):
         elif compliance_rate >= 50:
             recommendations.append("Moderate OCFL compliance")
             recommendations.append("Consider batch conversion of non-compliant folders")
-            recommendations.append("Use 'process_bucket_ocfl' command for bulk conversion")
+            recommendations.append("Use 'process_collections_ocfl' command for bulk conversion")
         else:
             recommendations.append("Low OCFL compliance rate")
             recommendations.append("Comprehensive conversion strategy needed")

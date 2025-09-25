@@ -360,22 +360,22 @@ class OCFLService:
                 "error": str(e)
             }
 
-    def convert_in_place(self, bucket_name: str, folder_path: str) -> Dict[str, Any]:
+    def convert_bundle_to_ocfl(self, bucket_name: str, bundle_path: str) -> Dict[str, Any]:
         """
-        Convert folder to OCFL within the same bucket using atomic operations.
+        Convert a bundle to OCFL within the same bucket using atomic operations.
 
         Args:
-            bucket_name (str): Name of bucket containing folder
-            folder_path (str): Path to folder to convert
+            bucket_name (str): Name of bucket containing the bundle
+            bundle_path (str): Path to the bundle to convert
 
         Returns:
             Dict[str, Any]: Result of the conversion
         """
-        logger.info(f"Starting in-place OCFL conversion for {folder_path} in {bucket_name}")
+        logger.info(f"Starting in-place OCFL conversion for bundle {bundle_path} in {bucket_name}")
 
         try:
             # First, analyze the existing structure
-            analysis_result = self.analyze_folder_structure(bucket_name, folder_path)
+            analysis_result = self.analyze_folder_structure(bucket_name, bundle_path)
 
             if not analysis_result["success"]:
                 return analysis_result
@@ -384,7 +384,7 @@ class OCFLService:
             if analysis_result["structure_analysis"]["is_ocfl_compliant"]:
                 return {
                     "success": True,
-                    "message": "Folder is already OCFL compliant",
+                    "message": "Bundle is already OCFL compliant",
                     "needs_conversion": False
                 }
 
@@ -399,7 +399,7 @@ class OCFLService:
                 }
 
             # Perform atomic conversion
-            return self._perform_atomic_conversion(bucket_name, folder_path, conversion_plan)
+            return self._perform_atomic_conversion(bucket_name, bundle_path, conversion_plan)
 
         except Exception as e:
             logger.error(f"Error in in-place conversion: {str(e)}")
@@ -448,19 +448,22 @@ class OCFLService:
 
             # Analyze each item
             for item in contents:
+                name = item["name"]
+
+                if name.startswith("0=ocfl_object_"):
+                    structure_analysis["has_ocfl_marker"] = True
+
                 if item.get("is_dir", False):
                     # Check for OCFL directories
-                    if item["name"].startswith("0=ocfl_object_"):
-                        structure_analysis["has_ocfl_marker"] = True
-                    elif item["name"] == "v1":
+                    if name == "v1":
                         structure_analysis["has_version_directory"] = True
-                    elif item["name"] == "content":
+                    elif name == "content":
                         structure_analysis["has_content_directory"] = True
-                    elif item["name"] == "Resources":
+                    elif name == "Resources":
                         structure_analysis["has_resources_directory"] = True
                 else:
                     # Analyze files
-                    filename = item["name"]
+                    filename = name
                     structure_analysis["total_files"] += 1
                     structure_analysis["total_size"] += item.get("size", 0)
 
@@ -508,6 +511,15 @@ class OCFLService:
         """
         structure = analysis_result["structure_analysis"]
 
+        is_ocfl_compliant = structure.get("is_ocfl_compliant", False)
+        partial_ocfl = structure.get("partial_ocfl", False)
+        has_metadata = structure.get("has_metadata_files", False)
+        has_resources = structure.get("has_resources_directory", False)
+        has_acl = structure.get("has_acl_file", False)
+        xml_files = structure.get("xml_files", []) or []
+        total_files = structure.get("total_files", 0) or 0
+        total_size = structure.get("total_size", 0) or 0
+
         plan = {
             "feasible": True,
             "conversion_type": "unknown",
@@ -519,18 +531,18 @@ class OCFLService:
 
         try:
             # Determine conversion type
-            if structure["is_ocfl_compliant"]:
+            if is_ocfl_compliant:
                 plan["conversion_type"] = "none_needed"
                 plan["feasible"] = False
                 plan["risks"].append("Already OCFL compliant")
                 return plan
-            elif structure["partial_ocfl"]:
+            elif partial_ocfl:
                 plan["conversion_type"] = "complete_partial"
                 plan["steps"] = ["Complete existing OCFL structure", "Reorganize content"]
-            elif structure["has_metadata_files"] and structure["has_resources_directory"]:
+            elif has_metadata and has_resources:
                 plan["conversion_type"] = "structured_to_ocfl"
                 plan["steps"] = ["Create OCFL markers", "Create v1/content structure", "Move metadata", "Move resources"]
-            elif structure["has_metadata_files"] or structure["has_resources_directory"]:
+            elif has_metadata or has_resources:
                 plan["conversion_type"] = "flat_to_ocfl"
                 plan["steps"] = ["Create OCFL structure", "Organize files into content/metadata"]
             else:
@@ -540,18 +552,18 @@ class OCFLService:
                 return plan
 
             # Identify items to preserve
-            if structure["has_acl_file"]:
+            if has_acl:
                 plan["preserve_items"].append("acl.json")
 
-            if structure["xml_files"]:
-                plan["preserve_items"].extend(structure["xml_files"])
+            if xml_files:
+                plan["preserve_items"].extend(xml_files)
 
             # Assess risks
-            if structure["total_files"] > 1000:
+            if total_files > 1000:
                 plan["risks"].append("Large number of files may increase processing time")
                 plan["estimated_time"] = "10-20 minutes"
 
-            if structure["total_size"] > 1024 * 1024 * 1024:  # 1GB
+            if total_size > 1024 * 1024 * 1024:  # 1GB
                 plan["risks"].append("Large folder size may require extended processing time")
                 plan["estimated_time"] = "15-30 minutes"
 

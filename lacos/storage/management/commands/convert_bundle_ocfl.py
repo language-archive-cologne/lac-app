@@ -9,11 +9,11 @@ from lacos.storage.services.ocfl_fixture_manager import OCFLFixtureManager
 
 
 class Command(BaseCommand):
-    help = 'Convert single folder to OCFL format in-place within the same bucket'
+    help = 'Convert a single bundle to OCFL format in-place within the same bucket'
 
     def add_arguments(self, parser):
-        parser.add_argument('bucket_name', type=str, help='Name of bucket containing folder')
-        parser.add_argument('folder_path', type=str, help='Path to folder to convert')
+        parser.add_argument('bucket_name', type=str, help='Name of bucket containing the bundle')
+        parser.add_argument('bundle_path', type=str, help='Path to the bundle to convert')
         parser.add_argument(
             '--dry-run',
             action='store_true',
@@ -38,7 +38,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         bucket_name = options['bucket_name']
-        folder_path = options['folder_path']
+        bundle_path = options['bundle_path']
         dry_run = options.get('dry_run', False)
         force = options.get('force', False)
         create_backup = options.get('backup', False)
@@ -51,22 +51,22 @@ class Command(BaseCommand):
             fixture_manager = OCFLFixtureManager(bucket_service)
 
             if output_format == 'text':
-                self.stdout.write(f"Converting folder to OCFL: {folder_path}")
+                self.stdout.write(f"Converting bundle to OCFL: {bundle_path}")
                 self.stdout.write(f"Bucket: {bucket_name}")
                 self.stdout.write(f"Dry run: {dry_run}")
                 self.stdout.write("")
 
-            # First, analyze the folder structure
-            analysis_result = ocfl_service.analyze_folder_structure(bucket_name, folder_path)
+            # First, analyze the bundle structure
+            analysis_result = ocfl_service.analyze_folder_structure(bucket_name, bundle_path)
 
             if not analysis_result["success"]:
-                raise CommandError(f"Failed to analyze folder: {analysis_result['error']}")
+                raise CommandError(f"Failed to analyze bundle: {analysis_result['error']}")
 
             structure = analysis_result["structure_analysis"]
 
             # Check if already OCFL compliant
             if structure["is_ocfl_compliant"]:
-                message = f"Folder {folder_path} is already OCFL compliant"
+                message = f"Bundle {bundle_path} is already OCFL compliant"
                 if output_format == 'text':
                     self.stdout.write(self.style.SUCCESS(message))
                 else:
@@ -128,7 +128,7 @@ class Command(BaseCommand):
             backup_id = None
             if create_backup:
                 try:
-                    backup_id = fixture_manager.create_fixture_backup(bucket_name, folder_path)
+                    backup_id = fixture_manager.create_fixture_backup(bucket_name, bundle_path)
                     if output_format == 'text':
                         self.stdout.write(f"Created backup: {backup_id}")
                 except Exception as e:
@@ -141,7 +141,7 @@ class Command(BaseCommand):
             if output_format == 'text':
                 self.stdout.write("Starting conversion...")
 
-            conversion_result = ocfl_service.convert_in_place(bucket_name, folder_path)
+            conversion_result = ocfl_service.convert_bundle_to_ocfl(bucket_name, bundle_path)
 
             # Display results
             if output_format == 'text':
@@ -169,13 +169,13 @@ class Command(BaseCommand):
                 self.stdout.write(json.dumps(output_result, indent=2))
 
         except Exception as e:
-            raise CommandError(f"Error converting folder {folder_path}: {str(e)}")
+            raise CommandError(f"Error converting bundle {bundle_path}: {str(e)}")
 
     def _display_analysis_text(self, analysis_result, conversion_plan):
         """Display analysis results in text format"""
         structure = analysis_result["structure_analysis"]
 
-        self.stdout.write("Folder Analysis:")
+        self.stdout.write("Bundle Analysis:")
         self.stdout.write(f"  Total files: {structure['total_files']}")
         self.stdout.write(f"  Total size: {self._format_size(structure['total_size'])}")
 

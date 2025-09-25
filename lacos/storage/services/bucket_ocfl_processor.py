@@ -81,23 +81,23 @@ class BucketOCFLProcessor:
         # Callbacks for progress reporting
         self.progress_callback: Optional[Callable[[BatchProcessingProgress], None]] = None
 
-    def process_entire_bucket(self, bucket_name: str,
-                            dry_run: bool = False,
-                            parallel: bool = False,
-                            max_workers: int = 3) -> Dict[str, Any]:
+    def process_all_collections(self, bucket_name: str,
+                                dry_run: bool = False,
+                                parallel: bool = False,
+                                max_workers: int = 3) -> Dict[str, Any]:
         """
-        Process all folders in a bucket for OCFL compliance.
+        Process every collection in a bucket for OCFL-compliant bundles.
 
         Args:
             bucket_name (str): Name of bucket to process
             dry_run (bool): If True, only analyze without making changes
-            parallel (bool): If True, process folders in parallel
+            parallel (bool): If True, process collections in parallel
             max_workers (int): Maximum number of parallel workers
 
         Returns:
             Dict containing processing results
         """
-        logger.info(f"Starting bucket-wide OCFL processing for {bucket_name} "
+        logger.info(f"Starting collection-wide OCFL processing for {bucket_name} "
                    f"(dry_run={dry_run}, parallel={parallel})")
 
         try:
@@ -110,7 +110,7 @@ class BucketOCFLProcessor:
             if not analysis.folders:
                 return {
                     "success": True,
-                    "message": "No folders found to process",
+                    "message": "No collections found to process",
                     "analysis": analysis
                 }
 
@@ -129,7 +129,7 @@ class BucketOCFLProcessor:
             self.progress.total_folders = len(analysis.folders)
             self.progress.start_time = time.time()
 
-            # Process folders
+            # Process collections
             if parallel and not dry_run:
                 processing_results = self._process_folders_parallel(
                     bucket_name, analysis.folders, max_workers
@@ -423,9 +423,9 @@ class BucketOCFLProcessor:
                 # Continue without backup (risky but allows processing)
 
             # Perform conversion using enhanced OCFL service
-            if hasattr(self.ocfl_service, 'convert_in_place'):
-                # Use new in-place conversion method
-                conversion_result = self.ocfl_service.convert_in_place(
+            if hasattr(self.ocfl_service, 'convert_bundle_to_ocfl'):
+                # Use bundle-focused conversion method
+                conversion_result = self.ocfl_service.convert_bundle_to_ocfl(
                     bucket_name, folder_analysis.folder_path
                 )
             else:

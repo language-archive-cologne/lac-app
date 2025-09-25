@@ -11,7 +11,7 @@ from lacos.storage.services.bucket_ocfl_processor import BucketOCFLProcessor
 
 
 class Command(BaseCommand):
-    help = 'Process entire bucket for OCFL conversion with batch operations'
+    help = 'Process all collections for OCFL conversion with batch operations'
 
     def add_arguments(self, parser):
         parser.add_argument('bucket_name', type=str, help='Name of bucket to process')
@@ -23,7 +23,7 @@ class Command(BaseCommand):
         parser.add_argument(
             '--parallel',
             action='store_true',
-            help='Process folders in parallel (faster but more resource intensive)'
+            help='Process collections in parallel (faster but more resource intensive)'
         )
         parser.add_argument(
             '--max-workers',
@@ -64,7 +64,7 @@ class Command(BaseCommand):
             processor = BucketOCFLProcessor(bucket_service, ocfl_service)
 
             if output_format == 'text':
-                self.stdout.write(f"Processing bucket for OCFL conversion: {bucket_name}")
+                self.stdout.write(f"Processing collections in bucket {bucket_name} for OCFL conversion")
                 self.stdout.write(f"Mode: {'Dry run' if dry_run else 'Live conversion'}")
                 self.stdout.write(f"Parallel processing: {parallel}")
                 if parallel:
@@ -82,7 +82,7 @@ class Command(BaseCommand):
 
             # Perform bucket processing
             start_time = time.time()
-            results = processor.process_entire_bucket(
+            results = processor.process_all_collections(
                 bucket_name=bucket_name,
                 dry_run=dry_run,
                 parallel=parallel,
@@ -120,15 +120,15 @@ class Command(BaseCommand):
                     percentage = ((progress.completed + progress.failed + progress.skipped) / progress.total_folders) * 100
                     self.stdout.write(
                         f"\rProgress: {percentage:.1f}% "
-                        f"({progress.completed} completed, {progress.failed} failed, "
+                        f"({progress.completed} collections completed, {progress.failed} failed, "
                         f"{progress.skipped} skipped, {progress.in_progress} in progress)",
                         ending=""
                     )
                     self.stdout.flush()
 
-                    # Show current folder
+                    # Show current collection
                     if progress.current_folder:
-                        self.stdout.write(f" - Processing: {progress.current_folder}", ending="")
+                        self.stdout.write(f" - Processing collection: {progress.current_folder}", ending="")
 
                     # Stop monitoring when processing is complete
                     if (progress.completed + progress.failed + progress.skipped) >= progress.total_folders:
@@ -151,7 +151,7 @@ class Command(BaseCommand):
         self.stdout.write("")
         self.stdout.write("Processing Results:")
         self.stdout.write("=" * 40)
-        self.stdout.write(f"Total folders: {summary['total_folders']}")
+        self.stdout.write(f"Total collections: {summary['total_folders']}")
         self.stdout.write(f"Completed: {summary['completed']}")
         self.stdout.write(f"Failed: {summary['failed']}")
         self.stdout.write(f"Skipped: {summary['skipped']}")
@@ -177,13 +177,13 @@ class Command(BaseCommand):
                         percentage = (count / analysis.total_folders) * 100 if analysis.total_folders > 0 else 0
                         self.stdout.write(f"    {structure_type.value}: {count} ({percentage:.1f}%)")
 
-        # Show failed folders
-        failed_folders = [f for f in results["folder_results"] if f["status"] == "failed"]
-        if failed_folders:
+        # Show failed collections
+        failed_collections = [f for f in results["folder_results"] if f["status"] == "failed"]
+        if failed_collections:
             self.stdout.write("")
             self.stdout.write(self.style.ERROR("Failed conversions:"))
-            for folder in failed_folders:
-                self.stdout.write(f"  • {folder['folder_path']}: {folder['error_message']}")
+            for collection in failed_collections:
+                self.stdout.write(f"  • {collection['folder_path']}: {collection['error_message']}")
 
         # Show recommendations
         if results.get("recommendations"):
@@ -215,7 +215,7 @@ class Command(BaseCommand):
                     if rollback_result["success"]:
                         self.stdout.write(self.style.SUCCESS("Rollback completed successfully"))
                         if rollback_result["restored_folders"]:
-                            self.stdout.write(f"Restored {len(rollback_result['restored_folders'])} folders")
+                            self.stdout.write(f"Restored {len(rollback_result['restored_folders'])} collections")
                     else:
                         self.stdout.write(self.style.ERROR("Rollback failed"))
                         if rollback_result.get("failed_rollbacks"):

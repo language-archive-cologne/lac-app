@@ -122,7 +122,7 @@ class TestBucketStructureScanner(TestCase):
 
     def test_scan_bucket_structures(self):
         """Test scanning entire bucket structures"""
-        # Mock top-level folders
+        # Mock top-level collections
         top_level_contents = [
             {"name": "folder1", "is_dir": True},
             {"name": "folder2", "is_dir": True},
