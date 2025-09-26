@@ -269,7 +269,7 @@ def mock_bundle_dir(temp_dir):
     
     # Create directory structure
     content_dir = bundle_dir / "v1" / "content"
-    resources_dir = content_dir / "Resources"
+    resources_dir = content_dir / "data"
     os.makedirs(resources_dir, exist_ok=True)
     
     # Create OCFL version marker
@@ -345,12 +345,12 @@ def mock_s3_bundle(mock_s3_bucket):
     # Create sample resource files
     s3.put_object(
         Bucket=TEST_BUCKET_NAME,
-        Key=f"{base_path}/v1/content/Resources/test_file1.wav",
+        Key=f"{base_path}/v1/content/data/test_file1.wav",
         Body="test audio content"
     )
     s3.put_object(
         Bucket=TEST_BUCKET_NAME,
-        Key=f"{base_path}/v1/content/Resources/test_file2.wav",
+        Key=f"{base_path}/v1/content/data/test_file2.wav",
         Body="more test audio content"
     )
     
@@ -474,7 +474,7 @@ def test_ocfl_transform_structure(mock_s3_bucket, mock_bucket_service, ocfl_serv
         
         s3.put_object(
             Bucket=TEST_BUCKET_NAME,
-            Key=f"{invalid_path}/Resources/test_file.wav",
+            Key=f"{invalid_path}/data/test_file.wav",
             Body="test audio content"
         )
         

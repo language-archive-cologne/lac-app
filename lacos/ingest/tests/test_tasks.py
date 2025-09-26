@@ -82,10 +82,10 @@ def mock_file_discovery_service():
     # Mock path formatting methods
     mock_instance.form_collection_path.side_effect = lambda cid: f"{cid}/{cid}"
     mock_instance.form_bundle_path.side_effect = lambda cid, bid: f"{cid}/{bid}"
-    mock_instance.form_resource_path.side_effect = lambda cid, bid, fname: f"{cid}/{bid}/v1/content/Resources/{fname}"
+    mock_instance.form_resource_path.side_effect = lambda cid, bid, fname: f"{cid}/{bid}/v1/content/data/{fname}"
     mock_instance.form_collection_xml_path.side_effect = lambda cid: f"{cid}/{cid}/v1/content/{cid}.xml"
     mock_instance.form_bundle_xml_path.side_effect = lambda cid, bid: f"{cid}/{bid}/v1/content/{bid}.xml"
-    mock_instance.get_resource_path_pattern.return_value = '{collection_id}/{bundle_id}/v1/content/Resources/{resource_filename}'
+    mock_instance.get_resource_path_pattern.return_value = '{collection_id}/{bundle_id}/v1/content/data/{resource_filename}'
 
     # Patch at the point where it's used in tasks.py
     patcher = patch('lacos.ingest.tasks.FileDiscoveryService', return_value=mock_instance)

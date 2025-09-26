@@ -10,8 +10,7 @@ IPYTHONDIR=/app/.ipython
 COLLECTION_PATH_PATTERN={collection_id}/{collection_id}
 BUNDLE_PATH_PATTERN={collection_id}/{bundle_id}
 # Resource and XML paths are explicitly defined
-RESOURCE_PATH_PATTERN={collection_id}/{bundle_id}/v1/content/Resources/{resource_filename}
+RESOURCE_PATH_PATTERN={collection_id}/{bundle_id}/v1/content/data/{resource_filename}
 COLLECTION_XML_PATH={collection_id}/{collection_id}/v1/content/{collection_id}.xml
 BUNDLE_XML_PATH={collection_id}/{bundle_id}/v1/content/{bundle_id}.xml
-
 

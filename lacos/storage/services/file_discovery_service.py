@@ -7,6 +7,7 @@ from botocore.exceptions import ClientError
 
 from django.conf import settings
 from .base_storage_service import BaseStorageService
+from lacos.storage.constants import OCFL_DATA_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -55,11 +56,8 @@ class FileDiscoveryService(BaseStorageService):
         bundle_path_pattern = getattr(settings, 'BUNDLE_PATH_PATTERN')
         path_structure['bundle_path_pattern'] = bundle_path_pattern
         
-        # Resource path pattern - can be derived from bundle path or set explicitly
-        resource_path_pattern = getattr(settings, 'RESOURCE_PATH_PATTERN', None)
-        if resource_path_pattern is None:
-            # Default derived from bundle path
-            resource_path_pattern = bundle_path_pattern + '/v1/content/Resources/{resource_filename}'
+        # Resource path pattern always derived from bundle path using configured data directory
+        resource_path_pattern = bundle_path_pattern + f'/v1/content/{OCFL_DATA_DIR}/{{resource_filename}}'
         path_structure['resource_path_pattern'] = resource_path_pattern
         
         # XML file paths - can be derived from base patterns or set explicitly

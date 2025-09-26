@@ -55,7 +55,7 @@ def test_server_side_conversion_success(mock_uuid, ocfl_service, mock_bucket_ser
     keys = {call.kwargs['Key'] for call in copy_calls}
     assert 'bundle_ocfl_12345678/v1/content/metadata/meta.xml' in keys
     assert 'bundle_ocfl_12345678/v1/content/metadata/acl.json' in keys
-    assert 'bundle_ocfl_12345678/v1/content/Resources/files/audio.wav' in keys
+    assert 'bundle_ocfl_12345678/v1/content/data/files/audio.wav' in keys
 
     put_calls = mock_bucket_service.s3_client.put_object.call_args_list
     inventory_keys = {call.kwargs['Key'] for call in put_calls}
@@ -75,13 +75,13 @@ def test_server_side_conversion_success(mock_uuid, ocfl_service, mock_bucket_ser
     assert set(inventory_data['manifest'].keys()) == {'digest-meta', 'digest-acl', 'digest-audio'}
     assert inventory_data['manifest']['digest-meta'] == ['v1/content/metadata/meta.xml']
     assert inventory_data['manifest']['digest-acl'] == ['v1/content/metadata/acl.json']
-    assert inventory_data['manifest']['digest-audio'] == ['v1/content/Resources/files/audio.wav']
+    assert inventory_data['manifest']['digest-audio'] == ['v1/content/data/files/audio.wav']
 
     state = inventory_data['versions']['v1']['state']
     assert set(state.keys()) == {'digest-meta', 'digest-acl', 'digest-audio'}
     assert state['digest-meta'] == ['metadata/meta.xml']
     assert state['digest-acl'] == ['metadata/acl.json']
-    assert state['digest-audio'] == ['Resources/files/audio.wav']
+    assert state['digest-audio'] == ['data/files/audio.wav']
     assert inventory_data['versions']['v1']['created'].endswith('Z')
 
     digest_call = next(call for call in put_calls if call.kwargs['Key'] == 'bundle_ocfl_12345678/inventory.json.sha512')
@@ -171,7 +171,7 @@ def test_server_side_conversion_creates_inventory_files():
         'bundle/inventory.json.sha512',
         'bundle/v1/content/metadata/meta.xml',
         'bundle/v1/content/metadata/acl.json',
-        'bundle/v1/content/Resources/files/audio.wav'
+        'bundle/v1/content/data/files/audio.wav'
     }
 
     for expected in expected_keys:

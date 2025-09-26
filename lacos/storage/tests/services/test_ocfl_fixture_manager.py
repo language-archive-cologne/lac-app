@@ -36,7 +36,7 @@ class TestOCFLFixtureManager(TestCase):
             {"name": "metadata.xml", "is_dir": False, "size": 1024},
             {"name": "description.xml", "is_dir": False, "size": 512},
             {"name": "0=ocfl_object_1.0", "is_dir": False, "size": 0},
-            {"name": "Resources", "is_dir": True},
+            {"name": "data", "is_dir": True},
             {"name": "manifest.json", "is_dir": False, "size": 128}
         ]
 

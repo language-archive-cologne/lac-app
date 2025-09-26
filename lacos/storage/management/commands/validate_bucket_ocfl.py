@@ -6,6 +6,7 @@ from django.conf import settings
 
 from lacos.storage.services.bucket_service import BucketService
 from lacos.storage.services.ocfl_service import OCFLService
+from lacos.storage.constants import OCFL_DATA_DIR
 from lacos.storage.services.bucket_structure_scanner import BucketStructureScanner, StructureType
 
 
@@ -178,12 +179,12 @@ class Command(BaseCommand):
             else:
                 content_validation["warnings"].append("No metadata directory found")
 
-            # Check for Resources directory
-            resources_path = f"{folder_path}/v1/content/Resources"
-            resources_contents = bucket_service.list_bucket_contents(bucket_service.ingest_bucket, resources_path)
+            # Check for data directory
+            data_path = f"{folder_path}/v1/content/{OCFL_DATA_DIR}"
+            data_contents = bucket_service.list_bucket_contents(bucket_service.ingest_bucket, data_path)
 
-            if not resources_contents:
-                content_validation["warnings"].append("No Resources directory found")
+            if not data_contents:
+                content_validation["warnings"].append("No data directory found")
 
         except Exception as e:
             content_validation["valid"] = False

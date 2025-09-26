@@ -158,7 +158,7 @@ class TestScanBucketStructuresCommand(TestCase):
         folder2.total_files = 5
         folder2.total_size = 512
         folder2.has_metadata_files = True
-        folder2.has_resources_directory = True
+        folder2.has_data_directory = True
         folder2.xml_files = ["desc.xml"]
         folder2.conversion_complexity = "low"
         folder2.issues = ["Needs conversion"]
@@ -292,7 +292,7 @@ class TestScanBucketStructuresCommand(TestCase):
         folder2.total_size = 1024 * 1024 * 2
         folder2.conversion_complexity = "medium"
         folder2.has_metadata_files = True
-        folder2.has_resources_directory = True
+        folder2.has_data_directory = True
         folder2.xml_files = ["data.xml"]
         folder2.issues = ["Missing ACL"]
         folder2.recommendations = ["Add ACL file", "Convert to OCFL"]
@@ -325,11 +325,12 @@ class TestScanBucketStructuresCommand(TestCase):
         self.assertIn("Structure type: full_ocfl", output)
         self.assertIn("Conversion complexity: low", output)
         self.assertIn("OCFL components: OCFL marker, version directory, content directory", output)
-        self.assertIn("Content: 2 XML files, ACL file", output)
+        self.assertIn("Content: ACL file", output)
         self.assertIn("Already compliant", output)
 
         self.assertIn("Folder: test/folder2", output)
         self.assertIn("Structure type: legacy_structured", output)
+        self.assertIn("Content: 1 XML files, data directory", output)
         self.assertIn("Issues: Missing ACL", output)
         self.assertIn("Add ACL file; Convert to OCFL", output)
 

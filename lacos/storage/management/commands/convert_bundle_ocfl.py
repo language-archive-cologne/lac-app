@@ -195,8 +195,8 @@ class Command(BaseCommand):
         content_items = []
         if structure["has_metadata_files"]:
             content_items.append(f"{len(structure['xml_files'])} XML files")
-        if structure["has_resources_directory"]:
-            content_items.append("Resources directory")
+        if structure.get("has_data_directory"):
+            content_items.append("data directory")
         if structure["has_acl_file"]:
             content_items.append("ACL file")
 

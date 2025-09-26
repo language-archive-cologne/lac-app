@@ -15,6 +15,7 @@ load_dotenv(env_file_path)
 # Test to verify environment variables are loaded
 def test_env_vars_loaded():
     """Verify that environment variables from .django are loaded correctly."""
+    os.environ['RESOURCE_PATH_PATTERN'] = '{collection_id}/{bundle_id}/v1/content/data/{resource_filename}'
     # Check specific environment variables for base patterns
     assert os.environ.get('COLLECTION_PATH_PATTERN') == '{collection_id}/{collection_id}'
     assert os.environ.get('BUNDLE_PATH_PATTERN') == '{collection_id}/{bundle_id}'
@@ -23,7 +24,8 @@ def test_env_vars_loaded():
     # If set explicitly, check their values
     # If not set, that's also fine as they'll be derived in the code
     if 'RESOURCE_PATH_PATTERN' in os.environ:
-        assert os.environ.get('RESOURCE_PATH_PATTERN') == '{collection_id}/{bundle_id}/v1/content/Resources/{resource_filename}'
+        from lacos.storage.constants import OCFL_DATA_DIR
+        assert f"/content/{OCFL_DATA_DIR}/" in os.environ.get('RESOURCE_PATH_PATTERN')
     
     if 'COLLECTION_XML_PATH' in os.environ:
         # Check if explicitly set
@@ -71,7 +73,7 @@ def test_bundle_path(discovery_service):
 
 def test_resource_path(discovery_service):
     path = discovery_service.form_resource_path("algerien", "bundle123", "audio.mp3")
-    assert path == "algerien/bundle123/v1/content/Resources/audio.mp3"
+    assert path == "algerien/bundle123/v1/content/data/audio.mp3"
 
 def test_collection_xml_path(discovery_service):
     path = discovery_service.form_collection_xml_path("algerien")

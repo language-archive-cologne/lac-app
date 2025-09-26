@@ -13,6 +13,8 @@ from botocore.exceptions import ClientError
 
 from django.conf import settings
 
+from lacos.storage.constants import OCFL_DATA_DIR
+
 logger = logging.getLogger(__name__)
 
 class OCFLService:
@@ -150,12 +152,12 @@ class OCFLService:
                     # Find and move acl.json if it exists
                     self._move_acl_file(source_dir, metadata_dir)
                     
-                    # Handle Resources directory if it exists
-                    resources_dir = self._find_resources_directory(source_dir)
-                    if resources_dir and os.path.exists(resources_dir):
-                        logger.info(f"Found Resources directory at {resources_dir}")
-                        dest_resources = os.path.join(content_dir, "Resources")
-                        shutil.copytree(resources_dir, dest_resources)
+                # Handle data directory if it exists
+                data_dir = self._find_data_directory(source_dir)
+                if data_dir and os.path.exists(data_dir):
+                    logger.info(f"Found data directory at {data_dir}")
+                    dest_data = os.path.join(content_dir, OCFL_DATA_DIR)
+                    shutil.copytree(data_dir, dest_data, dirs_exist_ok=True)
                 else:
                     logger.warning(f"Could not find source directory in {temp_dir}")
                 
@@ -289,18 +291,16 @@ class OCFLService:
                 
         logger.warning("acl.json not found in source directory")
     
-    def _find_resources_directory(self, source_dir: str) -> Optional[str]:
-        """Find the Resources directory in the source directory"""
-        # First check if Resources exists directly in the source directory
-        resources_dir = os.path.join(source_dir, "Resources")
-        if os.path.isdir(resources_dir):
-            return resources_dir
-            
-        # If not found, search for it recursively
+    def _find_data_directory(self, source_dir: str) -> Optional[str]:
+        """Find the data directory in the source directory"""
+        direct = os.path.join(source_dir, OCFL_DATA_DIR)
+        if os.path.isdir(direct):
+            return direct
+
         for root, dirs, _ in os.walk(source_dir):
-            if "Resources" in dirs:
-                return os.path.join(root, "Resources")
-                
+            if OCFL_DATA_DIR in dirs:
+                return os.path.join(root, OCFL_DATA_DIR)
+
         return None
     
     def move_to_production(self, source_prefix: str) -> Dict[str, Any]:
@@ -442,7 +442,7 @@ class OCFLService:
                 "has_version_directory": False,
                 "has_content_directory": False,
                 "has_metadata_files": False,
-                "has_resources_directory": False,
+                "has_data_directory": False,
                 "has_acl_file": False,
                 "xml_files": [],
                 "total_files": 0,
@@ -467,8 +467,8 @@ class OCFLService:
                         structure_analysis["has_version_directory"] = True
                     elif name == "content":
                         structure_analysis["has_content_directory"] = True
-                    elif name == "Resources":
-                        structure_analysis["has_resources_directory"] = True
+                    elif name == OCFL_DATA_DIR:
+                        structure_analysis["has_data_directory"] = True
                 else:
                     # Analyze files
                     filename = name
@@ -497,8 +497,8 @@ class OCFLService:
                     structure_analysis["xml_files"].append(relative.split('/')[-1])
                 if relative.endswith('acl.json'):
                     structure_analysis["has_acl_file"] = True
-                if '/Resources/' in relative:
-                    structure_analysis["has_resources_directory"] = True
+                if f'/{OCFL_DATA_DIR}/' in relative:
+                    structure_analysis["has_data_directory"] = True
 
             # Determine OCFL compliance
             structure_analysis["is_ocfl_compliant"] = (
@@ -541,7 +541,7 @@ class OCFLService:
         is_ocfl_compliant = structure.get("is_ocfl_compliant", False)
         partial_ocfl = structure.get("partial_ocfl", False)
         has_metadata = structure.get("has_metadata_files", False)
-        has_resources = structure.get("has_resources_directory", False)
+        has_data = structure.get("has_data_directory", False)
         has_acl = structure.get("has_acl_file", False)
         xml_files = structure.get("xml_files", []) or []
         total_files = structure.get("total_files", 0) or 0
@@ -566,15 +566,20 @@ class OCFLService:
             elif partial_ocfl:
                 plan["conversion_type"] = "complete_partial"
                 plan["steps"] = ["Complete existing OCFL structure", "Reorganize content"]
-            elif has_metadata and has_resources:
+            elif has_metadata and has_data:
                 plan["conversion_type"] = "structured_to_ocfl"
-                plan["steps"] = ["Create OCFL markers", "Create v1/content structure", "Move metadata", "Move resources"]
-            elif has_metadata or has_resources:
+                plan["steps"] = [
+                    "Create OCFL markers",
+                    "Create v1/content structure",
+                    "Move metadata",
+                    "Move data files"
+                ]
+            elif has_metadata or has_data:
                 plan["conversion_type"] = "flat_to_ocfl"
                 plan["steps"] = ["Create OCFL structure", "Organize files into content/metadata"]
             elif total_files > 0:
                 plan["conversion_type"] = "flat_to_ocfl"
-                plan["steps"] = ["Create OCFL structure", "Organize files into content/Resources"]
+                plan["steps"] = ["Create OCFL structure", f"Organize files into content/{OCFL_DATA_DIR}"]
             else:
                 plan["conversion_type"] = "unknown_structure"
                 plan["feasible"] = False
@@ -667,7 +672,7 @@ class OCFLService:
             self._put_empty_object(bucket_name, f"{temp_prefix}v1/")
             self._put_empty_object(bucket_name, f"{temp_prefix}v1/content/")
             self._put_empty_object(bucket_name, f"{temp_prefix}v1/content/metadata/")
-            self._put_empty_object(bucket_name, f"{temp_prefix}v1/content/Resources/")
+            self._put_empty_object(bucket_name, f"{temp_prefix}v1/content/{OCFL_DATA_DIR}/")
 
             for key in self._list_s3_objects(bucket_name, source_prefix):
                 if key == source_prefix:
@@ -693,11 +698,11 @@ class OCFLService:
                     dest_rel = self._build_metadata_destination(relative_path, metadata_seen, force_name='acl.json')
                 else:
                     parts = [part for part in relative_path.split('/') if part]
-                    if parts and parts[0].lower() == 'resources':
+                    if parts and parts[0].lower() == OCFL_DATA_DIR.lower():
                         parts = parts[1:]
 
                     resource_rel = '/'.join(parts) if parts else os.path.basename(relative_path)
-                    dest_rel = f"v1/content/Resources/{resource_rel}" if resource_rel else "v1/content/Resources"
+                    dest_rel = f"v1/content/{OCFL_DATA_DIR}/{resource_rel}" if resource_rel else f"v1/content/{OCFL_DATA_DIR}"
 
                 dest_key = f"{temp_prefix}{dest_rel}".replace('//', '/')
 
@@ -784,8 +789,8 @@ class OCFLService:
                 if self._move_acl_file_if_exists(source_dir, metadata_dir):
                     files_processed += 1
 
-                # Move Resources directory if exists
-                resources_moved = self._move_resources_directory(source_dir, content_dir)
+                # Move data directory if exists
+                resources_moved = self._move_data_directory(source_dir, content_dir)
                 if resources_moved:
                     files_processed += resources_moved
 
@@ -835,15 +840,14 @@ class OCFLService:
             return True
         return False
 
-    def _move_resources_directory(self, source_dir: str, content_dir: str) -> int:
-        """Move Resources directory if it exists"""
-        resources_dir = os.path.join(source_dir, "Resources")
-        if os.path.isdir(resources_dir):
-            dst_resources = os.path.join(content_dir, "Resources")
-            shutil.copytree(resources_dir, dst_resources)
-            # Count files in Resources directory
-            file_count = sum(len(files) for _, _, files in os.walk(dst_resources))
-            logger.debug(f"Moved Resources directory with {file_count} files")
+    def _move_data_directory(self, source_dir: str, content_dir: str) -> int:
+        """Move data directory if it exists"""
+        data_dir = os.path.join(source_dir, OCFL_DATA_DIR)
+        if os.path.isdir(data_dir):
+            dst = os.path.join(content_dir, OCFL_DATA_DIR)
+            shutil.copytree(data_dir, dst, dirs_exist_ok=True)
+            file_count = sum(len(files) for _, _, files in os.walk(dst))
+            logger.debug(f"Moved data directory with {file_count} files")
             return file_count
         return 0
 
@@ -861,10 +865,10 @@ class OCFLService:
                     dst = os.path.join(metadata_dir, os.path.basename(rel_path))
                     shutil.copy2(src, dst)
                 else:
-                    # Move to Resources
-                    resources_dir = os.path.join(content_dir, "Resources")
-                    os.makedirs(resources_dir, exist_ok=True)
-                    dst = os.path.join(resources_dir, rel_path)
+                    # Move to data directory
+                    data_dir = os.path.join(content_dir, OCFL_DATA_DIR)
+                    os.makedirs(data_dir, exist_ok=True)
+                    dst = os.path.join(data_dir, rel_path)
                     os.makedirs(os.path.dirname(dst), exist_ok=True)
                     shutil.copy2(src, dst)
 

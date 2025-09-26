@@ -45,7 +45,7 @@ class TestBucketStructureScanner(TestCase):
         contents = [
             {"name": "0=ocfl_object_1.0", "is_dir": False, "size": 0},
             {"name": "metadata.xml", "is_dir": False, "size": 1024},
-            {"name": "Resources", "is_dir": True}
+            {"name": "data", "is_dir": True}
         ]
 
         self.mock_bucket_service.list_bucket_contents.return_value = contents
@@ -55,7 +55,7 @@ class TestBucketStructureScanner(TestCase):
         self.assertEqual(result.structure_type, StructureType.PARTIAL_OCFL)
         self.assertTrue(result.has_ocfl_marker)
         self.assertFalse(result.has_version_directory)
-        self.assertTrue(result.has_resources_directory)
+        self.assertTrue(result.has_data_directory)
         self.assertEqual(result.conversion_complexity, "medium")
 
     def test_analyze_folder_structure_legacy_structured(self):
@@ -63,7 +63,7 @@ class TestBucketStructureScanner(TestCase):
         contents = [
             {"name": "metadata.xml", "is_dir": False, "size": 1024},
             {"name": "description.xml", "is_dir": False, "size": 512},
-            {"name": "Resources", "is_dir": True},
+            {"name": "data", "is_dir": True},
             {"name": "acl.json", "is_dir": False, "size": 256}
         ]
 
@@ -74,7 +74,7 @@ class TestBucketStructureScanner(TestCase):
         self.assertEqual(result.structure_type, StructureType.LEGACY_STRUCTURED)
         self.assertFalse(result.has_ocfl_marker)
         self.assertTrue(result.has_metadata_files)
-        self.assertTrue(result.has_resources_directory)
+        self.assertTrue(result.has_data_directory)
         self.assertTrue(result.has_acl_file)
         self.assertEqual(len(result.xml_files), 2)
         self.assertEqual(result.conversion_complexity, "low")
@@ -94,7 +94,7 @@ class TestBucketStructureScanner(TestCase):
         self.assertEqual(result.structure_type, StructureType.LEGACY_FLAT)
         self.assertFalse(result.has_ocfl_marker)
         self.assertTrue(result.has_metadata_files)
-        self.assertFalse(result.has_resources_directory)
+        self.assertFalse(result.has_data_directory)
         self.assertEqual(result.total_files, 3)
         self.assertEqual(result.conversion_complexity, "medium")
 
@@ -138,7 +138,7 @@ class TestBucketStructureScanner(TestCase):
             ],
             "folder2": [
                 {"name": "metadata.xml", "is_dir": False, "size": 1024},
-                {"name": "Resources", "is_dir": True}
+            {"name": "data", "is_dir": True}
             ],
             "folder3": [
                 {"name": "file.txt", "is_dir": False, "size": 100}
@@ -264,7 +264,7 @@ class TestBucketStructureScanner(TestCase):
         analysis = FolderAnalysis("test", StructureType.UNKNOWN)
         analysis.has_ocfl_marker = True
         analysis.has_metadata_files = True
-        analysis.has_resources_directory = False
+        analysis.has_data_directory = False
         analysis.has_version_directory = False
 
         structure_type = self.scanner._determine_structure_type(analysis)

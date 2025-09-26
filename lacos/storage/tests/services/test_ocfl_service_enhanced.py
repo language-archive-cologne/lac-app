@@ -31,7 +31,7 @@ class TestOCFLServiceEnhanced(TestCase):
             {"name": "content", "is_dir": True},
             {"name": "metadata.xml", "is_dir": False, "size": 1024},
             {"name": "acl.json", "is_dir": False, "size": 256},
-            {"name": "Resources", "is_dir": True}
+            {"name": "data", "is_dir": True}
         ]
 
         self.mock_bucket_service.list_bucket_contents.return_value = contents
@@ -48,7 +48,7 @@ class TestOCFLServiceEnhanced(TestCase):
         self.assertTrue(structure["has_content_directory"])
         self.assertTrue(structure["has_metadata_files"])
         self.assertTrue(structure["has_acl_file"])
-        self.assertTrue(structure["has_resources_directory"])
+        self.assertTrue(structure["has_data_directory"])
         self.assertEqual(structure["total_files"], 3)
 
     def test_analyze_folder_structure_partial_ocfl(self):
@@ -56,7 +56,7 @@ class TestOCFLServiceEnhanced(TestCase):
         contents = [
             {"name": "0=ocfl_object_1.0", "is_dir": False, "size": 0},
             {"name": "metadata.xml", "is_dir": False, "size": 1024},
-            {"name": "Resources", "is_dir": True}
+            {"name": "data", "is_dir": True}
         ]
 
         self.mock_bucket_service.list_bucket_contents.return_value = contents
@@ -74,7 +74,7 @@ class TestOCFLServiceEnhanced(TestCase):
         contents = [
             {"name": "metadata.xml", "is_dir": False, "size": 1024},
             {"name": "description.xml", "is_dir": False, "size": 512},
-            {"name": "Resources", "is_dir": True},
+            {"name": "data", "is_dir": True},
             {"name": "acl.json", "is_dir": False, "size": 256}
         ]
 
@@ -87,7 +87,7 @@ class TestOCFLServiceEnhanced(TestCase):
         self.assertFalse(structure["partial_ocfl"])
         self.assertFalse(structure["has_ocfl_marker"])
         self.assertTrue(structure["has_metadata_files"])
-        self.assertTrue(structure["has_resources_directory"])
+        self.assertTrue(structure["has_data_directory"])
         self.assertTrue(structure["has_acl_file"])
         self.assertEqual(len(structure["xml_files"]), 2)
 
@@ -144,7 +144,7 @@ class TestOCFLServiceEnhanced(TestCase):
                 "is_ocfl_compliant": False,
                 "partial_ocfl": False,
                 "has_metadata_files": True,
-                "has_resources_directory": True,
+                "has_data_directory": True,
                 "has_acl_file": False,
                 "xml_files": ["metadata.xml", "description.xml"],
                 "total_files": 50,
@@ -166,7 +166,7 @@ class TestOCFLServiceEnhanced(TestCase):
                 "is_ocfl_compliant": False,
                 "partial_ocfl": False,
                 "has_metadata_files": True,
-                "has_resources_directory": False,
+                "has_data_directory": False,
                 "xml_files": ["metadata.xml"],
                 "total_files": 100,
                 "total_size": 1024
@@ -186,7 +186,7 @@ class TestOCFLServiceEnhanced(TestCase):
                 "is_ocfl_compliant": False,
                 "partial_ocfl": False,
                 "has_metadata_files": False,
-                "has_resources_directory": False,
+                "has_data_directory": False,
                 "xml_files": [],
                 "total_files": 10,
                 "total_size": 1024
@@ -205,7 +205,7 @@ class TestOCFLServiceEnhanced(TestCase):
             "structure_analysis": {
                 "is_ocfl_compliant": False,
                 "has_metadata_files": True,
-                "has_resources_directory": True,
+                "has_data_directory": True,
                 "xml_files": ["metadata.xml"],
                 "total_files": 2000,  # Large number of files
                 "total_size": 2 * 1024 * 1024 * 1024  # 2GB
@@ -238,7 +238,7 @@ class TestOCFLServiceEnhanced(TestCase):
             "structure_analysis": {
                 "is_ocfl_compliant": False,
                 "has_metadata_files": True,
-                "has_resources_directory": True,
+                "has_data_directory": True,
                 "xml_files": ["metadata.xml"],
                 "total_files": 10,
                 "total_size": 1024
@@ -333,7 +333,7 @@ class TestOCFLServiceEnhanced(TestCase):
         # Mock helper methods
         self.ocfl_service._find_and_move_xml_files = Mock(return_value=["metadata.xml"])
         self.ocfl_service._move_acl_file_if_exists = Mock(return_value=True)
-        self.ocfl_service._move_resources_directory = Mock(return_value=5)
+        self.ocfl_service._move_data_directory = Mock(return_value=5)
         inventory_stub = {
             "id": "test",
             "digestAlgorithm": "sha512",
@@ -348,7 +348,7 @@ class TestOCFLServiceEnhanced(TestCase):
         result = self.ocfl_service._create_ocfl_structure(source_dir, target_dir, conversion_plan)
 
         self.assertTrue(result["success"])
-        self.assertEqual(result["files_processed"], 7)  # 1 XML + 1 ACL + 5 Resources
+        self.assertEqual(result["files_processed"], 7)  # 1 XML + 1 ACL + 5 data files
         self.assertEqual(result["structure_created"], "OCFL v1.0")
 
         # Verify OCFL marker was created
@@ -428,25 +428,24 @@ class TestOCFLServiceEnhanced(TestCase):
     @patch('os.path.isdir')
     @patch('shutil.copytree')
     @patch('os.walk')
-    def test_move_resources_directory(self, mock_walk, mock_copytree, mock_isdir):
-        """Test moving Resources directory"""
-        mock_isdir.return_value = True
-        # Mock walk to count files in Resources
+    def test_move_data_directory(self, mock_walk, mock_copytree, mock_isdir):
+        """Test moving data directory"""
+        mock_isdir.side_effect = lambda path: path == '/tmp/source/data'
         mock_walk.return_value = [
-            ("/tmp/source/Resources", [], ["file1.wav", "file2.wav", "file3.txt"])
+            ("/tmp/content/data", [], ["file1.wav", "file2.wav", "file3.txt"])
         ]
 
-        result = self.ocfl_service._move_resources_directory("/tmp/source", "/tmp/content")
+        result = self.ocfl_service._move_data_directory("/tmp/source", "/tmp/content")
 
-        self.assertEqual(result, 3)  # 3 files in Resources
-        mock_copytree.assert_called_once()
+        self.assertEqual(result, 3)
+        mock_copytree.assert_called_once_with('/tmp/source/data', '/tmp/content/data', dirs_exist_ok=True)
 
     @patch('os.path.isdir')
-    def test_move_resources_directory_not_found(self, mock_isdir):
-        """Test moving Resources directory when it doesn't exist"""
+    def test_move_data_directory_not_found(self, mock_isdir):
+        """Test moving data directory when it doesn't exist"""
         mock_isdir.return_value = False
 
-        result = self.ocfl_service._move_resources_directory("/tmp/source", "/tmp/content")
+        result = self.ocfl_service._move_data_directory("/tmp/source", "/tmp/content")
 
         self.assertEqual(result, 0)
 
@@ -469,12 +468,12 @@ class TestOCFLServiceEnhanced(TestCase):
         expected_calls = [
             call("/tmp/source/metadata.xml", "/tmp/metadata/metadata.xml"),
             call("/tmp/source/acl.json", "/tmp/metadata/acl.json"),
-            call("/tmp/source/root.txt", "/tmp/content/Resources/root.txt"),
-            call("/tmp/source/sub/nested.pdf", "/tmp/content/Resources/sub/nested.pdf")
+            call("/tmp/source/root.txt", "/tmp/content/data/root.txt"),
+            call("/tmp/source/sub/nested.pdf", "/tmp/content/data/sub/nested.pdf")
         ]
         self.assertEqual(mock_copy.call_args_list, expected_calls)
         # Ensure directory structure recreated for nested resource
-        mock_makedirs.assert_any_call("/tmp/content/Resources/sub", exist_ok=True)
+        mock_makedirs.assert_any_call("/tmp/content/data/sub", exist_ok=True)
 
     def test_delete_folder_contents(self):
         """Test deleting folder contents from S3"""

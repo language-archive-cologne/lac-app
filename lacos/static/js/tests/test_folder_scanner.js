@@ -371,7 +371,7 @@ describe('Folder Scanner', () => {
                                                 values: () => {
                                                     return [
                                                         {
-                                                            name: 'Resources',
+                                                            name: 'data',
                                                             kind: 'directory',
                                                             values: () => {
                                                                 return [
@@ -424,8 +424,8 @@ describe('Folder Scanner', () => {
             json: () => Promise.resolve({
                 success: true,
                 presigned_posts: [
-                    { file_name: 'zag_eoi_20141009_1/v1/content/Resources/ZAG_EOI_20141009_1.eaf' },
-                    { file_name: 'zag_eoi_20141009_1/v1/content/Resources/ZAG_EOI_20141009_1.wav' },
+                    { file_name: 'zag_eoi_20141009_1/v1/content/data/ZAG_EOI_20141009_1.eaf' },
+                    { file_name: 'zag_eoi_20141009_1/v1/content/data/ZAG_EOI_20141009_1.wav' },
                     { file_name: 'zag_eoi_20141009_1/v1/content/zag_eoi_20141009_1.xml' },
                     { file_name: 'zag_eoi_20141009_1/0=ocfl_object_1.0' },
                     { file_name: 'zag_eoi_20141009_1/acl.json' }
@@ -440,8 +440,8 @@ describe('Folder Scanner', () => {
                 total: 5,
                 failed: 0,
                 processed_files: [
-                    { file_name: 'zag_eoi_20141009_1/v1/content/Resources/ZAG_EOI_20141009_1.eaf' },
-                    { file_name: 'zag_eoi_20141009_1/v1/content/Resources/ZAG_EOI_20141009_1.wav' },
+                    { file_name: 'zag_eoi_20141009_1/v1/content/data/ZAG_EOI_20141009_1.eaf' },
+                    { file_name: 'zag_eoi_20141009_1/v1/content/data/ZAG_EOI_20141009_1.wav' },
                     { file_name: 'zag_eoi_20141009_1/v1/content/zag_eoi_20141009_1.xml' },
                     { file_name: 'zag_eoi_20141009_1/0=ocfl_object_1.0' },
                     { file_name: 'zag_eoi_20141009_1/acl.json' }
@@ -460,8 +460,8 @@ describe('Folder Scanner', () => {
         
         // Expected paths
         const expectedPaths = [
-            'zag_eoi_20141009_1/v1/content/Resources/ZAG_EOI_20141009_1.eaf',
-            'zag_eoi_20141009_1/v1/content/Resources/ZAG_EOI_20141009_1.wav',
+            'zag_eoi_20141009_1/v1/content/data/ZAG_EOI_20141009_1.eaf',
+            'zag_eoi_20141009_1/v1/content/data/ZAG_EOI_20141009_1.wav',
             'zag_eoi_20141009_1/v1/content/zag_eoi_20141009_1.xml',
             'zag_eoi_20141009_1/0=ocfl_object_1.0',
             'zag_eoi_20141009_1/acl.json'
@@ -501,7 +501,7 @@ describe('Folder Scanner', () => {
                                                 values: () => {
                                                     return [
                                                         {
-                                                            name: 'Resources',
+                                                            name: 'data',
                                                             kind: 'directory',
                                                             values: () => {
                                                                 return [
@@ -554,8 +554,8 @@ describe('Folder Scanner', () => {
             json: () => Promise.resolve({
                 success: true,
                 presigned_posts: [
-                    { file_name: 'zag_eoi_20141009_1/v1/content/Resources/ZAG_EOI_20141009_1.eaf' },
-                    { file_name: 'zag_eoi_20141009_1/v1/content/Resources/ZAG_EOI_20141009_1.wav' },
+                    { file_name: 'zag_eoi_20141009_1/v1/content/data/ZAG_EOI_20141009_1.eaf' },
+                    { file_name: 'zag_eoi_20141009_1/v1/content/data/ZAG_EOI_20141009_1.wav' },
                     { file_name: 'zag_eoi_20141009_1/v1/content/zag_eoi_20141009_1.xml' },
                     { file_name: 'zag_eoi_20141009_1/0=ocfl_object_1.0' },
                     { file_name: 'zag_eoi_20141009_1/acl.json' }
@@ -570,8 +570,8 @@ describe('Folder Scanner', () => {
                 total: 5,
                 failed: 0,
                 processed_files: [
-                    { file_name: 'zag_eoi_20141009_1/v1/content/Resources/ZAG_EOI_20141009_1.eaf' },
-                    { file_name: 'zag_eoi_20141009_1/v1/content/Resources/ZAG_EOI_20141009_1.wav' },
+                    { file_name: 'zag_eoi_20141009_1/v1/content/data/ZAG_EOI_20141009_1.eaf' },
+                    { file_name: 'zag_eoi_20141009_1/v1/content/data/ZAG_EOI_20141009_1.wav' },
                     { file_name: 'zag_eoi_20141009_1/v1/content/zag_eoi_20141009_1.xml' },
                     { file_name: 'zag_eoi_20141009_1/0=ocfl_object_1.0' },
                     { file_name: 'zag_eoi_20141009_1/acl.json' }
@@ -602,8 +602,8 @@ describe('Folder Scanner', () => {
         });
 
         // Verify specific paths
-        expect(paths).toContain('zag_eoi_20141009_1/v1/content/Resources/ZAG_EOI_20141009_1.eaf');
-        expect(paths).toContain('zag_eoi_20141009_1/v1/content/Resources/ZAG_EOI_20141009_1.wav');
+        expect(paths).toContain('zag_eoi_20141009_1/v1/content/data/ZAG_EOI_20141009_1.eaf');
+        expect(paths).toContain('zag_eoi_20141009_1/v1/content/data/ZAG_EOI_20141009_1.wav');
         expect(paths).toContain('zag_eoi_20141009_1/v1/content/zag_eoi_20141009_1.xml');
         expect(paths).toContain('zag_eoi_20141009_1/0=ocfl_object_1.0');
         expect(paths).toContain('zag_eoi_20141009_1/acl.json');

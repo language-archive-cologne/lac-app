@@ -41,7 +41,8 @@ class Command(BaseCommand):
             bucket_service = BucketService()
             scanner = BucketStructureScanner(bucket_service)
 
-            self.stdout.write(f"Scanning bucket structures for: {bucket_name}")
+            if output_format == 'text' and not output_file:
+                self.stdout.write(f"Scanning bucket structures for: {bucket_name}")
 
             # Perform bucket analysis
             analysis = scanner.scan_bucket_structures(bucket_name)
@@ -98,7 +99,7 @@ class Command(BaseCommand):
                     "has_version_directory": folder.has_version_directory,
                     "has_content_directory": folder.has_content_directory,
                     "has_metadata_files": folder.has_metadata_files,
-                    "has_resources_directory": folder.has_resources_directory,
+                    "has_data_directory": folder.has_data_directory,
                     "has_acl_file": folder.has_acl_file,
                     "xml_files": folder.xml_files,
                     "preservation_requirements": folder.preservation_requirements,
@@ -175,8 +176,8 @@ class Command(BaseCommand):
                 content_items = []
                 if folder.has_metadata_files:
                     content_items.append(f"{len(folder.xml_files)} XML files")
-                if folder.has_resources_directory:
-                    content_items.append("Resources directory")
+                if folder.has_data_directory:
+                    content_items.append("data directory")
                 if folder.has_acl_file:
                     content_items.append("ACL file")
 

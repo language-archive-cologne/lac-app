@@ -4,6 +4,8 @@ from typing import Dict, Any, List, Optional
 from enum import Enum
 from dataclasses import dataclass, field
 
+from lacos.storage.constants import OCFL_DATA_DIR
+
 logger = logging.getLogger(__name__)
 
 
@@ -11,7 +13,7 @@ class StructureType(Enum):
     """Types of folder structures detected in buckets"""
     FULL_OCFL = "full_ocfl"  # Complete OCFL structure with version marker and v1/content
     PARTIAL_OCFL = "partial_ocfl"  # Has some OCFL elements but incomplete
-    LEGACY_STRUCTURED = "legacy_structured"  # Traditional structure with metadata + Resources
+    LEGACY_STRUCTURED = "legacy_structured"  # Traditional structure with metadata + data directory
     LEGACY_FLAT = "legacy_flat"  # Flat structure without clear organization
     MIXED = "mixed"  # Contains both OCFL and non-OCFL elements
     UNKNOWN = "unknown"  # Cannot determine structure type
@@ -26,7 +28,7 @@ class FolderAnalysis:
     has_version_directory: bool = False
     has_content_directory: bool = False
     has_metadata_files: bool = False
-    has_resources_directory: bool = False
+    has_data_directory: bool = False
     has_acl_file: bool = False
     xml_files: List[str] = field(default_factory=list)
     total_files: int = 0
@@ -300,8 +302,8 @@ class BucketStructureScanner:
                     analysis.has_version_directory = True
                 elif name == "content":
                     analysis.has_content_directory = True
-                elif name == "Resources":
-                    analysis.has_resources_directory = True
+                elif name == OCFL_DATA_DIR:
+                    analysis.has_data_directory = True
             else:
                 # Check for important files
                 filename = name
@@ -325,9 +327,9 @@ class BucketStructureScanner:
                 return StructureType.PARTIAL_OCFL
         elif analysis.has_ocfl_marker or analysis.has_version_directory:
             return StructureType.PARTIAL_OCFL
-        elif analysis.has_metadata_files and analysis.has_resources_directory:
+        elif analysis.has_metadata_files and analysis.has_data_directory:
             return StructureType.LEGACY_STRUCTURED
-        elif analysis.has_metadata_files or analysis.has_resources_directory:
+        elif analysis.has_metadata_files or analysis.has_data_directory:
             return StructureType.LEGACY_FLAT
         elif analysis.total_files > 0:
             return StructureType.LEGACY_FLAT
