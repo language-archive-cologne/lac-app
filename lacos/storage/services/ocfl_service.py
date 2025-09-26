@@ -2,9 +2,14 @@ import logging
 import os
 import shutil
 import tempfile
-from pathlib import Path
+from collections import defaultdict
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 import uuid
+import hashlib
+import json
+
+from botocore.exceptions import ClientError
 
 from django.conf import settings
 
@@ -446,6 +451,9 @@ class OCFLService:
                 "partial_ocfl": False
             }
 
+            object_prefix = folder_path if folder_path.endswith('/') else f"{folder_path}/"
+            object_keys = self._list_s3_objects(bucket_name, object_prefix)
+
             # Analyze each item
             for item in contents:
                 name = item["name"]
@@ -472,6 +480,25 @@ class OCFLService:
                     elif filename.endswith(".xml"):
                         structure_analysis["xml_files"].append(filename)
                         structure_analysis["has_metadata_files"] = True
+
+            # Include nested objects in analysis
+            for key in object_keys:
+                relative = key[len(object_prefix):]
+                if not relative:
+                    continue
+                if '/' not in relative:
+                    continue  # already handled
+                if relative.endswith('/'):
+                    continue  # skip directory markers
+
+                structure_analysis["total_files"] += 1
+                if relative.endswith('.xml'):
+                    structure_analysis["has_metadata_files"] = True
+                    structure_analysis["xml_files"].append(relative.split('/')[-1])
+                if relative.endswith('acl.json'):
+                    structure_analysis["has_acl_file"] = True
+                if '/Resources/' in relative:
+                    structure_analysis["has_resources_directory"] = True
 
             # Determine OCFL compliance
             structure_analysis["is_ocfl_compliant"] = (
@@ -545,6 +572,9 @@ class OCFLService:
             elif has_metadata or has_resources:
                 plan["conversion_type"] = "flat_to_ocfl"
                 plan["steps"] = ["Create OCFL structure", "Organize files into content/metadata"]
+            elif total_files > 0:
+                plan["conversion_type"] = "flat_to_ocfl"
+                plan["steps"] = ["Create OCFL structure", "Organize files into content/Resources"]
             else:
                 plan["conversion_type"] = "unknown_structure"
                 plan["feasible"] = False
@@ -589,10 +619,6 @@ class OCFLService:
         """
         logger.info(f"Performing atomic conversion for {folder_path}")
 
-        temp_workspace = None
-        temp_suffix = str(uuid.uuid4())[:8]
-        temp_folder_path = f"{folder_path}_temp_{temp_suffix}"
-
         try:
             if conversion_plan.get("conversion_type") in {"structured_to_ocfl", "flat_to_ocfl"}:
                 server_result = self._perform_server_side_conversion(bucket_name, folder_path, conversion_plan)
@@ -600,78 +626,19 @@ class OCFLService:
                     return server_result
                 if server_result.get("server_side"):
                     logger.warning(
-                        "Server-side conversion attempt failed for %s: %s. Falling back to filesystem pipeline.",
+                        "Server-side conversion attempt failed for %s: %s.",
                         folder_path,
                         server_result.get("error"),
                     )
+                    return server_result
 
-            # Create temporary directory for processing
-            with tempfile.TemporaryDirectory() as temp_workspace:
-                logger.debug(f"Using temporary workspace: {temp_workspace}")
-
-                # Download original folder to temp workspace
-                original_dir = os.path.join(temp_workspace, "original")
-                self.bucket_service._download_directory(bucket_name, folder_path, original_dir)
-
-                # Create OCFL structure in temp workspace
-                ocfl_dir = os.path.join(temp_workspace, "ocfl_converted")
-                conversion_result = self._create_ocfl_structure(
-                    original_dir, ocfl_dir, conversion_plan
-                )
-
-                if not conversion_result["success"]:
-                    return conversion_result
-
-                # Upload converted structure to temporary location in bucket
-                upload_result = self.bucket_service._upload_directory(
-                    ocfl_dir, bucket_name, temp_folder_path
-                )
-
-                if not upload_result["success"]:
-                    return {
-                        "success": False,
-                        "error": "Failed to upload converted structure",
-                        "details": upload_result
-                    }
-
-                # Atomic replacement: delete original and rename temp
-                try:
-                    # Delete original folder
-                    self._delete_folder_contents(bucket_name, folder_path)
-
-                    # Move temp folder to original location
-                    self._move_folder_contents(bucket_name, temp_folder_path, folder_path, delete_source=True)
-
-                    # Clean up temp folder
-                    self._delete_folder_contents(bucket_name, temp_folder_path)
-
-                    logger.info(f"Successfully completed atomic conversion of {folder_path}")
-
-                    return {
-                        "success": True,
-                        "message": f"Successfully converted {folder_path} to OCFL format",
-                        "conversion_type": conversion_plan["conversion_type"],
-                        "files_processed": conversion_result.get("files_processed", 0),
-                        "preserved_items": conversion_plan["preserve_items"]
-                    }
-
-                except Exception as atomic_error:
-                    # Attempt to rollback by cleaning up temp folder
-                    try:
-                        self._delete_folder_contents(bucket_name, temp_folder_path)
-                    except:
-                        pass
-
-                    raise atomic_error
+            return {
+                "success": False,
+                "error": "Conversion path not supported for in-place server operations",
+            }
 
         except Exception as e:
             logger.error(f"Error in atomic conversion: {str(e)}")
-
-            # Clean up temp folder if it exists
-            try:
-                self._delete_folder_contents(bucket_name, temp_folder_path)
-            except:
-                pass
 
             return {
                 "success": False,
@@ -691,6 +658,8 @@ class OCFLService:
         metadata_seen: set[str] = set()
         metadata_files: List[str] = []
         files_processed = 0
+        manifest_entries: Dict[str, List[str]] = defaultdict(list)
+        state_entries: Dict[str, List[str]] = defaultdict(list)
 
         try:
             # Seed OCFL markers
@@ -723,9 +692,20 @@ class OCFLService:
                 elif lower_rel.endswith('acl.json'):
                     dest_rel = self._build_metadata_destination(relative_path, metadata_seen, force_name='acl.json')
                 else:
-                    dest_rel = f"v1/content/Resources/{relative_path}"
+                    parts = [part for part in relative_path.split('/') if part]
+                    if parts and parts[0].lower() == 'resources':
+                        parts = parts[1:]
+
+                    resource_rel = '/'.join(parts) if parts else os.path.basename(relative_path)
+                    dest_rel = f"v1/content/Resources/{resource_rel}" if resource_rel else "v1/content/Resources"
 
                 dest_key = f"{temp_prefix}{dest_rel}".replace('//', '/')
+
+                digest = self._compute_sha512_from_s3(bucket_name, key)
+                manifest_entries[digest].append(dest_rel)
+
+                logical_path = dest_rel.split('v1/content/', 1)[-1] if dest_rel.startswith('v1/content/') else dest_rel
+                state_entries[digest].append(logical_path)
 
                 self.bucket_service.s3_client.copy_object(
                     CopySource={'Bucket': bucket_name, 'Key': key},
@@ -735,9 +715,13 @@ class OCFLService:
 
                 files_processed += 1
 
+            inventory = self._build_inventory(folder_path, manifest_entries, state_entries)
+            self._write_inventory_to_s3(bucket_name, temp_prefix, inventory)
+
             # Replace original prefix with the new OCFL structure
             self._delete_folder_contents(bucket_name, source_prefix)
             self._move_folder_contents(bucket_name, temp_prefix, source_prefix, delete_source=True)
+            self._write_inventory_to_s3(bucket_name, source_prefix, inventory)
 
             return {
                 'success': True,
@@ -762,7 +746,7 @@ class OCFLService:
             }
 
     def _create_ocfl_structure(self, source_dir: str, target_dir: str,
-                              conversion_plan: Dict) -> Dict[str, Any]:
+                              conversion_plan: Dict, object_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Create OCFL structure from source directory.
 
@@ -808,6 +792,12 @@ class OCFLService:
             elif conversion_plan["conversion_type"] == "flat_to_ocfl":
                 # Organize flat structure
                 files_processed = self._organize_flat_structure(source_dir, content_dir, metadata_dir)
+
+            inventory = self._build_inventory_from_local(
+                target_dir,
+                folder_path=(object_id or os.path.basename(source_dir.rstrip('/')) or "object")
+            )
+            self._write_inventory_to_local(target_dir, inventory)
 
             return {
                 "success": True,
@@ -861,19 +851,21 @@ class OCFLService:
         """Organize flat file structure into OCFL format"""
         files_processed = 0
 
-        for root, dirs, files in os.walk(source_dir):
+        for root, _, files in os.walk(source_dir):
             for file in files:
                 src = os.path.join(root, file)
+                rel_path = os.path.relpath(src, source_dir)
 
                 if file.endswith(".xml") or file == "acl.json":
                     # Move to metadata
-                    dst = os.path.join(metadata_dir, file)
+                    dst = os.path.join(metadata_dir, os.path.basename(rel_path))
                     shutil.copy2(src, dst)
                 else:
                     # Move to Resources
                     resources_dir = os.path.join(content_dir, "Resources")
                     os.makedirs(resources_dir, exist_ok=True)
-                    dst = os.path.join(resources_dir, file)
+                    dst = os.path.join(resources_dir, rel_path)
+                    os.makedirs(os.path.dirname(dst), exist_ok=True)
                     shutil.copy2(src, dst)
 
                 files_processed += 1
@@ -882,13 +874,45 @@ class OCFLService:
 
     def _list_s3_objects(self, bucket_name: str, prefix: str) -> List[str]:
         paginator = self.bucket_service.s3_client.get_paginator("list_objects_v2")
+        queue = [prefix]
         keys: List[str] = []
-        for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
-            keys.extend(obj["Key"] for obj in page.get("Contents", []) if obj.get("Key"))
+        processed: set[str] = set()
+
+        while queue:
+            current_prefix = queue.pop(0)
+            if current_prefix in processed:
+                continue
+
+            processed.add(current_prefix)
+
+            for page in paginator.paginate(Bucket=bucket_name, Prefix=current_prefix, Delimiter='/'):
+                keys.extend(obj["Key"] for obj in page.get("Contents", []) if obj.get("Key"))
+                for common_prefix in page.get("CommonPrefixes", []):
+                    next_prefix = common_prefix.get('Prefix')
+                    if next_prefix and next_prefix not in processed:
+                        queue.append(next_prefix)
+
         return keys
 
     def _put_empty_object(self, bucket_name: str, key: str) -> None:
         self.bucket_service.s3_client.put_object(Bucket=bucket_name, Key=key, Body=b"")
+
+    def _compute_sha512_from_s3(self, bucket_name: str, key: str) -> str:
+        hasher = hashlib.sha512()
+        response = self.bucket_service.s3_client.get_object(Bucket=bucket_name, Key=key)
+        body = response.get('Body')
+        if body is None:
+            raise ValueError(f"Unable to read object body for {key}")
+
+        chunk = body.read(8192)
+        while chunk:
+            hasher.update(chunk)
+            chunk = body.read(8192)
+
+        if hasattr(body, 'close'):
+            body.close()
+
+        return hasher.hexdigest()
 
     def _build_metadata_destination(self, relative_path: str, existing: set[str], force_name: Optional[str] = None) -> str:
         filename = force_name or os.path.basename(relative_path) or "metadata.xml"
@@ -911,10 +935,21 @@ class OCFLService:
                     delete_keys = [{"Key": obj["Key"]} for obj in page["Contents"]]
 
                     if delete_keys:
-                        self.bucket_service.s3_client.delete_objects(
-                            Bucket=bucket_name,
-                            Delete={"Objects": delete_keys}
-                        )
+                        try:
+                            self.bucket_service.s3_client.delete_objects(
+                                Bucket=bucket_name,
+                                Delete={"Objects": delete_keys}
+                            )
+                        except ClientError as err:
+                            error_code = err.response.get("Error", {}).get("Code")
+                            if error_code == "MissingContentMD5":
+                                for key_info in delete_keys:
+                                    self.bucket_service.s3_client.delete_object(
+                                        Bucket=bucket_name,
+                                        Key=key_info["Key"]
+                                    )
+                            else:
+                                raise
 
         except Exception as e:
             logger.error(f"Error deleting folder contents: {str(e)}")
@@ -962,3 +997,95 @@ class OCFLService:
         except Exception as e:
             logger.error(f"Error moving folder contents: {str(e)}")
             raise 
+
+    def _build_inventory(self, folder_path: str, manifest_entries: Dict[str, List[str]],
+                         state_entries: Dict[str, List[str]]) -> Dict[str, Any]:
+        manifest = {digest: sorted(paths) for digest, paths in manifest_entries.items()}
+        state = {digest: sorted(paths) for digest, paths in state_entries.items()}
+
+        inventory = {
+            "id": folder_path.rstrip('/'),
+            "type": "https://ocfl.io/1.1/spec/#inventory",
+            "digestAlgorithm": "sha512",
+            "head": "v1",
+            "contentDirectory": "content",
+            "manifest": manifest,
+            "versions": {
+                "v1": {
+                    "created": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+                    "state": state
+                }
+            }
+        }
+
+        return inventory
+
+    def _serialize_inventory(self, inventory: Dict[str, Any]) -> bytes:
+        return json.dumps(inventory, indent=2, sort_keys=True).encode('utf-8') + b"\n"
+
+    def _write_inventory_to_s3(self, bucket_name: str, temp_prefix: str, inventory: Dict[str, Any]) -> None:
+        prefix = temp_prefix if temp_prefix.endswith('/') else f"{temp_prefix}/"
+        inventory_bytes = self._serialize_inventory(inventory)
+        inventory_digest = hashlib.sha512(inventory_bytes).hexdigest()
+        digest_body = f"{inventory_digest} inventory.json\n".encode('utf-8')
+
+        targets = [
+            f"{prefix}inventory.json",
+            f"{prefix}inventory.json.sha512",
+            f"{prefix}v1/inventory.json",
+            f"{prefix}v1/inventory.json.sha512",
+        ]
+        bodies = [inventory_bytes, digest_body, inventory_bytes, digest_body]
+
+        for key, body in zip(targets, bodies):
+            self.bucket_service.s3_client.put_object(Bucket=bucket_name, Key=key, Body=body)
+
+    def _build_inventory_from_local(self, target_dir: str, folder_path: str) -> Dict[str, Any]:
+        content_root = os.path.join(target_dir, "v1", "content")
+        manifest_entries: Dict[str, List[str]] = defaultdict(list)
+        state_entries: Dict[str, List[str]] = defaultdict(list)
+
+        for root, _, files in os.walk(content_root):
+            for file in files:
+                file_path = os.path.join(root, file)
+                digest = self._compute_sha512_from_file(file_path)
+
+                rel_from_v1 = os.path.relpath(file_path, os.path.join(target_dir, "v1"))
+                rel_from_v1 = rel_from_v1.replace(os.sep, '/')
+                manifest_entries[digest].append(f"v1/{rel_from_v1}")
+
+                logical_path = os.path.relpath(file_path, content_root).replace(os.sep, '/')
+                state_entries[digest].append(logical_path)
+
+        return self._build_inventory(folder_path, manifest_entries, state_entries)
+
+    def _compute_sha512_from_file(self, file_path: str) -> str:
+        hasher = hashlib.sha512()
+        with open(file_path, 'rb') as f:
+            while True:
+                chunk = f.read(8192)
+                if not chunk:
+                    break
+                hasher.update(chunk)
+        return hasher.hexdigest()
+
+    def _write_inventory_to_local(self, target_dir: str, inventory: Dict[str, Any]) -> None:
+        inventory_bytes = self._serialize_inventory(inventory)
+        inventory_digest = hashlib.sha512(inventory_bytes).hexdigest()
+        digest_body = f"{inventory_digest} inventory.json\n".encode('utf-8')
+
+        root_inventory = os.path.join(target_dir, "inventory.json")
+        with open(root_inventory, 'wb') as f:
+            f.write(inventory_bytes)
+
+        with open(f"{root_inventory}.sha512", 'wb') as f:
+            f.write(digest_body)
+
+        v1_dir = os.path.join(target_dir, "v1")
+        os.makedirs(v1_dir, exist_ok=True)
+
+        with open(os.path.join(v1_dir, "inventory.json"), 'wb') as f:
+            f.write(inventory_bytes)
+
+        with open(os.path.join(v1_dir, "inventory.json.sha512"), 'wb') as f:
+            f.write(digest_body)

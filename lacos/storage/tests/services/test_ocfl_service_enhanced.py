@@ -14,7 +14,14 @@ class TestOCFLServiceEnhanced(TestCase):
     def setUp(self):
         """Set up test fixtures"""
         self.mock_bucket_service = Mock()
+        self.mock_bucket_service.ingest_bucket = 'ingest'
+        self.mock_bucket_service.production_bucket = 'production'
+        self.mock_bucket_service.s3_client = Mock()
+        paginator_mock = Mock()
+        paginator_mock.paginate.return_value = []
+        self.mock_bucket_service.s3_client.get_paginator.return_value = paginator_mock
         self.ocfl_service = OCFLService(self.mock_bucket_service)
+        self.ocfl_service._list_s3_objects = Mock(return_value=[])
 
     def test_analyze_folder_structure_complete_ocfl(self):
         """Test analyzing a complete OCFL structure"""
@@ -172,8 +179,8 @@ class TestOCFLServiceEnhanced(TestCase):
         self.assertEqual(plan["conversion_type"], "flat_to_ocfl")
         self.assertIn("Create OCFL structure", plan["steps"][0])
 
-    def test_create_conversion_plan_unknown_structure(self):
-        """Test creating conversion plan for unknown structure"""
+    def test_create_conversion_plan_unknown_structure_defaults_to_flat(self):
+        """Folders with files but no metadata/resources should default to flat conversion"""
         analysis_result = {
             "structure_analysis": {
                 "is_ocfl_compliant": False,
@@ -188,9 +195,9 @@ class TestOCFLServiceEnhanced(TestCase):
 
         plan = self.ocfl_service.create_conversion_plan(analysis_result)
 
-        self.assertFalse(plan["feasible"])
-        self.assertEqual(plan["conversion_type"], "unknown_structure")
-        self.assertIn("Unknown structure type", plan["risks"])
+        self.assertTrue(plan["feasible"])
+        self.assertEqual(plan["conversion_type"], "flat_to_ocfl")
+        self.assertIn("Create OCFL structure", plan["steps"][0])
 
     def test_create_conversion_plan_large_folder_risks(self):
         """Test conversion plan risk assessment for large folders"""
@@ -327,6 +334,16 @@ class TestOCFLServiceEnhanced(TestCase):
         self.ocfl_service._find_and_move_xml_files = Mock(return_value=["metadata.xml"])
         self.ocfl_service._move_acl_file_if_exists = Mock(return_value=True)
         self.ocfl_service._move_resources_directory = Mock(return_value=5)
+        inventory_stub = {
+            "id": "test",
+            "digestAlgorithm": "sha512",
+            "head": "v1",
+            "contentDirectory": "content",
+            "manifest": {},
+            "versions": {"v1": {"created": "2024-01-01T00:00:00Z", "state": {}}}
+        }
+        self.ocfl_service._build_inventory_from_local = Mock(return_value=inventory_stub)
+        self.ocfl_service._write_inventory_to_local = Mock()
 
         result = self.ocfl_service._create_ocfl_structure(source_dir, target_dir, conversion_plan)
 
@@ -337,6 +354,8 @@ class TestOCFLServiceEnhanced(TestCase):
         # Verify OCFL marker was created
         mock_file.assert_called()
         mock_makedirs.assert_called()
+        self.ocfl_service._build_inventory_from_local.assert_called_once_with(target_dir, folder_path=os.path.basename(source_dir.rstrip('/')))
+        self.ocfl_service._write_inventory_to_local.assert_called_once_with(target_dir, inventory_stub)
 
     @patch('os.makedirs')
     @patch('builtins.open', new_callable=mock_open)
@@ -350,11 +369,23 @@ class TestOCFLServiceEnhanced(TestCase):
 
         # Mock helper method
         self.ocfl_service._organize_flat_structure = Mock(return_value=10)
+        inventory_stub = {
+            "id": "test",
+            "digestAlgorithm": "sha512",
+            "head": "v1",
+            "contentDirectory": "content",
+            "manifest": {},
+            "versions": {"v1": {"created": "2024-01-01T00:00:00Z", "state": {}}}
+        }
+        self.ocfl_service._build_inventory_from_local = Mock(return_value=inventory_stub)
+        self.ocfl_service._write_inventory_to_local = Mock()
 
         result = self.ocfl_service._create_ocfl_structure(source_dir, target_dir, conversion_plan)
 
         self.assertTrue(result["success"])
         self.assertEqual(result["files_processed"], 10)
+        self.ocfl_service._build_inventory_from_local.assert_called_once_with(target_dir, folder_path=os.path.basename(source_dir.rstrip('/')))
+        self.ocfl_service._write_inventory_to_local.assert_called_once_with(target_dir, inventory_stub)
 
     @patch('os.walk')
     @patch('shutil.copy2')
@@ -426,16 +457,24 @@ class TestOCFLServiceEnhanced(TestCase):
         """Test organizing flat file structure"""
         # Mock os.walk to return mixed files
         mock_walk.return_value = [
-            ("/tmp/source", [], ["metadata.xml", "acl.json", "audio.wav", "document.pdf"])
+            ("/tmp/source", ["sub"], ["metadata.xml", "acl.json", "root.txt"]),
+            ("/tmp/source/sub", [], ["nested.pdf"])
         ]
 
         result = self.ocfl_service._organize_flat_structure(
             "/tmp/source", "/tmp/content", "/tmp/metadata"
         )
 
-        self.assertEqual(result, 4)  # 4 files processed
-        # Verify copy2 was called for each file
-        self.assertEqual(mock_copy.call_count, 4)
+        self.assertEqual(result, 4)
+        expected_calls = [
+            call("/tmp/source/metadata.xml", "/tmp/metadata/metadata.xml"),
+            call("/tmp/source/acl.json", "/tmp/metadata/acl.json"),
+            call("/tmp/source/root.txt", "/tmp/content/Resources/root.txt"),
+            call("/tmp/source/sub/nested.pdf", "/tmp/content/Resources/sub/nested.pdf")
+        ]
+        self.assertEqual(mock_copy.call_args_list, expected_calls)
+        # Ensure directory structure recreated for nested resource
+        mock_makedirs.assert_any_call("/tmp/content/Resources/sub", exist_ok=True)
 
     def test_delete_folder_contents(self):
         """Test deleting folder contents from S3"""

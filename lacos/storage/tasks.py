@@ -113,19 +113,7 @@ def convert_folder_to_ocfl_task(
 
         if conversion_result.get('success'):
             logger.info(f"OCFL conversion completed successfully for {bucket_name}/{folder_path}")
-        if tracking_id:
-            BackgroundTaskService.mark_success(
-                tracking_id,
-                message="Conversion completed",
-                result={
-                    'bucket_name': bucket_name,
-                    'folder_path': folder_path,
-                    'conversion': conversion_result,
-                    'structure': structure,
-                    'backup_id': backup_id,
-                },
-            )
-            return {
+            payload = {
                 'success': True,
                 'message': f'Successfully converted {folder_path} to OCFL format',
                 'backup_location': backup_location,
@@ -135,26 +123,41 @@ def convert_folder_to_ocfl_task(
                 'analysis': analysis_result,
                 'conversion_details': conversion_result
             }
-        else:
-            error_msg = conversion_result.get('error', 'Unknown error occurred during conversion')
-            logger.error(f"OCFL conversion failed for {bucket_name}/{folder_path}: {error_msg}")
+
             if tracking_id:
-                BackgroundTaskService.mark_failed(
+                BackgroundTaskService.mark_success(
                     tracking_id,
-                    error_message=error_msg,
+                    message="Conversion completed",
                     result={
                         'bucket_name': bucket_name,
                         'folder_path': folder_path,
+                        'conversion': conversion_result,
                         'structure': structure,
+                        'backup_id': backup_id,
                     },
                 )
-            return {
-                'success': False,
-                'error': error_msg,
-                'bucket_name': bucket_name,
-                'folder_path': folder_path,
-                'analysis': analysis_result
-            }
+
+            return payload
+
+        error_msg = conversion_result.get('error', 'Unknown error occurred during conversion')
+        logger.error(f"OCFL conversion failed for {bucket_name}/{folder_path}: {error_msg}")
+        if tracking_id:
+            BackgroundTaskService.mark_failed(
+                tracking_id,
+                error_message=error_msg,
+                result={
+                    'bucket_name': bucket_name,
+                    'folder_path': folder_path,
+                    'structure': structure,
+                },
+            )
+        return {
+            'success': False,
+            'error': error_msg,
+            'bucket_name': bucket_name,
+            'folder_path': folder_path,
+            'analysis': analysis_result
+        }
 
     except Exception as e:
         error_msg = f"Error during OCFL conversion: {str(e)}"

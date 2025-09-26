@@ -68,6 +68,35 @@ class BucketService(BaseStorageService):
         
         logger.info("BucketService initialized")
         self.initialized = True
+
+    def _download_directory(self, bucket_name: str, prefix: str, local_dir: str) -> None:
+        """Download an S3 prefix to a local directory."""
+        paginator = self.s3_client.get_paginator("list_objects_v2")
+        normalized_prefix = prefix if not prefix or prefix.endswith('/') else f"{prefix}/"
+
+        for page in paginator.paginate(Bucket=bucket_name, Prefix=normalized_prefix):
+            for obj in page.get("Contents", []):
+                key = obj["Key"]
+                if normalized_prefix and key == normalized_prefix:
+                    continue
+
+                rel_path = key[len(normalized_prefix):] if normalized_prefix else key
+                target_path = os.path.join(local_dir, rel_path)
+                os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                self.s3_client.download_file(bucket_name, key, target_path)
+
+    def _upload_directory(self, local_dir: str, bucket_name: str, target_prefix: str) -> Dict[str, Any]:
+        """Upload a local directory into an S3 prefix."""
+        prefix = target_prefix if not target_prefix or target_prefix.endswith('/') else f"{target_prefix}/"
+
+        for root, _, files in os.walk(local_dir):
+            for file in files:
+                src_path = os.path.join(root, file)
+                rel_path = os.path.relpath(src_path, local_dir).replace(os.sep, '/')
+                dest_key = f"{prefix}{rel_path}" if prefix else rel_path
+                self.s3_client.upload_file(src_path, bucket_name, dest_key)
+
+        return {"success": True}
     
     def is_blam_object(self, bucket_name: str, path: str) -> Dict[str, Any]:
         """
