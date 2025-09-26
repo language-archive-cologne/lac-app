@@ -31,6 +31,8 @@ urlpatterns = [
          views.metadata_ingest_modal,
          name="metadata_ingest_modal"),
 
+    path("tasks/<uuid:task_id>/status/", views.background_task_status, name="background_task_status"),
+
     # Archivist dashboard
     path("dashboard/", views.archivist_dashboard, name="archivist_dashboard"),
     path("dashboard/folder-contents/<str:bucket_type>/<path:folder_path>/", views.load_folder_contents, name="load_folder_contents"),

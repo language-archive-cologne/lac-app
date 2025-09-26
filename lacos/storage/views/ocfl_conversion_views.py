@@ -5,8 +5,10 @@ from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.shortcuts import render
+from django.template.loader import render_to_string
 
 from lacos.storage.tasks import convert_folder_to_ocfl_task, analyze_folder_for_ocfl_task
+from lacos.storage.services.background_task_service import BackgroundTaskService
 
 logger = logging.getLogger(__name__)
 
@@ -23,42 +25,45 @@ class ConvertToOCFLView(View):
 
             logger.info(f"Triggering OCFL conversion task for {bucket_name}/{folder_path}")
 
+            task_record = BackgroundTaskService.create(
+                task_name='convert_folder_to_ocfl',
+                description=f'Convert {folder_path} to OCFL',
+                metadata={
+                    'bucket_name': bucket_name,
+                    'folder_path': folder_path,
+                }
+            )
+
             # Trigger the background task
             task_result = convert_folder_to_ocfl_task(
                 bucket_name=bucket_name,
                 folder_path=folder_path,
                 create_backup=create_backup,
-                force=force
+                force=force,
+                tracking_id=str(task_record.id)
             )
 
             # Get task ID for tracking
-            task_id = task_result.id if hasattr(task_result, 'id') else 'unknown'
+            task_id = getattr(task_result, 'id', None)
+            if task_id:
+                BackgroundTaskService.attach_huey_id(task_record, task_id)
+                task_record.metadata['task_id'] = task_id
+                task_record.save(update_fields=['metadata', 'updated_at'])
+            else:
+                task_id = 'unknown'
 
-            # Return immediate success response with task tracking
+            status_html = render_to_string(
+                'storage/background_task_status.html',
+                {'task': task_record},
+                request=request,
+            )
+
             return HttpResponse(
-                f"""
-                <div class="alert alert-info">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <div>
-                        <span class="font-semibold">OCFL conversion started!</span>
-                        <div class="text-sm mt-1">
-                            Converting: {folder_path}
-                            <br>Task ID: {task_id}
-                            <br>This may take several minutes. You'll be notified when complete.
-                        </div>
-                        <div class="mt-2">
-                            <div class="loading loading-spinner loading-sm inline-block mr-2"></div>
-                            <span class="text-sm">Processing in background...</span>
-                        </div>
-                    </div>
-                </div>
-                """,
+                status_html,
                 headers={
                     'HX-Trigger': json.dumps({
                         'showMessage': {
-                            'message': f'OCFL conversion started for {folder_path}. Task ID: {task_id}',
+                            'message': f'OCFL conversion queued for {folder_path}. Task ID: {task_id}',
                             'level': 'info'
                         }
                     })
