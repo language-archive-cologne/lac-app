@@ -199,6 +199,7 @@ TEMPLATES = [
                 "django.template.context_processors.tz",
                 "django.contrib.messages.context_processors.messages",
                 "lacos.users.context_processors.allauth_settings",
+                "lacos.storage.context_processors.upload_client_config",
             ],
         },
     },
@@ -323,11 +324,31 @@ S3_PRODUCTION_BUCKET = env("S3_PRODUCTION_BUCKET", default="lacos-production")
 # Multipart Upload Configuration
 # ------------------------------------------------------------------------------
 MULTIPART_UPLOAD_SETTINGS = {
-    # File size thresholds - 5GB forces single uploads for most files
-    'multipart_threshold': env.int('MULTIPART_THRESHOLD', default=5 * 1024 * 1024 * 1024),  # 5GB (S3 single upload limit)
-    'chunk_size': env.int('MULTIPART_CHUNK_SIZE', default=0),  # 0 means use dynamic sizing
-    'max_parts': 10000,  # S3 limit
-    'min_part_size': 5 * 1024 * 1024,  # 5MB - S3 minimum
+    # File size thresholds - default keeps single uploads up to 5GB (S3 limit)
+    'multipart_threshold': env.int('MULTIPART_THRESHOLD', default=5 * 1024 * 1024 * 1024),
+    'resumable_threshold': env.int('RESUMABLE_THRESHOLD', default=5 * 1024 * 1024 * 1024),
+
+    # Chunk sizing (100MB chunks balance request count vs throughput)
+    'chunk_size': env.int('MULTIPART_CHUNK_SIZE', default=100 * 1024 * 1024),
+    'resumable_chunk_size': env.int('RESUMABLE_CHUNK_SIZE', default=100 * 1024 * 1024),
+    'min_part_size': env.int('MULTIPART_MIN_PART_SIZE', default=5 * 1024 * 1024),
+    'max_parts': env.int('MULTIPART_MAX_PARTS', default=10000),
+
+    # Concurrency tuning
+    'max_workers': env.int('MULTIPART_MAX_WORKERS', default=12),
+    'max_concurrency': env.int('MULTIPART_MAX_CONCURRENCY', default=8),
+    'part_upload_concurrency': env.int('MULTIPART_PART_UPLOAD_CONCURRENCY', default=6),
+
+    # Retry/timeout behaviour
+    'max_retries': env.int('MULTIPART_MAX_RETRIES', default=3),
+    'retry_delay_base': env.float('MULTIPART_RETRY_DELAY_BASE', default=0.5),
+    'retry_max_delay': env.int('MULTIPART_RETRY_MAX_DELAY', default=30),
+    'chunk_timeout': env.int('MULTIPART_CHUNK_TIMEOUT', default=300),
+    'total_timeout': env.int('MULTIPART_TOTAL_TIMEOUT', default=3600),
+
+    # Operational toggles
+    'enable_resume': env.bool('MULTIPART_ENABLE_RESUME', default=True),
+    'cleanup_failed_uploads': env.bool('MULTIPART_CLEANUP_FAILED', default=True),
 }
 
 # django-allauth

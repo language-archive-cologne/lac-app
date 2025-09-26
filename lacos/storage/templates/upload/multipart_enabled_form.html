@@ -37,7 +37,7 @@
                         </span>
                     </p>
                     <p class="mt-1 text-xs text-gray-500">
-                        Files larger than 100MB will automatically use multipart upload
+                        Files larger than {{ UPLOAD_CLIENT_CONFIG.multipart_threshold_label|default:'5 GB' }} will automatically use multipart upload
                     </p>
                 </div>
             </div>
@@ -104,10 +104,12 @@
 <!-- Include multipart upload handler -->
 <script src="{% static 'js/upload/multipart-upload.js' %}"></script>
 
+{% include 'upload/_upload_config_bridge.html' %}
+
 <script>
 // Global variables
 let selectedFiles = [];
-const MULTIPART_THRESHOLD = 100 * 1024 * 1024; // 100MB
+const MULTIPART_THRESHOLD = (window.UPLOAD_CONFIG && window.UPLOAD_CONFIG.multipartThreshold) || 5 * 1024 * 1024 * 1024; // Default aligns with 5GB single-upload limit
 
 // Switch between files and folder mode
 function switchToFilesMode() {
