@@ -149,7 +149,7 @@ Template for displaying root level items and folders with lazy loading
                             </svg>
                         </button>
 
-                        {% if item.name|lower endswith '.xml' %}
+                        {% if item.name|lower|slice:'-4:' == '.xml' %}
                         <label class="text-amber-600 hover:text-amber-700 cursor-pointer"
                                for="metadata-ingest-modal"
                                title="Ingest this metadata XML"
