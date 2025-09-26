@@ -1,8 +1,8 @@
 {% load humanize %}
-{% with is_done=task.status in ('success', 'failed') %}
+{% with status=task.status %}
 <div id="background-task-{{ task.id }}"
-     class="alert {% if task.status == 'failed' %}alert-error{% elif task.status == 'success' %}alert-success{% else %}alert-info{% endif %}"
-     {% if not is_done %}
+     class="alert {% if status == 'failed' %}alert-error{% elif status == 'success' %}alert-success{% else %}alert-info{% endif %}"
+     {% if status != 'success' and status != 'failed' %}
         hx-get="{% url 'storage:background_task_status' task.id %}"
         hx-trigger="load, every 4s"
         hx-target="this"
@@ -10,9 +10,9 @@
      {% endif %}>
     <div class="flex items-start gap-3">
         <div class="mt-1">
-            {% if task.status == 'failed' %}
+            {% if status == 'failed' %}
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            {% elif task.status == 'success' %}
+            {% elif status == 'success' %}
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             {% else %}
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v2m0 12v2m8-8h-2M6 12H4m12.364 6.364l-1.414-1.414M8.05 8.05L6.636 6.636m10.728 0L16.95 8.05M8.05 15.95l-1.414 1.414" /></svg>
@@ -35,7 +35,7 @@
                 <div class="flex gap-2"><dt class="font-medium">Started</dt><dd>{{ task.created_at|naturaltime }}</dd></div>
             </dl>
 
-            {% if task.status == 'success' and task.result %}
+            {% if status == 'success' and task.result %}
                 {% with result=task.result %}
                 <div class="mt-2 text-xs text-base-content/80 space-y-1">
                     {% if result.conversion.message %}
@@ -49,7 +49,7 @@
                     {% endif %}
                 </div>
                 {% endwith %}
-            {% elif task.status == 'failed' and task.error %}
+            {% elif status == 'failed' and task.error %}
                 <div class="mt-2 text-xs text-red-200 break-words">{{ task.error }}</div>
             {% endif %}
         </div>

@@ -594,6 +594,17 @@ class OCFLService:
         temp_folder_path = f"{folder_path}_temp_{temp_suffix}"
 
         try:
+            if conversion_plan.get("conversion_type") in {"structured_to_ocfl", "flat_to_ocfl"}:
+                server_result = self._perform_server_side_conversion(bucket_name, folder_path, conversion_plan)
+                if server_result.get("success"):
+                    return server_result
+                if server_result.get("server_side"):
+                    logger.warning(
+                        "Server-side conversion attempt failed for %s: %s. Falling back to filesystem pipeline.",
+                        folder_path,
+                        server_result.get("error"),
+                    )
+
             # Create temporary directory for processing
             with tempfile.TemporaryDirectory() as temp_workspace:
                 logger.debug(f"Using temporary workspace: {temp_workspace}")
@@ -629,7 +640,7 @@ class OCFLService:
                     self._delete_folder_contents(bucket_name, folder_path)
 
                     # Move temp folder to original location
-                    self._move_folder_contents(bucket_name, temp_folder_path, folder_path)
+                    self._move_folder_contents(bucket_name, temp_folder_path, folder_path, delete_source=True)
 
                     # Clean up temp folder
                     self._delete_folder_contents(bucket_name, temp_folder_path)
@@ -666,6 +677,88 @@ class OCFLService:
                 "success": False,
                 "error": f"Atomic conversion failed: {str(e)}",
                 "rollback_attempted": True
+            }
+
+    def _perform_server_side_conversion(self, bucket_name: str, folder_path: str,
+                                        conversion_plan: Dict[str, Any]) -> Dict[str, Any]:
+        """Attempt OCFL conversion using in-bucket copy operations."""
+
+        source_prefix = folder_path if folder_path.endswith('/') else f"{folder_path}/"
+        temp_prefix = f"{folder_path.rstrip('/')}_ocfl_{uuid.uuid4().hex[:8]}/"
+
+        logger.info(f"Performing server-side conversion for {folder_path} using temp prefix {temp_prefix}")
+
+        metadata_seen: set[str] = set()
+        metadata_files: List[str] = []
+        files_processed = 0
+
+        try:
+            # Seed OCFL markers
+            self._put_empty_object(bucket_name, f"{temp_prefix}0=ocfl_object_1.0")
+            self._put_empty_object(bucket_name, f"{temp_prefix}v1/")
+            self._put_empty_object(bucket_name, f"{temp_prefix}v1/content/")
+            self._put_empty_object(bucket_name, f"{temp_prefix}v1/content/metadata/")
+            self._put_empty_object(bucket_name, f"{temp_prefix}v1/content/Resources/")
+
+            for key in self._list_s3_objects(bucket_name, source_prefix):
+                if key == source_prefix:
+                    continue
+
+                relative_path = key[len(source_prefix):]
+                if not relative_path:
+                    continue
+
+                lower_rel = relative_path.lower()
+
+                # Skip existing OCFL markers or structures; not supported in server-side flow
+                if lower_rel.startswith('0=ocfl_object') or lower_rel.startswith('v1/'):
+                    raise ValueError('Existing OCFL structure detected; cannot perform server-side conversion.')
+
+                if lower_rel.endswith('/'):
+                    continue
+
+                if lower_rel.endswith('.xml'):
+                    dest_rel = self._build_metadata_destination(relative_path, metadata_seen)
+                    metadata_files.append(os.path.basename(dest_rel))
+                elif lower_rel.endswith('acl.json'):
+                    dest_rel = self._build_metadata_destination(relative_path, metadata_seen, force_name='acl.json')
+                else:
+                    dest_rel = f"v1/content/Resources/{relative_path}"
+
+                dest_key = f"{temp_prefix}{dest_rel}".replace('//', '/')
+
+                self.bucket_service.s3_client.copy_object(
+                    CopySource={'Bucket': bucket_name, 'Key': key},
+                    Bucket=bucket_name,
+                    Key=dest_key
+                )
+
+                files_processed += 1
+
+            # Replace original prefix with the new OCFL structure
+            self._delete_folder_contents(bucket_name, source_prefix)
+            self._move_folder_contents(bucket_name, temp_prefix, source_prefix, delete_source=True)
+
+            return {
+                'success': True,
+                'message': f'Server-side conversion completed for {folder_path}',
+                'conversion_type': conversion_plan.get('conversion_type'),
+                'files_processed': files_processed,
+                'preserved_items': conversion_plan.get('preserve_items', []),
+                'metadata_files': metadata_files,
+                'server_side': True,
+            }
+
+        except Exception as exc:
+            logger.error(f"Server-side OCFL conversion failed: {exc}")
+            try:
+                self._delete_folder_contents(bucket_name, temp_prefix)
+            except Exception:
+                pass
+            return {
+                'success': False,
+                'error': str(exc),
+                'server_side': True,
             }
 
     def _create_ocfl_structure(self, source_dir: str, target_dir: str,
@@ -787,6 +880,27 @@ class OCFLService:
 
         return files_processed
 
+    def _list_s3_objects(self, bucket_name: str, prefix: str) -> List[str]:
+        paginator = self.bucket_service.s3_client.get_paginator("list_objects_v2")
+        keys: List[str] = []
+        for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+            keys.extend(obj["Key"] for obj in page.get("Contents", []) if obj.get("Key"))
+        return keys
+
+    def _put_empty_object(self, bucket_name: str, key: str) -> None:
+        self.bucket_service.s3_client.put_object(Bucket=bucket_name, Key=key, Body=b"")
+
+    def _build_metadata_destination(self, relative_path: str, existing: set[str], force_name: Optional[str] = None) -> str:
+        filename = force_name or os.path.basename(relative_path) or "metadata.xml"
+        name, ext = os.path.splitext(filename)
+        candidate = f"v1/content/metadata/{filename}"
+        counter = 1
+        while candidate in existing:
+            candidate = f"v1/content/metadata/{name}_{counter}{ext}"
+            counter += 1
+        existing.add(candidate)
+        return candidate
+
     def _delete_folder_contents(self, bucket_name: str, folder_path: str) -> None:
         """Delete all contents of a folder in S3"""
         try:
@@ -806,18 +920,31 @@ class OCFLService:
             logger.error(f"Error deleting folder contents: {str(e)}")
             raise
 
-    def _move_folder_contents(self, bucket_name: str, source_path: str, target_path: str) -> None:
-        """Move contents from source folder to target folder in S3"""
+    def _move_folder_contents(self, bucket_name: str, source_path: str, target_path: str, delete_source: bool = False) -> None:
+        """Move contents from source folder to target folder in S3.
+
+        Args:
+            bucket_name: Name of the bucket containing the objects.
+            source_path: Source prefix to move (with or without trailing slash).
+            target_path: Destination prefix.
+            delete_source: When True, delete each source object after copying (behaves like rename).
+        """
         try:
             paginator = self.bucket_service.s3_client.get_paginator("list_objects_v2")
 
-            for page in paginator.paginate(Bucket=bucket_name, Prefix=source_path):
+            source_prefix = source_path if source_path.endswith('/') else f"{source_path}/"
+            target_prefix = target_path if target_path.endswith('/') else f"{target_path}/"
+
+            for page in paginator.paginate(Bucket=bucket_name, Prefix=source_prefix):
                 if "Contents" in page:
                     for obj in page["Contents"]:
                         source_key = obj["Key"]
-                        # Calculate target key by replacing prefix
-                        relative_path = source_key[len(source_path):].lstrip("/")
-                        target_key = f"{target_path.rstrip('/')}/{relative_path}" if relative_path else target_path
+
+                        if source_key == source_prefix:
+                            continue
+
+                        relative_path = source_key[len(source_prefix):]
+                        target_key = f"{target_prefix}{relative_path}" if relative_path else target_prefix.rstrip('/')
 
                         # Copy object to new location
                         self.bucket_service.s3_client.copy_object(
@@ -825,6 +952,12 @@ class OCFLService:
                             Bucket=bucket_name,
                             Key=target_key
                         )
+
+                        if delete_source:
+                            self.bucket_service.s3_client.delete_object(
+                                Bucket=bucket_name,
+                                Key=source_key
+                            )
 
         except Exception as e:
             logger.error(f"Error moving folder contents: {str(e)}")
