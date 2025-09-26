@@ -54,5 +54,11 @@
             {% endif %}
         </div>
     </div>
+
+    {% if status == 'success' or status == 'failed' %}
+    <div class="mt-3 text-right" hx-swap-oob="true" id="ocfl-conversion-actions">
+        <label for="ocfl-conversion-modal" class="btn">Close</label>
+    </div>
+    {% endif %}
 </div>
 {% endwith %}

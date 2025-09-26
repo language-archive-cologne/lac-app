@@ -6,27 +6,12 @@
     <p class="text-sm text-gray-600">This will restructure the folder according to OCFL specifications while preserving all file content.</p>
 </div>
 
-<div class="form-control mb-4">
-    <label class="label cursor-pointer">
-        <span class="label-text">Create backup before conversion</span>
-        <input
-            type="checkbox"
-            id="ocfl-backup-checkbox"
-            class="checkbox checkbox-primary"
-            checked
-        />
-    </label>
-    <div class="label">
-        <span class="label-text-alt text-base-content/60">Recommended: Creates a backup copy before making changes</span>
-    </div>
-</div>
-
 <div id="ocfl-conversion-status" class="mb-4">
     <!-- Status messages will appear here -->
 </div>
 
-<div class="modal-action">
-    <label for="ocfl-conversion-modal" class="btn">Cancel</label>
+<div class="modal-action" id="ocfl-conversion-actions">
+    <label for="ocfl-conversion-modal" class="btn btn-outline">Close</label>
     <button
         type="button"
         class="btn btn-primary"
@@ -34,9 +19,17 @@
         hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
         hx-target="#ocfl-conversion-status"
         hx-swap="innerHTML"
-        hx-vals='js:{"create_backup": document.getElementById("ocfl-backup-checkbox").checked}'
         hx-indicator="#indicator"
     >
-        Convert to OCFL
+        Start conversion
     </button>
 </div>
+
+<script>
+document.addEventListener('ocflConversionStarted', function () {
+    const actions = document.getElementById('ocfl-conversion-actions');
+    if (actions) {
+        actions.innerHTML = '<label for="ocfl-conversion-modal" class="btn">Close</label>';
+    }
+});
+</script>

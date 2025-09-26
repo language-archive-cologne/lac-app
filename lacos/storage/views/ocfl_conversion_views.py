@@ -65,6 +65,9 @@ class ConvertToOCFLView(View):
                         'showMessage': {
                             'message': f'OCFL conversion queued for {folder_path}. Task ID: {task_id}',
                             'level': 'info'
+                        },
+                        'ocflConversionStarted': {
+                            'taskId': str(task_record.id)
                         }
                     })
                 }
