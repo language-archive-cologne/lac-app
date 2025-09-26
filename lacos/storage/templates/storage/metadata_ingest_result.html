@@ -1,0 +1,16 @@
+<h3 class="font-bold text-lg mb-2">Metadata ingest queued</h3>
+
+<div class="alert alert-success mb-4">
+    <span>
+        Task{% if task_id %} <strong>{{ task_id }}</strong>{% endif %} started for
+        <code>{{ s3_key }}</code> in bucket <strong>{{ bucket }}</strong>.
+    </span>
+</div>
+
+<p class="text-sm text-gray-600 mb-4">
+    You will be notified in the activity log when the Huey task finishes processing this XML.
+</p>
+
+<div class="modal-action">
+    <label for="metadata-ingest-modal" class="btn">Close</label>
+</div>

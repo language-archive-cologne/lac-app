@@ -29,7 +29,32 @@ Template for loading folder contents lazily
                     </span>
                     
                     <div class="ml-auto flex items-center space-x-2">
-                        
+                        <label class="text-purple-500 hover:text-purple-700 cursor-pointer"
+                               for="ocfl-conversion-modal"
+                               title="Convert to OCFL Format"
+                               hx-get="{% url 'storage:ocfl_conversion_modal' bucket_name=bucket_type folder_path=item.path %}"
+                               hx-target="#ocfl-modal-content"
+                               hx-trigger="click"
+                               hx-swap="innerHTML"
+                               hx-indicator="#indicator">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                            </svg>
+                        </label>
+
+                        <label class="text-amber-600 hover:text-amber-700 cursor-pointer"
+                               for="metadata-ingest-modal"
+                               title="Ingest metadata XML"
+                               hx-get="{% url 'storage:metadata_ingest_modal' bucket_type=bucket_type object_type='folder' object_path=item.path %}"
+                               hx-target="#metadata-modal-content"
+                               hx-trigger="click"
+                               hx-swap="innerHTML"
+                               hx-indicator="#indicator">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm0 2c-2.21 0-4 1.79-4 4v3h8v-3c0-2.21-1.79-4-4-4zm-7 7a1 1 0 011-1h12a1 1 0 011 1v2H5v-2z" />
+                            </svg>
+                        </label>
+
                         {% if item.is_blam_object %}
                             <!-- Delete button for BLAM objects (Collection or Bundle) -->
                             <button hx-post="{% url 'blam:delete_model' model_type=item.blam_type object_id=item.blam_id %}"
@@ -83,6 +108,21 @@ Template for loading folder contents lazily
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
                             </svg>
                         </button>
+
+                        {% if item.name|lower endswith '.xml' %}
+                        <label class="text-amber-600 hover:text-amber-700 cursor-pointer"
+                               for="metadata-ingest-modal"
+                               title="Ingest this metadata XML"
+                               hx-get="{% url 'storage:metadata_ingest_modal' bucket_type=bucket_type object_type='file' object_path=item.path %}"
+                               hx-target="#metadata-modal-content"
+                               hx-trigger="click"
+                               hx-swap="innerHTML"
+                               hx-indicator="#indicator">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm0 2c-2.21 0-4 1.79-4 4v3h8v-3c0-2.21-1.79-4-4-4zm-7 7a1 1 0 011-1h12a1 1 0 011 1v2H5v-2z" />
+                            </svg>
+                        </label>
+                        {% endif %}
 
                         <button hx-post="{% url 'storage:delete_object' bucket_type=bucket_type object_type='file' object_path=item.path %}"
                                 hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'

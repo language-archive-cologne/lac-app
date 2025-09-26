@@ -1,0 +1,69 @@
+<h3 class="font-bold text-lg mb-2">Ingest Metadata XML</h3>
+
+{% if error_message %}
+<div class="alert alert-error mb-4">
+    <span>{{ error_message }}</span>
+</div>
+{% endif %}
+
+<p class="text-sm text-gray-600 mb-4">
+    Queue a background task that reads the metadata XML and stores it in the database.
+</p>
+
+<form id="metadata-ingest-form"
+      class="space-y-4"
+      hx-post="{% url 'storage:ingest_metadata' %}"
+      hx-target="#metadata-modal-content"
+      hx-swap="innerHTML"
+      hx-indicator="#indicator">
+    {% csrf_token %}
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="form-control">
+            <label class="label"><span class="label-text">Bucket</span></label>
+            <select name="bucket" class="select select-bordered select-sm" required>
+                {% for bucket in bucket_options %}
+                    <option value="{{ bucket }}" {% if bucket == current_bucket %}selected{% endif %}>{{ bucket }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-control">
+            <label class="label"><span class="label-text">Metadata type</span></label>
+            <select name="metadata_type" class="select select-bordered select-sm" required>
+                <option value="bundle" {% if default_metadata_type == 'bundle' %}selected{% endif %}>Bundle XML</option>
+                <option value="collection" {% if default_metadata_type == 'collection' %}selected{% endif %}>Collection XML</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="form-control">
+        <label class="label"><span class="label-text">S3 key to XML file</span></label>
+        <input type="text"
+               name="s3_key"
+               value="{{ initial_key }}"
+               class="input input-bordered input-sm"
+               placeholder="e.g., collections/demo/v1/content/demo.xml"
+               required />
+        <label class="label">
+            <span class="label-text-alt text-base-content/60">
+                Provide the path inside the selected bucket{% if object_type == 'folder' and initial_key %}, starting from folder <code>{{ initial_key|escape }}</code>{% endif %}.
+            </span>
+        </label>
+    </div>
+
+    <input type="hidden" name="object_type" value="{{ object_type }}" />
+
+    <p class="text-xs text-base-content/60">
+        Source: {{ object_type|title }}{% if initial_key %} <code>{{ initial_key|escape }}</code>{% endif %}.
+    </p>
+
+    <p class="text-xs text-base-content/60">
+        The task runs asynchronously; you can keep working while it completes.
+    </p>
+
+    <div class="modal-action">
+        <label for="metadata-ingest-modal" class="btn">Cancel</label>
+        <button type="submit" class="btn btn-accent">Start ingest</button>
+    </div>
+</form>

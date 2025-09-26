@@ -24,7 +24,13 @@ urlpatterns = [
     path("multipart/complete/", views.complete_multipart_upload, name="complete_multipart_upload"),
     path("multipart/abort/", views.abort_multipart_upload, name="abort_multipart_upload"),
     path("multipart/list/", views.list_multipart_uploads, name="list_multipart_uploads"),
-    
+
+    # Metadata ingestion
+    path("ingest/metadata/", views.ingest_metadata, name="ingest_metadata"),
+    path("ingest/metadata/modal/<str:bucket_type>/<str:object_type>/<path:object_path>/",
+         views.metadata_ingest_modal,
+         name="metadata_ingest_modal"),
+
     # Archivist dashboard
     path("dashboard/", views.archivist_dashboard, name="archivist_dashboard"),
     path("dashboard/folder-contents/<str:bucket_type>/<path:folder_path>/", views.load_folder_contents, name="load_folder_contents"),

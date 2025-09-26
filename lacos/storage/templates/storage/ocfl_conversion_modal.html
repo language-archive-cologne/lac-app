@@ -31,6 +31,7 @@
         type="button"
         class="btn btn-primary"
         hx-post="{% url 'storage:convert_to_ocfl' bucket_name=bucket_name folder_path=folder_path %}"
+        hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
         hx-target="#ocfl-conversion-status"
         hx-swap="innerHTML"
         hx-vals='js:{"create_backup": document.getElementById("ocfl-backup-checkbox").checked}'

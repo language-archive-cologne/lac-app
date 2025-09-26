@@ -34,12 +34,12 @@
                 {% include "dashboard/bucket_tabs_partial.html" with active_bucket=workspace_buckets.0 %}
 
                 <!-- Action Buttons -->
-                <div class="flex gap-2">
+                <div class="flex flex-wrap gap-2 justify-end">
                     <label for="upload-modal" class="btn btn-primary btn-sm">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                         </svg>
-                        Upload
+                        Upload Files
                     </label>
 
                     <button
@@ -218,6 +218,14 @@
             <label for="upload-modal" class="btn">Cancel</label>
             <button id="modal-upload-btn" class="btn btn-primary" onclick="startModalUpload()" disabled>Upload Files</button>
         </div>
+    </div>
+</div>
+
+<!-- Metadata Ingest Modal -->
+<input type="checkbox" id="metadata-ingest-modal" class="modal-toggle" />
+<div class="modal" role="dialog">
+    <div class="modal-box max-w-xl" id="metadata-modal-content">
+        <!-- Loaded via HTMX -->
     </div>
 </div>
 
