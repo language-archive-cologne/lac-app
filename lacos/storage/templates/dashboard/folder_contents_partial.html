@@ -96,7 +96,7 @@ Template for loading folder contents lazily
                 </div>
             </li>
         {% elif item.type == 'file' %}
-            {% with target_id=('file-info-'|add:item.path)|slugify %}
+            {% with target_id='file-info-'|add:item.path|slugify %}
             <li class="file-item py-1">
                 <div class="flex items-center">
                     <span class="file-icon mr-2 text-gray-500">
