@@ -1,3 +1,4 @@
+from typing import Any
 from django.db import transaction
 from lacos.blam.models.collection.collection_publication_info import (
     CollectionPublicationInfo,
@@ -6,14 +7,13 @@ from lacos.blam.models.collection.collection_publication_info import (
 )
 from lacos.blam.models.collection.collection_repository import Collection
 from blam_schemas.collection.blam_collection_repository_v1_0 import (
-    Cmd,
     CreatorNameIdentifierIdentifierType,
     ContributorNameIdentifierIdentifierType
 )
 
 
 @transaction.atomic
-def import_publication_info(collection_schema: Cmd, collection: Collection) -> CollectionPublicationInfo:
+def import_publication_info(cmd_data: Any, collection: Collection) -> CollectionPublicationInfo:
     """
     Import publication info from a BLAM collection repository schema to Django models.
     
@@ -25,14 +25,14 @@ def import_publication_info(collection_schema: Cmd, collection: Collection) -> C
     If any part of the import fails, all database changes will be rolled back.
     
     Args:
-        collection_schema: The BLAM collection repository schema containing publication info.
+        cmd_data: The parsed BLAM collection data containing publication info.
         collection: The Collection instance to attach this publication info to.
         
     Returns:
         A fully populated CollectionPublicationInfo instance with all related objects.
     """
     # Extract the publication info section from the schema
-    publication_info_schema = collection_schema.components.blam_collection_repository_v1_0.collection_publication_info
+    publication_info_schema = cmd_data.components.blam_collection_repository_v1_0.collection_publication_info
     
     # Create and populate the publication info model
     publication_info = create_base_publication_info(publication_info_schema, collection)

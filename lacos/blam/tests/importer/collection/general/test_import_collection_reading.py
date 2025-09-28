@@ -4,7 +4,6 @@ from unittest.mock import patch, MagicMock
 from pathlib import Path
 
 from lacos.blam.mappers.collection.read.collection_importer import CollectionImporter
-from blam_schemas.collection.blam_collection_repository_v1_0 import Cmd
 
 
 def get_collection_xml_from_file():
@@ -34,8 +33,8 @@ def test_read_real_collection_xml():
     xml_content = get_collection_xml_from_file()
     
     cmd_data = CollectionImporter.validate_xml(xml_content)
-    assert isinstance(cmd_data, Cmd)
-    
+    assert hasattr(cmd_data, "version")
+
     repository = cmd_data.components.blam_collection_repository_v1_0
     
     general_info = repository.collection_general_info

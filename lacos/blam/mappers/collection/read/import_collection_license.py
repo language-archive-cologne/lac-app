@@ -1,13 +1,13 @@
-from django.db import transaction
 from typing import Any, Optional, Tuple
+from django.db import transaction
 from django.utils import timezone
-from blam_schemas.collection.blam_collection_repository_v1_0 import Cmd, SimpletypeAccess41
+from blam_schemas.collection.blam_collection_repository_v1_0 import SimpletypeAccess41
 from lacos.blam.models.collection.collection_administrative_info import CollectionLicense, CollectionAdministrativeInfo
 from lacos.blam.models.collection.collection_repository import Collection
 
 
 @transaction.atomic
-def import_collection_license(cmd_data: Cmd, collection: Collection) -> Optional[CollectionLicense]:
+def import_collection_license(cmd_data: Any, collection: Collection) -> Optional[CollectionLicense]:
     """
     Import collection license information from BLAM schema to Django models.
     

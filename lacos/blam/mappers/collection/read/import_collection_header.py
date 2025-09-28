@@ -2,13 +2,12 @@ from django.db import transaction
 from typing import Any, Optional
 from datetime import datetime
 from django.utils import timezone
-from blam_schemas.collection.blam_collection_repository_v1_0 import Cmd
 from lacos.blam.models.collection.collection_header import CollectionHeader
 from lacos.blam.models.collection.collection_repository import Collection
 
 
 @transaction.atomic
-def import_collection_header(cmd_data: Cmd, collection: Collection) -> CollectionHeader:
+def import_collection_header(cmd_data: Any, collection: Collection) -> CollectionHeader:
     """
     Import collection header information from BLAM schema to Django models.
     

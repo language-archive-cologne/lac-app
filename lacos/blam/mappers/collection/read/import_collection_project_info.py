@@ -1,3 +1,4 @@
+from typing import Any
 from django.db import transaction
 from lacos.blam.models.base_project_info import (
     ProjectInfo,
@@ -6,13 +7,12 @@ from lacos.blam.models.base_project_info import (
 )
 from lacos.blam.models.collection.collection_repository import Collection
 from blam_schemas.collection.blam_collection_repository_v1_0 import (
-    Cmd,
     FunderIdentifierIdentifierType
 )
 
 
 @transaction.atomic
-def import_project_info(collection_schema: Cmd, collection: Collection) -> list[ProjectInfo]:
+def import_project_info(cmd_data: Any, collection: Collection) -> list[ProjectInfo]:
     """
     Import project info from a BLAM collection repository schema to Django models.
     
@@ -24,14 +24,14 @@ def import_project_info(collection_schema: Cmd, collection: Collection) -> list[
     If any part of the import fails, all database changes will be rolled back.
     
     Args:
-        collection_schema: The BLAM collection repository schema containing project info.
+        cmd_data: The parsed BLAM collection data containing project info.
         collection: The Collection instance to attach these project infos to.
         
     Returns:
         A list of ProjectInfo instances with all related objects.
     """
     # Get repository component
-    repo = collection_schema.components.blam_collection_repository_v1_0
+    repo = cmd_data.components.blam_collection_repository_v1_0
     
     # Check if project_info exists in the schema
     if not hasattr(repo, 'project_info'):

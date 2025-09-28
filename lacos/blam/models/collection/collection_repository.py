@@ -7,6 +7,12 @@ class Collection(Repository):
     Concrete implementation of Repository for collections.
     A collection is a curated set of bundles that form a meaningful unit.
     """
+    source_version = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+        help_text="BLAM schema version used during the latest import",
+    )
     @property
     def base_header(self):
         """Get the collection header"""
@@ -40,4 +46,3 @@ class Collection(Repository):
     class Meta:
         verbose_name = "Collection"
         verbose_name_plural = "Collections"
-

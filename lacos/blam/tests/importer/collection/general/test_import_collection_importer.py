@@ -4,7 +4,6 @@ from django.core.exceptions import ValidationError
 import os
 
 from lacos.blam.mappers.collection.read.collection_importer import CollectionImporter
-from blam_schemas.collection.blam_collection_repository_v1_0 import Cmd
 from lacos.blam.models.base_project_info import ProjectInfo
 from lacos.blam.models.collection.collection_repository import Collection
 
@@ -45,10 +44,21 @@ def cmd_data(zaghawa_xml_content):
 
 @pytest.mark.django_db
 def test_validate_xml_with_real_data(cmd_data):
-    """Test that real XML can be parsed into a Cmd object"""
-    assert isinstance(cmd_data, Cmd)
+    """Test that real XML can be parsed into a collection command object"""
+    assert hasattr(cmd_data, "version")
     assert hasattr(cmd_data, 'header')
     assert cmd_data.header.md_collection_display_name.value == "Zaghawa"
+
+
+@pytest.mark.django_db
+def test_validate_xml_v11_variant(zaghawa_xml_content):
+    """Test that renamed v1.1 component is detected and parsed."""
+    xml_v11 = zaghawa_xml_content.replace("BLAM-collection-repository_v1.0", "BLAM-collection-repository_v1.1")
+    xml_v11 = xml_v11.replace("blam-collection-repository-v1_0", "blam-collection-repository-v1_1")
+
+    cmd_data = CollectionImporter.validate_xml(xml_v11)
+    assert cmd_data.version == "1.1"
+    assert hasattr(cmd_data.components, "blam_collection_repository_v1_0")
 
 
 @pytest.mark.django_db
@@ -61,6 +71,7 @@ def test_import_from_xml_real_models(zaghawa_xml_content):
         # If successful, verify the collection was created
         assert collection is not None
         assert isinstance(collection, Collection)
+        assert collection.source_version == "1.0"
         
         # Collection.general_info is now a RelatedManager, access the first item
         general_info = collection.general_info.first()
@@ -95,6 +106,16 @@ def test_import_from_xml_real_models(zaghawa_xml_content):
     except Exception as e:
         # If an expected failure occurs due to empty license fields, note that
         pytest.fail(f"Failed to import collection from XML: {str(e)}")
+
+
+@pytest.mark.django_db
+def test_import_from_xml_v11_sets_version(zaghawa_xml_content):
+    xml_v11 = zaghawa_xml_content.replace("BLAM-collection-repository_v1.0", "BLAM-collection-repository_v1.1")
+    xml_v11 = xml_v11.replace("blam-collection-repository-v1_0", "blam-collection-repository-v1_1")
+
+    collection = CollectionImporter.import_from_xml(xml_v11)
+    assert collection.source_version == "1.1"
+    assert collection.identifier == collection.base_header.md_self_link
 
 
 @pytest.mark.django_db

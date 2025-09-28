@@ -1,3 +1,4 @@
+from typing import Any
 from django.db import transaction
 from lacos.blam.models.collection.collection_general_info import (
     CollectionGeneralInfo,
@@ -9,9 +10,6 @@ from lacos.blam.models.collection.collection_general_info import (
     CollectionObjectLanguageTaxonomy
 )
 from lacos.blam.models.collection.collection_repository import Collection
-from blam_schemas.collection.blam_collection_repository_v1_0 import (
-    Cmd
-)
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
 import logging
 
@@ -19,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 @transaction.atomic
-def import_general_info(collection_schema: Cmd, collection: Collection) -> CollectionGeneralInfo:
+def import_general_info(cmd_data: Any, collection: Collection) -> CollectionGeneralInfo:
     """
     Import general info from a BLAM collection repository schema to Django models.
     
@@ -31,14 +29,14 @@ def import_general_info(collection_schema: Cmd, collection: Collection) -> Colle
     If any part of the import fails, all database changes will be rolled back.
     
     Args:
-        collection_schema: The BLAM collection repository schema containing general info.
+        cmd_data: The parsed BLAM collection data containing general info.
         collection: The Collection instance to attach this general info to.
         
     Returns:
         A fully populated CollectionGeneralInfo instance with all related objects.
     """
     # Extract the general info section from the schema
-    general_info_schema = collection_schema.components.blam_collection_repository_v1_0.collection_general_info
+    general_info_schema = cmd_data.components.blam_collection_repository_v1_0.collection_general_info
     
     # Create location first since it's required by general info
     location = create_location(general_info_schema.collection_location)
