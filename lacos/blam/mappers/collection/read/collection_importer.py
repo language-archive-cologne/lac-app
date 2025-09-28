@@ -1,241 +1,267 @@
-from dataclasses import asdict
-from typing import Any, Optional, List
-from django.db import transaction
-from django.core.exceptions import ValidationError
+from dataclasses import dataclass
+from typing import Any
+import io
 import logging
 import uuid
+import xml.etree.ElementTree as ET
 
-from lacos.blam.models.collection.collection_repository import Collection
-from blam_schemas.collection.blam_collection_repository_v1_0 import Cmd
+from django.core.exceptions import ValidationError
+from django.db import transaction
+from xsdata.formats.dataclass.models.generics import AnyElement
 from xsdata.formats.dataclass.parsers import XmlParser
 
+from blam_schemas.collection.blam_collection_repository_v1_0 import Cmd as CmdV10
+from blam_schemas.collection.blam_collection_repository_v1_1 import (
+    BlamCollectionRepositoryV11,
+)
+from blam_schemas.collection.cmd_envelop import Cmd as EnvelopeCmd
+from lacos.blam.models.collection.collection_repository import Collection
+
 # Import the standalone import functions
+from lacos.blam.mappers.collection.read.import_collection_administrative_info import (
+    import_administrative_info,
+)
+from lacos.blam.mappers.collection.read.import_collection_general_info import (
+    import_general_info,
+)
 from lacos.blam.mappers.collection.read.import_collection_header import import_collection_header
-from lacos.blam.mappers.collection.read.import_collection_license import import_collection_license
-from lacos.blam.mappers.collection.read.import_collection_general_info import import_general_info
-from lacos.blam.mappers.collection.read.import_collection_publication_info import import_publication_info
-from lacos.blam.mappers.collection.read.import_collection_administrative_info import import_administrative_info
-from lacos.blam.mappers.collection.read.import_collection_project_info import import_project_info
-from lacos.blam.mappers.collection.read.import_collection_structural_info import import_structural_info
+from lacos.blam.mappers.collection.read.import_collection_license import (
+    import_collection_license,
+)
+from lacos.blam.mappers.collection.read.import_collection_project_info import (
+    import_project_info,
+)
+from lacos.blam.mappers.collection.read.import_collection_publication_info import (
+    import_publication_info,
+)
+from lacos.blam.mappers.collection.read.import_collection_structural_info import (
+    import_structural_info,
+)
 
 logger = logging.getLogger(__name__)
 
+BLAM_VERSION_1_0 = "1.0"
+BLAM_VERSION_1_1 = "1.1"
+
+
+@dataclass
+class CollectionComponentsAdapter:
+    """Expose repository component under legacy attribute names expected by mappers."""
+
+    repository: Any
+    version: str
+
+    def __getattr__(self, name: str) -> Any:
+        if name in {"blam_collection_repository_v1_0", "blam_collection_repository_v1_1"}:
+            return self.repository
+        raise AttributeError(name)
+
+
+@dataclass
+class CollectionCmdAdapter:
+    """Container for parsed BLAM collection data and version metadata."""
+
+    header: Any
+    components: CollectionComponentsAdapter
+    version: str
+
+
 class CollectionImporter:
-    """
-    Handles importing BLAM Collection XML into Django models.
-    """
-    
+    """Handles importing BLAM Collection XML into Django models."""
+
     @staticmethod
-    def validate_xml(xml_content: str) -> Cmd:
-        """
-        Validates XML against schema and parses into dataclass
-        Returns parsed Cmd object if valid, raises ValidationError if invalid
-        """
-        try:
-            # Using xsdata parser to parse XML into Cmd dataclass
-            parser = XmlParser()
-            cmd_data = parser.from_string(xml_content, Cmd)
-            return cmd_data
-        except Exception as e:
-            raise ValidationError(f"Invalid BLAM collection XML: {str(e)}")
-    
+    def validate_xml(xml_content: str) -> CollectionCmdAdapter:
+        """Parse BLAM collection XML across supported schema versions."""
+        version = CollectionImporter._detect_version(xml_content)
+        logger.debug("Detected BLAM collection version %s", version)
+        if version == BLAM_VERSION_1_0:
+            return CollectionImporter._parse_v10(xml_content)
+        if version == BLAM_VERSION_1_1:
+            return CollectionImporter._parse_v11(xml_content)
+        raise ValidationError(f"Unsupported BLAM collection version: {version}")
+
     @classmethod
     @transaction.atomic
     def import_from_xml(cls, xml_content: str) -> Collection:
-        """
-        Import a collection from XML content.
-        
-        This method validates the XML content, imports it into Django models,
-        and returns the created Collection instance.
-        
-        Args:
-            xml_content: The XML content to import.
-            
-        Returns:
-            The imported Collection instance.
-        """
-        # Validate the XML content
+        """Import a collection from XML content."""
         cmd_data = cls.validate_xml(xml_content)
-        
-        # Extract the MD self link identifier from the header
+
         md_self_link = None
-        if cmd_data.header and cmd_data.header.md_self_link:
+        if cmd_data.header and getattr(cmd_data.header, "md_self_link", None):
             md_self_link = cmd_data.header.md_self_link.value
-            
-            # If we have an md_self_link, check if a collection already exists
+
             existing_collection = Collection.objects.filter(identifier=md_self_link).first()
             if existing_collection:
-                logger.info(f"Found existing collection with identifier {md_self_link}, returning without changes")
+                logger.info(
+                    "Found existing collection with identifier %s, returning without changes",
+                    md_self_link,
+                )
+                if existing_collection.source_version != cmd_data.version:
+                    existing_collection.source_version = cmd_data.version
+                    existing_collection.save(update_fields=["source_version"])
                 return existing_collection
-        
-        # Create a new collection with the components
+
         collection = cls._import_cmd_to_models(cmd_data)
-        
-        # Set the identifier on the collection
+
+        update_fields = ["source_version"]
         if md_self_link:
             collection.identifier = md_self_link
-            collection.save(update_fields=['identifier'])
-        
-        logger.info(f"Collection import completed for '{md_self_link}'.")
+            update_fields.append("identifier")
+        collection.source_version = cmd_data.version
+        collection.save(update_fields=update_fields)
+
+        logger.info(
+            "Collection import completed for '%s' (version %s).",
+            md_self_link,
+            cmd_data.version,
+        )
         return collection
-    
+
     @classmethod
-    def _import_cmd_to_models(cls, cmd_data: Cmd) -> Collection:
-        """
-        Converts Cmd object to Django models
-        
-        Args:
-            cmd_data: The validated CMD data object
-            
-        Returns:
-            The created Collection instance
-        """
-        # First, create the Collection object (a lightweight object without components)
-        collection = cls._create_collection(cmd_data)
-        
+    def _import_cmd_to_models(cls, cmd_data: CollectionCmdAdapter) -> Collection:
+        """Convert parsed data into Django models."""
+        collection = cls._create_collection()
+
         try:
-            #  import all components, passing the collection to each import function
             cls._import_header(cmd_data, collection)
             cls._import_general_info(cmd_data, collection)
             cls._import_publication_info(cmd_data, collection)
             cls._import_administrative_info(cmd_data, collection)
             cls._import_structural_info(cmd_data, collection)
             cls._import_license(cmd_data, collection)
-            
-            # Import optional project info if available
-            if hasattr(cmd_data.components.blam_collection_repository_v1_0, 'project_info') and cmd_data.components.blam_collection_repository_v1_0.project_info:
+
+            repository = getattr(cmd_data.components, "blam_collection_repository_v1_0", None)
+            if repository and getattr(repository, "project_info", None):
                 cls._import_project_info(cmd_data, collection)
                 logger.info("Project info found and imported")
             else:
                 logger.info("No project info found in XML - this is optional")
-            
+
             return collection
-            
-        except Exception as e:
-            # If any error occurs, the transaction will be rolled back automatically
-            # No need to manually delete the collection
-            logger.error(f"Error during collection import: {e}", exc_info=True)
-            raise e
-    
+
+        except Exception as exc:  # pragma: no cover - re-raise for transaction rollback
+            logger.error("Error during collection import: %s", exc, exc_info=True)
+            raise
+
     @classmethod
-    def _create_collection(cls, cmd_data: Cmd) -> Collection:
-        """
-        Create a new Collection for the import process
-        
-        Args:
-            cmd_data: The validated CMD data
-            
-        Returns:
-            A new Collection instance
-        """
-        # Create a new collection with a temporary identifier
-        # This will be replaced with the proper md_self_link in import_from_xml
+    def _create_collection(cls) -> Collection:
+        """Create a new collection placeholder before components import."""
         collection = Collection.objects.create(identifier=f"temp-collection-{uuid.uuid4()}")
-        logger.info(f"Created new Collection with ID {collection.id}")
+        logger.info("Created new Collection with ID %s", collection.id)
         return collection
-    
+
     @classmethod
-    def _import_header(cls, cmd_data: Cmd, collection: Collection):
-        """
-        Import header from CMD data and attach to collection
-        
-        Args:
-            cmd_data: The validated CMD data
-            collection: The Collection instance to attach to
-        """
-        # Pass the collection to the import function
+    def _import_header(cls, cmd_data: CollectionCmdAdapter, collection: Collection):
         header = import_collection_header(cmd_data, collection)
-        logger.info(f"Imported header for collection {collection.id}")
+        logger.info("Imported header for collection %s", collection.id)
         return header
-    
+
     @classmethod
-    def _import_license(cls, cmd_data: Cmd, collection: Collection):
-        """
-        Import license from CMD data and attach to collection
-        
-        Args:
-            cmd_data: The validated CMD data
-            collection: The Collection instance to attach to
-        """
-        # Pass the collection to the import function
+    def _import_license(cls, cmd_data: CollectionCmdAdapter, collection: Collection):
         license_obj = import_collection_license(cmd_data, collection)
         if license_obj:
-            logger.info(f"Imported license {license_obj.license_name} for collection {collection.id}")
+            logger.info(
+                "Imported license %s for collection %s",
+                license_obj.license_name,
+                collection.id,
+            )
         else:
-            logger.info(f"No license found for collection {collection.id}")
+            logger.info("No license found for collection %s", collection.id)
         return license_obj
-    
+
     @classmethod
-    def _import_general_info(cls, cmd_data: Cmd, collection: Collection):
-        """
-        Import general info from CMD data and attach to collection
-        
-        Args:
-            cmd_data: The validated CMD data
-            collection: The Collection instance to attach to
-        """
-        # Pass the collection to the import function
+    def _import_general_info(cls, cmd_data: CollectionCmdAdapter, collection: Collection):
         general_info = import_general_info(cmd_data, collection)
-        logger.info(f"Imported general info for collection {collection.id}")
+        logger.info("Imported general info for collection %s", collection.id)
         return general_info
-    
+
     @classmethod
-    def _import_publication_info(cls, cmd_data: Cmd, collection: Collection):
-        """
-        Import publication info from CMD data and attach to collection
-        
-        Args:
-            cmd_data: The validated CMD data
-            collection: The Collection instance to attach to
-        """
-        # Pass the collection to the import function
+    def _import_publication_info(cls, cmd_data: CollectionCmdAdapter, collection: Collection):
         publication_info = import_publication_info(cmd_data, collection)
-        logger.info(f"Imported publication info for collection {collection.id}")
+        logger.info("Imported publication info for collection %s", collection.id)
         return publication_info
-    
+
     @classmethod
-    def _import_project_info(cls, cmd_data: Cmd, collection: Collection):
-        """
-        Import project info from CMD data and attach to collection
-        
-        Args:
-            cmd_data: The validated CMD data
-            collection: The Collection instance to attach to
-        """
-        # Pass the collection to the import function
+    def _import_project_info(cls, cmd_data: CollectionCmdAdapter, collection: Collection):
         project_info = import_project_info(cmd_data, collection)
-        logger.info(f"Imported project info for collection {collection.id}")
+        logger.info("Imported project info for collection %s", collection.id)
         return project_info
 
     @classmethod
-    def _import_administrative_info(cls, cmd_data: Cmd, collection: Collection):
-        """
-        Import administrative info from CMD data and attach to collection
-        
-        Args:
-            cmd_data: The validated CMD data
-            collection: The Collection instance to attach to
-        """
-        # Pass the collection to the import function
+    def _import_administrative_info(
+        cls, cmd_data: CollectionCmdAdapter, collection: Collection
+    ):
         administrative_info = import_administrative_info(cmd_data, collection)
-        logger.info(f"Imported administrative info for collection {collection.id}")
+        logger.info("Imported administrative info for collection %s", collection.id)
         return administrative_info
-    
+
     @classmethod
-    def _import_structural_info(cls, cmd_data: Cmd, collection: Collection):
-        """
-        Import structural info from CMD data and attach to collection
-        
-        Args:
-            cmd_data: The validated CMD data
-            collection: The Collection instance to attach to
-        """
-        # Pass the collection to the import function
+    def _import_structural_info(cls, cmd_data: CollectionCmdAdapter, collection: Collection):
         structural_info = import_structural_info(cmd_data, collection)
-        logger.info(f"Imported structural info for collection {collection.id}")
+        logger.info("Imported structural info for collection %s", collection.id)
         return structural_info
-    
-# The following methods (resolve_bundle_references, resolve_all_bundle_references) are being removed
-# as they seem disconnected from the actual import logic and model relationships.
-# Bundle linking is handled during bundle import via the ForeignKey from BundleStructuralInfo.
-    
+
+    @staticmethod
+    def _detect_version(xml_content: str) -> str:
+        try:
+            for _, element in ET.iterparse(io.StringIO(xml_content), events=("start",)):
+                local = element.tag.split("}")[-1]
+                if local.startswith("BLAM-collection-repository"):
+                    if "v1.1" in local or "v1_1" in local:
+                        return BLAM_VERSION_1_1
+                    return BLAM_VERSION_1_0
+                element.clear()
+        except ET.ParseError as exc:  # pragma: no cover - propagate as validation error
+            raise ValidationError(f"Invalid BLAM collection XML: {exc}") from exc
+        return BLAM_VERSION_1_0
+
+    @staticmethod
+    def _parse_v10(xml_content: str) -> CollectionCmdAdapter:
+        try:
+            parser = XmlParser()
+            cmd = parser.from_string(xml_content, CmdV10)
+        except Exception as exc:  # pragma: no cover - xsdata validation
+            raise ValidationError(f"Invalid BLAM collection XML: {exc}") from exc
+
+        repository = getattr(cmd.components, "blam_collection_repository_v1_0", None)
+        components = CollectionComponentsAdapter(repository=repository, version=BLAM_VERSION_1_0)
+        return CollectionCmdAdapter(header=cmd.header, components=components, version=BLAM_VERSION_1_0)
+
+    @staticmethod
+    def _parse_v11(xml_content: str) -> CollectionCmdAdapter:
+        parser = XmlParser()
+        try:
+            envelope = parser.from_string(xml_content, EnvelopeCmd)
+        except Exception as exc:  # pragma: no cover - xsdata validation
+            raise ValidationError(f"Invalid BLAM collection XML: {exc}") from exc
+
+        repository = CollectionImporter._deserialize_repository(parser, envelope)
+        components = CollectionComponentsAdapter(repository=repository, version=BLAM_VERSION_1_1)
+        return CollectionCmdAdapter(header=envelope.header, components=components, version=BLAM_VERSION_1_1)
+
+    @staticmethod
+    def _deserialize_repository(parser: XmlParser, envelope: EnvelopeCmd) -> Any:
+        other_element = getattr(envelope.components, "other_element", None)
+        if isinstance(other_element, BlamCollectionRepositoryV11):
+            return other_element
+        if not isinstance(other_element, AnyElement):
+            raise ValidationError("BLAM collection XML missing repository component")
+        element = CollectionImporter._any_element_to_element(other_element)
+        fragment = ET.tostring(element, encoding="unicode")
+        try:
+            return parser.from_string(fragment, BlamCollectionRepositoryV11)
+        except Exception as exc:  # pragma: no cover - xsdata validation
+            raise ValidationError(f"Invalid BLAM collection component: {exc}") from exc
+
+    @staticmethod
+    def _any_element_to_element(any_element: AnyElement) -> ET.Element:
+        qname = any_element.qname or ""
+        tag = qname if qname.startswith("{") else qname
+        element = ET.Element(tag)
+        for attr, value in any_element.attributes.items():
+            element.set(attr, value)
+        if any_element.text:
+            element.text = any_element.text
+        for child in any_element.children:
+            element.append(CollectionImporter._any_element_to_element(child))
+        return element

@@ -13,7 +13,6 @@ from lacos.blam.models.collection.collection_structural_info import (
     CollectionAdditionalMetadataFile
 )
 from lacos.blam.models.collection.collection_repository import Collection
-from blam_schemas.collection.blam_collection_repository_v1_0 import Cmd
 
 
 @pytest.fixture

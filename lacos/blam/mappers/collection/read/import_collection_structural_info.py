@@ -1,14 +1,14 @@
+from typing import Any
 from django.db import transaction
 from lacos.blam.models.collection.collection_structural_info import (
     CollectionStructuralInfo,
     CollectionAdditionalMetadataFile
 )
 from lacos.blam.models.collection.collection_repository import Collection
-from blam_schemas.collection.blam_collection_repository_v1_0 import Cmd
 
 
 @transaction.atomic
-def import_structural_info(collection_schema: Cmd, collection: Collection) -> CollectionStructuralInfo:
+def import_structural_info(cmd_data: Any, collection: Collection) -> CollectionStructuralInfo:
     """
     Import structural info from a BLAM collection repository schema to Django models.
     
@@ -20,14 +20,14 @@ def import_structural_info(collection_schema: Cmd, collection: Collection) -> Co
     If any part of the import fails, all database changes will be rolled back.
     
     Args:
-        collection_schema: The BLAM collection repository schema containing structural info.
+        cmd_data: The parsed BLAM collection data containing structural info.
         collection: The Collection instance to attach this structural info to.
         
     Returns:
         A fully populated CollectionStructuralInfo instance with all related objects.
     """
     # Extract the structural info section from the schema
-    structural_info_schema = collection_schema.components.blam_collection_repository_v1_0.collection_structural_info
+    structural_info_schema = cmd_data.components.blam_collection_repository_v1_0.collection_structural_info
     
     # Try to find an existing structural info for this collection or create a new one
     try:

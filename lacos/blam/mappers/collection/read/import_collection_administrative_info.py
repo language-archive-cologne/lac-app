@@ -1,3 +1,4 @@
+from typing import Any
 from django.db import transaction
 from django.utils.dateparse import parse_date
 from lacos.blam.models.collection.collection_administrative_info import (
@@ -7,14 +8,11 @@ from lacos.blam.models.collection.collection_administrative_info import (
     CollectionRightsHolderIdentifier
 )
 from lacos.blam.models.collection.collection_repository import Collection
-from blam_schemas.collection.blam_collection_repository_v1_0 import (
-    Cmd
-)
 from lacos.blam.mappers.collection.read.import_collection_license import create_collection_license
 
 
 @transaction.atomic
-def import_administrative_info(collection_schema: Cmd, collection: Collection) -> CollectionAdministrativeInfo:
+def import_administrative_info(cmd_data: Any, collection: Collection) -> CollectionAdministrativeInfo:
     """
     Import administrative info from a BLAM collection repository schema to a Django model.
     
@@ -26,14 +24,14 @@ def import_administrative_info(collection_schema: Cmd, collection: Collection) -
     If any part of the import fails, all database changes will be rolled back.
     
     Args:
-        collection_schema: The BLAM collection repository schema containing administrative info.
+        cmd_data: The parsed BLAM collection data containing administrative info.
         collection: The Collection instance to attach this administrative info to.
         
     Returns:
         A fully populated CollectionAdministrativeInfo instance with all related objects.
     """
     # Extract the administrative info section from the schema
-    admin_info_schema = collection_schema.components.blam_collection_repository_v1_0.collection_administrative_info
+    admin_info_schema = cmd_data.components.blam_collection_repository_v1_0.collection_administrative_info
     
     # Create and populate the administrative info model with reference to collection
     admin_info = create_base_administrative_info(admin_info_schema, collection)
