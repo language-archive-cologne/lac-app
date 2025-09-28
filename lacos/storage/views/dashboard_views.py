@@ -11,6 +11,7 @@ from django.views import View
 from django.template.loader import render_to_string
 from django.middleware.csrf import get_token
 from django.urls import reverse
+from django.utils.text import slugify
 import json
 
 logger = logging.getLogger(__name__)
@@ -107,6 +108,32 @@ def load_folder_contents(request, bucket_type, folder_path):
         },
     )
 
+
+@login_required
+def bucket_size_info(request, bucket_name):
+    """HTMX endpoint returning bucket size details."""
+    bucket_service = BucketService()
+    accessible = set(bucket_service.get_all_accessible_buckets())
+
+    if bucket_name not in accessible:
+        return HttpResponse(status=404)
+
+    force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
+    size_result = bucket_service.get_bucket_total_size(bucket_name, force_fresh=force_fresh)
+
+    context = {
+        "bucket_name": bucket_name,
+        "total_size": size_result.get("total_size", 0),
+        "total_size_formatted": size_result.get("total_size_formatted", "0 B"),
+        "object_count": size_result.get("object_count", 0),
+        "success": size_result.get("success", False),
+        "error": size_result.get("error"),
+    }
+
+    html = render_to_string("dashboard/partials/bucket_size_info.html", context, request=request)
+    return HttpResponse(html)
+
+
 @login_required
 def dashboard_content(request, bucket_type):
     """
@@ -170,6 +197,57 @@ class BucketContentHTMXView(HtmxTemplateHelperMixin, View):
 
 
 # Class-based view is now used directly in URLs
+
+
+@login_required
+def file_info_htmx(request, bucket_type, object_path):
+    """Provide file metadata details via HTMX."""
+    bucket_service = BucketService()
+    target_id = request.GET.get("target_id") or request.GET.get("targetId")
+
+    if not target_id:
+        target_id = slugify(f"file-info-{object_path}")
+
+    if request.GET.get("clear"):
+        html = render_to_string(
+            "dashboard/partials/file_info_placeholder.html",
+            {"target_id": target_id},
+            request=request,
+        )
+        return HttpResponse(html)
+
+    accessible_buckets = set(bucket_service.get_all_accessible_buckets())
+
+    if bucket_type in accessible_buckets:
+        bucket_name = bucket_type
+    elif bucket_type == "ingest":
+        bucket_name = bucket_service.ingest_bucket
+    elif bucket_type == "production":
+        bucket_name = bucket_service.production_bucket
+    else:
+        return HttpResponse(status=404)
+
+    info_result = bucket_service.get_file_info(bucket_name, object_path)
+
+    context = {
+        "target_id": target_id,
+        "bucket_type": bucket_type,
+        "object_path": object_path,
+        "file_name": info_result.get("file_name") or object_path.rstrip("/").split("/")[-1],
+        "file_size_formatted": info_result.get("file_size_formatted"),
+        "content_type": info_result.get("content_type"),
+        "last_modified": info_result.get("last_modified"),
+        "metadata": info_result.get("metadata", {}),
+        "success": info_result.get("success", False),
+        "error": info_result.get("error"),
+    }
+
+    html = render_to_string(
+        "dashboard/partials/file_info_panel.html",
+        context,
+        request=request,
+    )
+    return HttpResponse(html)
 
 
 @method_decorator(login_required, name='dispatch')

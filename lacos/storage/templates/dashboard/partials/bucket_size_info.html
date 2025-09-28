@@ -1,0 +1,20 @@
+<div id="bucket-size-container-{{ bucket_name|slugify }}"
+     class="btn btn-ghost btn-xs gap-2"
+     hx-get="{% url 'storage:bucket_size_info' bucket_name %}?force_fresh=true"
+     hx-target="this"
+     hx-swap="outerHTML"
+     title="Refresh bucket size for {{ bucket_name }}">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+    </svg>
+    {% if success %}
+        <span class="font-medium text-sm">{{ total_size_formatted }}</span>
+        <span class="badge badge-ghost badge-xs">{{ object_count }} objects</span>
+    {% else %}
+        <span class="text-error text-sm font-medium">Error</span>
+        {% if error %}
+            <span class="text-xs text-error/70">{{ error|truncatechars:40 }}</span>
+        {% endif %}
+    {% endif %}
+    <span class="loading loading-spinner loading-xs htmx-indicator"></span>
+</div>

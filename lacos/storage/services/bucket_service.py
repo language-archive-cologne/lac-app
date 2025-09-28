@@ -8,6 +8,7 @@ import time
 
 from botocore.exceptions import ClientError
 from django.conf import settings
+from django.core.cache import cache
 import boto3
 from django.core.management import call_command
 
@@ -573,9 +574,109 @@ class BucketService(BaseStorageService):
                 
         except Exception as e:
             logger.error(f"Error in direct_move_to_production: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+    def get_bucket_total_size(self, bucket_name: str, force_fresh: bool = False) -> Dict[str, Any]:
+        """Calculate total size and object count for a bucket."""
+        cache_key = f"storage_bucket_size_{bucket_name}"
+
+        if not force_fresh:
+            cached_result = cache.get(cache_key)
+            if cached_result:
+                return cached_result
+
+        start_time = time.time()
+        total_size = 0
+        object_count = 0
+
+        try:
+            paginator = self.s3_client.get_paginator("list_objects_v2")
+
+            for page in paginator.paginate(Bucket=bucket_name):
+                contents = page.get("Contents", [])
+                object_count += len(contents)
+                total_size += sum(obj.get("Size", 0) for obj in contents)
+
+            duration = time.time() - start_time
+            result = {
+                "success": True,
+                "bucket_name": bucket_name,
+                "total_size": total_size,
+                "total_size_formatted": self._format_size(total_size),
+                "object_count": object_count,
+                "calculation_duration": duration,
+            }
+
+            cache.set(cache_key, result, timeout=1800)
+            return result
+
+        except ClientError as exc:
+            error_code = exc.response.get("Error", {}).get("Code", "Unknown")
+            logger.error(f"Error calculating bucket size for {bucket_name}: {error_code}")
             return {
                 "success": False,
-                "error": str(e)
+                "bucket_name": bucket_name,
+                "error": f"S3 error: {error_code}",
+                "total_size": 0,
+                "total_size_formatted": "0 B",
+                "object_count": 0,
+            }
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.exception(f"Unexpected error calculating bucket size for {bucket_name}")
+            return {
+                "success": False,
+                "bucket_name": bucket_name,
+                "error": str(exc),
+                "total_size": 0,
+                "total_size_formatted": "0 B",
+                "object_count": 0,
+            }
+
+    def get_file_info(self, bucket_name: str, object_path: str) -> Dict[str, Any]:
+        """Fetch metadata for a single object."""
+        try:
+            metadata = self.s3_client.head_object(Bucket=bucket_name, Key=object_path)
+            size = metadata.get("ContentLength", 0)
+            last_modified = metadata.get("LastModified")
+
+            return {
+                "success": True,
+                "bucket_name": bucket_name,
+                "object_path": object_path,
+                "file_name": os.path.basename(object_path.rstrip("/")),
+                "file_size": size,
+                "file_size_formatted": self._format_size(size),
+                "content_type": metadata.get("ContentType", "application/octet-stream"),
+                "last_modified": last_modified.isoformat() if last_modified else None,
+                "etag": metadata.get("ETag"),
+                "metadata": metadata.get("Metadata", {}),
+            }
+        except ClientError as exc:
+            error_code = exc.response.get("Error", {}).get("Code", "Unknown")
+            status_code = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+            if error_code == "NoSuchKey" or status_code == 404:
+                logger.warning(f"File not found for info lookup: {object_path}")
+                error_message = "File not found"
+            else:
+                logger.error(f"Error fetching file info for {object_path}: {error_code}")
+                error_message = f"S3 error: {error_code}"
+
+            return {
+                "success": False,
+                "bucket_name": bucket_name,
+                "object_path": object_path,
+                "error": error_message,
+            }
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.exception(f"Unexpected error fetching file info for {object_path}")
+            return {
+                "success": False,
+                "bucket_name": bucket_name,
+                "object_path": object_path,
+                "error": str(exc),
             }
         
     def _format_size(self, size_bytes: int) -> str:

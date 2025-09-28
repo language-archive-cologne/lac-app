@@ -5,7 +5,7 @@ volumes:
   minio_data: {}
 
 networks:
-  lacos_network:
+  lacos_network_ws:
     driver: bridge
 
 services:
@@ -14,7 +14,6 @@ services:
       context: .
       dockerfile: ./compose/local/django/Dockerfile
     image: lacos_local_django
-    container_name: lacos_local_django
     restart: unless-stopped
     depends_on:
       - postgres
@@ -29,25 +28,23 @@ services:
       - '8101:8000'
     command: /start
     networks:
-      - lacos_network
+      - lacos_network_ws
 
   postgres:
     build:
       context: .
       dockerfile: ./compose/production/postgres/Dockerfile
     image: lacos_production_postgres
-    container_name: lacos_local_postgres
     volumes:
       - lacos_local_postgres_data:/var/lib/postgresql/data
       - lacos_local_postgres_data_backups:/backups
     env_file:
       - ./.envs/.local/.postgres
     networks:
-      - lacos_network
+      - lacos_network_ws
 
   minio:
     image: minio/minio
-    container_name: lacos_minio
     ports:
       - "9100:9000"
       - "9101:9001"
@@ -73,18 +70,17 @@ services:
       timeout: 20s
       retries: 3
     networks:
-      - lacos_network
+      - lacos_network_ws
 
 
   redis:
     image: "redis:latest"
-    container_name: redis
     volumes:
       - lacos_local_redis_data:/data
     ports:
       - "6381:6379"
     networks:
-      - lacos_network
+      - lacos_network_ws
     command: redis-server --appendonly yes
 
   huey:
@@ -92,7 +88,6 @@ services:
         context: .
         dockerfile: ./compose/local/django/Dockerfile
       image: lacos_local_huey
-      container_name: huey
       depends_on:
         - django
         - redis
@@ -104,11 +99,10 @@ services:
         - ./.envs/.local/.storage
       command: /bin/sh -c "python manage.py run_huey"
       networks:
-        - lacos_network
+        - lacos_network_ws
 
   node:
     image: node:latest
-    container_name: node_tailwind_builder
     depends_on:
       - django
     working_dir: /app/theme/static_src
@@ -118,4 +112,4 @@ services:
     command: /bin/sh -c "npm install && npm run dev"
     tty: true
     networks:
-      - lacos_network
+      - lacos_network_ws

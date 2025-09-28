@@ -36,6 +36,7 @@ urlpatterns = [
     # Archivist dashboard
     path("dashboard/", views.archivist_dashboard, name="archivist_dashboard"),
     path("dashboard/folder-contents/<str:bucket_type>/<path:folder_path>/", views.load_folder_contents, name="load_folder_contents"),
+    path("dashboard/bucket-size/<str:bucket_name>/", views.bucket_size_info, name="bucket_size_info"),
     
     # File operations
     path("file-content/<str:bucket_type>/<path:file_path>/", views.file_content, name="file_content"),
@@ -54,6 +55,7 @@ urlpatterns = [
     path("htmx/create-bucket/", views.CreateBucketHTMXView.as_view(), name="create_bucket_htmx"),
     path("htmx/delete-bucket/<str:bucket_name>/", views.delete_bucket_htmx, name="delete_bucket_htmx"),
     path("htmx/rename-bucket/<str:bucket_name>/", views.RenameBucketHTMXView.as_view(), name="rename_bucket_htmx"),
+    path("htmx/file-info/<str:bucket_type>/<path:object_path>/", views.file_info_htmx, name="file_info_htmx"),
 
     # OCFL conversion operations
     path("ocfl/modal/<str:bucket_name>/<path:folder_path>/", views.ocfl_conversion_modal, name="ocfl_conversion_modal"),
