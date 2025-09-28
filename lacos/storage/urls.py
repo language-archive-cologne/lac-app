@@ -40,6 +40,11 @@ urlpatterns = [
     
     # File operations
     path("file-content/<str:bucket_type>/<path:file_path>/", views.file_content, name="file_content"),
+    path(
+        "htmx/file-viewer/<str:bucket_type>/<path:object_path>/",
+        views.file_viewer_htmx,
+        name="file_viewer_htmx",
+    ),
     path("delete/<str:bucket_type>/<str:object_type>/<path:object_path>/", views.delete_object, name="delete_object"),
     path("htmx/rename-object/<str:bucket_name>/<str:object_type>/<path:object_path>/", views.RenameObjectHTMXView.as_view(), name="rename_object_htmx"),
     path("htmx/rename-bucket-modal/<str:bucket_name>/", views.RenameBucketModalHTMXView.as_view(), name="rename_bucket_modal_htmx"),

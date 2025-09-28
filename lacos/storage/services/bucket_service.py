@@ -678,6 +678,50 @@ class BucketService(BaseStorageService):
                 "object_path": object_path,
                 "error": str(exc),
             }
+
+    def generate_presigned_download_url(
+        self,
+        bucket_name: str,
+        object_path: str,
+        expires_in: int = 900,
+    ) -> Dict[str, Any]:
+        """Create a presigned GET URL for streaming/downloading an object."""
+        client = getattr(self, "presigned_client", self.s3_client)
+
+        try:
+            url = client.generate_presigned_url(
+                "get_object",
+                Params={
+                    "Bucket": bucket_name,
+                    "Key": object_path,
+                },
+                ExpiresIn=expires_in,
+            )
+
+            return {
+                "success": True,
+                "url": url,
+                "expires_in": expires_in,
+            }
+        except ClientError as exc:
+            error_code = exc.response.get("Error", {}).get("Code", "Unknown")
+            logger.error(
+                "Error generating presigned URL for %s: %s",
+                object_path,
+                error_code,
+            )
+            return {
+                "success": False,
+                "error": f"S3 error: {error_code}",
+            }
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.exception(
+                "Unexpected error generating presigned URL for %s", object_path
+            )
+            return {
+                "success": False,
+                "error": str(exc),
+            }
         
     def _format_size(self, size_bytes: int) -> str:
         """Format bytes to human-readable size"""

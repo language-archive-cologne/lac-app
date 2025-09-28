@@ -58,6 +58,96 @@ def file_content(request, bucket_type, file_path):
         return HttpResponse(error_message, status=500)
 
 
+@login_required
+def file_viewer_htmx(request, bucket_type, object_path):
+    """Return modal content with a presigned URL for streaming file previews."""
+    bucket_service = BucketService()
+
+    accessible_buckets = set(bucket_service.get_all_accessible_buckets())
+
+    if bucket_type in accessible_buckets:
+        bucket_name = bucket_type
+    elif bucket_type == "ingest":
+        bucket_name = bucket_service.ingest_bucket
+    elif bucket_type == "production":
+        bucket_name = bucket_service.production_bucket
+    else:
+        return HttpResponse(status=404)
+
+    info_result = bucket_service.get_file_info(bucket_name, object_path)
+
+    if not info_result.get("success", False):
+        html = render_to_string(
+            "dashboard/partials/file_viewer_error.html",
+            {
+                "file_name": object_path.rstrip("/").split("/")[-1],
+                "error": info_result.get("error", "Unable to load file metadata."),
+            },
+            request=request,
+        )
+        return HttpResponse(html, status=404)
+
+    presigned = bucket_service.generate_presigned_download_url(bucket_name, object_path)
+
+    if not presigned.get("success", False):
+        html = render_to_string(
+            "dashboard/partials/file_viewer_error.html",
+            {
+                "file_name": info_result.get("file_name"),
+                "error": presigned.get("error", "Could not generate access link."),
+            },
+            request=request,
+        )
+        return HttpResponse(html, status=500)
+
+    content_type = info_result.get("content_type") or "application/octet-stream"
+    file_name = info_result.get("file_name") or object_path.rstrip("/").split("/")[-1]
+
+    viewer_type = _determine_viewer_type(content_type, file_name)
+
+    context = {
+        "file_name": file_name,
+        "bucket_type": bucket_type,
+        "object_path": object_path,
+        "content_type": content_type,
+        "file_size": info_result.get("file_size"),
+        "file_size_formatted": info_result.get("file_size_formatted"),
+        "last_modified": info_result.get("last_modified"),
+        "etag": info_result.get("etag"),
+        "download_url": presigned.get("url"),
+        "expires_in": presigned.get("expires_in"),
+        "viewer_type": viewer_type,
+    }
+
+    html = render_to_string(
+        "dashboard/partials/file_viewer_modal.html",
+        context,
+        request=request,
+    )
+    return HttpResponse(html)
+
+
+def _determine_viewer_type(content_type: str, file_name: str) -> str:
+    """Infer viewer type from MIME type and extension."""
+    if not content_type:
+        content_type = "application/octet-stream"
+
+    lowered_type = content_type.lower()
+    extension = file_name.rsplit(".", 1)[-1].lower() if "." in file_name else ""
+
+    if lowered_type.startswith("video/") or extension in {"mp4", "webm", "mov", "m4v", "avi"}:
+        return "video"
+    if lowered_type.startswith("audio/") or extension in {"mp3", "wav", "ogg", "flac", "m4a"}:
+        return "audio"
+    if lowered_type.startswith("image/") or extension in {"jpg", "jpeg", "png", "gif", "bmp", "webp", "svg"}:
+        return "image"
+    if lowered_type == "application/pdf" or extension == "pdf":
+        return "pdf"
+    if lowered_type.startswith("text/") or extension in {"txt", "json", "xml", "html", "csv", "md"}:
+        return "text"
+    return "download"
+
+
 @method_decorator(login_required, name='dispatch')
 class RenameObjectHTMXView(HtmxTemplateHelperMixin, View):
     """HTMX endpoint for renaming files and folders within a bucket."""
