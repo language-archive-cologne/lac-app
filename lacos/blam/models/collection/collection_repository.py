@@ -13,6 +13,17 @@ class Collection(Repository):
         blank=True,
         help_text="BLAM schema version used during the latest import",
     )
+    import_bucket = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="S3 bucket used when this collection was imported",
+    )
+    import_object_key = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Original S3 object key used for the collection import",
+    )
     @property
     def base_header(self):
         """Get the collection header"""

@@ -193,6 +193,9 @@ def test_import_s3_collection(mock_file_discovery_service, mock_collection_impor
     assert ingest_tasks.CollectionImporter.import_from_xml.called
     # Check the return value is the collection ID
     assert result == 1
+    assert mock_collection_importer.import_bucket == test_bucket
+    assert mock_collection_importer.import_object_key == test_key
+    mock_collection_importer.save.assert_any_call(update_fields=['import_bucket', 'import_object_key'])
 
 def test_import_s3_collection_error(mock_file_discovery_service):
     """Test error handling when read_s3_object raises an exception."""
@@ -224,6 +227,9 @@ def test_import_s3_bundle(mock_file_discovery_service, mock_bundle_importer):
     assert ingest_tasks.BundleImporter.import_from_xml.called
     # Check the return value contains both bundle and resources IDs
     assert result == (bundle.id, bundle_resources_id)
+    assert bundle.import_bucket == test_bucket
+    assert bundle.import_object_key == test_key
+    bundle.save.assert_any_call(update_fields=['import_bucket', 'import_object_key'])
 
 def test_import_s3_bundle_error(mock_file_discovery_service):
     """Test error handling when read_s3_object raises an exception."""

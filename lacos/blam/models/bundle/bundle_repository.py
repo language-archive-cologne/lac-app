@@ -1,3 +1,5 @@
+from django.db import models
+
 from lacos.blam.models.base_repository import Repository
 
 
@@ -8,6 +10,17 @@ class Bundle(Repository):
     It is a member of a collection.
 
     """
+    import_bucket = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="S3 bucket used when this bundle was imported",
+    )
+    import_object_key = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Original S3 object key used for the bundle import",
+    )
     @property
     def base_header(self):
         """Get the bundle header"""
@@ -36,5 +49,4 @@ class Bundle(Repository):
     class Meta:
         verbose_name = "Bundle"
         verbose_name_plural = "Bundles"
-
 

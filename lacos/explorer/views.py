@@ -6,7 +6,7 @@ from functools import lru_cache
 import re
 from django.urls import reverse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.http import HttpResponse, Http404
+from django.http import HttpResponse, Http404, StreamingHttpResponse
 from urllib.parse import unquote
 
 # Assuming your Collection model is here. Adjust if necessary.
@@ -212,6 +212,9 @@ class BundleResourcesView(View):
     
     def get(self, request, pk, resource_id=None):
         bundle = get_object_or_404(Bundle, pk=pk)
+        collection_for_path = None
+        if hasattr(bundle, 'structural_info') and bundle.structural_info.first():
+            collection_for_path = bundle.structural_info.first().is_member_of_collection
         
         # If a specific resource is requested, try to serve it directly
         if resource_id:
@@ -223,16 +226,24 @@ class BundleResourcesView(View):
                 if decoded_resource_id.startswith('ID_'):
                     decoded_resource_id = decoded_resource_id[3:]
                 
-                # Use the ResourceMappingService to get a direct S3 URL
                 from lacos.storage.services.resource_mapping_service import ResourceMappingService
-                
-                # Initialize the service
+
                 resource_service = ResourceMappingService()
-                
-                # Generate a presigned URL directly from the PID
-                presigned_url = resource_service.get_resource_url_by_pid(decoded_resource_id)
-                
-                # Redirect to the presigned URL
+                location = resource_service.resolve_pid_to_s3(decoded_resource_id)
+                if not location:
+                    raise ValueError(f"No S3 location found for PID: {decoded_resource_id}")
+
+                resolved_bucket = location.s3_bucket
+                if getattr(bundle, 'import_bucket', None):
+                    resolved_bucket = bundle.import_bucket
+                elif getattr(collection_for_path, 'import_bucket', None):
+                    resolved_bucket = collection_for_path.import_bucket
+
+                presigned_url = resource_service.generate_presigned_url(
+                    resolved_bucket,
+                    location.s3_key,
+                )
+
                 return redirect(presigned_url)
                 
             except ValueError as e:
@@ -269,6 +280,9 @@ class ResourceAccessView(View):
     
     def get(self, request, bundle_id, resource_id):
         bundle = get_object_or_404(Bundle, pk=bundle_id)
+        collection_for_path = None
+        if hasattr(bundle, 'structural_info') and bundle.structural_info.first():
+            collection_for_path = bundle.structural_info.first().is_member_of_collection
         action = request.GET.get('action', 'download')  # Default to download if no action specified
         
         try:
@@ -316,18 +330,52 @@ class ResourceAccessView(View):
             
             # Get the PID from the resource
             resource_pid = resource.file_pid
-            
-            # Use the ResourceMappingService to get a direct S3 URL
+
             from lacos.storage.services.resource_mapping_service import ResourceMappingService
-            from urllib.parse import urlparse
-            import mimetypes
-            import requests
-            
-            # Initialize the service
+            from lacos.storage.services.file_discovery_service import FileDiscoveryService
+            from botocore.exceptions import ClientError
+
             resource_service = ResourceMappingService()
-            
-            # Generate a presigned URL directly from the PID
-            presigned_url = resource_service.get_resource_url_by_pid(resource_pid)
+
+            location = resource_service.resolve_pid_to_s3(resource_pid)
+
+            bucket_name = None
+            object_key = None
+
+            if location:
+                bucket_name = location.s3_bucket
+                object_key = location.s3_key
+            else:
+                discovery_service = FileDiscoveryService()
+                if collection_for_path:
+                    try:
+                        object_key = discovery_service.form_resource_path(
+                            collection_for_path.id,
+                            bundle.id,
+                            resource.file_name,
+                        )
+                    except Exception:
+                        object_key = None
+
+                bucket_name = getattr(bundle, 'import_bucket', None) or (
+                    collection_for_path.import_bucket if collection_for_path else None
+                ) or resource_service.production_bucket
+
+            preferred_bucket = (
+                getattr(bundle, 'import_bucket', None)
+                or (
+                    getattr(collection_for_path, 'import_bucket', None)
+                    if collection_for_path
+                    else None
+                )
+            )
+            if preferred_bucket:
+                bucket_name = preferred_bucket
+
+            if not bucket_name or not object_key:
+                raise ValueError("Unable to determine S3 location for resource")
+
+            presigned_url = resource_service.generate_presigned_url(bucket_name, object_key)
             
             # For direct download, just redirect to the presigned URL
             if action == 'download':
@@ -335,42 +383,62 @@ class ResourceAccessView(View):
             
             # For streaming/viewing, handle based on the mime type
             if mime_type and (mime_type.startswith('audio/') or mime_type.startswith('video/')):
-                # Handle range requests for audio/video files
-                range_header = request.META.get('HTTP_RANGE', None)
-                
+                range_header = request.META.get('HTTP_RANGE')
+
+                get_kwargs = {
+                    'Bucket': bucket_name,
+                    'Key': object_key,
+                }
+
                 if range_header:
-                    # Forward the range request to S3
-                    headers = {'Range': range_header}
-                    response = requests.get(presigned_url, headers=headers, stream=True)
-                    
-                    # Create streaming response with the same headers
-                    from django.http import StreamingHttpResponse
-                    streaming_response = StreamingHttpResponse(
-                        streaming_content=response.iter_content(chunk_size=8192),
-                        content_type=mime_type,
-                        status=response.status_code
+                    get_kwargs['Range'] = range_header
+
+                try:
+                    s3_response = resource_service.s3_client.get_object(**get_kwargs)
+                except ClientError as s3_error:
+                    logger.error(
+                        "Error streaming resource %s from bucket %s: %s",
+                        resource_id,
+                        bucket_name,
+                        s3_error,
                     )
-                    
-                    # Copy relevant headers from the S3 response
-                    for header in ['Content-Range', 'Content-Length', 'Accept-Ranges', 'Content-Type']:
-                        if header in response.headers:
-                            streaming_response[header] = response.headers[header]
-                    
-                    return streaming_response
-                else:
-                    # Initial request without range header
-                    response = requests.head(presigned_url)
-                    content_length = response.headers.get('Content-Length', 0)
-                    
-                    from django.http import StreamingHttpResponse
-                    streaming_response = StreamingHttpResponse(
-                        streaming_content=requests.get(presigned_url, stream=True).iter_content(chunk_size=8192),
-                        content_type=mime_type
+                    return HttpResponse(
+                        f"Error streaming resource: {s3_error}",
+                        status=500,
                     )
-                    
-                    streaming_response['Content-Length'] = content_length
-                    streaming_response['Accept-Ranges'] = 'bytes'
-                    return streaming_response
+
+                stream_body = s3_response['Body']
+
+                def stream_generator(chunk_size=8192):
+                    try:
+                        for chunk in stream_body.iter_chunks(chunk_size=chunk_size):
+                            if chunk:
+                                yield chunk
+                    finally:
+                        stream_body.close()
+
+                status_code = s3_response.get('ResponseMetadata', {}).get('HTTPStatusCode', 200)
+                streaming_response = StreamingHttpResponse(
+                    stream_generator(),
+                    content_type=mime_type,
+                    status=status_code,
+                )
+
+                content_length = s3_response.get('ContentLength')
+                if content_length is not None:
+                    streaming_response['Content-Length'] = str(content_length)
+
+                content_range = s3_response.get('ContentRange')
+                if content_range:
+                    streaming_response['Content-Range'] = content_range
+
+                streaming_response['Accept-Ranges'] = 'bytes'
+
+                # Ensure partial content status is correct when range requested
+                if range_header and status_code == 200:
+                    streaming_response.status_code = 206
+
+                return streaming_response
             
             elif mime_type and (mime_type.startswith('image/') or mime_type == 'application/pdf'):
                 # For images and PDFs, redirect to view in browser

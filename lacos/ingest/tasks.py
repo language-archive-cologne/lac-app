@@ -77,6 +77,17 @@ def import_s3_collection(bucket: str, s3_key: str) -> Optional[UUID]:
             xml_content = xml_content_bytes.decode('utf-8')
             # Use CollectionImporter to handle parsing and saving
             collection = CollectionImporter.import_from_xml(xml_content)
+
+            fields_to_update: List[str] = []
+            if getattr(collection, 'import_bucket', None) != bucket:
+                collection.import_bucket = bucket
+                fields_to_update.append('import_bucket')
+            if getattr(collection, 'import_object_key', None) != s3_key:
+                collection.import_object_key = s3_key
+                fields_to_update.append('import_object_key')
+            if fields_to_update:
+                collection.save(update_fields=fields_to_update)
+
             collection_id = collection.id # Store ID for logging after commit
             collection_title = getattr(collection.general_info, 'display_title', 'Unknown') if hasattr(collection, 'general_info') else 'Unknown' # Safe access
             logger.info(f"COLLECTION IMPORT SUCCESS (within transaction): ID={collection_id} | Title={collection_title} | S3={s3_key}")
@@ -126,6 +137,16 @@ def import_s3_bundle(bucket: str, s3_key: str) -> Optional[Tuple[UUID, UUID]]:
         if not bundle or not bundle_resources_id:
              logger.error(f"{task_id}: FAILED - BundleImporter returned None for bundle or bundle_resources_id.")
              return None
+
+        fields_to_update: List[str] = []
+        if getattr(bundle, 'import_bucket', None) != bucket:
+            bundle.import_bucket = bucket
+            fields_to_update.append('import_bucket')
+        if getattr(bundle, 'import_object_key', None) != s3_key:
+            bundle.import_object_key = s3_key
+            fields_to_update.append('import_object_key')
+        if fields_to_update:
+            bundle.save(update_fields=fields_to_update)
 
         bundle_title = getattr(bundle.general_info, 'display_title', 'Unknown') if hasattr(bundle, 'general_info') and bundle.general_info else 'Unknown'
         struct_info = bundle.structural_info.first() if hasattr(bundle, 'structural_info') else None
@@ -409,5 +430,3 @@ def process_s3_prefix(bucket: str = None, prefix: str = ''):
             continue
 
     logger.info(f"Completed enqueuing {pipelines_enqueued} collection processing pipelines for S3 prefix: {actual_bucket}/{prefix}")
-
-
