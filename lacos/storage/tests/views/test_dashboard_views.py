@@ -8,6 +8,7 @@ from lacos.storage.views.dashboard_views import (
     RenameBucketModalHTMXView,
     RenameObjectModalHTMXView,
 )
+from lacos.common.mixins.htmx_template_helpers import HtmxTemplateHelperMixin
 
 # Note: fixtures are now imported from conftest.py automatically
 
@@ -68,6 +69,9 @@ def test_archivist_dashboard_success(mock_render, mock_bucket_service, prepared_
     assert 'production_structure' in context
     assert 'message' in context
     assert context['message'] == 'Test message'
+    assert context['active_bucket'] == 'test-ingest-bucket'
+    assert context['active_bucket_structure'] == bucket_structures['test-ingest-bucket']
+    assert request.session['storage_active_bucket'] == 'test-ingest-bucket'
     
     # Verify the structure of the context data
     ingest_structure = context['ingest_structure']
@@ -107,6 +111,9 @@ def test_archivist_dashboard_empty_buckets(mock_render, mock_bucket_service, pre
     context = mock_render.call_args[0][2]
     assert len(context['ingest_structure']['children']) == 0
     assert len(context['production_structure']['children']) == 0
+    assert context['active_bucket'] == 'test-ingest-bucket'
+    assert context['active_bucket_structure']['name'] == 'test-ingest-bucket'
+    assert request.session['storage_active_bucket'] == 'test-ingest-bucket'
 
 @patch('lacos.storage.views.dashboard_views.BucketService')
 @patch('lacos.storage.views.dashboard_views.render')
@@ -126,6 +133,31 @@ def test_archivist_dashboard_error_handling(mock_render, mock_bucket_service, pr
     context = mock_render.call_args[0][2]
     assert len(context['ingest_structure']['children']) == 0
     assert len(context['production_structure']['children']) == 0
+    assert context['active_bucket'] == 'test-ingest-bucket'
+    assert context['active_bucket_structure']['name'] == 'test-ingest-bucket'
+    assert request.session['storage_active_bucket'] == 'test-ingest-bucket'
+
+
+class _DummyHelperView(HtmxTemplateHelperMixin):
+    """Simple helper to expose the mixin for testing."""
+
+
+def test_build_bucket_tabs_oob_response_adds_hidden_input(request_factory):
+    request = request_factory.get('/storage/test')
+    request.session = {'storage_active_bucket': 'bucket-1'}
+
+    view = _DummyHelperView()
+
+    with patch.object(
+        _DummyHelperView,
+        'render_bucket_tabs_template',
+        return_value='<div id="bucket-tabs">tabs</div>'
+    ):
+        result = view.build_bucket_tabs_oob_response(main_html='', request=request, active_bucket='bucket-1')
+
+    assert 'id="bucket-tabs" hx-swap-oob="outerHTML"' in result
+    assert 'id="current-active-bucket-input"' in result
+    assert result.count('hx-swap-oob="outerHTML"') >= 2
 
 @patch('lacos.storage.views.dashboard_views.BucketService')
 @patch('lacos.storage.views.dashboard_views.render')

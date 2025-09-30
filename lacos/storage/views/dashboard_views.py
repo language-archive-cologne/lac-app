@@ -3,7 +3,7 @@ import ast
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from lacos.storage.services.bucket_service import BucketService
-from lacos.common.mixins import HtmxTemplateHelperMixin
+from lacos.common.mixins import BucketCoordinatorMixin, HtmxTemplateHelperMixin
 from django.http import HttpResponse, JsonResponse, QueryDict
 from django.views.decorators.http import require_http_methods
 from django.utils.decorators import method_decorator
@@ -24,13 +24,16 @@ def archivist_dashboard(request):
     Only loads root level items initially for better performance.
     """
     bucket_service = BucketService()
+    bucket_state = BucketCoordinatorMixin()
 
     force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
 
     try:
         # Get root level items for all workspace buckets
         bucket_structures = {}
-        for bucket_name in bucket_service.get_all_accessible_buckets():
+        workspace_buckets = bucket_service.get_all_accessible_buckets()
+
+        for bucket_name in workspace_buckets:
             try:
                 if force_fresh:
                     bucket_structures[bucket_name] = bucket_service.get_root_level_items(bucket_name, force_fresh=True)
@@ -54,8 +57,20 @@ def archivist_dashboard(request):
         logger.error(f"Error loading dashboard: {str(e)}")
         # Return empty structures on error
         bucket_structures = {}
+        workspace_buckets = bucket_service.get_all_accessible_buckets()
         ingest_structure = {"type": "folder", "name": bucket_service.ingest_bucket, "path": "", "children": []}
         production_structure = {"type": "folder", "name": bucket_service.production_bucket, "path": "", "children": []}
+
+    active_bucket = bucket_state.ensure_active_bucket(request, workspace_buckets)
+    active_bucket_structure = bucket_structures.get(active_bucket)
+
+    if active_bucket and active_bucket_structure is None:
+        active_bucket_structure = {
+            "type": "folder",
+            "name": active_bucket,
+            "path": "",
+            "children": [],
+        }
 
     # Check for success message
     message = request.GET.get('message', None)
@@ -65,7 +80,9 @@ def archivist_dashboard(request):
         "dashboard/archivist_dashboard.html",
         {
             "bucket_structures": bucket_structures,
-            "workspace_buckets": bucket_service.get_all_accessible_buckets(),
+            "workspace_buckets": workspace_buckets,
+            "active_bucket": active_bucket,
+            "active_bucket_structure": active_bucket_structure,
             "ocfl_buckets": bucket_service.ocfl_buckets,
             # Legacy backward compatibility
             "ingest_structure": ingest_structure,
@@ -294,10 +311,12 @@ class CreateBucketHTMXView(HtmxTemplateHelperMixin, View):
             logger.info(f"Successfully created bucket: {bucket_name}, OCFL: {enable_ocfl}")
 
             # Only update bucket tabs, keep current view active
-            # Get the current active bucket from form data
-            current_active_bucket = request.POST.get('currentActiveBucket')
+            current_active_bucket = self.get_active_bucket(request)
 
-            # If no current bucket (first bucket creation), use the new bucket
+            if not current_active_bucket:
+                current_active_bucket = request.POST.get('currentActiveBucket')
+
+            # If still not set (first bucket creation), use the new bucket
             if not current_active_bucket:
                 current_active_bucket = bucket_name
 

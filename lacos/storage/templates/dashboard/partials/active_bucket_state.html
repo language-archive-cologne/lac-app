@@ -1,0 +1,5 @@
+<input type="hidden"
+       name="currentActiveBucket"
+       value="{{ active_bucket|default:'' }}"
+       id="current-active-bucket-input"
+       {% if oob %}hx-swap-oob="outerHTML"{% endif %} />

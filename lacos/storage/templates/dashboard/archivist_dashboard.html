@@ -31,7 +31,7 @@
             <div class="flex flex-col lg:flex-row items-center justify-between gap-4">
 
                 <!-- Bucket Tabs with HTMX -->
-                {% include "dashboard/bucket_tabs_partial.html" with active_bucket=workspace_buckets.0 %}
+                {% include "dashboard/bucket_tabs_partial.html" with active_bucket=active_bucket %}
 
                 <!-- Action Buttons -->
                 <div class="flex flex-wrap gap-2 justify-end">
@@ -62,14 +62,8 @@
     <div class="card bg-base-100 shadow-xl">
         <div id="bucket-content">
             <!-- Initial bucket content -->
-            {% if workspace_buckets %}
-                {% with workspace_buckets.0 as first_bucket %}
-                    {% for bucket, structure in bucket_structures.items %}
-                        {% if bucket == first_bucket %}
-                            {% include "dashboard/bucket_content_partial.html" with structure=structure bucket_name=first_bucket %}
-                        {% endif %}
-                    {% endfor %}
-                {% endwith %}
+            {% if active_bucket %}
+                {% include "dashboard/bucket_content_partial.html" with structure=active_bucket_structure bucket_name=active_bucket %}
             {% else %}
                 <div class="card-body p-6">
                     <div class="text-center py-12">
@@ -98,7 +92,7 @@
               hx-indicator="#indicator">
             {% csrf_token %}
             <!-- Track current active bucket -->
-            <input type="hidden" name="currentActiveBucket" value="{% if workspace_buckets %}{{ workspace_buckets.0 }}{% endif %}" id="current-active-bucket-input" />
+            {% include "dashboard/partials/active_bucket_state.html" with active_bucket=active_bucket oob=False %}
             <div class="form-control w-full mb-4">
                 <label class="label">
                     <span class="label-text">Bucket Name</span>

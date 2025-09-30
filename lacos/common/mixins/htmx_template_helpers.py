@@ -1,20 +1,18 @@
-"""
-HTMX Template Helpers
-
-This mixin provides common template rendering and context preparation methods
-to reduce code duplication across HTMX-enabled views.
-"""
+"""HTMX template helper mixin primitives."""
 
 import logging
-from django.template.loader import render_to_string
-from django.middleware.csrf import get_token
-from django.http import HttpResponse
 import json
+
+from django.http import HttpResponse
+from django.middleware.csrf import get_token
+from django.template.loader import render_to_string
+
+from .bucket_coordinator import BucketCoordinatorMixin
 
 logger = logging.getLogger(__name__)
 
 
-class HtmxTemplateHelperMixin:
+class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
     """
     Mixin providing common template rendering methods for HTMX-enabled views.
 
@@ -39,9 +37,10 @@ class HtmxTemplateHelperMixin:
         workspace_buckets = bucket_service.get_all_accessible_buckets()
         ocfl_buckets = bucket_service.ocfl_buckets
 
-        # Set default active bucket if none provided
-        if active_bucket is None and workspace_buckets:
-            active_bucket = workspace_buckets[0]
+        if active_bucket is not None:
+            active_bucket = self.set_active_bucket(request, active_bucket, workspace_buckets)
+        else:
+            active_bucket = self.get_active_bucket(request, workspace_buckets)
 
         logger.info(f"🎨 TEMPLATE_HELPER: render_bucket_tabs_template called with {len(workspace_buckets)} buckets")
         logger.info(f"🔧 BUCKET_TABS: Active bucket: {active_bucket}")
@@ -69,10 +68,13 @@ class HtmxTemplateHelperMixin:
         from lacos.storage.services.bucket_service import BucketService
 
         bucket_service = BucketService()
+        workspace_buckets = bucket_service.get_all_accessible_buckets()
 
         # Verify bucket access
-        if bucket_name not in bucket_service.get_all_accessible_buckets():
+        if bucket_name not in workspace_buckets:
             return '<div class="alert alert-error"><span>Bucket not accessible</span></div>'
+
+        self.set_active_bucket(request, bucket_name, workspace_buckets)
 
         try:
             force_fresh = request.GET.get('force_fresh', 'false').lower() == 'true'
@@ -169,6 +171,19 @@ class HtmxTemplateHelperMixin:
             logger.exception(f"Error rendering bucket info for {bucket_name}: {str(e)}")
             return f'<span class="text-error">Error loading info: {str(e)}</span>'
 
+    def render_active_bucket_state_template(self, request, active_bucket, oob=False):
+        """Render the hidden input tracking the active bucket selection."""
+        context = {
+            'active_bucket': active_bucket,
+            'oob': oob,
+        }
+
+        return render_to_string(
+            'dashboard/partials/active_bucket_state.html',
+            context,
+            request=request
+        )
+
     def build_oob_response(self, main_html, oob_updates=None):
         """
         Build response with out-of-band updates.
@@ -225,6 +240,17 @@ class HtmxTemplateHelperMixin:
                 success_message=success_message
             )
 
+            active_bucket_resolved = None
+            active_bucket_snippet = ""
+
+            if request is not None:
+                active_bucket_resolved = self.get_active_bucket(request)
+                active_bucket_snippet = self.render_active_bucket_state_template(
+                    request=request,
+                    active_bucket=active_bucket_resolved,
+                    oob=True
+                )
+
             # Add hx-swap-oob="outerHTML" to the bucket-tabs element
             if 'id="bucket-tabs"' in tabs_html:
                 oob_tabs_html = tabs_html.replace(
@@ -232,10 +258,10 @@ class HtmxTemplateHelperMixin:
                     'id="bucket-tabs" hx-swap-oob="outerHTML"',
                     1
                 )
-                return f'{main_html}{oob_tabs_html}'
+                return f'{main_html}{oob_tabs_html}{active_bucket_snippet}'
             else:
                 logger.warning("bucket-tabs id not found in tabs HTML, falling back to innerHTML")
-                return self.build_oob_response(main_html, {'bucket-tabs': tabs_html})
+                return f"{self.build_oob_response(main_html, {'bucket-tabs': tabs_html})}{active_bucket_snippet}"
 
         except Exception as e:
             logger.exception(f"Error building bucket tabs OOB response: {str(e)}")
@@ -270,6 +296,8 @@ class HtmxTemplateHelperMixin:
         This is commonly needed after operations that change the bucket state.
         Returns main_html + OOB updates for bucket tabs, content, and info.
         """
+        self.set_active_bucket(request, bucket_name)
+
         # Render all standard templates
         tabs_html = self.render_bucket_tabs_template(request, active_bucket=bucket_name, success_message=success_message)
         content_html = self.render_bucket_content_template(request, bucket_name)
@@ -282,7 +310,15 @@ class HtmxTemplateHelperMixin:
             'bucket-info': info_html,
         }
 
-        return self.build_oob_response(main_html, oob_updates)
+        response_html = self.build_oob_response(main_html, oob_updates)
+
+        active_bucket_snippet = self.render_active_bucket_state_template(
+            request=request,
+            active_bucket=self.get_active_bucket(request),
+            oob=True,
+        )
+
+        return f'{response_html}{active_bucket_snippet}'
 
     def render_message_template(self, message, level="success"):
         """
