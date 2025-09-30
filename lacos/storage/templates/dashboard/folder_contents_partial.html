@@ -74,6 +74,20 @@ Nested folder contents returned via HTMX when a folder is expanded.
                 </svg>
                 <span class="flex-1 truncate text-sm">{{ item.name }}</span>
                 <div class="flex items-center gap-1">
+                    {% if item.name|lower|slice:'-4:' == '.xml' %}
+                    <label class="btn btn-ghost btn-xs text-amber-600"
+                           onclick="event.stopPropagation();"
+                           for="metadata-ingest-modal"
+                           title="Ingest metadata"
+                           hx-get="{% url 'storage:metadata_ingest_modal' bucket_type=bucket_type object_type='file' object_path=item.path %}"
+                           hx-target="#metadata-modal-content"
+                           hx-swap="innerHTML"
+                           hx-indicator="#indicator">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm0 2c-2.21 0-4 1.79-4 4v3h8v-3c0-2.21-1.79-4-4-4zm-7 7a1 1 0 011-1h12a1 1 0 011 1v2H5v-2z"></path>
+                        </svg>
+                    </label>
+                    {% endif %}
                     <button type="button"
                             class="btn btn-ghost btn-xs"
                             title="Rename File"

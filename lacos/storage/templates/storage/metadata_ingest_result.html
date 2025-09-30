@@ -1,3 +1,18 @@
+{% if used_pipeline %}
+<h3 class="font-bold text-lg mb-2">Collection ingest pipeline queued</h3>
+
+<div class="alert alert-success mb-4">
+    <span>
+        Discovered {{ preview_collection_count }} collection{{ preview_collection_count|pluralize }}
+        and {{ preview_bundle_count }} bundle{{ preview_bundle_count|pluralize }} under
+        <code>{{ pipeline_prefix }}</code> (bucket <strong>{{ bucket }}</strong>). Tasks have been enqueued.
+    </span>
+</div>
+
+<p class="text-sm text-gray-600 mb-4">
+    Huey will import each XML and map related resources. Monitor the activity log for completion details.
+</p>
+{% else %}
 <h3 class="font-bold text-lg mb-2">Metadata ingest queued</h3>
 
 <div class="alert alert-success mb-4">
@@ -10,6 +25,7 @@
 <p class="text-sm text-gray-600 mb-4">
     You will be notified in the activity log when the Huey task finishes processing this XML.
 </p>
+{% endif %}
 
 <div class="modal-action">
     <label for="metadata-ingest-modal" class="btn">Close</label>

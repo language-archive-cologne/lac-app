@@ -7,8 +7,9 @@ from django.shortcuts import render
 from django.template.loader import render_to_string
 from django.views.decorators.http import require_POST
 
-from lacos.ingest.tasks import import_s3_collection, import_s3_bundle
+from lacos.ingest.tasks import import_s3_collection, import_s3_bundle, process_s3_prefix
 from lacos.storage.services.bucket_service import BucketService
+from lacos.storage.services.file_discovery_service import FileDiscoveryService
 from lacos.common.mixins.htmx_template_helpers import HtmxTemplateHelperMixin
 
 logger = logging.getLogger(__name__)
@@ -24,7 +25,6 @@ def validate_metadata_xml(bucket: str, s3_key: str, metadata_type: str) -> dict:
         - 'warnings': list of str
         - 'details': dict with metadata info
     """
-    from lacos.storage.services.file_discovery_service import FileDiscoveryService
     from lacos.blam.mappers.collection.read.collection_importer import CollectionImporter
     from lacos.blam.mappers.bundle.read.bundle_importer import BundleImporter
     from django.core.exceptions import ValidationError
@@ -193,6 +193,10 @@ def ingest_metadata(request):
     metadata_type = (payload.get("metadata_type") or "").strip().lower()
     bucket = (payload.get("bucket") or "").strip()
     s3_key = (payload.get("s3_key") or "").strip()
+    use_pipeline = (payload.get('use_pipeline') or '').strip().lower() == 'true'
+    pipeline_prefix = (payload.get('pipeline_prefix') or '').strip()
+    preview_collection_count = int((payload.get('preview_collection_count') or '0').strip() or 0)
+    preview_bundle_count = int((payload.get('preview_bundle_count') or '0').strip() or 0)
 
     if metadata_type not in {"collection", "bundle"}:
         error_message = "metadata_type must be 'collection' or 'bundle'"
@@ -207,7 +211,22 @@ def ingest_metadata(request):
         return JsonResponse({"success": False, "error": error_message}, status=400)
 
     try:
-        if metadata_type == "collection":
+        if use_pipeline:
+            if not pipeline_prefix:
+                raise ValueError('Pipeline preview data missing. Please preview again.')
+
+            logger.info(
+                "Launching collection ingest pipeline",
+                extra={
+                    "bucket": bucket,
+                    "prefix": pipeline_prefix,
+                    "preview_collection_count": preview_collection_count,
+                    "preview_bundle_count": preview_bundle_count,
+                },
+            )
+            process_s3_prefix(bucket=bucket, prefix=pipeline_prefix)
+            task = None
+        elif metadata_type == "collection":
             task = import_s3_collection(bucket=bucket, s3_key=s3_key)
         else:
             task = import_s3_bundle(bucket=bucket, s3_key=s3_key)
@@ -221,6 +240,8 @@ def ingest_metadata(request):
                 "bucket": bucket,
                 "s3_key": s3_key,
                 "task_id": task_id,
+                "use_pipeline": use_pipeline,
+                "pipeline_prefix": pipeline_prefix if use_pipeline else None,
             },
         )
 
@@ -233,17 +254,31 @@ def ingest_metadata(request):
                     's3_key': s3_key,
                     'metadata_type': metadata_type,
                     'task_id': task_id,
+                    'used_pipeline': use_pipeline,
+                    'pipeline_prefix': pipeline_prefix,
+                    'preview_collection_count': preview_collection_count,
+                    'preview_bundle_count': preview_bundle_count,
                 },
             )
+            if use_pipeline:
+                message = f"Collection ingest pipeline queued for prefix {pipeline_prefix or s3_key} in {bucket}."
+            else:
+                message = f"Metadata ingest queued for {s3_key} (bucket {bucket})."
+
             response['HX-Trigger'] = json.dumps({
                 'showMessage': {
-                    'message': f"Metadata ingest queued for {s3_key} (bucket {bucket}).",
+                    'message': message,
                     'level': 'success',
                 }
             })
             return response
 
-        return JsonResponse({"success": True, "task_id": task_id})
+        return JsonResponse({
+            "success": True,
+            "task_id": task_id,
+            "used_pipeline": use_pipeline,
+            "pipeline_prefix": pipeline_prefix,
+        })
 
     except Exception as exc:
         logger.error("Failed to queue metadata ingest task: %s", exc, exc_info=True)
@@ -396,3 +431,81 @@ def _render_modal_with_error(request, payload, error):
         }
     })
     return response
+
+
+def _infer_pipeline_prefix(object_type: str, s3_key: str) -> str:
+    """Infer the prefix used to discover related BLAM XML files."""
+    clean_key = (s3_key or '').strip('/ ')
+    if not clean_key:
+        return ''
+
+    if object_type == 'folder':
+        return f"{clean_key}/"
+
+    parts = clean_key.split('/')
+    if len(parts) <= 1:
+        return ''
+    return f"{parts[0]}/"
+
+
+@login_required
+def preview_metadata_ingest(request):
+    """Return a preview of the metadata ingest that would be enqueued."""
+
+    bucket = (request.GET.get('bucket') or '').strip()
+    s3_key = (request.GET.get('s3_key') or '').strip()
+    object_type = (request.GET.get('object_type') or 'file').strip().lower()
+    metadata_type = (request.GET.get('metadata_type') or '').strip().lower()
+
+    context = {
+        'bucket': bucket,
+        's3_key': s3_key,
+        'metadata_type': metadata_type,
+        'object_type': object_type,
+    }
+
+    if not bucket or not s3_key:
+        context['error_message'] = 'Bucket and S3 key are required to build a preview.'
+        return render(request, 'storage/metadata_ingest_preview.html', context)
+
+    prefix = _infer_pipeline_prefix(object_type, s3_key)
+    if metadata_type == 'bundle':
+        # Bundle imports operate on the single XML the user selected.
+        context.update({
+            'collection_xmls': [],
+            'bundle_xmls': [s3_key],
+            'should_use_pipeline': False,
+            'pipeline_prefix': '',
+            'collection_count': 0,
+            'bundle_count': 1,
+        })
+        return render(request, 'storage/metadata_ingest_preview.html', context)
+
+    if not prefix:
+        context['error_message'] = 'Unable to infer the collection prefix for discovery. Try selecting the top-level folder instead.'
+        return render(request, 'storage/metadata_ingest_preview.html', context)
+
+    discovery_service = FileDiscoveryService()
+    try:
+        discovery_result = discovery_service.find_collection_and_bundle_xmls_s3(bucket, prefix=prefix)
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logger.error('Failed to preview metadata ingest for %s/%s: %s', bucket, s3_key, exc, exc_info=True)
+        context['error_message'] = 'Error while scanning S3 for BLAM XML files.'
+        return render(request, 'storage/metadata_ingest_preview.html', context)
+
+    collection_xmls = discovery_result.get('potential_collection_xmls', [])
+    bundle_xmls = discovery_result.get('potential_bundle_xmls', [])
+
+    if not collection_xmls:
+        context['error_message'] = 'No collection XML could be located under the inferred prefix.'
+        return render(request, 'storage/metadata_ingest_preview.html', context)
+
+    context.update({
+        'collection_xmls': collection_xmls,
+        'bundle_xmls': bundle_xmls,
+        'should_use_pipeline': True,
+        'pipeline_prefix': prefix,
+        'collection_count': len(collection_xmls),
+        'bundle_count': len(bundle_xmls),
+    })
+    return render(request, 'storage/metadata_ingest_preview.html', context)

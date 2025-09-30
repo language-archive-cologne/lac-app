@@ -1,0 +1,54 @@
+{% if error_message %}
+<div class="alert alert-error mb-3">
+    <span>{{ error_message }}</span>
+</div>
+<input type="hidden" name="use_pipeline" value="false">
+<input type="hidden" name="pipeline_prefix" value="">
+<input type="hidden" name="preview_collection_count" value="0">
+<input type="hidden" name="preview_bundle_count" value="0">
+{% else %}
+    {% if should_use_pipeline %}
+    <div class="alert alert-info mb-3">
+        <span>
+            Found {{ collection_count }} collection{{ collection_count|pluralize }} and
+            {{ bundle_count }} bundle{{ bundle_count|pluralize }} beneath <code>{{ pipeline_prefix }}</code>.
+        </span>
+    </div>
+    <div class="bg-base-200/40 border border-base-300 rounded-lg p-3 mb-3 text-sm space-y-2">
+        <div>
+            <p class="font-semibold">Collection XML</p>
+            <ul class="list-disc list-inside text-xs">
+                {% for path in collection_xmls %}
+                <li><code>{{ path }}</code></li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div>
+            <p class="font-semibold">Bundle XMLs ({{ bundle_count }})</p>
+            {% if bundle_xmls %}
+            <ul class="list-disc list-inside text-xs max-h-32 overflow-auto">
+                {% for path in bundle_xmls %}
+                <li><code>{{ path }}</code></li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="text-xs text-base-content/60">No bundle XMLs detected alongside this collection.</p>
+            {% endif %}
+        </div>
+    </div>
+    <input type="hidden" name="use_pipeline" value="true">
+    <input type="hidden" name="pipeline_prefix" value="{{ pipeline_prefix }}">
+    <input type="hidden" name="preview_collection_count" value="{{ collection_count }}">
+    <input type="hidden" name="preview_bundle_count" value="{{ bundle_count }}">
+    {% else %}
+    <div class="alert alert-info mb-3">
+        <span>
+            The selected bundle XML <code>{{ s3_key }}</code> will be imported individually.
+        </span>
+    </div>
+    <input type="hidden" name="use_pipeline" value="false">
+    <input type="hidden" name="pipeline_prefix" value="">
+    <input type="hidden" name="preview_collection_count" value="0">
+    <input type="hidden" name="preview_bundle_count" value="1">
+    {% endif %}
+{% endif %}

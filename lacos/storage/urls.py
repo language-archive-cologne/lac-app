@@ -27,6 +27,7 @@ urlpatterns = [
 
     # Metadata ingestion
     path("ingest/metadata/", views.ingest_metadata, name="ingest_metadata"),
+    path("ingest/metadata/preview/", views.preview_metadata_ingest, name="preview_metadata_ingest"),
     path("ingest/metadata/modal/<str:bucket_type>/<str:object_type>/<path:object_path>/",
          views.metadata_ingest_modal,
          name="metadata_ingest_modal"),
