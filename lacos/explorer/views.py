@@ -399,6 +399,19 @@ class ResourceAccessView(View):
 
             bucket_name = resolve_existing_bucket(resource_service, bucket_candidates, object_key)
 
+            if not bucket_name and location and collection_for_path:
+                discovery_service = FileDiscoveryService()
+                try:
+                    object_key = discovery_service.form_resource_path(
+                        collection_for_path.id,
+                        bundle.id,
+                        resource.file_name,
+                    )
+                    bucket_candidates = [fallback_bucket, resource_service.production_bucket]
+                    bucket_name = resolve_existing_bucket(resource_service, bucket_candidates, object_key)
+                except Exception:
+                    object_key = None
+
             if not bucket_name:
                 raise ValueError("Unable to determine S3 location for resource")
 
