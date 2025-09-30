@@ -475,15 +475,6 @@ class ResourceAccessView(View):
 
             is_htmx = request.headers.get('HX-Request') == 'true'
 
-            media_stream_url = request.build_absolute_uri(
-                reverse(
-                    'explorer:resource_access',
-                    kwargs={'bundle_id': bundle_id, 'resource_id': resource_id}
-                )
-            )
-            separator = '&' if '?' in media_stream_url else '?'
-            stream_query_url = f"{media_stream_url}{separator}action=stream"
-
             if is_htmx and action in {'play', 'view'}:
                 media_type = None
                 if mime_type and mime_type.startswith('audio/'):
@@ -500,7 +491,7 @@ class ResourceAccessView(View):
                     'resource_description': getattr(resource, 'file_description', ''),
                     'mime_type': mime_type,
                     'media_type': media_type,
-                    'stream_url': stream_query_url if media_type in {'audio', 'video'} else None,
+                    'stream_url': presigned_url if media_type in {'audio', 'video'} else None,
                     'preview_url': presigned_url,
                     'download_url': presigned_url,
                 }
@@ -520,78 +511,18 @@ class ResourceAccessView(View):
             # For streaming/viewing, handle based on the mime type
             if mime_type and (mime_type.startswith('audio/') or mime_type.startswith('video/')):
                 if action == 'play':
-                    player_context = {
-                        'resource_name': resource.file_name,
-                        'mime_type': mime_type,
-                        'stream_url': stream_query_url,
-                        'download_url': presigned_url,
-                    }
                     return render(
                         request,
                         'resource_player.html',
-                        player_context,
+                        {
+                            'resource_name': resource.file_name,
+                            'mime_type': mime_type,
+                            'stream_url': presigned_url,
+                            'download_url': presigned_url,
+                        },
                     )
 
-                if action != 'stream':
-                    # Fallback to download behaviour if action unknown
-                    return redirect(presigned_url)
-
-                range_header = request.META.get('HTTP_RANGE')
-
-                get_kwargs = {
-                    'Bucket': bucket_name,
-                    'Key': object_key,
-                }
-
-                if range_header:
-                    get_kwargs['Range'] = range_header
-
-                try:
-                    s3_response = resource_service.s3_client.get_object(**get_kwargs)
-                except ClientError as s3_error:
-                    logger.error(
-                        "Error streaming resource %s from bucket %s: %s",
-                        resource_id,
-                        bucket_name,
-                        s3_error,
-                    )
-                    return HttpResponse(
-                        f"Error streaming resource: {s3_error}",
-                        status=500,
-                    )
-
-                stream_body = s3_response['Body']
-
-                def stream_generator(chunk_size=8192):
-                    try:
-                        for chunk in stream_body.iter_chunks(chunk_size=chunk_size):
-                            if chunk:
-                                yield chunk
-                    finally:
-                        stream_body.close()
-
-                status_code = s3_response.get('ResponseMetadata', {}).get('HTTPStatusCode', 200)
-                streaming_response = StreamingHttpResponse(
-                    stream_generator(),
-                    content_type=mime_type,
-                    status=status_code,
-                )
-
-                content_length = s3_response.get('ContentLength')
-                if content_length is not None:
-                    streaming_response['Content-Length'] = str(content_length)
-
-                content_range = s3_response.get('ContentRange')
-                if content_range:
-                    streaming_response['Content-Range'] = content_range
-
-                streaming_response['Accept-Ranges'] = 'bytes'
-
-                # Ensure partial content status is correct when range requested
-                if range_header and status_code == 200:
-                    streaming_response.status_code = 206
-
-                return streaming_response
+                return redirect(presigned_url)
             
             elif mime_type and (mime_type.startswith('image/') or mime_type == 'application/pdf'):
                 # For images and PDFs, redirect to view in browser
