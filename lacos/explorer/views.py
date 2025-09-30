@@ -1,15 +1,17 @@
 import logging
-from django.views.generic import DetailView, ListView, View
-from geopy.geocoders import Nominatim
-from django.core.cache import cache
-from functools import lru_cache
 import re
-from django.urls import reverse
-from django.shortcuts import get_object_or_404, redirect, render
-from django.http import HttpResponse, Http404, StreamingHttpResponse
-from urllib.parse import unquote
+from functools import lru_cache
+from pathlib import PurePosixPath
+from typing import Iterable, Optional, Sequence, Tuple
 
 from botocore.exceptions import ClientError
+from django.core.cache import cache
+from django.http import HttpResponse, Http404, StreamingHttpResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.views.generic import DetailView, ListView, View
+from geopy.geocoders import Nominatim
+from urllib.parse import unquote
 
 # Assuming your Collection model is here. Adjust if necessary.
 from lacos.blam.models import Collection, Bundle
@@ -18,17 +20,63 @@ from lacos.blam.models import Collection, Bundle
 logger = logging.getLogger(__name__)
 
 
-def resolve_existing_bucket(resource_service, bucket_candidates, object_key):
-    """Return the first bucket containing the object key, using HEAD for validation."""
-    for candidate in [bucket for bucket in bucket_candidates if bucket]:
+def resolve_existing_object(
+    resource_service,
+    object_locations: Sequence[Tuple[Optional[str], Optional[str]]],
+) -> Tuple[Optional[str], Optional[str]]:
+    """Return the first (bucket, key) pair that exists in storage."""
+    seen: set[Tuple[str, str]] = set()
+
+    for bucket, key in object_locations:
+        if not bucket or not key:
+            continue
+
+        identifier = (bucket, key)
+        if identifier in seen:
+            continue
+        seen.add(identifier)
+
         try:
-            resource_service.s3_client.head_object(Bucket=candidate, Key=object_key)
-            return candidate
+            resource_service.s3_client.head_object(Bucket=bucket, Key=key)
+            return bucket, key
         except ClientError as error:
             error_code = error.response.get('Error', {}).get('Code')
             if error_code in {'404', 'NoSuchKey', 'NotFound'}:
                 continue
             raise
+
+    return None, None
+
+
+def _iter_bundle_resources(bundle) -> Iterable:
+    """Yield all resources associated with the bundle."""
+    resources_container = bundle.resources.first()
+    if resources_container:
+        yield from resources_container.bundle_media_resources.all()
+        yield from resources_container.bundle_written_resources.all()
+        yield from resources_container.bundle_other_resources.all()
+
+    struct_info = bundle.structural_info.first()
+    if struct_info:
+        yield from struct_info.additional_metadata_files.all()
+
+
+def find_resource_in_bundle(
+    bundle,
+    *,
+    resource_id: Optional[str] = None,
+    file_pid: Optional[str] = None,
+):
+    """Locate a resource within a bundle by id or PID."""
+    if resource_id is None and file_pid is None:
+        return None
+
+    for resource in _iter_bundle_resources(bundle):
+        if resource_id is not None and str(resource.id) == str(resource_id):
+            return resource
+        if file_pid is not None and getattr(resource, 'file_pid', None) == file_pid:
+            return resource
+
     return None
 
 
@@ -242,12 +290,15 @@ class BundleResourcesView(View):
                 if decoded_resource_id.startswith('ID_'):
                     decoded_resource_id = decoded_resource_id[3:]
                 
+                from lacos.storage.services.file_discovery_service import FileDiscoveryService
                 from lacos.storage.services.resource_mapping_service import ResourceMappingService
 
                 resource_service = ResourceMappingService()
                 location = resource_service.resolve_pid_to_s3(decoded_resource_id)
                 if not location:
                     raise ValueError(f"No S3 location found for PID: {decoded_resource_id}")
+
+                resource_obj = find_resource_in_bundle(bundle, file_pid=decoded_resource_id)
 
                 fallback_bucket = (
                     getattr(bundle, 'import_bucket', None)
@@ -256,19 +307,53 @@ class BundleResourcesView(View):
                         if collection_for_path
                         else None
                     )
+                    or resource_service.production_bucket
                 )
 
-                bucket_candidates = [location.s3_bucket, fallback_bucket, resource_service.production_bucket]
-                resolved_bucket = resolve_existing_bucket(resource_service, bucket_candidates, location.s3_key)
+                candidate_locations: list[tuple[Optional[str], Optional[str]]] = []
+                candidate_locations.append((location.s3_bucket, location.s3_key))
+                if fallback_bucket:
+                    candidate_locations.append((fallback_bucket, location.s3_key))
 
-                if not resolved_bucket:
-                    raise ValueError(
-                        f"Resource key not available in candidate buckets: {bucket_candidates}"
+                def add_import_location(import_bucket: Optional[str], import_key: Optional[str]):
+                    if not resource_obj or not import_bucket or not import_key:
+                        return
+                    base_path = PurePosixPath(import_key).parent
+                    candidate_locations.append(
+                        (import_bucket, str(base_path / 'Resources' / resource_obj.file_name))
                     )
+
+                add_import_location(getattr(bundle, 'import_bucket', None), getattr(bundle, 'import_object_key', None))
+                if collection_for_path:
+                    add_import_location(
+                        getattr(collection_for_path, 'import_bucket', None),
+                        getattr(collection_for_path, 'import_object_key', None),
+                    )
+
+                if resource_obj and collection_for_path:
+                    try:
+                        discovery_service = FileDiscoveryService()
+                        derived_key = discovery_service.form_resource_path(
+                            collection_for_path.id,
+                            bundle.id,
+                            resource_obj.file_name,
+                        )
+                    except Exception:  # pragma: no cover - defensive
+                        derived_key = None
+
+                    if derived_key:
+                        candidate_locations.append((fallback_bucket, derived_key))
+                        if fallback_bucket != resource_service.production_bucket:
+                            candidate_locations.append((resource_service.production_bucket, derived_key))
+
+                resolved_bucket, resolved_key = resolve_existing_object(resource_service, candidate_locations)
+
+                if not resolved_bucket or not resolved_key:
+                    raise ValueError("Resource key not available in candidate locations")
 
                 presigned_url = resource_service.generate_presigned_url(
                     resolved_bucket,
-                    location.s3_key,
+                    resolved_key,
                 )
 
                 return redirect(presigned_url)
@@ -318,45 +403,14 @@ class ResourceAccessView(View):
             from lacos.storage.models.s3_resource_location import S3ResourceLocation
             
             # Get the resource
-            resource = None
-            resource_pid = None
-            mime_type = None
-            
-            # Check in media resources
-            if bundle.resources.first():
-                for r in bundle.resources.first().bundle_media_resources.all():
-                    if r.id == resource_id:
-                        resource = r
-                        mime_type = r.mime_type
-                        break
-                
-                if not resource:
-                    for r in bundle.resources.first().bundle_written_resources.all():
-                        if r.id == resource_id:
-                            resource = r
-                            mime_type = r.mime_type
-                            break
-                
-                if not resource:
-                    for r in bundle.resources.first().bundle_other_resources.all():
-                        if r.id == resource_id:
-                            resource = r
-                            mime_type = r.mime_type
-                            break
-            
-            # Check in metadata files
-            if not resource and hasattr(bundle, 'structural_info') and bundle.structural_info.first():
-                for r in bundle.structural_info.first().additional_metadata_files.all():
-                    if r.id == resource_id:
-                        resource = r
-                        mime_type = r.mime_type
-                        break
-            
+            resource = find_resource_in_bundle(bundle, resource_id=resource_id)
+
             if not resource:
                 raise Http404(f"Resource with id {resource_id} not found in bundle {bundle_id}")
-            
+
             # Get the PID from the resource
             resource_pid = resource.file_pid
+            mime_type = getattr(resource, 'mime_type', None)
 
             from lacos.storage.services.resource_mapping_service import ResourceMappingService
             from lacos.storage.services.file_discovery_service import FileDiscoveryService
@@ -364,10 +418,6 @@ class ResourceAccessView(View):
             resource_service = ResourceMappingService()
 
             location = resource_service.resolve_pid_to_s3(resource_pid)
-
-            bucket_name = None
-            object_key = None
-
             fallback_bucket = (
                 getattr(bundle, 'import_bucket', None)
                 or (
@@ -375,44 +425,49 @@ class ResourceAccessView(View):
                     if collection_for_path
                     else None
                 )
-            )
+            ) or resource_service.production_bucket
+
+            candidate_locations: list[tuple[Optional[str], Optional[str]]] = []
 
             if location:
-                bucket_candidates = [location.s3_bucket, fallback_bucket, resource_service.production_bucket]
-                object_key = location.s3_key
-            else:
-                discovery_service = FileDiscoveryService()
-                if collection_for_path:
-                    try:
-                        object_key = discovery_service.form_resource_path(
-                            collection_for_path.id,
-                            bundle.id,
-                            resource.file_name,
-                        )
-                    except Exception:
-                        object_key = None
+                candidate_locations.append((location.s3_bucket, location.s3_key))
+                candidate_locations.append((fallback_bucket, location.s3_key))
 
-                bucket_candidates = [fallback_bucket, resource_service.production_bucket]
+            def add_import_location(import_bucket: Optional[str], import_key: Optional[str]):
+                if not import_bucket or not import_key:
+                    return
+                base_path = PurePosixPath(import_key).parent
+                candidate_locations.append(
+                    (import_bucket, str(base_path / 'Resources' / resource.file_name))
+                )
 
-            if not object_key:
-                raise ValueError("Unable to determine S3 key for resource")
+            add_import_location(getattr(bundle, 'import_bucket', None), getattr(bundle, 'import_object_key', None))
+            if collection_for_path:
+                add_import_location(
+                    getattr(collection_for_path, 'import_bucket', None),
+                    getattr(collection_for_path, 'import_object_key', None),
+                )
 
-            bucket_name = resolve_existing_bucket(resource_service, bucket_candidates, object_key)
-
-            if not bucket_name and location and collection_for_path:
-                discovery_service = FileDiscoveryService()
+            discovery_service = FileDiscoveryService()
+            derived_key = None
+            if collection_for_path:
                 try:
-                    object_key = discovery_service.form_resource_path(
+                    derived_key = discovery_service.form_resource_path(
                         collection_for_path.id,
                         bundle.id,
                         resource.file_name,
                     )
-                    bucket_candidates = [fallback_bucket, resource_service.production_bucket]
-                    bucket_name = resolve_existing_bucket(resource_service, bucket_candidates, object_key)
-                except Exception:
-                    object_key = None
+                except Exception:  # pragma: no cover - defensive
+                    derived_key = None
 
-            if not bucket_name:
+            if derived_key:
+                candidate_locations.append((fallback_bucket, derived_key))
+                if fallback_bucket != resource_service.production_bucket:
+                    candidate_locations.append((resource_service.production_bucket, derived_key))
+
+            bucket_name, object_key = resolve_existing_object(resource_service, candidate_locations)
+
+            if not bucket_name or not object_key:
                 raise ValueError("Unable to determine S3 location for resource")
 
             presigned_url = resource_service.generate_presigned_url(bucket_name, object_key)
