@@ -6,8 +6,65 @@
 {% block content %}
   <h1 class="text-3xl font-light text-slate-800 mb-6 tracking-tight">{% translate "Collections Explorer" %}</h1>
 
-  {% block explorer_content %}
+{% block explorer_content %}
   {% comment %} Child templates will fill this block {% endcomment %}
   {% endblock explorer_content %}
 
 {% endblock content %}
+
+{% block modal %}
+  <div id="resource-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4 py-6" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="absolute inset-0 bg-slate-900/60" data-modal-close></div>
+    <div class="relative w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-xl">
+      <div id="resource-modal-content" class="p-6"></div>
+    </div>
+  </div>
+{% endblock modal %}
+
+{% block inline_javascript %}
+  {{ block.super }}
+  <script>
+    (function () {
+      const modal = document.getElementById('resource-modal');
+      const modalContent = document.getElementById('resource-modal-content');
+      if (!modal || !modalContent) {
+        return;
+      }
+
+      const openModal = () => {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        document.body.classList.add('overflow-hidden');
+        modal.setAttribute('aria-hidden', 'false');
+      };
+
+      const closeModal = () => {
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('overflow-hidden');
+        modalContent.innerHTML = '';
+      };
+
+      document.addEventListener('showResourceModal', openModal);
+
+      document.addEventListener('htmx:afterSwap', (event) => {
+        if (event.detail && event.detail.target === modalContent) {
+          openModal();
+        }
+      });
+
+      modal.addEventListener('click', (event) => {
+        if (event.target.hasAttribute('data-modal-close') || event.target === modal) {
+          closeModal();
+        }
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !modal.classList.contains('hidden')) {
+          closeModal();
+        }
+      });
+    })();
+  </script>
+{% endblock inline_javascript %}

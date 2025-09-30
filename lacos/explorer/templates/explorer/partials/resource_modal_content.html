@@ -1,0 +1,48 @@
+{% load i18n %}
+
+<div class="space-y-4">
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <h2 class="text-lg font-semibold text-slate-800">{{ resource_name }}</h2>
+      {% if resource_description %}
+        <p class="text-sm text-slate-500 mt-1">{{ resource_description }}</p>
+      {% endif %}
+    </div>
+    <button type="button" class="btn btn-sm btn-circle btn-ghost" aria-label="{% translate 'Close media viewer' %}" data-modal-close>
+      ✕
+    </button>
+  </div>
+
+  <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
+    {% if media_type == 'audio' %}
+      <audio controls preload="metadata" class="w-full" src="{{ stream_url }}">
+        <p>{% translate "Your browser does not support the audio element." %}</p>
+      </audio>
+    {% elif media_type == 'video' %}
+      <video controls preload="metadata" class="w-full rounded-lg" src="{{ stream_url }}" style="max-height: 70vh">
+        <p>{% translate "Your browser does not support the video element." %}</p>
+      </video>
+    {% elif media_type == 'image' %}
+      <img src="{{ preview_url }}" alt="{{ resource_name }}" class="max-h-[70vh] mx-auto rounded-lg shadow" loading="lazy" />
+    {% elif media_type == 'pdf' %}
+      <iframe src="{{ preview_url }}" title="{{ resource_name }}" class="w-full h-[70vh] rounded-lg border border-slate-200" loading="lazy"></iframe>
+    {% else %}
+      <div class="flex flex-col items-start gap-3">
+        <p class="text-sm text-slate-600">
+          {% translate "Preview is not available for this file type." %}
+        </p>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="flex flex-wrap gap-2">
+    {% if download_url %}
+      <a href="{{ download_url }}" class="btn btn-primary btn-sm" target="_blank" rel="noopener noreferrer">
+        {% translate "Download" %}
+      </a>
+    {% endif %}
+    <button type="button" class="btn btn-ghost btn-sm" data-modal-close>
+      {% translate "Close" %}
+    </button>
+  </div>
+</div>

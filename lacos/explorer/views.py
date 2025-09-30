@@ -1,3 +1,4 @@
+import json
 import logging
 import re
 from functools import lru_cache
@@ -6,7 +7,7 @@ from typing import Iterable, Optional, Sequence, Tuple
 
 from botocore.exceptions import ClientError
 from django.core.cache import cache
-from django.http import HttpResponse, Http404, StreamingHttpResponse
+from django.http import Http404, HttpResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.generic import DetailView, ListView, View
@@ -472,6 +473,8 @@ class ResourceAccessView(View):
 
             presigned_url = resource_service.generate_presigned_url(bucket_name, object_key)
 
+            is_htmx = request.headers.get('HX-Request') == 'true'
+
             media_stream_url = request.build_absolute_uri(
                 reverse(
                     'explorer:resource_access',
@@ -481,6 +484,35 @@ class ResourceAccessView(View):
             separator = '&' if '?' in media_stream_url else '?'
             stream_query_url = f"{media_stream_url}{separator}action=stream"
 
+            if is_htmx and action in {'play', 'view'}:
+                media_type = None
+                if mime_type and mime_type.startswith('audio/'):
+                    media_type = 'audio'
+                elif mime_type and mime_type.startswith('video/'):
+                    media_type = 'video'
+                elif mime_type and mime_type.startswith('image/'):
+                    media_type = 'image'
+                elif mime_type == 'application/pdf':
+                    media_type = 'pdf'
+
+                modal_context = {
+                    'resource_name': resource.file_name,
+                    'resource_description': getattr(resource, 'file_description', ''),
+                    'mime_type': mime_type,
+                    'media_type': media_type,
+                    'stream_url': stream_query_url if media_type in {'audio', 'video'} else None,
+                    'preview_url': presigned_url,
+                    'download_url': presigned_url,
+                }
+
+                response = render(
+                    request,
+                    'explorer/partials/resource_modal_content.html',
+                    modal_context,
+                )
+                response['HX-Trigger'] = json.dumps({'showResourceModal': True})
+                return response
+
             # For direct download, just redirect to the presigned URL
             if action == 'download':
                 return redirect(presigned_url)
@@ -489,12 +521,10 @@ class ResourceAccessView(View):
             if mime_type and (mime_type.startswith('audio/') or mime_type.startswith('video/')):
                 if action == 'play':
                     player_context = {
-                        'bundle': bundle,
-                        'resource': resource,
+                        'resource_name': resource.file_name,
                         'mime_type': mime_type,
                         'stream_url': stream_query_url,
-                        'resource_name': resource.file_name,
-                        'action': action,
+                        'download_url': presigned_url,
                     }
                     return render(
                         request,
