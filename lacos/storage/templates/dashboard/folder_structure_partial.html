@@ -176,7 +176,7 @@ HTMX loads child contents when a folder is expanded.
                                 <li>
                                     <a hx-get="{% url 'storage:validate_metadata' bucket_type item.path %}?type=collection"
                                        hx-target="#{{ target_id }}"
-                                       hx-swap="outerHTML"
+                                       hx-swap="outerHTML show:none"
                                        hx-indicator="#indicator"
                                        onclick="document.activeElement.blur()">
                                         Validate as Collection
@@ -185,7 +185,7 @@ HTMX loads child contents when a folder is expanded.
                                 <li>
                                     <a hx-get="{% url 'storage:validate_metadata' bucket_type item.path %}?type=bundle"
                                        hx-target="#{{ target_id }}"
-                                       hx-swap="outerHTML"
+                                       hx-swap="outerHTML show:none"
                                        hx-indicator="#indicator"
                                        onclick="document.activeElement.blur()">
                                         Validate as Bundle
