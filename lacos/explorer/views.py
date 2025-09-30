@@ -234,10 +234,15 @@ class BundleResourcesView(View):
                     raise ValueError(f"No S3 location found for PID: {decoded_resource_id}")
 
                 resolved_bucket = location.s3_bucket
-                if getattr(bundle, 'import_bucket', None):
-                    resolved_bucket = bundle.import_bucket
-                elif getattr(collection_for_path, 'import_bucket', None):
-                    resolved_bucket = collection_for_path.import_bucket
+                if not resolved_bucket:
+                    resolved_bucket = (
+                        getattr(bundle, 'import_bucket', None)
+                        or (
+                            getattr(collection_for_path, 'import_bucket', None)
+                            if collection_for_path
+                            else None
+                        )
+                    )
 
                 presigned_url = resource_service.generate_presigned_url(
                     resolved_bucket,
@@ -342,8 +347,17 @@ class ResourceAccessView(View):
             bucket_name = None
             object_key = None
 
+            fallback_bucket = (
+                getattr(bundle, 'import_bucket', None)
+                or (
+                    getattr(collection_for_path, 'import_bucket', None)
+                    if collection_for_path
+                    else None
+                )
+            )
+
             if location:
-                bucket_name = location.s3_bucket
+                bucket_name = location.s3_bucket or fallback_bucket or resource_service.production_bucket
                 object_key = location.s3_key
             else:
                 discovery_service = FileDiscoveryService()
@@ -357,20 +371,7 @@ class ResourceAccessView(View):
                     except Exception:
                         object_key = None
 
-                bucket_name = getattr(bundle, 'import_bucket', None) or (
-                    collection_for_path.import_bucket if collection_for_path else None
-                ) or resource_service.production_bucket
-
-            preferred_bucket = (
-                getattr(bundle, 'import_bucket', None)
-                or (
-                    getattr(collection_for_path, 'import_bucket', None)
-                    if collection_for_path
-                    else None
-                )
-            )
-            if preferred_bucket:
-                bucket_name = preferred_bucket
+                bucket_name = fallback_bucket or resource_service.production_bucket
 
             if not bucket_name or not object_key:
                 raise ValueError("Unable to determine S3 location for resource")
