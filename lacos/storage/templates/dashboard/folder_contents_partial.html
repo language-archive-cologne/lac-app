@@ -122,7 +122,8 @@ Nested folder contents returned via HTMX when a folder is expanded.
                                 <a hx-get="{% url 'storage:validate_metadata' bucket_type item.path %}?type=collection"
                                    hx-target="#{{ target_id }}"
                                    hx-swap="outerHTML"
-                                   hx-indicator="#indicator">
+                                   hx-indicator="#indicator"
+                                   onclick="document.activeElement.blur()">
                                     Validate as Collection
                                 </a>
                             </li>
@@ -130,7 +131,8 @@ Nested folder contents returned via HTMX when a folder is expanded.
                                 <a hx-get="{% url 'storage:validate_metadata' bucket_type item.path %}?type=bundle"
                                    hx-target="#{{ target_id }}"
                                    hx-swap="outerHTML"
-                                   hx-indicator="#indicator">
+                                   hx-indicator="#indicator"
+                                   onclick="document.activeElement.blur()">
                                     Validate as Bundle
                                 </a>
                             </li>
