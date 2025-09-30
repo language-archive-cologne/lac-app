@@ -455,10 +455,7 @@ document.body.addEventListener('htmx:afterOnLoad', function(evt) {
         
         // Show the message container
         messageContainer.classList.remove('hidden');
-        
-        // Scroll to the top to make sure the message is visible
-        window.scrollTo({top: 0, behavior: 'smooth'});
-        
+
         // Optionally auto-hide the message after a delay
         setTimeout(function() {
             messageContainer.classList.add('hidden');
@@ -482,10 +479,7 @@ document.addEventListener('showMessage', function(event) {
         
         // Show the message container
         messageContainer.classList.remove('hidden');
-        
-        // Scroll to the top to make sure the message is visible
-        window.scrollTo({top: 0, behavior: 'smooth'});
-        
+
         // Optionally auto-hide the message after a delay
         setTimeout(function() {
             messageContainer.classList.add('hidden');
