@@ -1,4 +1,9 @@
-<div id="{{ target_id }}" class="mt-2 text-sm">
+<div id="{{ target_id }}" class="mt-2 text-sm relative">
+<button type="button" class="btn btn-ghost btn-xs absolute top-0 right-0" onclick="this.parentElement.classList.add('hidden')">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+    </svg>
+</button>
 {% if result.valid %}
 <!-- Success: Valid XML -->
 <div class="alert alert-success">
@@ -13,7 +18,7 @@
     <strong>Metadata Details:</strong>
     <ul class="list-disc list-inside mt-2">
         {% if result.details.type %}<li>Type: <strong>{{ result.details.type }}</strong></li>{% endif %}
-        {% if result.details.identifier %}<li>Identifier: <code class="bg-base-300 px-1 rounded">{{ result.details.identifier }}</code></li>{% endif %}
+        {% if result.details.identifier %}<li>Identifier: <code class="bg-primary/20 text-primary-content px-2 py-0.5 rounded font-mono">{{ result.details.identifier }}</code></li>{% endif %}
         {% if result.details.version %}<li>Schema Version: <strong>{{ result.details.version }}</strong></li>{% endif %}
     </ul>
 </div>
@@ -50,8 +55,8 @@
 <div class="bg-base-200 rounded p-3 mt-3 text-sm">
     <strong>File Details:</strong>
     <ul class="list-disc list-inside mt-2">
-        <li>Bucket: <code class="bg-base-300 px-1 rounded">{{ bucket }}</code></li>
-        <li>Path: <code class="bg-base-300 px-1 rounded">{{ s3_key }}</code></li>
+        <li>Bucket: <code class="bg-info/20 text-info-content px-2 py-0.5 rounded font-mono">{{ bucket }}</code></li>
+        <li>Path: <code class="bg-info/20 text-info-content px-2 py-0.5 rounded font-mono">{{ s3_key }}</code></li>
         <li>Type: <strong>{{ metadata_type|title }}</strong></li>
     </ul>
 </div>
