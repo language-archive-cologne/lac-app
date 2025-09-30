@@ -1,0 +1,22 @@
+{% extends "explorer_base.html" %}
+{% load i18n %}
+
+{% block title %}
+  {{ resource_name }} - {% translate "Media Player" %} - {{ block.super }}
+{% endblock title %}
+
+{% block explorer_content %}
+  <div class="max-w-4xl mx-auto py-10">
+    <h1 class="text-2xl font-light text-slate-800 mb-6">
+      {{ resource_name }}
+    </h1>
+
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+      {% if mime_type|slice:":5" == "video" %}
+        <video controls preload="metadata" class="w-full rounded-lg shadow" src="{{ stream_url }}"></video>
+      {% else %}
+        <audio controls preload="metadata" class="w-full" src="{{ stream_url }}"></audio>
+      {% endif %}
+    </div>
+  </div>
+{% endblock explorer_content %}

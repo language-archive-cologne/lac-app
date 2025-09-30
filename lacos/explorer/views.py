@@ -471,13 +471,41 @@ class ResourceAccessView(View):
                 raise ValueError("Unable to determine S3 location for resource")
 
             presigned_url = resource_service.generate_presigned_url(bucket_name, object_key)
-            
+
+            media_stream_url = request.build_absolute_uri(
+                reverse(
+                    'explorer:resource_access',
+                    kwargs={'bundle_id': bundle_id, 'resource_id': resource_id}
+                )
+            )
+            separator = '&' if '?' in media_stream_url else '?'
+            stream_query_url = f"{media_stream_url}{separator}action=stream"
+
             # For direct download, just redirect to the presigned URL
             if action == 'download':
                 return redirect(presigned_url)
-            
+
             # For streaming/viewing, handle based on the mime type
             if mime_type and (mime_type.startswith('audio/') or mime_type.startswith('video/')):
+                if action == 'play':
+                    player_context = {
+                        'bundle': bundle,
+                        'resource': resource,
+                        'mime_type': mime_type,
+                        'stream_url': stream_query_url,
+                        'resource_name': resource.file_name,
+                        'action': action,
+                    }
+                    return render(
+                        request,
+                        'resource_player.html',
+                        player_context,
+                    )
+
+                if action != 'stream':
+                    # Fallback to download behaviour if action unknown
+                    return redirect(presigned_url)
+
                 range_header = request.META.get('HTTP_RANGE')
 
                 get_kwargs = {
