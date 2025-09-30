@@ -4,10 +4,12 @@ import logging
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import render
+from django.template.loader import render_to_string
 from django.views.decorators.http import require_POST
 
 from lacos.ingest.tasks import import_s3_collection, import_s3_bundle
 from lacos.storage.services.bucket_service import BucketService
+from lacos.common.mixins.htmx_template_helpers import HtmxTemplateHelperMixin
 
 logger = logging.getLogger(__name__)
 
@@ -312,13 +314,48 @@ def validate_metadata_endpoint(request, bucket_type, object_path):
 
     logger.info(f"🔍 VALIDATE: result valid={result.get('valid')}, error={result.get('error')}")
 
-    return render(request, 'storage/metadata_validation_result.html', {
+    context = {
         'result': result,
         'bucket': bucket_name,
         's3_key': object_path,
         'metadata_type': metadata_type,
         'target_id': target_id,
-    })
+    }
+
+    if request.headers.get('HX-Request') == 'true':
+        helper = HtmxTemplateHelperMixin()
+        validation_html = render_to_string(
+            'storage/metadata_validation_result.html',
+            context,
+            request=request,
+        )
+
+        message_level = 'success' if result.get('valid') else 'error'
+        message_label = 'validated' if result.get('valid') else 'failed validation'
+        message = f"{metadata_type.title()} XML {message_label} for {object_path}"
+
+        message_body = helper.render_message_template(message, level=message_level)
+        if '<div class="alert' in message_body:
+            message_body = message_body.replace('<div class="alert', '<div id="message-content" class="alert', 1)
+
+        # Main response is validation_html (targeted by hx-target)
+        # Message uses OOB to update the message container
+        oob_updates = {
+            'message-container': f'<div class="mb-6">{message_body}</div>'
+        }
+
+        response_html = helper.build_oob_response(validation_html, oob_updates)
+
+        triggers = {
+            'showMessage': {
+                'message': message,
+                'level': message_level,
+            }
+        }
+
+        return helper.add_htmx_trigger(response_html, triggers)
+
+    return render(request, 'storage/metadata_validation_result.html', context)
 
 
 def _render_modal_with_error(request, payload, error):

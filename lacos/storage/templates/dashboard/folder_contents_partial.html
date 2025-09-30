@@ -112,16 +112,16 @@ Nested folder contents returned via HTMX when a folder is expanded.
                     </button>
                     {% if item.name|lower|slice:'-4:' == '.xml' %}
                     <div class="dropdown dropdown-end">
-                        <button type="button" class="btn btn-ghost btn-xs text-success" onclick="event.stopPropagation();">
+                        <button type="button" tabindex="0" class="btn btn-ghost btn-xs text-success" onclick="event.stopPropagation();">
                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                         </button>
-                        <ul class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-40">
+                        <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-40">
                             <li>
                                 <a hx-get="{% url 'storage:validate_metadata' bucket_type item.path %}?type=collection"
                                    hx-target="#{{ target_id }}"
-                                   hx-swap="innerHTML"
+                                   hx-swap="outerHTML"
                                    hx-indicator="#indicator">
                                     Validate as Collection
                                 </a>
@@ -129,7 +129,7 @@ Nested folder contents returned via HTMX when a folder is expanded.
                             <li>
                                 <a hx-get="{% url 'storage:validate_metadata' bucket_type item.path %}?type=bundle"
                                    hx-target="#{{ target_id }}"
-                                   hx-swap="innerHTML"
+                                   hx-swap="outerHTML"
                                    hx-indicator="#indicator">
                                     Validate as Bundle
                                 </a>
