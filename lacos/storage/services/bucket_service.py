@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 import shutil
 import tempfile
 from pathlib import Path
@@ -17,6 +17,7 @@ from .base_storage_service import BaseStorageService
 from .collection_service import CollectionService
 from .upload_service import UploadService
 from .ocfl_service import OCFLService
+from .folder_cache_service import FolderStructureCacheService
 
 # Import BLAM models for direct access
 from lacos.blam.models.collection.collection_repository import Collection
@@ -66,6 +67,9 @@ class BucketService(BaseStorageService):
         # OCFL service uses this instance's bucket references, so just set the client
         if hasattr(self.ocfl_service, 's3_client'):
             self.ocfl_service.s3_client = self.s3_client
+
+        # Per-bucket folder cache helper
+        self.folder_cache = FolderStructureCacheService()
         
         logger.info("BucketService initialized")
         self.initialized = True
@@ -169,7 +173,7 @@ class BucketService(BaseStorageService):
             
         return result
     
-    def get_root_level_items(self, bucket_name: str) -> Dict[str, Any]:
+    def get_root_level_items(self, bucket_name: str, force_fresh: bool = False) -> Dict[str, Any]:
         """
         Get only the root level items (files and folders) from a bucket.
         This is optimized for the initial dashboard load.
@@ -181,6 +185,11 @@ class BucketService(BaseStorageService):
             Dict[str, Any]: Dictionary containing root level items
         """
         try:
+            if not force_fresh:
+                cached = self.folder_cache.get(bucket_name, None)
+                if cached is not None:
+                    return cached
+
             contents = self.collection_service.list_bucket_contents(bucket_name)
             
             # Process items to add BLAM object information
@@ -206,17 +215,19 @@ class BucketService(BaseStorageService):
                 processed_children.append(child)
             
             # Transform the contents into the expected structure
-            return {
+            result = {
                 "type": "folder",
                 "name": bucket_name,
                 "path": "",
                 "children": processed_children
             }
+            self.folder_cache.set(bucket_name, None, result)
+            return result
         except Exception as e:
             logger.error(f"Error getting root level items for bucket '{bucket_name}': {str(e)}")
             return {"type": "folder", "name": bucket_name, "path": "", "children": []}
-    
-    def get_folder_contents(self, bucket_name: str, folder_path: str) -> List[Dict[str, Any]]:
+
+    def get_folder_contents(self, bucket_name: str, folder_path: str, force_fresh: bool = False) -> List[Dict[str, Any]]:
         """
         Get the contents of a specific folder.
         This is used for lazy loading folder contents.
@@ -229,6 +240,11 @@ class BucketService(BaseStorageService):
             List[Dict[str, Any]]: List of items in the folder
         """
         try:
+            if not force_fresh:
+                cached = self.folder_cache.get(bucket_name, folder_path)
+                if cached is not None:
+                    return cached
+
             contents = self.collection_service.list_bucket_contents(bucket_name, folder_path)
             
             # Transform the contents and add BLAM object information
@@ -253,11 +269,21 @@ class BucketService(BaseStorageService):
                 
                 processed_contents.append(result)
             
+            self.folder_cache.set(bucket_name, folder_path, processed_contents)
             return processed_contents
         except Exception as e:
             logger.error(f"Error getting folder contents for '{folder_path}' in bucket '{bucket_name}': {str(e)}")
             return []
-    
+
+    def _invalidate_folder_cache(self, bucket_name: str, *folder_paths: Optional[str]) -> None:
+        try:
+            if folder_paths:
+                self.folder_cache.invalidate_many(bucket_name, *folder_paths)
+            else:
+                self.folder_cache.invalidate(bucket_name)
+        except Exception as exc:
+            logger.debug("Cache invalidation skipped for %s (%s)", bucket_name, exc)
+
     # Collection-related methods
     def is_collection_path(self, path: str) -> bool:
         """Delegate to collection service to check if a path is a collection."""
@@ -356,6 +382,8 @@ class BucketService(BaseStorageService):
                 self.workspace_buckets.append(new_bucket)
 
             message = f"Bucket '{current_bucket}' renamed to '{new_bucket}'"
+            self._invalidate_folder_cache(current_bucket)
+            self._invalidate_folder_cache(new_bucket)
             return {
                 "success": True,
                 "message": message,
@@ -417,14 +445,22 @@ class BucketService(BaseStorageService):
                     moved += 1
 
             if moved == 0:
-                return {"success": True, "message": "Folder was empty", "folder_path": new_prefix}
+                response = {"success": True, "message": "Folder was empty", "folder_path": new_prefix}
+            else:
+                response = {
+                    "success": True,
+                    "message": f"Folder renamed to '{new_name}'",
+                    "folder_path": new_prefix,
+                    "objects_moved": moved
+                }
 
-            return {
-                "success": True,
-                "message": f"Folder renamed to '{new_name}'",
-                "folder_path": new_prefix,
-                "objects_moved": moved
-            }
+            self._invalidate_folder_cache(
+                bucket_name,
+                parent['parent'],
+                old_prefix,
+                new_prefix
+            )
+            return response
 
         except ClientError as e:
             logger.error(f"Error renaming folder {old_path} -> {new_name}: {str(e)}")
@@ -467,11 +503,13 @@ class BucketService(BaseStorageService):
             )
             self.s3_client.delete_object(Bucket=bucket_name, Key=file_path)
 
-            return {
+            response = {
                 "success": True,
                 "message": f"File renamed to '{new_name}'",
                 "file_path": new_key
             }
+            self._invalidate_folder_cache(bucket_name, parent['parent'])
+            return response
 
         except ClientError as e:
             logger.error(f"Error renaming file {file_path} -> {new_name}: {str(e)}")
@@ -742,7 +780,11 @@ class BucketService(BaseStorageService):
         Returns:
             dict: Result of the operation with success flag and error message if applicable
         """
-        return self.delete_object(bucket_name, folder_path, is_directory=True)
+        result = super().delete_object(bucket_name, folder_path, is_directory=True)
+        if result.get("success"):
+            parent = self._split_parent_child(folder_path)
+            self._invalidate_folder_cache(bucket_name, parent['parent'], folder_path)
+        return result
         
     def delete_file(self, bucket_name, file_path):
         """
@@ -755,7 +797,11 @@ class BucketService(BaseStorageService):
         Returns:
             dict: Result of the operation with success flag and error message if applicable
         """
-        return self.delete_object(bucket_name, file_path, is_directory=False)
+        result = super().delete_object(bucket_name, file_path, is_directory=False)
+        if result.get("success"):
+            parent = self._split_parent_child(file_path)
+            self._invalidate_folder_cache(bucket_name, parent['parent'])
+        return result
 
     def create_bucket(self, bucket_name: str, enable_ocfl: bool = False) -> Dict[str, Any]:
         """

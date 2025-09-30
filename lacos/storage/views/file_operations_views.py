@@ -107,6 +107,7 @@ def file_viewer_htmx(request, bucket_type, object_path):
 
     context = {
         "file_name": file_name,
+        "filename": file_name,
         "bucket_type": bucket_type,
         "object_path": object_path,
         "content_type": content_type,
@@ -141,6 +142,8 @@ def _determine_viewer_type(content_type: str, file_name: str) -> str:
         return "audio"
     if lowered_type.startswith("image/") or extension in {"jpg", "jpeg", "png", "gif", "bmp", "webp", "svg"}:
         return "image"
+    if extension in {"eaf", "elan"}:
+        return "elan"
     if lowered_type == "application/pdf" or extension == "pdf":
         return "pdf"
     if lowered_type.startswith("text/") or extension in {"txt", "json", "xml", "html", "csv", "md"}:

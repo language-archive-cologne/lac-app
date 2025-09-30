@@ -25,12 +25,17 @@ def archivist_dashboard(request):
     """
     bucket_service = BucketService()
 
+    force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
+
     try:
         # Get root level items for all workspace buckets
         bucket_structures = {}
         for bucket_name in bucket_service.get_all_accessible_buckets():
             try:
-                bucket_structures[bucket_name] = bucket_service.get_root_level_items(bucket_name)
+                if force_fresh:
+                    bucket_structures[bucket_name] = bucket_service.get_root_level_items(bucket_name, force_fresh=True)
+                else:
+                    bucket_structures[bucket_name] = bucket_service.get_root_level_items(bucket_name)
             except Exception as e:
                 logger.error(f"Error loading bucket {bucket_name}: {str(e)}")
                 # Return empty structure on error for this bucket
@@ -88,9 +93,13 @@ def load_folder_contents(request, bucket_type, folder_path):
         # Clean up the folder path to handle double slashes
         folder_path = folder_path.replace('//', '/')
         logger.info(f"Loading folder contents for {bucket_type} bucket, path: {folder_path}")
+        force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
         
         # Get folder contents
-        folder_contents = bucket_service.get_folder_contents(bucket, folder_path)
+        if force_fresh:
+            folder_contents = bucket_service.get_folder_contents(bucket, folder_path, force_fresh=True)
+        else:
+            folder_contents = bucket_service.get_folder_contents(bucket, folder_path)
         logger.info(f"Folder contents for {folder_path}: {folder_contents}")
         
     except Exception as e:
@@ -148,11 +157,18 @@ def dashboard_content(request, bucket_type):
     """
     try:
         bucket_service = BucketService()
+        force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
         
         if bucket_type == "ingest":
-            structure = bucket_service.get_root_level_items(bucket_service.ingest_bucket)
+            if force_fresh:
+                structure = bucket_service.get_root_level_items(bucket_service.ingest_bucket, force_fresh=True)
+            else:
+                structure = bucket_service.get_root_level_items(bucket_service.ingest_bucket)
         elif bucket_type == "production":
-            structure = bucket_service.get_root_level_items(bucket_service.production_bucket)
+            if force_fresh:
+                structure = bucket_service.get_root_level_items(bucket_service.production_bucket, force_fresh=True)
+            else:
+                structure = bucket_service.get_root_level_items(bucket_service.production_bucket)
         else:
             return HttpResponse("Invalid bucket type", status=400)
             

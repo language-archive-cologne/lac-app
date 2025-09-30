@@ -44,7 +44,7 @@
 
                     <button
                         class="btn btn-outline btn-sm"
-                        hx-get="{% url 'storage:archivist_dashboard' %}"
+                        hx-get="{% url 'storage:archivist_dashboard' %}?force_fresh=true"
                         hx-target="body"
                         hx-indicator="#indicator"
                     >
@@ -221,6 +221,15 @@
     </div>
 </div>
 
+<dialog id="file-viewer-modal" class="modal">
+    <div class="modal-box w-11/12 max-w-7xl h-5/6 max-h-screen flex items-center justify-center">
+        <div class="flex flex-col items-center gap-3 text-base-content/70">
+            <span class="loading loading-spinner loading-lg"></span>
+            <p class="text-sm">Preparing preview…</p>
+        </div>
+    </div>
+</dialog>
+
 <!-- Metadata Ingest Modal -->
 <input type="checkbox" id="metadata-ingest-modal" class="modal-toggle" />
 <div class="modal" role="dialog">
@@ -285,147 +294,139 @@
         height: 70vh;
     }
 
-    /* Additional folder structure styles */
-    .folder-tree {
-        list-style-type: none;
-        padding: 0;
-    }
-    
-    .folder-item {
-        margin-bottom: 0.5rem;
-    }
-    
-    .folder-contents {
-        transition: all 0.3s ease;
-    }
-    
-    .folder-contents:not(.hidden) {
-        display: block !important;
-        opacity: 1;
-        max-height: 9999px;
-    }
-    
-    /* Debug styles to highlight nested structure */
-    .folder-tree > .folder-item > .folder-contents {
-        border-left: 2px solid rgba(59, 130, 246, 0.5);
-    }
-    
-    .folder-tree > .folder-item > .folder-contents > .folder-item > .folder-contents {
-        border-left: 2px solid rgba(245, 158, 11, 0.5);
-    }
-    
-    .folder-tree > .folder-item > .folder-contents > .folder-item > .folder-contents > .folder-item > .folder-contents {
-        border-left: 2px solid rgba(16, 185, 129, 0.5);
-    }
 </style>
 
-<script type="module">
-// Essential JavaScript for file operations only
-import { handleFileViewRequest } from '/static/js/src/file-viewer/file-viewer-handler.js';
-import { toggleFolder, expandAllFolders } from '/static/js/src/folder-manager.js';
+<script>
+(function () {
+    const modal = document.getElementById('file-viewer-modal');
+    const modalBox = modal ? modal.querySelector('.modal-box') : null;
+    const initialMarkup = modalBox ? modalBox.innerHTML : '';
+    let waveSurferInstance = null;
 
-// Make file operations available globally
-window.handleFileViewRequest = handleFileViewRequest;
-window.toggleFolder = toggleFolder;
-window.expandAllFolders = expandAllFolders;
-
-// Add HTMX event handlers for file viewing
-document.body.addEventListener('htmx:afterRequest', function (event) {
-    if (event.detail.elt.classList.contains('view-icon')) {
-        handleFileViewRequest(event);
-    }
-});
-
-// HTMX event handler for modal management
-document.body.addEventListener('htmx:afterRequest', function (event) {
-    // Close modals on successful form submission
-    if (event.detail.xhr && event.detail.xhr.status === 200) {
-        const trigger = event.detail.xhr.getResponseHeader('HX-Trigger');
-        if (trigger) {
-            const triggerData = JSON.parse(trigger);
-            if (triggerData.closeModal) {
-                const modalCheckbox = document.getElementById(triggerData.closeModal);
-                if (modalCheckbox) {
-                    modalCheckbox.checked = false;
-                }
-            }
+    function cleanupMedia() {
+        if (!modal) {
+            return;
+        }
+        const audio = modal.querySelector('#audioPlayer');
+        if (audio) {
+            audio.pause();
+            audio.currentTime = 0;
+        }
+        const video = modal.querySelector('#videoPlayer');
+        if (video) {
+            video.pause();
+            video.currentTime = 0;
+        }
+        if (waveSurferInstance) {
+            waveSurferInstance.destroy();
+            waveSurferInstance = null;
         }
     }
-});
 
-// Track active bucket for bucket creation
-document.body.addEventListener('htmx:afterRequest', function (event) {
-    // Update current active bucket when bucket selector is updated
-    if (event.detail.elt.id === 'bucket-tabs' || event.detail.elt.closest('#bucket-tabs')) {
-        // Find the current active bucket from the dropdown button text
+    function initialiseWaveform(container) {
+        const waveformTarget = container.querySelector('#waveform');
+        const audioElement = container.querySelector('#audioPlayer');
+        const playButton = container.querySelector('#playButton');
+        if (!waveformTarget || !audioElement || !window.WaveSurfer) {
+            return;
+        }
+        waveSurferInstance = WaveSurfer.create({
+            container: waveformTarget,
+            waveColor: '#4F46E5',
+            progressColor: '#818CF8',
+            cursorColor: '#C7D2FE',
+            barWidth: 2,
+            barRadius: 3,
+            cursorWidth: 1,
+            height: 80,
+            barGap: 2,
+        });
+        waveSurferInstance.load(audioElement.src);
+        if (playButton) {
+            playButton.addEventListener('click', () => {
+                waveSurferInstance.playPause();
+                const playing = waveSurferInstance.isPlaying();
+                playButton.querySelector('.play-icon')?.classList.toggle('hidden', playing);
+                playButton.querySelector('.pause-icon')?.classList.toggle('hidden', !playing);
+            });
+        }
+        waveSurferInstance.on('finish', () => {
+            playButton?.querySelector('.play-icon')?.classList.remove('hidden');
+            playButton?.querySelector('.pause-icon')?.classList.add('hidden');
+        });
+    }
+
+    function updateActiveBucketInput() {
+        const targetInput = document.getElementById('current-active-bucket-input');
         const dropdownButton = document.querySelector('#bucket-tabs .btn');
-        if (dropdownButton) {
-            const bucketNameElement = dropdownButton.querySelector('.font-semibold');
-            if (bucketNameElement) {
-                const activeBucketName = bucketNameElement.textContent.trim();
-                const currentActiveInput = document.getElementById('current-active-bucket-input');
-                if (currentActiveInput && activeBucketName !== 'Select Bucket') {
-                    currentActiveInput.value = activeBucketName;
-                }
-            }
+        const bucketName = dropdownButton?.querySelector('.font-semibold')?.textContent?.trim();
+        if (targetInput && bucketName && bucketName !== 'Select Bucket') {
+            targetInput.value = bucketName;
         }
     }
-});
 
-// Track bucket switches when user clicks bucket dropdown items
-document.body.addEventListener('click', function (event) {
-    // Check if clicked element is a bucket selection link in the dropdown
-    const bucketLink = event.target.closest('#bucket-tabs .dropdown-content a[hx-get]');
-    if (bucketLink) {
-        // Extract bucket name from the link
-        const bucketNameElement = bucketLink.querySelector('.font-semibold');
-        if (bucketNameElement) {
-            const bucketName = bucketNameElement.textContent.trim();
-            const currentActiveInput = document.getElementById('current-active-bucket-input');
-            if (currentActiveInput) {
-                currentActiveInput.value = bucketName;
-            }
+    function resetModalContent() {
+        if (modalBox && initialMarkup) {
+            modalBox.innerHTML = initialMarkup;
         }
-
-        // Close dropdown after selection
-        setTimeout(() => {
-            const dropdown = bucketLink.closest('.dropdown');
-            if (dropdown) {
-                const dropdownButton = dropdown.querySelector('[tabindex="0"]');
-                if (dropdownButton) {
-                    dropdownButton.blur();
-                }
-            }
-        }, 100);
     }
-});
 
-// Handle OCFL conversion events
-document.body.addEventListener('htmx:afterRequest', function (event) {
-    if (event.detail.xhr && event.detail.xhr.status === 200) {
-        const trigger = event.detail.xhr.getResponseHeader('HX-Trigger');
-        if (trigger) {
-            try {
-                const triggerData = JSON.parse(trigger);
-                if (triggerData.refreshBucketContent) {
-                    // Close the OCFL modal
-                    const modal = document.getElementById('ocfl-conversion-modal');
-                    if (modal) {
-                        modal.checked = false;
+    document.addEventListener('htmx:afterSwap', (event) => {
+        if (event.target.matches('#file-viewer-modal .modal-box')) {
+            initialiseWaveform(event.target);
+        }
+        if (event.target.id === 'bucket-tabs' || event.target.closest?.('#bucket-tabs')) {
+            updateActiveBucketInput();
+        }
+    });
+
+    document.addEventListener('htmx:afterRequest', (event) => {
+        const xhr = event.detail?.xhr;
+        if (xhr && xhr.status === 200) {
+            const triggerHeader = xhr.getResponseHeader('HX-Trigger');
+            if (triggerHeader) {
+                try {
+                    const data = JSON.parse(triggerHeader);
+                    if (data.closeModal) {
+                        const modalToggle = document.getElementById(data.closeModal);
+                        if (modalToggle) {
+                            modalToggle.checked = false;
+                        }
                     }
-
-                    // Refresh the bucket content
-                    const refreshButton = document.querySelector('button[hx-get*="archivist_dashboard"]');
-                    if (refreshButton) {
-                        refreshButton.click();
+                    if (data.refreshBucketContent) {
+                        document.querySelector('button[hx-get*="archivist_dashboard"]')?.click();
                     }
+                } catch (error) {
+                    console.warn('Unable to parse HX-Trigger header', error);
                 }
-            } catch (e) {
-                console.log('Could not parse HX-Trigger header:', e);
             }
         }
+        if (event.detail?.elt?.id === 'bucket-tabs' || event.detail?.elt?.closest?.('#bucket-tabs')) {
+            updateActiveBucketInput();
+        }
+    });
+
+    document.addEventListener('click', (event) => {
+        if (event.target.closest('.view-icon')) {
+            resetModalContent();
+        }
+        const bucketLink = event.target.closest('#bucket-tabs .dropdown-content a[hx-get]');
+        if (bucketLink) {
+            const name = bucketLink.querySelector('.font-semibold')?.textContent?.trim();
+            const targetInput = document.getElementById('current-active-bucket-input');
+            if (targetInput && name) {
+                targetInput.value = name;
+            }
+        }
+    });
+
+    if (modal) {
+        modal.addEventListener('close', () => {
+            cleanupMedia();
+            resetModalContent();
+        });
     }
-});
+})();
 </script>
 
 {% include 'upload/_upload_config_bridge.html' %}
