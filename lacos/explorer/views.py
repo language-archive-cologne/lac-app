@@ -9,11 +9,27 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.http import HttpResponse, Http404, StreamingHttpResponse
 from urllib.parse import unquote
 
+from botocore.exceptions import ClientError
+
 # Assuming your Collection model is here. Adjust if necessary.
 from lacos.blam.models import Collection, Bundle
 
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
+
+
+def resolve_existing_bucket(resource_service, bucket_candidates, object_key):
+    """Return the first bucket containing the object key, using HEAD for validation."""
+    for candidate in [bucket for bucket in bucket_candidates if bucket]:
+        try:
+            resource_service.s3_client.head_object(Bucket=candidate, Key=object_key)
+            return candidate
+        except ClientError as error:
+            error_code = error.response.get('Error', {}).get('Code')
+            if error_code in {'404', 'NoSuchKey', 'NotFound'}:
+                continue
+            raise
+    return None
 
 
 def get_formatted_location(location):
@@ -233,15 +249,21 @@ class BundleResourcesView(View):
                 if not location:
                     raise ValueError(f"No S3 location found for PID: {decoded_resource_id}")
 
-                resolved_bucket = location.s3_bucket
+                fallback_bucket = (
+                    getattr(bundle, 'import_bucket', None)
+                    or (
+                        getattr(collection_for_path, 'import_bucket', None)
+                        if collection_for_path
+                        else None
+                    )
+                )
+
+                bucket_candidates = [location.s3_bucket, fallback_bucket, resource_service.production_bucket]
+                resolved_bucket = resolve_existing_bucket(resource_service, bucket_candidates, location.s3_key)
+
                 if not resolved_bucket:
-                    resolved_bucket = (
-                        getattr(bundle, 'import_bucket', None)
-                        or (
-                            getattr(collection_for_path, 'import_bucket', None)
-                            if collection_for_path
-                            else None
-                        )
+                    raise ValueError(
+                        f"Resource key not available in candidate buckets: {bucket_candidates}"
                     )
 
                 presigned_url = resource_service.generate_presigned_url(
@@ -338,7 +360,6 @@ class ResourceAccessView(View):
 
             from lacos.storage.services.resource_mapping_service import ResourceMappingService
             from lacos.storage.services.file_discovery_service import FileDiscoveryService
-            from botocore.exceptions import ClientError
 
             resource_service = ResourceMappingService()
 
@@ -357,7 +378,7 @@ class ResourceAccessView(View):
             )
 
             if location:
-                bucket_name = location.s3_bucket or fallback_bucket or resource_service.production_bucket
+                bucket_candidates = [location.s3_bucket, fallback_bucket, resource_service.production_bucket]
                 object_key = location.s3_key
             else:
                 discovery_service = FileDiscoveryService()
@@ -371,9 +392,14 @@ class ResourceAccessView(View):
                     except Exception:
                         object_key = None
 
-                bucket_name = fallback_bucket or resource_service.production_bucket
+                bucket_candidates = [fallback_bucket, resource_service.production_bucket]
 
-            if not bucket_name or not object_key:
+            if not object_key:
+                raise ValueError("Unable to determine S3 key for resource")
+
+            bucket_name = resolve_existing_bucket(resource_service, bucket_candidates, object_key)
+
+            if not bucket_name:
                 raise ValueError("Unable to determine S3 location for resource")
 
             presigned_url = resource_service.generate_presigned_url(bucket_name, object_key)
