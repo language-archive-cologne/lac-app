@@ -12,6 +12,123 @@ from lacos.storage.services.bucket_service import BucketService
 logger = logging.getLogger(__name__)
 
 
+def validate_metadata_xml(bucket: str, s3_key: str, metadata_type: str) -> dict:
+    """
+    Validate XML file before importing.
+
+    Returns dict with:
+        - 'valid': bool
+        - 'error': str (if invalid)
+        - 'warnings': list of str
+        - 'details': dict with metadata info
+    """
+    from lacos.storage.services.file_discovery_service import FileDiscoveryService
+    from lacos.blam.mappers.collection.read.collection_importer import CollectionImporter
+    from lacos.blam.mappers.bundle.read.bundle_importer import BundleImporter
+    from django.core.exceptions import ValidationError
+
+    result = {
+        'valid': False,
+        'error': None,
+        'warnings': [],
+        'details': {}
+    }
+
+    # Check if file exists in S3
+    try:
+        logger.info(f"🔍 VALIDATE_XML: Reading S3 object bucket={bucket}, key={s3_key}")
+        discovery_service = FileDiscoveryService()
+        xml_bytes = discovery_service.read_s3_object(bucket=bucket, key=s3_key)
+
+        if not xml_bytes:
+            logger.warning(f"🔍 VALIDATE_XML: File not found")
+            result['error'] = f"File not found in bucket '{bucket}' at path '{s3_key}'"
+            return result
+
+        logger.info(f"🔍 VALIDATE_XML: Successfully read {len(xml_bytes)} bytes")
+
+    except Exception as e:
+        logger.error(f"🔍 VALIDATE_XML: Error reading S3 object: {str(e)}", exc_info=True)
+        result['error'] = f"Cannot access S3 file: {str(e)}"
+        return result
+
+    # Try to decode XML
+    try:
+        xml_content = xml_bytes.decode('utf-8')
+    except UnicodeDecodeError as e:
+        result['error'] = f"File is not valid UTF-8 text: {str(e)}"
+        return result
+
+    # Validate XML structure using xsdata importers
+    try:
+        if metadata_type == 'collection':
+            cmd_data = CollectionImporter.validate_xml(xml_content)
+
+            # Extract useful info for display
+            if hasattr(cmd_data, 'header') and cmd_data.header:
+                if hasattr(cmd_data.header, 'md_self_link'):
+                    identifier = cmd_data.header.md_self_link.value
+                    result['details']['identifier'] = identifier
+
+                    # Check if already exists
+                    from lacos.blam.models.collection.collection_repository import Collection
+                    existing = Collection.objects.filter(identifier=identifier).first()
+                    if existing:
+                        result['warnings'].append(
+                            f"Collection '{identifier}' already exists in database. "
+                            f"Import will skip this collection."
+                        )
+
+            result['details']['version'] = cmd_data.version
+            result['details']['type'] = 'Collection'
+
+        else:  # bundle
+            cmd_data = BundleImporter.validate_xml(xml_content)
+
+            # Extract useful info for display
+            if hasattr(cmd_data, 'header') and cmd_data.header:
+                if hasattr(cmd_data.header, 'md_self_link'):
+                    identifier = cmd_data.header.md_self_link.value
+                    result['details']['identifier'] = identifier
+
+                    # Check if already exists
+                    from lacos.blam.models.bundle.bundle_repository import Bundle
+                    existing = Bundle.objects.filter(identifier=identifier).first()
+                    if existing:
+                        result['warnings'].append(
+                            f"Bundle '{identifier}' already exists in database. "
+                            f"Import will skip this bundle."
+                        )
+
+            result['details']['type'] = 'Bundle'
+
+        result['valid'] = True
+
+    except ValidationError as e:
+        # This is the xsdata validation error - make it user-friendly
+        error_msg = str(e)
+
+        # Parse common xsdata errors and make them readable
+        if "No matching global declaration" in error_msg:
+            result['error'] = (
+                "XML structure doesn't match BLAM schema. "
+                "The root element or namespace might be incorrect."
+            )
+        elif "is not valid" in error_msg:
+            result['error'] = f"XML validation failed: {error_msg}"
+        elif "Expected element" in error_msg:
+            result['error'] = (
+                f"Missing required XML element. {error_msg}"
+            )
+        else:
+            result['error'] = f"Invalid BLAM {metadata_type} XML: {error_msg}"
+
+    except Exception as e:
+        result['error'] = f"Unexpected error parsing XML: {str(e)}"
+
+    return result
+
+
 @login_required
 def metadata_ingest_modal(request, bucket_type, object_type, object_path):
     """Render the metadata ingest modal with sensible defaults."""
@@ -131,6 +248,77 @@ def ingest_metadata(request):
         if is_htmx:
             return _render_modal_with_error(request, payload=payload, error=str(exc))
         return JsonResponse({"success": False, "error": str(exc)}, status=500)
+
+
+@login_required
+def validate_metadata_endpoint(request, bucket_type, object_path):
+    """
+    Validate a specific XML file and return results via HTMX.
+    """
+    from django.utils.text import slugify
+
+    # Clean up trailing slashes from path
+    object_path = object_path.rstrip('/')
+
+    logger.info(f"🔍 VALIDATE: bucket_type={bucket_type}, object_path={object_path}")
+
+    bucket_service = BucketService()
+    accessible_buckets = bucket_service.get_all_accessible_buckets()
+
+    # Determine actual bucket name
+    if bucket_type in accessible_buckets:
+        bucket_name = bucket_type
+    elif bucket_type == 'ingest':
+        bucket_name = bucket_service.ingest_bucket
+    elif bucket_type == 'production':
+        bucket_name = bucket_service.production_bucket
+    else:
+        bucket_name = bucket_type
+
+    logger.info(f"🔍 VALIDATE: resolved bucket_name={bucket_name}")
+
+    # Get metadata type from query parameter (user explicitly selected it)
+    metadata_type = request.GET.get('type', '').lower()
+
+    # Validate the type parameter
+    if metadata_type not in ['collection', 'bundle']:
+        # Fallback to auto-detection if not specified
+        lower_path = object_path.lower()
+
+        # First check if path explicitly contains 'collection' or 'bundle'
+        if 'collection' in lower_path:
+            metadata_type = 'collection'
+        elif 'bundle' in lower_path:
+            metadata_type = 'bundle'
+        else:
+            # Heuristic: if the first two path segments are the same, likely a collection
+            path_parts = object_path.split('/')
+            if len(path_parts) >= 2 and path_parts[0] == path_parts[1]:
+                metadata_type = 'collection'
+            else:
+                metadata_type = 'bundle'
+
+        logger.info(f"🔍 VALIDATE: auto-detected metadata_type={metadata_type} from path={object_path}")
+    else:
+        logger.info(f"🔍 VALIDATE: user-selected metadata_type={metadata_type}")
+
+    # Get or generate target_id for proper element replacement
+    target_id = request.GET.get('target_id') or slugify(f'file-info-{object_path}')
+
+    logger.info(f"🔍 VALIDATE: target_id={target_id}")
+
+    # Run validation
+    result = validate_metadata_xml(bucket_name, object_path, metadata_type)
+
+    logger.info(f"🔍 VALIDATE: result valid={result.get('valid')}, error={result.get('error')}")
+
+    return render(request, 'storage/metadata_validation_result.html', {
+        'result': result,
+        'bucket': bucket_name,
+        's3_key': object_path,
+        'metadata_type': metadata_type,
+        'target_id': target_id,
+    })
 
 
 def _render_modal_with_error(request, payload, error):

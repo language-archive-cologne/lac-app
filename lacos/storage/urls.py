@@ -30,6 +30,9 @@ urlpatterns = [
     path("ingest/metadata/modal/<str:bucket_type>/<str:object_type>/<path:object_path>/",
          views.metadata_ingest_modal,
          name="metadata_ingest_modal"),
+    path("validate/metadata/<str:bucket_type>/<path:object_path>/",
+         views.validate_metadata_endpoint,
+         name="validate_metadata"),
 
     path("tasks/<uuid:task_id>/status/", views.background_task_status, name="background_task_status"),
 

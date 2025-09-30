@@ -165,6 +165,33 @@ HTMX loads child contents when a folder is expanded.
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                         </button>
+                        {% if item.name|lower|slice:'-4:' == '.xml' %}
+                        <div class="dropdown dropdown-end">
+                            <button type="button" class="btn btn-ghost btn-xs text-success" title="Validate XML">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </button>
+                            <ul class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
+                                <li>
+                                    <a hx-get="{% url 'storage:validate_metadata' bucket_type item.path %}?type=collection"
+                                       hx-target="#{{ target_id }}"
+                                       hx-swap="innerHTML"
+                                       hx-indicator="#indicator">
+                                        Validate as Collection
+                                    </a>
+                                </li>
+                                <li>
+                                    <a hx-get="{% url 'storage:validate_metadata' bucket_type item.path %}?type=bundle"
+                                       hx-target="#{{ target_id }}"
+                                       hx-swap="innerHTML"
+                                       hx-indicator="#indicator">
+                                        Validate as Bundle
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        {% endif %}
                         <button type="button"
                                 class="btn btn-ghost btn-xs text-error"
                                 title="Delete File"
