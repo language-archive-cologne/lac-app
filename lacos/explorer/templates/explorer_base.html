@@ -15,8 +15,8 @@
 {% block modal %}
   <div id="resource-modal" class="fixed inset-0 z-50 hidden items-center justify-center px-4 py-6" aria-hidden="true" role="dialog" aria-modal="true">
     <div class="absolute inset-0 bg-slate-900/60" data-modal-close></div>
-    <div class="relative w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-xl">
-      <div id="resource-modal-content" class="p-6"></div>
+    <div class="relative w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-2xl bg-white shadow-xl">
+      <div id="resource-modal-content" class="p-6 overflow-y-auto max-h-[90vh]"></div>
     </div>
   </div>
 {% endblock modal %}
@@ -31,11 +31,42 @@
         return;
       }
 
+      const initializeElanControls = () => {
+        const viewerRoot = modalContent.querySelector('[data-viewer-type]');
+        if (!viewerRoot || viewerRoot.dataset.viewerType !== 'elan') {
+          return;
+        }
+
+        const audioElement = viewerRoot.querySelector('audio');
+        if (!audioElement) {
+          return;
+        }
+
+        viewerRoot.querySelectorAll('[data-annotation-start]').forEach((button) => {
+          button.addEventListener('click', () => {
+            const start = parseFloat(button.dataset.annotationStart || '');
+            if (Number.isNaN(start)) {
+              return;
+            }
+            try {
+              audioElement.currentTime = Math.max(start, 0);
+              const playPromise = audioElement.play();
+              if (playPromise && typeof playPromise.catch === 'function') {
+                playPromise.catch(() => {});
+              }
+            } catch (error) {
+              console.error('Unable to seek ELAN audio', error);
+            }
+          }, { once: false });
+        });
+      };
+
       const openModal = () => {
         modal.classList.remove('hidden');
         modal.classList.add('flex');
         document.body.classList.add('overflow-hidden');
         modal.setAttribute('aria-hidden', 'false');
+        initializeElanControls();
       };
 
       const closeModal = () => {

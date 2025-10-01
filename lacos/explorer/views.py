@@ -2,13 +2,14 @@ import json
 import logging
 import re
 from functools import lru_cache
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Iterable, Optional, Sequence, Tuple
+from xml.etree import ElementTree as ET
 
 from botocore.exceptions import ClientError
 from django.core.cache import cache
 from django.db.models import Prefetch
-from django.http import Http404, HttpResponse, StreamingHttpResponse
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.generic import DetailView, ListView, View
@@ -24,6 +25,7 @@ from lacos.blam.models.bundle.bundle_structural_info import (
 from django.core.paginator import Paginator
 
 from lacos.explorer.search import search_archives
+from lacos.storage.services.file_discovery_service import FileDiscoveryService
 
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
@@ -67,7 +69,12 @@ def _build_bundle_context(struct_info):
         written_resources = []
         other_resources = []
 
-    media_like_other = [res for res in other_resources if getattr(res, 'mime_type', '') and (res.mime_type.startswith('video/') or res.mime_type.startswith('audio/'))]
+    media_like_other = []
+    for res in other_resources:
+        mime = getattr(res, 'mime_type', '') or ''
+        lowered = mime.lower()
+        if lowered.startswith('video/') or lowered.startswith('audio/'):
+            media_like_other.append(res)
     if media_like_other:
         media_resources.extend(media_like_other)
         other_resources = [res for res in other_resources if res not in media_like_other]
@@ -138,6 +145,278 @@ def _iter_bundle_resources(bundle) -> Iterable:
     struct_info = bundle.structural_info.first()
     if struct_info:
         yield from struct_info.additional_metadata_files.all()
+
+
+def _resolve_resource_to_presigned(
+    resource_service,
+    resource,
+    bundle,
+    collection_for_path,
+):
+    """Resolve a resource to its storage location and presigned URL."""
+
+    fallback_bucket = (
+        getattr(bundle, "import_bucket", None)
+        or (
+            getattr(collection_for_path, "import_bucket", None)
+            if collection_for_path
+            else None
+        )
+    ) or resource_service.production_bucket
+
+    candidate_locations: list[tuple[Optional[str], Optional[str]]] = []
+
+    location = resource_service.resolve_pid_to_s3(getattr(resource, "file_pid", None))
+    if location:
+        candidate_locations.append((location.s3_bucket, location.s3_key))
+        candidate_locations.append((fallback_bucket, location.s3_key))
+
+    def add_import_location(import_bucket: Optional[str], import_key: Optional[str]):
+        if not import_bucket or not import_key:
+            return
+        base_path = PurePosixPath(import_key).parent
+        candidate_locations.append(
+            (import_bucket, str(base_path / "Resources" / resource.file_name))
+        )
+
+    add_import_location(
+        getattr(bundle, "import_bucket", None),
+        getattr(bundle, "import_object_key", None),
+    )
+    if collection_for_path:
+        add_import_location(
+            getattr(collection_for_path, "import_bucket", None),
+            getattr(collection_for_path, "import_object_key", None),
+        )
+
+    discovery_service = FileDiscoveryService()
+    derived_key = None
+    if collection_for_path:
+        try:
+            derived_key = discovery_service.form_resource_path(
+                collection_for_path.id,
+                bundle.id,
+                resource.file_name,
+            )
+        except Exception:  # pragma: no cover - defensive fallback
+            derived_key = None
+
+    if derived_key:
+        candidate_locations.append((fallback_bucket, derived_key))
+        if fallback_bucket != resource_service.production_bucket:
+            candidate_locations.append(
+                (resource_service.production_bucket, derived_key)
+            )
+
+    bucket_name, object_key = resolve_existing_object(
+        resource_service, candidate_locations
+    )
+
+    if not bucket_name or not object_key:
+        return None
+
+    presigned_url = resource_service.generate_presigned_url(
+        bucket_name,
+        object_key,
+    )
+
+    return {
+        "bucket": bucket_name,
+        "key": object_key,
+        "url": presigned_url,
+    }
+
+
+def _parse_elan_document(resource_service, bucket_name: str, object_key: str) -> dict:
+    """Fetch and parse ELAN (.eaf) metadata for annotations and media links."""
+    try:
+        response = resource_service.s3_client.get_object(
+            Bucket=bucket_name,
+            Key=object_key,
+        )
+    except ClientError as exc:  # pragma: no cover - depends on storage backend
+        logger.error(
+            "Unable to fetch ELAN document %s from bucket %s: %s",
+            object_key,
+            bucket_name,
+            exc,
+        )
+        return {"annotations": [], "media_files": []}
+
+    raw_bytes = response.get("Body").read()
+    try:
+        elan_text = raw_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        elan_text = raw_bytes.decode("utf-8", errors="replace")
+
+    return _parse_elan_text(elan_text)
+
+
+def _parse_elan_text(elan_text: str) -> dict:
+    try:
+        root = ET.fromstring(elan_text)
+    except ET.ParseError as exc:
+        logger.error("Failed to parse ELAN document: %s", exc)
+        return {"annotations": [], "media_files": []}
+
+    timeslots: dict[str, Optional[int]] = {}
+    for slot in root.findall("./TIME_ORDER/TIME_SLOT"):
+        slot_id = slot.attrib.get("TIME_SLOT_ID")
+        if not slot_id:
+            continue
+        time_value = slot.attrib.get("TIME_VALUE")
+        try:
+            timeslots[slot_id] = int(time_value) if time_value is not None else None
+        except ValueError:
+            timeslots[slot_id] = None
+
+    media_files: list[str] = []
+    for descriptor in root.findall("./HEADER/MEDIA_DESCRIPTOR"):
+        relative = descriptor.attrib.get("RELATIVE_MEDIA_URL")
+        media_url = relative or descriptor.attrib.get("MEDIA_URL")
+        if media_url:
+            media_files.append(media_url.strip())
+
+    tier_headers: set[str] = set()
+    annotations_map: dict[str, dict[str, Optional[float]]] = {}
+
+    def ensure_entry(annotation_id: str) -> dict:
+        entry = annotations_map.get(annotation_id)
+        if entry is None:
+            entry = {
+                "id": annotation_id,
+                "start": None,
+                "end": None,
+                "tiers": {},
+            }
+            annotations_map[annotation_id] = entry
+        return entry
+
+    def _time_to_seconds(value: Optional[int]) -> Optional[float]:
+        if value is None:
+            return None
+        return (value or 0) / 1000
+
+    for tier in root.findall("TIER"):
+        tier_id = tier.attrib.get("TIER_ID", "Tier")
+        tier_headers.add(tier_id)
+
+        for annotation in tier.findall("./ANNOTATION"):
+            alignable = annotation.find("ALIGNABLE_ANNOTATION")
+            ref_annotation = annotation.find("REF_ANNOTATION")
+
+            if alignable is not None:
+                annotation_id = alignable.attrib.get("ANNOTATION_ID")
+                if not annotation_id:
+                    continue
+
+                entry = ensure_entry(annotation_id)
+
+                start_ref = alignable.attrib.get("TIME_SLOT_REF1")
+                end_ref = alignable.attrib.get("TIME_SLOT_REF2")
+                entry["start"] = _time_to_seconds(timeslots.get(start_ref))
+                entry["end"] = _time_to_seconds(timeslots.get(end_ref))
+
+                value_element = alignable.find("ANNOTATION_VALUE")
+                value_text = (
+                    value_element.text.strip()
+                    if value_element is not None and value_element.text
+                    else ""
+                )
+
+                if value_text:
+                    entry.setdefault("tiers", {})[tier_id] = value_text
+
+            elif ref_annotation is not None:
+                reference_id = ref_annotation.attrib.get("ANNOTATION_REF")
+                if not reference_id:
+                    continue
+
+                entry = ensure_entry(reference_id)
+
+                value_element = ref_annotation.find("ANNOTATION_VALUE")
+                value_text = (
+                    value_element.text.strip()
+                    if value_element is not None and value_element.text
+                    else ""
+                )
+
+                if value_text:
+                    entry.setdefault("tiers", {})[tier_id] = value_text
+
+    annotations = list(annotations_map.values())
+
+    if "Tier" in tier_headers and len(tier_headers) > 1:
+        tier_headers.discard("Tier")
+
+    tier_list = sorted(tier_headers)
+
+    for entry in annotations:
+        entry['ordered_tiers'] = [
+            {
+                'name': tier,
+                'value': entry.get('tiers', {}).get(tier, ''),
+            }
+            for tier in tier_list
+        ]
+
+    annotations.sort(
+        key=lambda item: (
+            item["start"] if item["start"] is not None else -1,
+            item.get("id", ""),
+        )
+    )
+
+    for entry in annotations:
+        tier_texts = [text for text in entry.get("tiers", {}).values() if text]
+        entry["value"] = tier_texts[0] if tier_texts else ""
+
+    return {
+        "annotations": annotations,
+        "media_files": media_files,
+        "tier_headers": tier_list,
+    }
+
+
+def _pick_elan_audio_resource(bundle, target_resource, elan_data: dict):
+    """Choose the most relevant audio resource for an ELAN file."""
+
+    base_names = {Path(target_resource.file_name).stem.lower()}
+    for candidate in elan_data.get("media_files", []):
+        if not candidate:
+            continue
+        candidate_name = Path(unquote(candidate)).name
+        base_names.add(Path(candidate_name).stem.lower())
+
+    audio_candidates: list[tuple[int, object]] = []
+
+    for resource in _iter_bundle_resources(bundle):
+        if resource.id == target_resource.id:
+            continue
+        mime = getattr(resource, "mime_type", "") or ""
+        lowered_mime = mime.lower()
+        if not lowered_mime.startswith("audio/"):
+            continue
+
+        resource_stem = Path(resource.file_name).stem.lower()
+        score = 0
+        if resource_stem in base_names:
+            score += 2
+        if resource_stem == Path(target_resource.file_name).stem.lower():
+            score += 1
+
+        # Allow generic fallback when we have no confident match yet
+        if score == 0 and not audio_candidates:
+            score = 1
+
+        audio_candidates.append((score, resource))
+
+    if not audio_candidates:
+        return None
+
+    audio_candidates.sort(key=lambda item: item[0], reverse=True)
+    best_score, best_resource = audio_candidates[0]
+    return best_resource if best_score > 0 else None
 
 
 def find_resource_in_bundle(
@@ -514,91 +793,88 @@ class ResourceAccessView(View):
         
         try:
             # Find the resource by its ID (UUID) first
-            from django.contrib.contenttypes.models import ContentType
-            from lacos.storage.models.s3_resource_location import S3ResourceLocation
-            
-            # Get the resource
             resource = find_resource_in_bundle(bundle, resource_id=resource_id)
 
             if not resource:
                 raise Http404(f"Resource with id {resource_id} not found in bundle {bundle_id}")
 
             # Get the PID from the resource
-            resource_pid = resource.file_pid
             mime_type = getattr(resource, 'mime_type', None)
+            normalized_mime_type = mime_type.lower().strip() if mime_type else ''
+            extension = (
+                Path(getattr(resource, 'file_name', '')).suffix.lower().lstrip('.')
+                if getattr(resource, 'file_name', None)
+                else ''
+            )
+            is_elan = extension in {'eaf', 'elan'} or normalized_mime_type == 'text/x-eaf+xml'
 
             from lacos.storage.services.resource_mapping_service import ResourceMappingService
-            from lacos.storage.services.file_discovery_service import FileDiscoveryService
 
             resource_service = ResourceMappingService()
 
-            location = resource_service.resolve_pid_to_s3(resource_pid)
-            fallback_bucket = (
-                getattr(bundle, 'import_bucket', None)
-                or (
-                    getattr(collection_for_path, 'import_bucket', None)
-                    if collection_for_path
-                    else None
-                )
-            ) or resource_service.production_bucket
+            storage_resolution = _resolve_resource_to_presigned(
+                resource_service,
+                resource,
+                bundle,
+                collection_for_path,
+            )
 
-            candidate_locations: list[tuple[Optional[str], Optional[str]]] = []
-
-            if location:
-                candidate_locations.append((location.s3_bucket, location.s3_key))
-                candidate_locations.append((fallback_bucket, location.s3_key))
-
-            def add_import_location(import_bucket: Optional[str], import_key: Optional[str]):
-                if not import_bucket or not import_key:
-                    return
-                base_path = PurePosixPath(import_key).parent
-                candidate_locations.append(
-                    (import_bucket, str(base_path / 'Resources' / resource.file_name))
-                )
-
-            add_import_location(getattr(bundle, 'import_bucket', None), getattr(bundle, 'import_object_key', None))
-            if collection_for_path:
-                add_import_location(
-                    getattr(collection_for_path, 'import_bucket', None),
-                    getattr(collection_for_path, 'import_object_key', None),
-                )
-
-            discovery_service = FileDiscoveryService()
-            derived_key = None
-            if collection_for_path:
-                try:
-                    derived_key = discovery_service.form_resource_path(
-                        collection_for_path.id,
-                        bundle.id,
-                        resource.file_name,
-                    )
-                except Exception:  # pragma: no cover - defensive
-                    derived_key = None
-
-            if derived_key:
-                candidate_locations.append((fallback_bucket, derived_key))
-                if fallback_bucket != resource_service.production_bucket:
-                    candidate_locations.append((resource_service.production_bucket, derived_key))
-
-            bucket_name, object_key = resolve_existing_object(resource_service, candidate_locations)
-
-            if not bucket_name or not object_key:
+            if not storage_resolution:
                 raise ValueError("Unable to determine S3 location for resource")
 
-            presigned_url = resource_service.generate_presigned_url(bucket_name, object_key)
+            bucket_name = storage_resolution['bucket']
+            object_key = storage_resolution['key']
+            presigned_url = storage_resolution['url']
+
+            elan_context = None
+            if is_elan:
+                elan_data = _parse_elan_document(
+                    resource_service,
+                    bucket_name,
+                    object_key,
+                )
+
+                audio_resource = _pick_elan_audio_resource(
+                    bundle,
+                    resource,
+                    elan_data,
+                )
+
+                audio_url = None
+                audio_file_name = None
+                if audio_resource:
+                    audio_resolution = _resolve_resource_to_presigned(
+                        resource_service,
+                        audio_resource,
+                        bundle,
+                        collection_for_path,
+                    )
+                    if audio_resolution:
+                        audio_url = audio_resolution['url']
+                        audio_file_name = getattr(audio_resource, 'file_name', '')
+
+                elan_context = {
+                    'annotations': elan_data.get('annotations', []),
+                    'media_files': elan_data.get('media_files', []),
+                    'audio_url': audio_url,
+                    'audio_file_name': audio_file_name,
+                    'tier_headers': elan_data.get('tier_headers', []),
+                }
 
             is_htmx = request.headers.get('HX-Request') == 'true'
 
             if is_htmx and action in {'play', 'view'}:
                 media_type = None
-                if mime_type and mime_type.startswith('audio/'):
+                if normalized_mime_type.startswith('audio/'):
                     media_type = 'audio'
-                elif mime_type and mime_type.startswith('video/'):
+                elif normalized_mime_type.startswith('video/'):
                     media_type = 'video'
-                elif mime_type and mime_type.startswith('image/'):
+                elif normalized_mime_type.startswith('image/'):
                     media_type = 'image'
-                elif mime_type == 'application/pdf':
+                elif normalized_mime_type == 'application/pdf':
                     media_type = 'pdf'
+                elif is_elan:
+                    media_type = 'elan'
 
                 modal_context = {
                     'resource_name': resource.file_name,
@@ -608,6 +884,7 @@ class ResourceAccessView(View):
                     'stream_url': presigned_url if media_type in {'audio', 'video'} else None,
                     'preview_url': presigned_url,
                     'download_url': presigned_url,
+                    'elan_context': elan_context,
                 }
 
                 response = render(
@@ -623,7 +900,7 @@ class ResourceAccessView(View):
                 return redirect(presigned_url)
 
             # For streaming/viewing, handle based on the mime type
-            if mime_type and (mime_type.startswith('audio/') or mime_type.startswith('video/')):
+            if normalized_mime_type.startswith('audio/') or normalized_mime_type.startswith('video/'):
                 if action == 'play':
                     return render(
                         request,
@@ -638,7 +915,7 @@ class ResourceAccessView(View):
 
                 return redirect(presigned_url)
             
-            elif mime_type and (mime_type.startswith('image/') or mime_type == 'application/pdf'):
+            elif normalized_mime_type.startswith('image/') or normalized_mime_type == 'application/pdf':
                 # For images and PDFs, redirect to view in browser
                 return redirect(presigned_url)
             else:

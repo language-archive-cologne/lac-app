@@ -85,7 +85,7 @@
                           </svg>
                           {% translate "Play" %}
                         </a>
-                        {% elif resource.mime_type and resource.mime_type|slice:":6" == "image/" or resource.mime_type == "application/pdf" %}
+                        {% elif resource.mime_type and resource.mime_type|slice:":6" == "image/" or resource.mime_type == "application/pdf" or resource.mime_type == "text/x-eaf+xml" or resource.file_name|lower|slice:"-4:" == ".eaf" or resource.file_name|lower|slice:"-5:" == ".elan" %}
                         <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view" 
                            hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view"
                            hx-target="#resource-modal-content"

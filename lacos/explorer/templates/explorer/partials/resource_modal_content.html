@@ -1,6 +1,6 @@
 {% load i18n %}
 
-<div class="space-y-4">
+<div class="space-y-4" data-viewer-type="{{ media_type }}">
   <div class="flex items-start justify-between gap-4">
     <div>
       <h2 class="text-lg font-semibold text-slate-800">{{ resource_name }}</h2>
@@ -26,6 +26,101 @@
       <img src="{{ preview_url }}" alt="{{ resource_name }}" class="max-h-[70vh] mx-auto rounded-lg shadow" loading="lazy" />
     {% elif media_type == 'pdf' %}
       <iframe src="{{ preview_url }}" title="{{ resource_name }}" class="w-full h-[70vh] rounded-lg border border-slate-200" loading="lazy"></iframe>
+    {% elif media_type == 'elan' %}
+      <div class="space-y-4" data-has-audio="{% if elan_context and elan_context.audio_url %}true{% else %}false{% endif %}">
+        {% if elan_context and elan_context.audio_url %}
+          <div class="bg-white border border-slate-200 rounded-lg p-4 shadow">
+            <p class="text-sm text-slate-500 mb-2">
+              {% if elan_context.audio_file_name %}
+                {% translate "Audio Track" %}: {{ elan_context.audio_file_name }}
+              {% else %}
+                {% translate "Audio Track" %}
+              {% endif %}
+            </p>
+            <audio controls preload="metadata" class="w-full" src="{{ elan_context.audio_url }}">
+              <p>{% translate "Your browser does not support the audio element." %}</p>
+            </audio>
+          </div>
+        {% else %}
+          <div class="alert alert-info flex items-start gap-3">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>{% translate "No linked audio track found for this ELAN file." %}</span>
+          </div>
+        {% endif %}
+
+        <div class="border border-slate-200 rounded-lg overflow-hidden">
+          <div class="bg-slate-100 px-4 py-2 text-sm font-medium text-slate-600">
+            {% translate "Annotations" %}
+          </div>
+          <div class="max-h-[55vh] overflow-y-auto">
+            {% if elan_context and elan_context.annotations %}
+              <table class="min-w-[60rem] divide-y divide-slate-200 text-sm">
+                <thead class="bg-slate-50">
+                  <tr>
+                    <th class="px-4 py-2 text-left font-semibold text-slate-600">{% translate "Start (s)" %}</th>
+                    <th class="px-4 py-2 text-left font-semibold text-slate-600">{% translate "End (s)" %}</th>
+                    {% if elan_context.tier_headers %}
+                      {% for tier_name in elan_context.tier_headers %}
+                        <th class="px-4 py-2 text-left font-semibold text-slate-600">{{ tier_name }}</th>
+                      {% endfor %}
+                    {% else %}
+                      <th class="px-4 py-2 text-left font-semibold text-slate-600">{% translate "Annotation" %}</th>
+                    {% endif %}
+                    {% if elan_context and elan_context.audio_url %}
+                      <th class="px-4 py-2 text-left font-semibold text-slate-600">{% translate "Actions" %}</th>
+                    {% endif %}
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                  {% for annotation in elan_context.annotations %}
+                    <tr class="hover:bg-slate-50">
+                      <td class="px-4 py-2 text-slate-500">
+                        {% if annotation.start is not None %}
+                          {{ annotation.start|floatformat:2 }}
+                        {% else %}
+                          &mdash;
+                        {% endif %}
+                      </td>
+                      <td class="px-4 py-2 text-slate-500">
+                        {% if annotation.end is not None %}
+                          {{ annotation.end|floatformat:2 }}
+                        {% else %}
+                          &mdash;
+                        {% endif %}
+                      </td>
+                      {% if elan_context.tier_headers %}
+                        {% for tier in annotation.ordered_tiers %}
+                          <td class="px-4 py-2 text-slate-700">{{ tier.value|default:"" }}</td>
+                        {% endfor %}
+                      {% else %}
+                        <td class="px-4 py-2 text-slate-700">{{ annotation.value|default:"" }}</td>
+                      {% endif %}
+                      {% if elan_context and elan_context.audio_url %}
+                        <td class="px-4 py-2">
+                          {% if annotation.start is not None %}
+                            <button type="button"
+                                    class="btn btn-xs btn-primary"
+                                    data-annotation-start="{{ annotation.start|floatformat:3 }}"
+                                    {% if annotation.end is not None %}data-annotation-end="{{ annotation.end|floatformat:3 }}"{% endif %}>
+                              {% translate "Play" %}
+                            </button>
+                          {% else %}
+                            <span class="text-xs text-slate-400">{% translate "Unavailable" %}</span>
+                          {% endif %}
+                        </td>
+                      {% endif %}
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            {% else %}
+              <p class="px-4 py-6 text-sm text-slate-500">{% translate "No annotations were found in this ELAN file." %}</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
     {% else %}
       <div class="flex flex-col items-start gap-3">
         <p class="text-sm text-slate-600">
