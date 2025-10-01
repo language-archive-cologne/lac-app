@@ -4,7 +4,9 @@ from lacos.blam.models.bundle.bundle_publication_info import (
     BundlePublicationInfo, BundleCreator, BundleContributor, BundleContributorName
 )
 from blam_schemas.bundle.blam_bundle_repository_v1_0 import (
-    Cmd, CreatorNameIdentifierIdentifierType, ContributorNameIdentifierIdentifierType
+    Cmd,
+    CreatorNameIdentifierIdentifierType,
+    ContributorNameIdentifierIdentifierType,
 )
 from lacos.blam.models.base_indentifiers import PersonIdentifierTypeChoices
 import logging
@@ -58,7 +60,7 @@ def import_publication_info(cmd_data: Cmd, bundle: 'Bundle') -> Optional[BundleP
     
     # Extract primary creator identifier and type for the main record
     primary_identifier = ''
-    primary_identifier_type = '' # Default to empty strings for required fields
+    primary_identifier_type = PersonIdentifierTypeChoices.OTHER.value  # default to valid choice
     first_creator_data = None
     if hasattr(pub_info, 'bundle_creators') and pub_info.bundle_creators and pub_info.bundle_creators.bundle_creator:
         first_creator_data = pub_info.bundle_creators.bundle_creator[0]
@@ -84,13 +86,7 @@ def import_publication_info(cmd_data: Cmd, bundle: 'Bundle') -> Optional[BundleP
                 identifier = first_creator_data.creator_name_identifier[0]
                 primary_identifier = getattr(identifier, 'value', '')
                 id_type_enum = getattr(identifier, 'identifier_type', None)
-                # Map enum to string value
-                if id_type_enum == CreatorNameIdentifierIdentifierType.EMAIL:
-                     primary_identifier_type = PersonIdentifierTypeChoices.EMAIL.value
-                elif id_type_enum: # Other type specified
-                     primary_identifier_type = PersonIdentifierTypeChoices.OTHER.value # Or map specific schema types if needed
-                else: # No type specified
-                     primary_identifier_type = PersonIdentifierTypeChoices.OTHER.value # Default if type is missing
+                primary_identifier_type = _map_person_identifier_type(id_type_enum)
 
     # Always create a new record for each bundle import
     try:
@@ -114,6 +110,16 @@ def import_publication_info(cmd_data: Cmd, bundle: 'Bundle') -> Optional[BundleP
         import_contributors(bundle_pub_info, pub_info.bundle_contributors.bundle_contributor)
     
     return bundle_pub_info
+
+
+def _map_person_identifier_type(identifier_enum) -> str:
+    if identifier_enum == CreatorNameIdentifierIdentifierType.ORCID:
+        return PersonIdentifierTypeChoices.ORCID.value
+    if identifier_enum == CreatorNameIdentifierIdentifierType.ISNI:
+        return PersonIdentifierTypeChoices.ISNI.value
+    if identifier_enum == CreatorNameIdentifierIdentifierType.EMAIL:
+        return PersonIdentifierTypeChoices.EMAIL.value
+    return PersonIdentifierTypeChoices.OTHER.value
 
 
 def import_creators(bundle_pub_info: BundlePublicationInfo, creators_data: List) -> None:
@@ -141,19 +147,11 @@ def import_creators(bundle_pub_info: BundlePublicationInfo, creators_data: List)
         if creator_data.creator_name_identifier:
             for identifier in creator_data.creator_name_identifier:
                 # First check for specific identifier types
-                if identifier.identifier_type == CreatorNameIdentifierIdentifierType.ORCID:
-                    creator.name_identifier = identifier.value
-                    creator.name_identifier_type = "ORCID"
-                    break
-                elif identifier.identifier_type == CreatorNameIdentifierIdentifierType.ISNI:
-                    creator.name_identifier = identifier.value
-                    creator.name_identifier_type = "ISNI"
-                    break
-                # If no type match, just use the first identifier value
-                else:
-                    creator.name_identifier = identifier.value
-                    creator.name_identifier_type = str(identifier.identifier_type) if identifier.identifier_type else "OTHER"
-                    break
+                creator.name_identifier = getattr(identifier, "value", "")
+                creator.name_identifier_type = _map_person_identifier_type(
+                    getattr(identifier, "identifier_type", None)
+                )
+                break
         
         # Handle affiliation
         if creator_data.creator_affiliation:
@@ -197,10 +195,17 @@ def import_contributors(bundle_pub_info: BundlePublicationInfo, contributors_dat
         # Handle identifiers
         if contributor_data.contributor_name_identifier:
             for identifier in contributor_data.contributor_name_identifier:
-                if identifier.identifier_type == ContributorNameIdentifierIdentifierType.ORCID:
-                    contributor.name_identifier = identifier.value
-                    contributor.name_identifier_type = "ORCID"
-                    break
+                contributor.name_identifier = getattr(identifier, "value", "")
+                id_type_enum = getattr(identifier, "identifier_type", None)
+                if id_type_enum == ContributorNameIdentifierIdentifierType.ORCID:
+                    contributor.name_identifier_type = PersonIdentifierTypeChoices.ORCID.value
+                elif id_type_enum == ContributorNameIdentifierIdentifierType.ISNI:
+                    contributor.name_identifier_type = PersonIdentifierTypeChoices.ISNI.value
+                elif id_type_enum == ContributorNameIdentifierIdentifierType.EMAIL:
+                    contributor.name_identifier_type = PersonIdentifierTypeChoices.EMAIL.value
+                else:
+                    contributor.name_identifier_type = PersonIdentifierTypeChoices.OTHER.value
+                break
         
         # Handle affiliation
         if contributor_data.contributor_affiliation:
