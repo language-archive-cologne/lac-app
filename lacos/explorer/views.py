@@ -21,6 +21,7 @@ from lacos.blam.models.bundle.bundle_structural_info import (
     BundleResources,
     BundleStructuralInfo,
 )
+from lacos.explorer.search import search_archives
 
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
@@ -186,6 +187,17 @@ class CollectionListView(ListView):
     def get_context_data(self, **kwargs):
         """Add processed location data to the context."""
         context = super().get_context_data(**kwargs)
+        search_query = self.request.GET.get("q", "").strip()
+        context["search_query"] = search_query
+        if search_query:
+            search_results = search_archives(search_query)
+            context["search_results"] = search_results
+            context["collection_search_results"] = [
+                result for result in search_results if result.kind == "collection"
+            ]
+            context["bundle_search_results"] = [
+                result for result in search_results if result.kind == "bundle"
+            ]
         # Process locations for each collection
         collections_with_locations = []
         for collection in context['collection_list']:
