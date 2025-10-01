@@ -190,7 +190,10 @@ class BucketService(BaseStorageService):
                 if cached is not None:
                     return cached
 
-            contents = self.collection_service.list_bucket_contents(bucket_name)
+            contents = self.collection_service.list_bucket_contents(
+                bucket_name,
+                force_fresh=force_fresh,
+            )
             
             # Process items to add BLAM object information
             processed_children = []
@@ -245,7 +248,11 @@ class BucketService(BaseStorageService):
                 if cached is not None:
                     return cached
 
-            contents = self.collection_service.list_bucket_contents(bucket_name, folder_path)
+            contents = self.collection_service.list_bucket_contents(
+                bucket_name,
+                folder_path,
+                force_fresh=force_fresh,
+            )
             
             # Transform the contents and add BLAM object information
             processed_contents = []
@@ -518,9 +525,19 @@ class BucketService(BaseStorageService):
             logger.exception(f"Unexpected error renaming file {file_path}")
             return {"success": False, "error": str(e)}
     
-    def list_bucket_contents(self, bucket_name: str, prefix: str = "") -> List[Dict[str, any]]:
+    def list_bucket_contents(
+        self,
+        bucket_name: str,
+        prefix: str = "",
+        *,
+        force_fresh: bool = False,
+    ) -> List[Dict[str, Any]]:
         """Delegate to collection service to list bucket contents."""
-        return self.collection_service.list_bucket_contents(bucket_name, prefix)
+        return self.collection_service.list_bucket_contents(
+            bucket_name,
+            prefix,
+            force_fresh=force_fresh,
+        )
     
     def get_folder_structure(self, bucket_name: str, prefix: str = "") -> Dict[str, Any]:
         """Delegate to collection service to get folder structure."""

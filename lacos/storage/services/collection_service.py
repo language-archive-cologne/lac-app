@@ -1,8 +1,9 @@
 import logging
 import os
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 from .base_storage_service import BaseStorageService
+from .folder_cache_service import FolderStructureCacheService
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +30,13 @@ class CollectionService(BaseStorageService):
             skip_bucket_check (bool): If True, skip bucket existence check
         """
         # Skip initialization if already done
-        if hasattr(self, 'initialized'):
+        if getattr(self, 'initialized', False):
             return
             
         super().__init__(skip_bucket_check=skip_bucket_check)
-        logger.info("CollectionService initialized")
+        logger.debug("CollectionService initialized")
         self.initialized = True
+        self._folder_cache = FolderStructureCacheService(timeout=300)
     
     def is_ocfl_object(self, bucket_name: str, prefix: str) -> bool:
         """
@@ -160,7 +162,13 @@ class CollectionService(BaseStorageService):
         # Default case: return the immediate parent
         return '/'.join(parts[:-1])
     
-    def list_bucket_contents(self, bucket_name: str, prefix: str = "") -> List[Dict[str, any]]:
+    def list_bucket_contents(
+        self,
+        bucket_name: str,
+        prefix: str = "",
+        *,
+        force_fresh: bool = False,
+    ) -> List[Dict[str, Any]]:
         """
         List the contents of a bucket with the given prefix.
         
@@ -173,6 +181,12 @@ class CollectionService(BaseStorageService):
         """
         try:
             logger.info("Listing contents of bucket '%s' with prefix '%s'", bucket_name, prefix)
+
+            if not force_fresh:
+                cached = self._folder_cache.get(bucket_name, prefix)
+                if cached is not None:
+                    logger.debug("Returning cached listing for %s:%s", bucket_name, prefix)
+                    return cached
 
             # Ensure prefix ends with / if it's not empty to avoid partial matches
             listing_prefix = prefix
@@ -213,9 +227,11 @@ class CollectionService(BaseStorageService):
             logger.debug(
                 "Listed %s items for %s%s",
                 len(contents),
-                listing_prefix or '/'.join([bucket_name, '']),
+                listing_prefix or f"{bucket_name}/",
                 f" — {preview}" if preview else "",
             )
+
+            self._folder_cache.set(bucket_name, prefix, contents)
 
             return contents
         except Exception as e:
