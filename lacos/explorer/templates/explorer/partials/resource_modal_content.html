@@ -56,7 +56,8 @@
           </div>
           <div class="max-h-[55vh] overflow-y-auto">
             {% if elan_context and elan_context.annotations %}
-              <table class="min-w-[60rem] divide-y divide-slate-200 text-sm">
+              <div class="overflow-x-auto">
+                <table class="min-w-[60rem] divide-y divide-slate-200 text-sm">
                 <thead class="bg-slate-50">
                   <tr>
                     <th class="px-4 py-2 text-left font-semibold text-slate-600">{% translate "Start (s)" %}</th>
@@ -114,7 +115,8 @@
                     </tr>
                   {% endfor %}
                 </tbody>
-              </table>
+                </table>
+              </div>
             {% else %}
               <p class="px-4 py-6 text-sm text-slate-500">{% translate "No annotations were found in this ELAN file." %}</p>
             {% endif %}
