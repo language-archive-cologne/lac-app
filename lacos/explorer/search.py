@@ -50,10 +50,20 @@ def search_archives(term: str, *, limit: int | None = None) -> list[SearchResult
     combined: list[SearchResult] = [*collection_results, *bundle_results]
     combined.sort(key=lambda result: result.rank, reverse=True)
 
-    if limit is None:
-        return combined
+    deduped: list[SearchResult] = []
+    seen_keys: set[tuple[str, str]] = set()
 
-    return combined[:limit]
+    for result in combined:
+        key = (result.kind, result.object_id)
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        deduped.append(result)
+
+    if limit is None:
+        return deduped
+
+    return deduped[:limit]
 
 
 def _search_collections(query: SearchQuery) -> list[SearchResult]:
