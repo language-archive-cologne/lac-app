@@ -4,6 +4,7 @@ from typing import Any, Dict
 import boto3
 from botocore.exceptions import ClientError
 from django.conf import settings
+from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
@@ -268,14 +269,20 @@ class BaseStorageService:
 
     def get_all_accessible_buckets(self) -> list:
         """Get all buckets that exist in MinIO."""
+        cache_key = "storage:bucket-names"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            logger.debug("Returning cached bucket list: %s", cached)
+            return cached
+
         try:
             response = self.s3_client.list_buckets()
-            bucket_names = [bucket['Name'] for bucket in response['Buckets']]
-            logger.info(f"📦 BUCKETS: Found {len(bucket_names)} buckets in MinIO: {bucket_names}")
-            return sorted(bucket_names)
+            bucket_names = sorted(bucket['Name'] for bucket in response['Buckets'])
+            logger.info("📦 BUCKETS: Found %s buckets in MinIO", len(bucket_names))
+            cache.set(cache_key, bucket_names, timeout=300)
+            return bucket_names
         except Exception as e:
-            logger.exception(f"❌ Error listing buckets from MinIO: {str(e)}")
-            # Fallback to configured buckets if MinIO is unavailable
+            logger.exception("❌ Error listing buckets from MinIO: %s", e)
             return self.workspace_buckets.copy()
 
     def _create_s3_client(self):
@@ -340,8 +347,14 @@ class BaseStorageService:
                 )
                 logger.info(f"Created separate client for presigned URLs with endpoint: {browser_endpoint}")
         
-        # Create and return the client
-        return boto3.client(**client_kwargs)
+        # Create the primary client
+        client = boto3.client(**client_kwargs)
+
+        # Ensure a presigned client always exists; fall back to the primary client
+        if not hasattr(self, "presigned_client"):
+            self.presigned_client = client
+
+        return client
     
     def _format_size(self, size_bytes: int) -> str:
         """Format bytes to human-readable size"""
