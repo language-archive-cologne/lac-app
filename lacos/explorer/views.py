@@ -21,10 +21,77 @@ from lacos.blam.models.bundle.bundle_structural_info import (
     BundleResources,
     BundleStructuralInfo,
 )
+from django.core.paginator import Paginator
+
 from lacos.explorer.search import search_archives
 
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
+
+BUNDLES_PER_PAGE = 10
+
+
+def _bundle_queryset_for_collection(collection):
+    return (
+        BundleStructuralInfo.objects.filter(is_member_of_collection=collection)
+        .select_related("bundle", "is_member_of_collection")
+        .prefetch_related(
+            "bundle_topics",
+            "additional_metadata_files",
+            Prefetch(
+                "bundle__resources",
+                queryset=BundleResources.objects.prefetch_related(
+                    "bundle_media_resources",
+                    "bundle_written_resources",
+                    "bundle_other_resources",
+                ),
+            ),
+            "bundle__general_info",
+            "bundle__general_info__object_languages",
+        )
+        .order_by("bundle__identifier")
+    )
+
+
+def _build_bundle_context(struct_info):
+    bundle = struct_info.bundle
+    bundle_resources = list(bundle.resources.all())
+    primary_resources = bundle_resources[0] if bundle_resources else None
+
+    if primary_resources:
+        media_resources = list(primary_resources.bundle_media_resources.all())
+        written_resources = list(primary_resources.bundle_written_resources.all())
+        other_resources = list(primary_resources.bundle_other_resources.all())
+    else:
+        media_resources = []
+        written_resources = []
+        other_resources = []
+
+    metadata_files = list(struct_info.additional_metadata_files.all())
+    topics = list(struct_info.bundle_topics.all())
+
+    return {
+        "structural_info": struct_info,
+        "bundle": bundle,
+        "primary_resources": primary_resources,
+        "media_resources": media_resources,
+        "written_resources": written_resources,
+        "other_resources": other_resources,
+        "metadata_files": metadata_files,
+        "topics": topics,
+    }
+
+
+def _paginate_bundle_contexts(collection, page_number, per_page=BUNDLES_PER_PAGE):
+    queryset = _bundle_queryset_for_collection(collection)
+    paginator = Paginator(queryset, per_page)
+
+    if paginator.count == 0:
+        return None, []
+
+    page_obj = paginator.get_page(page_number)
+    contexts = [_build_bundle_context(struct_info) for struct_info in page_obj.object_list]
+    return page_obj, contexts
 
 
 def resolve_existing_object(
@@ -237,81 +304,35 @@ class CollectionDetailView(DetailView):
         else:
             self.object.formatted_location = ""
             
-        # Build bundle context with prefetching to avoid N+1 queries
-        bundle_infos_qs = (
-            BundleStructuralInfo.objects.filter(is_member_of_collection=self.object)
-            .select_related("bundle")
-            .prefetch_related(
-                "bundle_topics",
-                "additional_metadata_files",
-                Prefetch(
-                    "bundle__resources",
-                    queryset=BundleResources.objects.prefetch_related(
-                        "bundle_media_resources",
-                        "bundle_written_resources",
-                        "bundle_other_resources",
-                    ),
-                ),
-                "bundle__general_info",
-                "bundle__general_info__object_languages",
-            )
-        )
+        page_number = self.request.GET.get('bundle_page')
+        page_obj, bundle_contexts = _paginate_bundle_contexts(self.object, page_number)
 
-        bundle_contexts: list[dict] = []
-        collection_media_resources: list = []
-        collection_written_resources: list = []
-        collection_other_resources: list = []
-        collection_metadata_files: list = []
+        query_params = self.request.GET.copy()
+        if 'bundle_page' in query_params:
+            query_params.pop('bundle_page')
+        base_query = query_params.urlencode()
+        if base_query:
+            base_url = f"{self.request.path}?{base_query}"
+        else:
+            base_url = self.request.path
+        separator = '&' if '?' in base_url else '?'
 
-        for info in bundle_infos_qs:
-            bundle = info.bundle
-            resources_qs = bundle.resources.all()
-            primary_resources = next(iter(resources_qs), None)
-
-            media_resources = (
-                list(primary_resources.bundle_media_resources.all())
-                if primary_resources
-                else []
-            )
-            written_resources = (
-                list(primary_resources.bundle_written_resources.all())
-                if primary_resources
-                else []
-            )
-            other_resources = (
-                list(primary_resources.bundle_other_resources.all())
-                if primary_resources
-                else []
-            )
-
-            metadata_files = list(info.additional_metadata_files.all())
-            topics = list(info.bundle_topics.all())
-
-            collection_media_resources.extend(media_resources)
-            collection_written_resources.extend(written_resources)
-            collection_other_resources.extend(other_resources)
-            collection_metadata_files.extend(metadata_files)
-
-            bundle_contexts.append(
-                {
-                    "structural_info": info,
-                    "bundle": bundle,
-                    "primary_resources": primary_resources,
-                    "media_resources": media_resources,
-                    "written_resources": written_resources,
-                    "other_resources": other_resources,
-                    "metadata_files": metadata_files,
-                    "topics": topics,
-                }
-            )
-
-        context['collection_media_resources'] = collection_media_resources
-        context['collection_written_resources'] = collection_written_resources
-        context['collection_other_resources'] = collection_other_resources
-        context['collection_metadata_files'] = collection_metadata_files
+        context['bundle_page_obj'] = page_obj
         context['bundle_contexts'] = bundle_contexts
+        context['bundle_page_base_url'] = base_url
+        context['bundle_page_separator'] = separator
+        context['bundles_total'] = page_obj.paginator.count if page_obj else 0
 
         return context
+
+    def render_to_response(self, context, **response_kwargs):
+        if self.request.headers.get('HX-Request') and 'bundle_page' in self.request.GET:
+            return render(
+                self.request,
+                'explorer/partials/collection_bundles_table.html',
+                context,
+            )
+        return super().render_to_response(context, **response_kwargs)
 
 
 class BundleDetailView(DetailView):
