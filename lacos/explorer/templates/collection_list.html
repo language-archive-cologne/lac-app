@@ -101,12 +101,14 @@
                     <svg class="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                     </svg>
-                    <div>
+                    <div class="flex flex-wrap gap-2">
                       {% for creator in collection.publication_info.first.creators.all %}
-                        <div class="{% if not forloop.first %}mt-2 pt-2 border-t border-slate-100{% endif %}">
+                        <span
+                          class="inline-flex items-center px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 border border-slate-200"
+                          {% if creator.affiliation %}title="{{ creator.affiliation }}"{% endif %}
+                        >
                           {{ creator.given_name }} {{ creator.family_name }}
-                          {% if creator.affiliation %}<div class="text-xs text-slate-500 mt-0.5">{{ creator.affiliation }}</div>{% endif %}
-                        </div>
+                        </span>
                       {% endfor %}
                     </div>
                   </div>
