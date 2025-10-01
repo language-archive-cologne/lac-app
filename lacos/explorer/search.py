@@ -3,18 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from django.contrib.postgres.aggregates import StringAgg
 from django.contrib.postgres.search import SearchQuery
 from django.contrib.postgres.search import SearchRank
 from django.contrib.postgres.search import SearchVector
-from django.db.models import CharField
 from django.db.models import OuterRef
-from django.db.models import TextField
 from django.db.models import Subquery
 from django.db.models import Value
 from django.db.models import F
 from django.db.models import Q
-from django.db.models.functions import Cast
 from django.db.models.functions import Coalesce
 from django.urls import reverse
 
@@ -69,124 +65,27 @@ def _search_collections(query: SearchQuery) -> list[SearchResult]:
         .annotate(
             collection_display_title=Subquery(general_info.values("display_title")[:1]),
             collection_description=Subquery(general_info.values("description")[:1]),
-            collection_keywords=StringAgg(
-                "general_info__keywords__value",
-                delimiter=" ",
-                distinct=True,
-                default=Value("", output_field=TextField()),
-            ),
-            collection_languages=StringAgg(
-                "general_info__object_languages__name",
-                delimiter=" ",
-                distinct=True,
-                default=Value("", output_field=TextField()),
-            ),
             collection_location=Subquery(general_info.values("location__location_name")[:1]),
             collection_country=Subquery(general_info.values("location__country_name")[:1]),
-            collection_creators=StringAgg(
-                "publication_info__creators__family_name",
-                delimiter=" ",
-                distinct=True,
-                default=Value("", output_field=TextField()),
-            ),
-            collection_contributors=StringAgg(
-                "publication_info__contributors__family_name",
-                delimiter=" ",
-                distinct=True,
-                default=Value("", output_field=TextField()),
-            ),
             collection_data_provider=Subquery(publication_info.values("data_provider")[:1]),
-        )
-        .annotate(
             collection_search_vector=(
                 SearchVector("identifier", weight="A", config="simple")
-                + SearchVector(
-                    Coalesce(
-                        Cast("collection_display_title", TextField()),
-                        Value("", output_field=TextField()),
-                        output_field=TextField(),
-                    ),
-                    weight="A",
-                    config="simple",
-                )
-                + SearchVector(
-                    Coalesce(
-                        Cast("collection_description", TextField()),
-                        Value("", output_field=TextField()),
-                        output_field=TextField(),
-                    ),
-                    weight="B",
-                    config="simple",
-                )
-                + SearchVector(
-                    Coalesce(
-                        Cast("collection_keywords", TextField()),
-                        Value("", output_field=TextField()),
-                        output_field=TextField(),
-                    ),
-                    weight="B",
-                    config="simple",
-                )
-                + SearchVector(
-                    Coalesce(
-                        Cast("collection_languages", TextField()),
-                        Value("", output_field=TextField()),
-                        output_field=TextField(),
-                    ),
-                    weight="C",
-                    config="simple",
-                )
-                + SearchVector(
-                    Coalesce(
-                        Cast("collection_creators", TextField()),
-                        Value("", output_field=TextField()),
-                        output_field=TextField(),
-                    ),
-                    weight="C",
-                    config="simple",
-                )
-                + SearchVector(
-                    Coalesce(
-                        Cast("collection_contributors", TextField()),
-                        Value("", output_field=TextField()),
-                        output_field=TextField(),
-                    ),
-                    weight="D",
-                    config="simple",
-                )
-                + SearchVector(
-                    Coalesce(
-                        Cast("collection_data_provider", TextField()),
-                        Value("", output_field=TextField()),
-                        output_field=TextField(),
-                    ),
-                    weight="D",
-                    config="simple",
-                )
-                + SearchVector(
-                    Coalesce(
-                        Cast("collection_location", TextField()),
-                        Value("", output_field=TextField()),
-                        output_field=TextField(),
-                    ),
-                    weight="D",
-                    config="simple",
-                )
-                + SearchVector(
-                    Coalesce(
-                        Cast("collection_country", TextField()),
-                        Value("", output_field=TextField()),
-                        output_field=TextField(),
-                    ),
-                    weight="D",
-                    config="simple",
-                )
-            )
+                + SearchVector("general_info__display_title", weight="A", config="simple")
+                + SearchVector("general_info__description", weight="B", config="simple")
+                + SearchVector("general_info__keywords__value", weight="B", config="simple")
+                + SearchVector("general_info__object_languages__name", weight="C", config="simple")
+                + SearchVector("publication_info__creators__family_name", weight="C", config="simple")
+                + SearchVector("publication_info__contributors__family_name", weight="D", config="simple")
+                + SearchVector("publication_info__data_provider", weight="D", config="simple")
+                + SearchVector("general_info__location__location_name", weight="D", config="simple")
+                + SearchVector("general_info__location__country_name", weight="D", config="simple")
+            ),
         )
         .annotate(search_rank=SearchRank(F("collection_search_vector"), query))
         .filter(Q(collection_search_vector=query))
         .order_by("-search_rank", "identifier")
-    )
+        .distinct()
+    )[:50]
 
     results: list[SearchResult] = []
     for collection in collections:
@@ -215,146 +114,26 @@ def _search_bundles(query: SearchQuery) -> list[SearchResult]:
         .annotate(
             bundle_display_title=Subquery(general_info.values("display_title")[:1]),
             bundle_description=Subquery(general_info.values("description")[:1]),
-            bundle_keywords_text=StringAgg(
-                "general_info__keywords__value",
-                delimiter=" ",
-                distinct=True,
-                default=Value("", output_field=TextField()),
-            ),
-            bundle_languages_text=StringAgg(
-                "general_info__object_languages__name",
-                delimiter=" ",
-                distinct=True,
-                default=Value("", output_field=TextField()),
-            ),
-            bundle_topics_text=StringAgg(
-                "structural_info__bundle_topics__name",
-                delimiter=" ",
-                distinct=True,
-                default=Value("", output_field=TextField()),
-            ),
-            bundle_media_files_text=StringAgg(
-                "resources__bundle_media_resources__file_name",
-                delimiter=" ",
-                distinct=True,
-                default=Value("", output_field=TextField()),
-            ),
-            bundle_written_files_text=StringAgg(
-                "resources__bundle_written_resources__file_name",
-                delimiter=" ",
-                distinct=True,
-                default=Value("", output_field=TextField()),
-            ),
-            bundle_other_files_text=StringAgg(
-                "resources__bundle_other_resources__file_name",
-                delimiter=" ",
-                distinct=True,
-                default=Value("", output_field=TextField()),
-            ),
             parent_collection_identifier=Subquery(structural_info.values("is_member_of_collection__identifier")[:1]),
             parent_collection_title=Subquery(
                 structural_info.values("is_member_of_collection__general_info__display_title")[:1]
             ),
-        )
-        .annotate(
             bundle_search_vector=(
                 SearchVector("identifier", weight="A", config="simple")
-                + SearchVector(
-                    Coalesce(
-                        Cast("bundle_display_title", TextField()),
-                        Value("", output_field=TextField()),
-                        output_field=TextField(),
-                    ),
-                    weight="A",
-                    config="simple",
-                )
-                + SearchVector(
-                    Coalesce(
-                        Cast("bundle_description", TextField()),
-                        Value("", output_field=TextField()),
-                        output_field=TextField(),
-                    ),
-                    weight="B",
-                    config="simple",
-                )
-                + SearchVector(
-                    Coalesce(
-                        Cast("bundle_topics_text", TextField()),
-                        Value("", output_field=TextField()),
-                        output_field=TextField(),
-                    ),
-                    weight="B",
-                    config="simple",
-                )
-                + SearchVector(
-                    Coalesce(
-                        Cast("bundle_keywords_text", TextField()),
-                        Value("", output_field=TextField()),
-                        output_field=TextField(),
-                    ),
-                    weight="C",
-                    config="simple",
-                )
-                + SearchVector(
-                    Coalesce(
-                        Cast("bundle_languages_text", TextField()),
-                        Value("", output_field=TextField()),
-                        output_field=TextField(),
-                    ),
-                    weight="C",
-                    config="simple",
-                )
-                + SearchVector(
-                    Coalesce(
-                        Cast("bundle_media_files_text", TextField()),
-                        Value("", output_field=TextField()),
-                        output_field=TextField(),
-                    ),
-                    weight="C",
-                    config="simple",
-                )
-                + SearchVector(
-                    Coalesce(
-                        Cast("bundle_written_files_text", TextField()),
-                        Value("", output_field=TextField()),
-                        output_field=TextField(),
-                    ),
-                    weight="C",
-                    config="simple",
-                )
-                + SearchVector(
-                    Coalesce(
-                        Cast("bundle_other_files_text", TextField()),
-                        Value("", output_field=TextField()),
-                        output_field=TextField(),
-                    ),
-                    weight="C",
-                    config="simple",
-                )
-                + SearchVector(
-                    Coalesce(
-                        Cast("parent_collection_identifier", TextField()),
-                        Value("", output_field=TextField()),
-                        output_field=TextField(),
-                    ),
-                    weight="D",
-                    config="simple",
-                )
-                + SearchVector(
-                    Coalesce(
-                        Cast("parent_collection_title", TextField()),
-                        Value("", output_field=TextField()),
-                        output_field=TextField(),
-                    ),
-                    weight="D",
-                    config="simple",
-                )
-            )
+                + SearchVector("general_info__display_title", weight="A", config="simple")
+                + SearchVector("general_info__description", weight="B", config="simple")
+                + SearchVector("structural_info__bundle_topics__name", weight="B", config="simple")
+                + SearchVector("general_info__keywords__value", weight="C", config="simple")
+                + SearchVector("general_info__object_languages__name", weight="C", config="simple")
+                + SearchVector("structural_info__is_member_of_collection__identifier", weight="D", config="simple")
+                + SearchVector("structural_info__is_member_of_collection__general_info__display_title", weight="D", config="simple")
+            ),
         )
         .annotate(search_rank=SearchRank(F("bundle_search_vector"), query))
         .filter(Q(bundle_search_vector=query))
         .order_by("-search_rank", "identifier")
-    )
+        .distinct()
+    )[:50]
 
     results: list[SearchResult] = []
     for bundle in bundles:
