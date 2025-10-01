@@ -6,13 +6,17 @@ from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from django.urls import include
 from django.urls import path
 from django.views import defaults as default_views
-from django.views.generic import TemplateView
+from django.views.generic import RedirectView, TemplateView
 from drf_spectacular.views import SpectacularAPIView
 from drf_spectacular.views import SpectacularSwaggerView
 from rest_framework.authtoken.views import obtain_auth_token
 
 urlpatterns = [
-    path("", TemplateView.as_view(template_name="pages/home.html"), name="home"),
+    path(
+        "",
+        RedirectView.as_view(pattern_name="explorer:collection_list"),
+        name="home",
+    ),
     path(
         "about/",
         TemplateView.as_view(template_name="pages/about.html"),

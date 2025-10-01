@@ -7,6 +7,7 @@ from typing import Iterable, Optional, Sequence, Tuple
 
 from botocore.exceptions import ClientError
 from django.core.cache import cache
+from django.db.models import Prefetch
 from django.http import Http404, HttpResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -15,7 +16,11 @@ from geopy.geocoders import Nominatim
 from urllib.parse import unquote
 
 # Assuming your Collection model is here. Adjust if necessary.
-from lacos.blam.models import Collection, Bundle
+from lacos.blam.models import Bundle, Collection
+from lacos.blam.models.bundle.bundle_structural_info import (
+    BundleResources,
+    BundleStructuralInfo,
+)
 
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
@@ -203,6 +208,14 @@ class CollectionDetailView(DetailView):
     template_name = "collection_detail.html"
     context_object_name = "collection"  # To match the template variable
 
+    def get_queryset(self):
+        return Collection.objects.prefetch_related(
+            "general_info",
+            "general_info__object_languages",
+            "publication_info",
+            "publication_info__creators",
+        )
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         # Add formatted location to the collection
@@ -212,26 +225,80 @@ class CollectionDetailView(DetailView):
         else:
             self.object.formatted_location = ""
             
-        # Get all resources from bundles in this collection
-        context['collection_media_resources'] = []
-        context['collection_written_resources'] = []
-        context['collection_other_resources'] = []
-        context['collection_metadata_files'] = []
-        
-        # Get bundles in this collection
-        bundles = Bundle.objects.filter(structural_info__is_member_of_collection=self.object)
-        
-        # Collect resources from all bundles
-        for bundle in bundles:
-            if bundle.resources.first():
-                resources = bundle.resources.first()
-                context['collection_media_resources'].extend(resources.bundle_media_resources.all())
-                context['collection_written_resources'].extend(resources.bundle_written_resources.all())
-                context['collection_other_resources'].extend(resources.bundle_other_resources.all())
-                
-            if hasattr(bundle, 'structural_info') and bundle.structural_info.first():
-                context['collection_metadata_files'].extend(bundle.structural_info.first().additional_metadata_files.all())
-                
+        # Build bundle context with prefetching to avoid N+1 queries
+        bundle_infos_qs = (
+            BundleStructuralInfo.objects.filter(is_member_of_collection=self.object)
+            .select_related("bundle")
+            .prefetch_related(
+                "bundle_topics",
+                "additional_metadata_files",
+                Prefetch(
+                    "bundle__resources",
+                    queryset=BundleResources.objects.prefetch_related(
+                        "bundle_media_resources",
+                        "bundle_written_resources",
+                        "bundle_other_resources",
+                    ),
+                ),
+                "bundle__general_info",
+                "bundle__general_info__object_languages",
+            )
+        )
+
+        bundle_contexts: list[dict] = []
+        collection_media_resources: list = []
+        collection_written_resources: list = []
+        collection_other_resources: list = []
+        collection_metadata_files: list = []
+
+        for info in bundle_infos_qs:
+            bundle = info.bundle
+            resources_qs = bundle.resources.all()
+            primary_resources = next(iter(resources_qs), None)
+
+            media_resources = (
+                list(primary_resources.bundle_media_resources.all())
+                if primary_resources
+                else []
+            )
+            written_resources = (
+                list(primary_resources.bundle_written_resources.all())
+                if primary_resources
+                else []
+            )
+            other_resources = (
+                list(primary_resources.bundle_other_resources.all())
+                if primary_resources
+                else []
+            )
+
+            metadata_files = list(info.additional_metadata_files.all())
+            topics = list(info.bundle_topics.all())
+
+            collection_media_resources.extend(media_resources)
+            collection_written_resources.extend(written_resources)
+            collection_other_resources.extend(other_resources)
+            collection_metadata_files.extend(metadata_files)
+
+            bundle_contexts.append(
+                {
+                    "structural_info": info,
+                    "bundle": bundle,
+                    "primary_resources": primary_resources,
+                    "media_resources": media_resources,
+                    "written_resources": written_resources,
+                    "other_resources": other_resources,
+                    "metadata_files": metadata_files,
+                    "topics": topics,
+                }
+            )
+
+        context['collection_media_resources'] = collection_media_resources
+        context['collection_written_resources'] = collection_written_resources
+        context['collection_other_resources'] = collection_other_resources
+        context['collection_metadata_files'] = collection_metadata_files
+        context['bundle_contexts'] = bundle_contexts
+
         return context
 
 

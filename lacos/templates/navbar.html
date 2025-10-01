@@ -11,7 +11,7 @@
         </svg>
       </label>
       <ul tabindex="0" class="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52">
-        <li><a href="http://localhost:8101/explorer/collections/">Home</a></li>
+        <li><a href="{% url 'home' %}">Home</a></li>
         <li><a href="{% url 'about' %}">About</a></li>
         <li><a href="#">User Guide</a></li>
         <li><a href="{% url 'storage:archivist_dashboard' %}">Storage</a></li>
@@ -23,7 +23,7 @@
     </div>
 
     <!-- Logo and Title Section -->
-    <a href="http://localhost:8101/explorer/collections/" class="btn btn-ghost normal-case text-xl text-white hover:text-white">
+    <a href="{% url 'home' %}" class="btn btn-ghost normal-case text-xl text-white hover:text-white">
       <img src="{% static 'images/logo-LAC.png' %}" alt="LAC logo" class="h-8 mr-3">
       <span class="hidden lg:inline">Language Archive Cologne</span>
       <span class="lg:hidden">LAC</span>
@@ -34,7 +34,7 @@
     <!-- Desktop Navigation Menu -->
     <ul class="menu menu-horizontal px-1 gap-2">
 
-      <li><a href="http://localhost:8101/explorer/collections/" class="btn btn-ghost btn-sm text-white hover:text-white">
+      <li><a href="{% url 'home' %}" class="btn btn-ghost btn-sm text-white hover:text-white">
         <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
           <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
         </svg>
