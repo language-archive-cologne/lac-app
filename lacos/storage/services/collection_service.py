@@ -172,63 +172,50 @@ class CollectionService(BaseStorageService):
             List[Dict[str, any]]: A list of dictionaries containing information about the objects
         """
         try:
-            logger.info(
-                f"Listing contents of bucket: '{bucket_name}' with prefix: '{prefix}'"
-            )
-            
+            logger.info("Listing contents of bucket '%s' with prefix '%s'", bucket_name, prefix)
+
             # Ensure prefix ends with / if it's not empty to avoid partial matches
-            if prefix and not prefix.endswith('/'):
-                prefix = prefix + '/'
-                logger.info(f"Adjusted prefix to: '{prefix}'")
-                
-            response = self.s3_client.list_objects_v2(
-                Bucket=bucket_name, Prefix=prefix, Delimiter="/"
+            listing_prefix = prefix
+            if listing_prefix and not listing_prefix.endswith('/'):
+                listing_prefix = f"{listing_prefix}/"
+                logger.debug("Adjusted prefix to '%s'", listing_prefix)
+
+            paginator = self.s3_client.get_paginator('list_objects_v2')
+            contents: list[dict[str, Any]] = []
+
+            for page in paginator.paginate(Bucket=bucket_name, Prefix=listing_prefix, Delimiter="/"):
+                for obj in page.get("Contents", []):
+                    # Skip the directory marker itself if listing a directory
+                    if listing_prefix and obj["Key"] == listing_prefix:
+                        continue
+
+                    contents.append(
+                        {
+                            "name": os.path.basename(obj["Key"]),
+                            "path": obj["Key"],
+                            "size": obj.get("Size"),
+                            "last_modified": obj.get("LastModified"),
+                            "is_dir": False,
+                        }
+                    )
+
+                for prefix_obj in page.get("CommonPrefixes", []):
+                    prefix_str = prefix_obj.get("Prefix", "")
+                    contents.append(
+                        {
+                            "name": os.path.basename(prefix_str.rstrip("/")),
+                            "path": prefix_str,
+                            "is_dir": True,
+                        }
+                    )
+
+            preview = ', '.join(item["name"] for item in contents[:5])
+            logger.debug(
+                "Listed %s items for %s%s",
+                len(contents),
+                listing_prefix or '/'.join([bucket_name, '']),
+                f" — {preview}" if preview else "",
             )
-            
-            # Log the raw response for debugging
-            logger.info(f"DEBUG: S3 list_objects_v2 raw response:")
-            if 'Contents' in response:
-                logger.info(f"  Contents: {len(response['Contents'])} items")
-            else:
-                logger.info(f"  Contents: 0 items")
-                
-            if 'CommonPrefixes' in response:
-                logger.info(f"  CommonPrefixes: {len(response['CommonPrefixes'])} items")
-                for cp in response.get('CommonPrefixes', []):
-                    logger.info(f"    Prefix: {cp.get('Prefix')}")
-            else:
-                logger.info(f"  CommonPrefixes: 0 items")
-            
-            contents = []
-
-            for obj in response.get("Contents", []):
-                # Skip the directory marker itself if listing a directory
-                if prefix and obj["Key"] == prefix:
-                    logger.info(f"Skipping directory marker: {obj['Key']}")
-                    continue
-                    
-                item = {
-                    "name": os.path.basename(obj["Key"]),
-                    "path": obj["Key"],
-                    "size": obj["Size"],
-                    "last_modified": obj["LastModified"],
-                    "is_dir": False,
-                }
-                contents.append(item)
-                logger.info(f"Found file: {item}")
-
-            for prefix_obj in response.get("CommonPrefixes", []):
-                # Extract the folder name from the prefix
-                prefix_str = prefix_obj["Prefix"]
-                name = os.path.basename(prefix_str.rstrip("/")) 
-                
-                item = {
-                    "name": name,
-                    "path": prefix_str,
-                    "is_dir": True,
-                }
-                contents.append(item)
-                logger.info(f"Found directory: {item}")
 
             return contents
         except Exception as e:
