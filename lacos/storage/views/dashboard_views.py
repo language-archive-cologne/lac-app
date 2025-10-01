@@ -109,7 +109,7 @@ def load_folder_contents(request, bucket_type, folder_path):
     try:
         # Clean up the folder path to handle double slashes
         folder_path = folder_path.replace('//', '/')
-        logger.info(f"Loading folder contents for {bucket_type} bucket, path: {folder_path}")
+        logger.info("Loading folder contents for %s bucket, path: %s", bucket_type, folder_path)
         force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
         
         # Get folder contents
@@ -117,7 +117,15 @@ def load_folder_contents(request, bucket_type, folder_path):
             folder_contents = bucket_service.get_folder_contents(bucket, folder_path, force_fresh=True)
         else:
             folder_contents = bucket_service.get_folder_contents(bucket, folder_path)
-        logger.info(f"Folder contents for {folder_path}: {folder_contents}")
+        preview_names = ", ".join(item["name"] for item in folder_contents[:5])
+        more_indicator = "…" if len(folder_contents) > 5 else ""
+        logger.debug(
+            "Loaded %s items for %s%s%s",
+            len(folder_contents),
+            folder_path,
+            f" — {preview_names}" if preview_names else "",
+            more_indicator,
+        )
         
     except Exception as e:
         logger.error(f"Error loading folder contents for {folder_path}: {str(e)}")
