@@ -1,5 +1,69 @@
 {% load i18n %}
 {% if bundle_contexts %}
+  {% if bundle_page_obj %}
+    <div class="flex items-center justify-between mb-3 text-sm text-slate-600">
+      <div>
+        {% blocktrans with start=bundle_page_obj.start_index end=bundle_page_obj.end_index total=bundles_total %}
+          Showing {{ start }}–{{ end }} of {{ total }} bundles
+        {% endblocktrans %}
+      </div>
+      <div class="flex gap-2">
+        <button
+          class="btn btn-sm btn-outline"
+          {% if bundle_page_obj.number > 1 %}
+            hx-get="{{ bundle_page_base_url }}{{ bundle_page_separator }}bundle_page=1"
+            hx-target="#collection-bundles-table"
+            hx-swap="innerHTML"
+            hx-push-url="false"
+          {% else %}
+            disabled
+          {% endif %}
+        >
+          {% translate "First" %}
+        </button>
+        <button
+          class="btn btn-sm btn-outline"
+          {% if bundle_page_obj.has_previous %}
+            hx-get="{{ bundle_page_base_url }}{{ bundle_page_separator }}bundle_page={{ bundle_page_obj.previous_page_number }}"
+            hx-target="#collection-bundles-table"
+            hx-swap="innerHTML"
+            hx-push-url="false"
+          {% else %}
+            disabled
+          {% endif %}
+        >
+          {% translate "Previous" %}
+        </button>
+        <button
+          class="btn btn-sm btn-outline"
+          {% if bundle_page_obj.has_next %}
+            hx-get="{{ bundle_page_base_url }}{{ bundle_page_separator }}bundle_page={{ bundle_page_obj.next_page_number }}"
+            hx-target="#collection-bundles-table"
+            hx-swap="innerHTML"
+            hx-push-url="false"
+          {% else %}
+            disabled
+          {% endif %}
+        >
+          {% translate "Next" %}
+        </button>
+        <button
+          class="btn btn-sm btn-outline"
+          {% if bundle_page_obj.number < bundle_page_obj.paginator.num_pages %}
+            hx-get="{{ bundle_page_base_url }}{{ bundle_page_separator }}bundle_page={{ bundle_page_obj.paginator.num_pages }}"
+            hx-target="#collection-bundles-table"
+            hx-swap="innerHTML"
+            hx-push-url="false"
+          {% else %}
+            disabled
+          {% endif %}
+        >
+          {% translate "Last" %}
+        </button>
+      </div>
+    </div>
+  {% endif %}
+
   <div class="bg-white shadow-sm border border-slate-200 rounded-xl overflow-hidden">
     <table class="min-w-full divide-y divide-slate-200">
       <thead class="bg-slate-50">
@@ -40,7 +104,7 @@
               <td class="px-8 py-5 text-sm text-slate-600 align-top">
                 {% if bundle.get_general_info.description %}
                   <div class="cursor-help" title="{{ bundle.get_general_info.description }}">
-                    {{ bundle.get_general_info.description|truncatewords:15|urlize_text }}
+                    {{ bundle.get_general_info.description|truncatewords:15|urlize }}
                   </div>
                 {% endif %}
               </td>
@@ -198,44 +262,6 @@
       </tbody>
     </table>
   </div>
-
-  {% if bundle_page_obj %}
-    <div class="flex items-center justify-between mt-4 text-sm text-slate-600">
-      <div>
-        {% blocktrans with start=bundle_page_obj.start_index end=bundle_page_obj.end_index total=bundles_total %}
-          Showing {{ start }}–{{ end }} of {{ total }} bundles
-        {% endblocktrans %}
-      </div>
-      <div class="flex gap-2">
-        <button
-          class="btn btn-sm btn-outline"
-          {% if bundle_page_obj.has_previous %}
-            hx-get="{{ bundle_page_base_url }}{{ bundle_page_separator }}bundle_page={{ bundle_page_obj.previous_page_number }}"
-            hx-target="#collection-bundles-table"
-            hx-swap="innerHTML"
-            hx-push-url="false"
-          {% else %}
-            disabled
-          {% endif %}
-        >
-          {% translate "Previous" %}
-        </button>
-        <button
-          class="btn btn-sm btn-outline"
-          {% if bundle_page_obj.has_next %}
-            hx-get="{{ bundle_page_base_url }}{{ bundle_page_separator }}bundle_page={{ bundle_page_obj.next_page_number }}"
-            hx-target="#collection-bundles-table"
-            hx-swap="innerHTML"
-            hx-push-url="false"
-          {% else %}
-            disabled
-          {% endif %}
-        >
-          {% translate "Next" %}
-        </button>
-      </div>
-    </div>
-  {% endif %}
 {% else %}
   <p class="text-slate-500">{% translate "No bundles available for this collection." %}</p>
 {% endif %}

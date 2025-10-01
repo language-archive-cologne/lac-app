@@ -5,96 +5,11 @@
 {% block title %}{% translate "Collections" %} - {{ block.super }}{% endblock title %}
 
 {% block explorer_content %}
-  <form method="get" class="mb-8">
-    <label for="search-query" class="sr-only">{% translate "Search" %}</label>
-    <div class="join w-full md:max-w-4xl">
-      <input
-        id="search-query"
-        type="search"
-        name="q"
-        value="{{ search_query }}"
-        placeholder="{% translate 'Search collections or bundles' %}"
-        class="input input-bordered join-item w-full"
-      >
-      <button type="submit" class="btn btn-primary join-item">{% translate "Search" %}</button>
-      {% if search_query %}
-        <a href="{% url 'explorer:collection_list' %}" class="btn btn-ghost join-item">{% translate "Clear" %}</a>
-      {% endif %}
-    </div>
-  </form>
+  {% include "explorer/partials/search_bar.html" %}
 
   {% if search_query %}
-    <div class="space-y-8">
-      <p class="text-sm text-slate-600">
-        {% translate "Showing results for" %}
-        <span class="font-medium text-slate-800">“{{ search_query }}”</span>
-      </p>
-
-      {% if collection_search_results %}
-        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-          <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-            <h3 class="text-lg font-medium text-slate-800">{% translate "Collections" %}</h3>
-            <span class="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-              {{ collection_search_results|length }} {% translate "matches" %}
-            </span>
-          </div>
-          <ul class="divide-y divide-slate-100">
-            {% for result in collection_search_results %}
-              <li class="px-6 py-4">
-                <div class="flex flex-col md:flex-row md:items-start md:justify-between md:gap-4">
-                  <div>
-                    <a href="{{ result.url }}" class="text-base font-semibold text-slate-800 hover:text-slate-900">
-                      {{ result.title }}
-                    </a>
-                    {% if result.description %}
-                      <p class="mt-2 text-sm text-slate-600">
-                        {{ result.description|truncatewords:30 }}
-                      </p>
-                    {% endif %}
-                  </div>
-                  <span class="mt-2 md:mt-0 text-xs font-mono text-slate-500">{{ result.identifier }}</span>
-                </div>
-              </li>
-            {% endfor %}
-          </ul>
-        </div>
-      {% endif %}
-
-      {% if bundle_search_results %}
-        <div class="bg-white border border-amber-200 rounded-xl shadow-sm overflow-hidden">
-          <div class="px-6 py-4 border-b border-amber-200 flex items-center justify-between">
-            <h3 class="text-lg font-medium text-slate-800">{% translate "Bundles" %}</h3>
-            <span class="text-xs font-semibold text-amber-600 uppercase tracking-wide">
-              {{ bundle_search_results|length }} {% translate "matches" %}
-            </span>
-          </div>
-          <ul class="divide-y divide-amber-100">
-            {% for result in bundle_search_results %}
-              <li class="px-6 py-4">
-                <div class="flex flex-col md:flex-row md:items-start md:justify-between md:gap-4">
-                  <div>
-                    <a href="{{ result.url }}" class="text-base font-semibold text-slate-800 hover:text-slate-900">
-                      {{ result.title }}
-                    </a>
-                    {% if result.description %}
-                      <p class="mt-2 text-sm text-slate-600">
-                        {{ result.description|truncatewords:30 }}
-                      </p>
-                    {% endif %}
-                  </div>
-                  <span class="mt-2 md:mt-0 text-xs font-mono text-slate-500">{{ result.identifier }}</span>
-                </div>
-              </li>
-            {% endfor %}
-          </ul>
-        </div>
-      {% endif %}
-
-      {% if not collection_search_results and not bundle_search_results %}
-        <div class="bg-white border border-slate-200 rounded-xl shadow-sm px-6 py-8 text-center">
-          <p class="text-sm text-slate-600">{% translate "No results found." %}</p>
-        </div>
-      {% endif %}
+    <div class="space-y-8" id="collection-search-results">
+      {% include "explorer/partials/collection_search_results_content.html" %}
     </div>
   {% else %}
     {% if collection_list %}

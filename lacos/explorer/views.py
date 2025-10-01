@@ -67,6 +67,11 @@ def _build_bundle_context(struct_info):
         written_resources = []
         other_resources = []
 
+    media_like_other = [res for res in other_resources if getattr(res, 'mime_type', '') and (res.mime_type.startswith('video/') or res.mime_type.startswith('audio/'))]
+    if media_like_other:
+        media_resources.extend(media_like_other)
+        other_resources = [res for res in other_resources if res not in media_like_other]
+
     metadata_files = list(struct_info.additional_metadata_files.all())
     topics = list(struct_info.bundle_topics.all())
 
@@ -277,6 +282,15 @@ class CollectionListView(ListView):
         
         context['collection_list'] = collections_with_locations
         return context
+
+    def render_to_response(self, context, **response_kwargs):
+        if self.request.headers.get('HX-Request') and 'q' in self.request.GET:
+            return render(
+                self.request,
+                'explorer/partials/collection_search_results_content.html',
+                context,
+            )
+        return super().render_to_response(context, **response_kwargs)
 
 
 class CollectionDetailView(DetailView):
