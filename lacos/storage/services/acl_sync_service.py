@@ -258,5 +258,15 @@ class ACLSyncService(BaseStorageService):
     def _normalize_prefix(prefix: Optional[str]) -> Optional[str]:
         if not prefix:
             return None
-        cleaned = prefix.strip()
-        return cleaned if cleaned else None
+        cleaned = prefix.strip().strip('/')
+        if not cleaned:
+            return None
+
+        # OCFL content paths often include versioned segments like
+        # ".../v1/content/..." – the ACL lives at the object root, so strip
+        # anything after the first version marker.
+        version_index = cleaned.find('/v')
+        if version_index > 0:
+            cleaned = cleaned[:version_index]
+
+        return cleaned
