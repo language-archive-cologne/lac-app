@@ -13,3 +13,6 @@ AWS_S3_REGION_NAME=eu-central-1
 # Multipart Upload Configuration
 # 100MB threshold ensures large files use multipart uploads in tests
 MULTIPART_THRESHOLD=104857600
+
+# Enable automatic ACL sync on startup for local dev
+ACL_SYNC_ON_STARTUP=true

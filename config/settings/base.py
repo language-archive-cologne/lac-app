@@ -327,6 +327,7 @@ S3_PRODUCTION_BUCKET = env("S3_PRODUCTION_BUCKET", default="lacos-production")
 ACL_ENFORCEMENT_ENABLED = env.bool("ACL_ENFORCEMENT_ENABLED", default=True)
 ACL_LOG_ACCESS_ATTEMPTS = env.bool("ACL_LOG_ACCESS_ATTEMPTS", default=True)
 ACL_DEFAULT_DENY = env.bool("ACL_DEFAULT_DENY", default=True)
+ACL_SYNC_ON_STARTUP = env.bool("ACL_SYNC_ON_STARTUP", default=False)
 
 # Multipart Upload Configuration
 # ------------------------------------------------------------------------------
