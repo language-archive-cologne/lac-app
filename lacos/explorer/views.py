@@ -9,12 +9,13 @@ from xml.etree import ElementTree as ET
 from botocore.exceptions import ClientError
 from django.core.cache import cache
 from django.db.models import Prefetch
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.generic import DetailView, ListView, View
 from geopy.geocoders import Nominatim
 from urllib.parse import unquote
+from django.utils.translation import gettext_lazy as _
 
 # Assuming your Collection model is here. Adjust if necessary.
 from lacos.blam.models import Bundle, Collection
@@ -24,7 +25,9 @@ from lacos.blam.models.bundle.bundle_structural_info import (
 )
 from django.core.paginator import Paginator
 
+from lacos.explorer.permissions import ACLPermissionMixin
 from lacos.explorer.search import search_archives
+from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
 from lacos.storage.services.file_discovery_service import FileDiscoveryService
 
 # Get an instance of a logger
@@ -628,13 +631,19 @@ class CollectionDetailView(DetailView):
         return super().render_to_response(context, **response_kwargs)
 
 
-class BundleDetailView(DetailView):
+class BundleDetailView(ACLPermissionMixin, DetailView):
     model = Bundle
     template_name = "bundle_detail.html"
     context_object_name = "bundle"
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        result = getattr(self, "acl_result", None)
+        context["acl_check_result"] = result
+        context["can_read_bundle"] = True if result is None else result.allowed
+        context["acl_enforcement_enabled"] = (
+            self.get_acl_service().enforcement_enabled  # type: ignore[attr-defined]
+        )
         
         # Get the collection this bundle belongs to
         if hasattr(self.object, 'structural_info') and self.object.structural_info.first():
@@ -667,9 +676,15 @@ class BundleDetailView(DetailView):
 
 class BundleResourcesView(View):
     """View for accessing bundle resources directly or listing them"""
+    permission_denied_message = _("You do not have permission to access this bundle.")
     
     def get(self, request, pk, resource_id=None):
         bundle = get_object_or_404(Bundle, pk=pk)
+        acl_service = ACLEvaluationService()
+        acl_result = acl_service.evaluate(request.user, bundle, mode="acl:Read")
+        if acl_service.enforcement_enabled and not acl_result.allowed:
+            return HttpResponseForbidden(self.permission_denied_message)
+
         collection_for_path = None
         if hasattr(bundle, 'structural_info') and bundle.structural_info.first():
             collection_for_path = bundle.structural_info.first().is_member_of_collection
@@ -765,27 +780,41 @@ class BundleResourcesView(View):
             'media_resources': [],
             'written_resources': [],
             'other_resources': [],
-            'metadata_files': []
+            'metadata_files': [],
+            'restricted_resources': False,
         }
+        context['acl_check_result'] = acl_result
+        context['can_read_bundle'] = acl_result.allowed
+        context['acl_enforcement_enabled'] = acl_service.enforcement_enabled
         
-        if bundle.resources.first():
-            resources = bundle.resources.first()
+        resources = bundle.resources.first()
+        if acl_result.allowed and resources:
             context['media_resources'] = resources.bundle_media_resources.all()
             context['written_resources'] = resources.bundle_written_resources.all()
             context['other_resources'] = resources.bundle_other_resources.all()
-            
+        elif resources:
+            context['restricted_resources'] = True
+
         if hasattr(bundle, 'structural_info') and bundle.structural_info.first():
             context['collection'] = bundle.structural_info.first().is_member_of_collection
             context['metadata_files'] = bundle.structural_info.first().additional_metadata_files.all()
+            if not acl_result.allowed:
+                context['metadata_files'] = []
         
         return render(request, 'bundle_resources.html', context)
 
 
 class ResourceAccessView(View):
     """View for accessing resources either through direct download or streaming"""
+    permission_denied_message = _("You do not have permission to access this resource.")
     
     def get(self, request, bundle_id, resource_id):
         bundle = get_object_or_404(Bundle, pk=bundle_id)
+        acl_service = ACLEvaluationService()
+        acl_result = acl_service.evaluate(request.user, bundle, mode="acl:Read")
+        if acl_service.enforcement_enabled and not acl_result.allowed:
+            return HttpResponseForbidden(self.permission_denied_message)
+
         collection_for_path = None
         if hasattr(bundle, 'structural_info') and bundle.structural_info.first():
             collection_for_path = bundle.structural_info.first().is_member_of_collection

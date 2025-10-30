@@ -318,12 +318,17 @@ def test_full_bundle_import(real_bundle_xml, create_test_collection):
               mock_import_structural_info):
 
         # Import the bundle using the correct signature
-        bundle = BundleImporter.import_from_xml(real_bundle_xml)
+        importer_result = BundleImporter.import_from_xml(real_bundle_xml)
+
+        assert importer_result is not None
+        bundle, bundle_resources_id = importer_result
 
     # Verify it created a complete bundle object
-    assert bundle is not None
     assert isinstance(bundle, Bundle)
     assert bundle.id is not None
+
+    # Ensure bundle resources identifier is returned for downstream mapping
+    assert bundle_resources_id is not None
     
     # Verify all required components were created
     assert bundle.get_general_info is not None

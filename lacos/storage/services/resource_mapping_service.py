@@ -218,7 +218,11 @@ class ResourceMappingService(BaseStorageService):
                 s3_key = f"{base_key}/{file_name}"
                 self.register_s3_location(resource, bucket, s3_key)
 
-    def map_collection_hierarchy(self, collection_id: UUID, bundle_resources_pairs: List[Tuple[UUID, Optional[UUID]]]) -> int:
+    def map_collection_hierarchy(
+        self,
+        collection_id: UUID,
+        bundle_resources_pairs: Optional[List[Tuple[UUID, Optional[UUID]]]] = None,
+    ) -> int:
         """
         Map an entire collection hierarchy to S3 locations.
         Uses explicitly passed (bundle_id, bundle_resources_id) pairs.
@@ -250,6 +254,13 @@ class ResourceMappingService(BaseStorageService):
             logger.error(f"Failed to map Collection {collection_id} object: {e}", exc_info=True)
             # Continue to map bundles even if collection mapping failed?
             # For now, we return 0 if collection fetch fails, but log error if mapping fails.
+
+        if bundle_resources_pairs is None:
+            bundle_resources_pairs = []
+            bundles = Bundle.objects.filter(structural_info__is_member_of_collection=collection)
+            for bundle in bundles:
+                resources = bundle.resources.first()
+                bundle_resources_pairs.append((bundle.id, resources.id if resources else None))
 
         # 2. Iterate through bundles using the provided pairs
         logger.info(f"Processing {len(bundle_resources_pairs)} bundle/resources pairs for collection {collection_id}.")

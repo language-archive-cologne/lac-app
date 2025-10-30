@@ -11,5 +11,5 @@ AWS_PRODUCTION_BUCKET_NAME=lacos-production
 AWS_S3_REGION_NAME=eu-central-1
 
 # Multipart Upload Configuration
-# 5GB threshold - forces single uploads for most files
-MULTIPART_THRESHOLD=5368709120
+# 100MB threshold ensures large files use multipart uploads in tests
+MULTIPART_THRESHOLD=104857600

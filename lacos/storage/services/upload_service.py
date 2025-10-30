@@ -91,9 +91,11 @@ class UploadService(BaseStorageService):
             logger.info(f"Generating presigned upload URL for {file_key}")
 
             # Check if multipart is needed based on file size
-            if file_size > 0:
-                parts_info = self.calculate_multipart_parts(file_size)
-                if parts_info['should_use_multipart']:
+            threshold = self._get_multipart_threshold()
+            size_for_parts = file_size if file_size > 0 else threshold + 1
+            parts_info = self.calculate_multipart_parts(size_for_parts)
+
+            if parts_info['should_use_multipart'] or file_size <= 0:
                     logger.info(f"File size {file_size} exceeds threshold, using multipart upload")
 
                     # Initialize multipart upload
@@ -183,9 +185,14 @@ class UploadService(BaseStorageService):
         # Join everything together
         return " \\\n  ".join(curl_cmd)
     
-    def generate_batch_presigned_posts(self, files_metadata: List[Dict[str, str]],
-                                    path_prefix: Optional[str] = None,
-                                    expiration: int = 3600, bucket_name: Optional[str] = None) -> Dict[str, Any]:
+    def generate_batch_presigned_posts(
+        self,
+        files_metadata: List[Dict[str, Any]],
+        path_prefix: Optional[str] = None,
+        expiration: int = 3600,
+        bucket_name: Optional[str] = None,
+        file_size: Optional[int] = None,
+    ) -> Dict[str, Any]:
         """
         Generate multiple presigned URLs for direct upload to S3.
         Auto-detects multipart needs based on file size.
@@ -224,12 +231,14 @@ class UploadService(BaseStorageService):
                     effective_path_prefix = file_path
             
             # Generate the presigned post for this file
+            effective_file_size = file_meta.get('file_size', file_size or 0)
+
             result = self.generate_presigned_post(
                 file_name=file_name,
                 file_type=file_type,
                 path_prefix=effective_path_prefix,
                 expiration=expiration,
-                file_size=file_meta.get('file_size', 0),  # Pass file size for multipart detection
+                file_size=effective_file_size,
                 bucket_name=bucket_name  # Pass bucket name
             )
             

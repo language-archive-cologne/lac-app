@@ -6,7 +6,7 @@ from django.utils.translation import gettext_lazy as _
 
 from .forms import UserAdminChangeForm
 from .forms import UserAdminCreationForm
-from .models import User
+from .models import GroupACL, User
 
 if settings.DJANGO_ADMIN_FORCE_ALLAUTH:
     # Force the `admin` sign in process to go through the `django-allauth` workflow:
@@ -21,7 +21,7 @@ class UserAdmin(auth_admin.UserAdmin):
     add_form = UserAdminCreationForm
     fieldsets = (
         (None, {"fields": ("username", "password")}),
-        (_("Personal info"), {"fields": ("name", "email")}),
+        (_("Personal info"), {"fields": ("name", "email", "acl_agent_uri")}),
         (
             _("Permissions"),
             {
@@ -36,5 +36,12 @@ class UserAdmin(auth_admin.UserAdmin):
         ),
         (_("Important dates"), {"fields": ("last_login", "date_joined")}),
     )
-    list_display = ["username", "name", "is_superuser"]
-    search_fields = ["name"]
+    list_display = ["username", "name", "acl_agent_uri", "is_superuser"]
+    search_fields = ["username", "name", "email", "acl_agent_uri"]
+
+
+@admin.register(GroupACL)
+class GroupACLAdmin(admin.ModelAdmin):
+    list_display = ("group", "acl_agent_uri")
+    search_fields = ("group__name", "acl_agent_uri")
+    autocomplete_fields = ("group",)

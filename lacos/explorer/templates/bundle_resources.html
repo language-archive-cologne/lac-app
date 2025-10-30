@@ -14,6 +14,7 @@
 {% endblock title %}
 
 {% block explorer_content %}
+{% with can_read=can_read_bundle|default:True %}
   <div class="mb-4">
     <a href="{% url 'explorer:bundle_detail' pk=bundle.pk %}" class="inline-flex items-center text-blue-600 hover:text-blue-800">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
@@ -40,6 +41,11 @@
     </div>
     
     <div class="px-4 py-5 sm:p-6">
+      {% if not can_read %}
+        <div class="mb-6 rounded-md bg-yellow-50 p-4 text-sm text-yellow-800">
+          {% translate "You do not have permission to download files from this bundle." %}
+        </div>
+      {% endif %}
       <!-- Resources List -->
       <div class="space-y-8">
         {% if media_resources %}
@@ -63,6 +69,7 @@
                       {% endif %}
                     </div>
                     <div>
+                      {% if can_read %}
                       <div class="flex space-x-2">
                         <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}" 
                            class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
@@ -100,6 +107,9 @@
                         </a>
                         {% endif %}
                       </div>
+                      {% else %}
+                      <span class="text-xs text-gray-500">{% translate "Access restricted" %}</span>
+                      {% endif %}
                     </div>
                   </div>
                 </li>
@@ -125,6 +135,7 @@
                       {% endif %}
                     </div>
                     <div>
+                      {% if can_read %}
                       <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}" 
                          class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -132,6 +143,9 @@
                         </svg>
                         {% translate "Download" %}
                       </a>
+                      {% else %}
+                      <span class="text-xs text-gray-500">{% translate "Access restricted" %}</span>
+                      {% endif %}
                     </div>
                   </div>
                 </li>
@@ -157,6 +171,7 @@
                       {% endif %}
                     </div>
                     <div>
+                      {% if can_read %}
                       <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}" 
                          class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -164,6 +179,9 @@
                         </svg>
                         {% translate "Download" %}
                       </a>
+                      {% else %}
+                      <span class="text-xs text-gray-500">{% translate "Access restricted" %}</span>
+                      {% endif %}
                     </div>
                   </div>
                 </li>
@@ -189,6 +207,7 @@
                       {% endif %}
                     </div>
                     <div>
+                      {% if can_read %}
                       <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}" 
                          class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -196,6 +215,9 @@
                         </svg>
                         {% translate "Download" %}
                       </a>
+                      {% else %}
+                      <span class="text-xs text-gray-500">{% translate "Access restricted" %}</span>
+                      {% endif %}
                     </div>
                   </div>
                 </li>
@@ -204,7 +226,11 @@
           </div>
         {% endif %}
         
-        {% if not media_resources and not written_resources and not other_resources and not metadata_files %}
+        {% if restricted_resources %}
+          <div class="text-center py-12 text-sm text-yellow-800">
+            {% translate "Resources exist for this bundle, but you do not have permission to access them." %}
+          </div>
+        {% elif not media_resources and not written_resources and not other_resources and not metadata_files %}
           <div class="text-center py-12">
             <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
@@ -216,4 +242,5 @@
       </div>
     </div>
   </div>
-{% endblock explorer_content %} 
+{% endwith %}
+{% endblock explorer_content %}

@@ -12,7 +12,8 @@ class ACLPermissions(models.Model):
         on_delete=models.CASCADE,
         help_text="Type of the object (Collection or Bundle)"
     )
-    object_id = models.PositiveIntegerField(
+    object_id = models.CharField(
+        max_length=36,
         help_text="ID of the object"
     )
     content_object = GenericForeignKey('content_type', 'object_id')

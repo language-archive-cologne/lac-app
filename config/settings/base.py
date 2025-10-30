@@ -322,11 +322,17 @@ S3_OCFL_BUCKETS = env.list("S3_OCFL_BUCKETS", default=["lacos-ingest", "lacos-pr
 S3_INGEST_BUCKET = env("S3_INGEST_BUCKET", default="lacos-ingest")
 S3_PRODUCTION_BUCKET = env("S3_PRODUCTION_BUCKET", default="lacos-production")
 
+# ACL Configuration
+# ------------------------------------------------------------------------------
+ACL_ENFORCEMENT_ENABLED = env.bool("ACL_ENFORCEMENT_ENABLED", default=True)
+ACL_LOG_ACCESS_ATTEMPTS = env.bool("ACL_LOG_ACCESS_ATTEMPTS", default=True)
+ACL_DEFAULT_DENY = env.bool("ACL_DEFAULT_DENY", default=True)
+
 # Multipart Upload Configuration
 # ------------------------------------------------------------------------------
 MULTIPART_UPLOAD_SETTINGS = {
     # File size thresholds - default keeps single uploads up to 5GB (S3 limit)
-    'multipart_threshold': env.int('MULTIPART_THRESHOLD', default=5 * 1024 * 1024 * 1024),
+    'multipart_threshold': env.int('MULTIPART_THRESHOLD', default=100 * 1024 * 1024),
     'resumable_threshold': env.int('RESUMABLE_THRESHOLD', default=5 * 1024 * 1024 * 1024),
 
     # Chunk sizing (100MB chunks balance request count vs throughput)
