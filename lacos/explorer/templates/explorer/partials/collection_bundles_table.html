@@ -68,16 +68,42 @@
     <table class="min-w-full divide-y divide-slate-200">
       <thead class="bg-slate-50">
         <tr>
-          <th scope="col" class="px-8 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide w-1/5">{% translate "Bundle Name" %}</th>
-          <th scope="col" class="px-8 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide w-1/5">{% translate "Description" %}</th>
-          <th scope="col" class="px-8 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide w-1/5">{% translate "Topics" %}</th>
-          <th scope="col" class="px-8 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide w-2/5">{% translate "Files" %}</th>
+          <th scope="col" class="px-8 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide w-[12%]">{% translate "Access" %}</th>
+          <th scope="col" class="px-8 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide w-[24%]">{% translate "Bundle Name" %}</th>
+          <th scope="col" class="px-8 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide w-[24%]">{% translate "Description" %}</th>
+          <th scope="col" class="px-8 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide w-[20%]">{% translate "Topics" %}</th>
+          <th scope="col" class="px-8 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide w-[20%]">{% translate "Files" %}</th>
         </tr>
       </thead>
       <tbody class="bg-white divide-y divide-slate-100">
         {% for bundle_info in bundle_contexts %}
           {% with bundle=bundle_info.bundle %}
             <tr class="hover:bg-slate-50 transition-colors">
+              <td class="px-8 py-5 align-top text-sm">
+                {% with level=bundle_info.access_level|default:bundle_info.acl_check_result.access_level %}
+                  {% if level == 'public' %}
+                    <span class="flex items-center text-green-700" title="{% translate 'Public access' %}">
+                      <span aria-hidden="true" class="mr-2">🌍</span>
+                      <span>{% translate "Public" %}</span>
+                    </span>
+                  {% elif level == 'protected' %}
+                    <span class="flex items-center text-blue-700" title="{% translate 'Requires sign-in' %}">
+                      <span aria-hidden="true" class="mr-2">🔒</span>
+                      <span>{% translate "Protected" %}</span>
+                    </span>
+                  {% elif level == 'private' %}
+                    <span class="flex items-center text-yellow-700" title="{% translate 'Restricted to specific users' %}">
+                      <span aria-hidden="true" class="mr-2">👤</span>
+                      <span>{% translate "Private" %}</span>
+                    </span>
+                  {% else %}
+                    <span class="flex items-center text-red-700" title="{% translate 'No downloads allowed' %}">
+                      <span aria-hidden="true" class="mr-2">⛔</span>
+                      <span>{% translate "Embargo" %}</span>
+                    </span>
+                  {% endif %}
+                {% endwith %}
+              </td>
               <td class="px-8 py-5 align-top">
                 <div class="text-sm font-medium text-slate-700 hover:text-slate-900">
                   <a href="{% url 'explorer:bundle_detail' pk=bundle.pk %}">
@@ -92,12 +118,19 @@
                 </div>
                 {% if bundle_info.primary_resources %}
                   <div class="mt-2">
-                    <a href="{% url 'explorer:bundle_resources' pk=bundle.pk %}" class="inline-flex items-center text-xs text-slate-500 hover:text-slate-700">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                      </svg>
-                      {% translate "Access files" %}
-                    </a>
+                    {% if bundle_info.can_read_bundle %}
+                      <a href="{% url 'explorer:bundle_resources' pk=bundle.pk %}" class="inline-flex items-center text-xs text-slate-500 hover:text-slate-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        {% translate "Access files" %}
+                      </a>
+                    {% else %}
+                      <span class="inline-flex items-center text-xs text-red-600">
+                        <span aria-hidden="true" class="mr-1">⛔</span>
+                        {% translate "Restricted" %}
+                      </span>
+                    {% endif %}
                   </div>
                 {% endif %}
               </td>
@@ -120,7 +153,7 @@
                 {% endif %}
               </td>
               <td class="px-8 py-5 text-sm text-slate-600">
-                {% if bundle_info.primary_resources %}
+                {% if bundle_info.primary_resources and bundle_info.can_read_bundle %}
                   <div class="space-y-3">
                     {% if bundle_info.media_resources %}
                       <div>
@@ -254,6 +287,11 @@
                   </div>
                 {% else %}
                   -
+                {% elif bundle_info.primary_resources %}
+                  <div class="text-xs text-red-600 flex items-center">
+                    <span aria-hidden="true" class="mr-1">⛔</span>
+                    {% translate "Files are hidden due to access restrictions." %}
+                  </div>
                 {% endif %}
               </td>
             </tr>

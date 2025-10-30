@@ -33,6 +33,23 @@
           {{ collection.identifier }}
         {% endif %}
       </h1>
+      {% with access_level=collection_acl_check_result.access_level|default:'embargo' %}
+        <div class="mt-2 flex items-center text-sm">
+          {% if access_level == 'public' %}
+            <span class="mr-2" aria-hidden="true">🌍</span>
+            <span class="text-green-700 font-medium">Public – all visitors can read bundles in this collection.</span>
+          {% elif access_level == 'protected' %}
+            <span class="mr-2" aria-hidden="true">🔒</span>
+            <span class="text-blue-700 font-medium">Protected – only signed-in users can read bundles.</span>
+          {% elif access_level == 'private' %}
+            <span class="mr-2" aria-hidden="true">👤</span>
+            <span class="text-yellow-700 font-medium">Private – access is limited to specific users.</span>
+          {% else %}
+            <span class="mr-2" aria-hidden="true">⛔</span>
+            <span class="text-red-700 font-medium">Embargoed – this collection is currently closed to readers.</span>
+          {% endif %}
+        </div>
+      {% endwith %}
       <p class="mt-2 text-sm text-slate-500">{% translate "Collection Details" %}</p>
     </div>
 

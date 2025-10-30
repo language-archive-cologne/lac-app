@@ -619,6 +619,21 @@ class CollectionDetailView(DetailView):
         context['bundle_page_separator'] = separator
         context['bundles_total'] = page_obj.paginator.count if page_obj else 0
 
+        acl_service = ACLEvaluationService()
+        collection_acl = acl_service.evaluate(self.request.user, self.object)
+        context['collection_acl_check_result'] = collection_acl
+        context['collection_can_read'] = collection_acl.allowed or not acl_service.enforcement_enabled
+        context['collection_acl_enforcement_enabled'] = acl_service.enforcement_enabled
+
+        for bundle_info in bundle_contexts:
+            bundle = bundle_info.get('bundle')
+            if not bundle:
+                continue
+            bundle_acl = acl_service.evaluate(self.request.user, bundle)
+            bundle_info['acl_check_result'] = bundle_acl
+            bundle_info['access_level'] = bundle_acl.access_level
+            bundle_info['can_read_bundle'] = bundle_acl.allowed or not acl_service.enforcement_enabled
+
         return context
 
     def render_to_response(self, context, **response_kwargs):
@@ -639,11 +654,14 @@ class BundleDetailView(ACLPermissionMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         result = getattr(self, "acl_result", None)
+        service = self.get_acl_service()  # type: ignore[attr-defined]
+        enforcement_enabled = service.enforcement_enabled if service else True
+        allowed = True
+        if result is not None:
+            allowed = result.allowed or not enforcement_enabled
         context["acl_check_result"] = result
-        context["can_read_bundle"] = True if result is None else result.allowed
-        context["acl_enforcement_enabled"] = (
-            self.get_acl_service().enforcement_enabled  # type: ignore[attr-defined]
-        )
+        context["can_read_bundle"] = allowed
+        context["acl_enforcement_enabled"] = enforcement_enabled
         
         # Get the collection this bundle belongs to
         if hasattr(self.object, 'structural_info') and self.object.structural_info.first():
@@ -784,11 +802,12 @@ class BundleResourcesView(View):
             'restricted_resources': False,
         }
         context['acl_check_result'] = acl_result
-        context['can_read_bundle'] = acl_result.allowed
+        can_read = acl_result.allowed or not acl_service.enforcement_enabled
+        context['can_read_bundle'] = can_read
         context['acl_enforcement_enabled'] = acl_service.enforcement_enabled
-        
+
         resources = bundle.resources.first()
-        if acl_result.allowed and resources:
+        if can_read and resources:
             context['media_resources'] = resources.bundle_media_resources.all()
             context['written_resources'] = resources.bundle_written_resources.all()
             context['other_resources'] = resources.bundle_other_resources.all()
@@ -798,7 +817,7 @@ class BundleResourcesView(View):
         if hasattr(bundle, 'structural_info') and bundle.structural_info.first():
             context['collection'] = bundle.structural_info.first().is_member_of_collection
             context['metadata_files'] = bundle.structural_info.first().additional_metadata_files.all()
-            if not acl_result.allowed:
+            if not can_read:
                 context['metadata_files'] = []
         
         return render(request, 'bundle_resources.html', context)
