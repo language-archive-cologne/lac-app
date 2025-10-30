@@ -285,13 +285,13 @@
                       </div>
                     {% endif %}
                   </div>
-                {% else %}
-                  -
                 {% elif bundle_info.primary_resources %}
                   <div class="text-xs text-red-600 flex items-center">
                     <span aria-hidden="true" class="mr-1">⛔</span>
                     {% translate "Files are hidden due to access restrictions." %}
                   </div>
+                {% else %}
+                  -
                 {% endif %}
               </td>
             </tr>
