@@ -6,6 +6,12 @@ from django.contrib.contenttypes.models import ContentType
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
 from lacos.blam.models.collection.collection_repository import Collection
+from lacos.storage.constants import (
+    ACL_LEVEL_PRIVATE,
+    ACL_LEVEL_PROTECTED,
+    ACL_LEVEL_PUBLIC,
+    WAC_AUTHENTICATED_AGENT,
+)
 from lacos.storage.models.acl_permissions import ACLPermissions
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
 from lacos.users.models import GroupACL
@@ -42,21 +48,24 @@ def test_public_agent_allows_anonymous():
 
     assert result.allowed is True
     assert result.matched_rule["agentClass"] == "foaf:Agent"
+    assert result.access_level == ACL_LEVEL_PUBLIC
 
 
 @pytest.mark.django_db
 def test_authenticated_agent_requires_login():
     collection = _create_collection()
-    _store_acl(collection, [{"agentClass": "foaf:AuthenticatedAgent", "mode": ["acl:Read"]}])
+    _store_acl(collection, [{"agentClass": WAC_AUTHENTICATED_AGENT, "mode": ["acl:Read"]}])
 
     service = ACLEvaluationService()
 
     anonymous_result = service.evaluate(AnonymousUser(), collection)
     assert anonymous_result.allowed is False
+    assert anonymous_result.access_level == ACL_LEVEL_PROTECTED
 
     user = get_user_model().objects.create_user(username="auth-user", password="test123")
     result = service.evaluate(user, collection)
     assert result.allowed is True
+    assert result.access_level == ACL_LEVEL_PROTECTED
 
 
 @pytest.mark.django_db
@@ -71,10 +80,12 @@ def test_person_rule_matches_acl_agent_uri():
     user = get_user_model().objects.create_user(username="alice", password="pass", acl_agent_uri=person_uri)
     result = service.evaluate(user, bundle)
     assert result.allowed is True
+    assert result.access_level == ACL_LEVEL_PRIVATE
 
     other_user = get_user_model().objects.create_user(username="bob", password="pass")
     denied = service.evaluate(other_user, bundle)
     assert denied.allowed is False
+    assert denied.access_level == ACL_LEVEL_PRIVATE
 
 
 @pytest.mark.django_db
@@ -94,10 +105,12 @@ def test_group_rule_matches_group_profile():
 
     allowed = service.evaluate(user, bundle)
     assert allowed.allowed is True
+    assert allowed.access_level == ACL_LEVEL_PRIVATE
 
     other_user = get_user_model().objects.create_user(username="outsider", password="pass")
     denied = service.evaluate(other_user, bundle)
     assert denied.allowed is False
+    assert denied.access_level == ACL_LEVEL_PRIVATE
 
 
 @pytest.mark.django_db
@@ -117,15 +130,17 @@ def test_bundle_inherits_collection_acl():
     result = service.evaluate(user, bundle)
     assert result.allowed is True
     assert result.source == collection
+    assert result.access_level == ACL_LEVEL_PRIVATE
 
 
 @pytest.mark.django_db
 def test_default_deny_when_no_rules_match():
     collection = _create_collection()
     bundle = _create_bundle(collection)
-    _store_acl(bundle, [{"agentClass": "foaf:AuthenticatedAgent", "mode": ["acl:Read"]}])
+    _store_acl(bundle, [{"agentClass": WAC_AUTHENTICATED_AGENT, "mode": ["acl:Read"]}])
 
     service = ACLEvaluationService()
     anonymous_result = service.evaluate(AnonymousUser(), bundle)
     assert anonymous_result.allowed is False
     assert anonymous_result.default_applied is True
+    assert anonymous_result.access_level == ACL_LEVEL_PROTECTED

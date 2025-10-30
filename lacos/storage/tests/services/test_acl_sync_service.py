@@ -6,6 +6,7 @@ from django.contrib.contenttypes.models import ContentType
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
 from lacos.blam.models.collection.collection_repository import Collection
+from lacos.storage.constants import ACL_LEVEL_EMBARGO, ACL_LEVEL_PUBLIC
 from lacos.storage.models.acl_permissions import ACLPermissions
 from lacos.storage.services.acl_sync_service import ACLSyncService
 from lacos.storage.services.resource_mapping_service import ResourceMappingService
@@ -69,6 +70,8 @@ def test_sync_collection_creates_permissions(mock_s3, acl_sync_service):
     assert permissions.ACL_file_key.endswith("collections/collection-1/acl.json")
     assert permissions.permissions_data == acl_rules
     assert permissions.last_synced is not None
+    assert permissions.access_level == ACL_LEVEL_PUBLIC
+    assert permissions.read_agents == ["foaf:Agent"]
 
 
 @pytest.mark.django_db
@@ -93,3 +96,5 @@ def test_sync_bundle_handles_missing_acl(mock_s3, acl_sync_service):
     permissions = ACLPermissions.objects.get(content_type=ct, object_id=bundle.pk)
     assert permissions.permissions_data is None
     assert permissions.last_synced is None
+    assert permissions.access_level == ACL_LEVEL_EMBARGO
+    assert permissions.read_agents == []

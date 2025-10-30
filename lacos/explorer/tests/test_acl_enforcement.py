@@ -11,6 +11,7 @@ from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
 from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo, CollectionLocation
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
+from lacos.storage.constants import WAC_AUTHENTICATED_AGENT
 from lacos.storage.models.acl_permissions import ACLPermissions
 
 
@@ -95,7 +96,7 @@ def test_bundle_resources_denies_when_acl_restricts(client):
 def test_bundle_resources_allows_authenticated_agent(client):
     collection = _create_collection("auth-collection")
     bundle = _create_bundle(collection, "auth-bundle")
-    _store_acl(bundle, [{"agentClass": "foaf:AuthenticatedAgent", "mode": ["acl:Read"]}])
+    _store_acl(bundle, [{"agentClass": WAC_AUTHENTICATED_AGENT, "mode": ["acl:Read"]}])
 
     user = get_user_model().objects.create_user(username="viewer", password="pass")
     client.force_login(user)

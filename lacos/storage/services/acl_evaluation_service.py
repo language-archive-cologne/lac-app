@@ -9,6 +9,15 @@ from django.contrib.contenttypes.models import ContentType
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.storage.models.acl_permissions import ACLPermissions
+from lacos.storage.constants import (
+    ACL_LEVEL_EMBARGO,
+    ACL_LEVEL_PRIVATE,
+    ACL_LEVEL_PROTECTED,
+    ACL_LEVEL_PUBLIC,
+    WAC_AGENT,
+    WAC_AUTHENTICATED_AGENT,
+)
+from lacos.storage.utils.acl import determine_access_level
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +31,7 @@ class ACLCheckResult:
     source: Optional[Any] = None
     default_applied: bool = False
     reason: Optional[str] = None
+    access_level: str = ACL_LEVEL_EMBARGO
 
     def enforce(self) -> bool:
         """
@@ -85,15 +95,22 @@ class ACLEvaluationService:
     # Internal logic -----------------------------------------------------------
     def _evaluate_internal(self, user, obj: Any, mode: str) -> ACLCheckResult:
         last_source = None
+        last_access_level = ACL_LEVEL_EMBARGO
         for source in self._iter_acl_chain(obj):
             last_source = source
             permissions = self._get_permissions(source)
             if not permissions or not permissions.permissions_data:
                 continue
+            last_access_level = determine_access_level(permissions.permissions_data)
 
             matched_rule = self._match_rules(user, permissions.permissions_data, mode)
             if matched_rule:
-                return ACLCheckResult(allowed=True, matched_rule=matched_rule, source=source)
+                return ACLCheckResult(
+                    allowed=True,
+                    matched_rule=matched_rule,
+                    source=source,
+                    access_level=last_access_level,
+                )
 
         if self.default_deny:
             return ACLCheckResult(
@@ -102,6 +119,7 @@ class ACLEvaluationService:
                 source=last_source,
                 default_applied=True,
                 reason="No ACL rule matched; default deny",
+                access_level=last_access_level,
             )
 
         return ACLCheckResult(
@@ -110,6 +128,7 @@ class ACLEvaluationService:
             source=last_source,
             default_applied=True,
             reason="No ACL rule matched; default allow",
+            access_level=last_access_level,
         )
 
     def _iter_acl_chain(self, obj: Any) -> Iterable[Any]:
@@ -154,10 +173,10 @@ class ACLEvaluationService:
     def _rule_applies(self, user, rule: dict[str, Any]) -> bool:
         agent_class = rule.get("agentClass")
 
-        if agent_class == "foaf:Agent":
+        if agent_class == WAC_AGENT:
             return True
 
-        if agent_class == "foaf:AuthenticatedAgent":
+        if agent_class == WAC_AUTHENTICATED_AGENT:
             return getattr(user, "is_authenticated", False)
 
         if agent_class == "foaf:Person":
@@ -215,4 +234,3 @@ class ACLEvaluationService:
             rule_info,
             result.reason,
         )
-

@@ -13,6 +13,7 @@ from lacos.blam.models.collection.collection_repository import Collection
 from lacos.storage.models.acl_permissions import ACLPermissions
 from lacos.storage.services.base_storage_service import BaseStorageService
 from lacos.storage.services.resource_mapping_service import ResourceMappingService
+from lacos.storage.utils.acl import determine_access_level, extract_read_agents
 
 logger = logging.getLogger(__name__)
 
@@ -143,10 +144,13 @@ class ACLSyncService(BaseStorageService):
 
             updated = created or bool(fields_to_update)
 
+            current_permissions: Sequence[dict[str, Any]] | None = record.permissions_data
+
             if found and fetch_error is None:
                 record.permissions_data = permissions_data
                 record.last_synced = timezone.now()
                 fields_to_update.update({"permissions_data", "last_synced"})
+                current_permissions = permissions_data
                 updated = True
             elif fetch_error:
                 # Keep existing permissions data, but surface the error.
@@ -164,6 +168,15 @@ class ACLSyncService(BaseStorageService):
                     bucket,
                     key,
                 )
+
+            access_level = determine_access_level(current_permissions or [])
+            read_agents = extract_read_agents(current_permissions or [])
+            if record.access_level != access_level:
+                record.access_level = access_level
+                fields_to_update.add("access_level")
+            if record.read_agents != read_agents:
+                record.read_agents = read_agents
+                fields_to_update.add("read_agents")
 
             if fields_to_update:
                 record.save(update_fields=list(fields_to_update))
@@ -247,4 +260,3 @@ class ACLSyncService(BaseStorageService):
             return None
         cleaned = prefix.strip()
         return cleaned if cleaned else None
-
