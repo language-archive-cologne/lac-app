@@ -325,8 +325,6 @@ S3_PRODUCTION_BUCKET = env("S3_PRODUCTION_BUCKET", default=None)
 # Pagination settings for dashboard bucket listings
 # Default page size for root-level listings (prevents timeout on large buckets)
 S3_LISTING_PAGE_SIZE = env.int("S3_LISTING_PAGE_SIZE", default=100)
-# Prefetch bucket discovery during app startup (helps avoid first-request latency)
-STORAGE_PREFETCH_BUCKETS_ON_STARTUP = env.bool("STORAGE_PREFETCH_BUCKETS_ON_STARTUP", default=True)
 
 # ACL Configuration
 # ------------------------------------------------------------------------------
