@@ -17,7 +17,7 @@ from django.views import View
 from django.views.decorators.http import require_http_methods
 
 from lacos.common.mixins import BucketCoordinatorMixin, HtmxTemplateHelperMixin
-from lacos.storage.services.bucket_service import BucketService
+from lacos.storage.services.registry import get_bucket_service
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ def archivist_dashboard(request):
     try:
         # Initialize service
         logger.info("Initializing BucketService...")
-        bucket_service = BucketService()
+        bucket_service = get_bucket_service()
         logger.info("✅ BucketService initialized")
 
         force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
@@ -186,9 +186,9 @@ def acl_sync_all(request):
     Trigger a full ACL sync for Collections and Bundles.
     Returns a small JSON summary for HTMX or redirects back with a message.
     """
-    from lacos.storage.services.acl_sync_service import ACLSyncService
+    from lacos.storage.services.registry import get_acl_sync_service
 
-    service = ACLSyncService(skip_bucket_check=True)
+    service = get_acl_sync_service(skip_bucket_check=True)
     results = service.sync_all()
 
     updated = sum(1 for r in results if r.updated)
@@ -260,7 +260,7 @@ def load_folder_contents(request, bucket_type, folder_path):
     Now supports any workspace bucket, not just ingest/production.
     Supports pagination via continuation_token parameter.
     """
-    bucket_service = BucketService()
+    bucket_service = get_bucket_service()
     force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
 
     # Support new flexible bucket names
@@ -330,7 +330,7 @@ def load_folder_contents(request, bucket_type, folder_path):
 @login_required
 def bucket_size_info(request, bucket_name):
     """HTMX endpoint returning bucket size details."""
-    bucket_service = BucketService()
+    bucket_service = get_bucket_service()
     force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
     accessible = set(bucket_service.get_all_accessible_buckets(force_refresh=force_fresh))
 
@@ -356,7 +356,7 @@ def bucket_size_info(request, bucket_name):
 def dashboard_content(request, bucket_type):
     """Return the structure content for a specific bucket via HTMX refresh."""
     try:
-        bucket_service = BucketService()
+        bucket_service = get_bucket_service()
         force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
         continuation_token = request.GET.get("continuation_token")
 
@@ -446,7 +446,7 @@ class BucketContentHTMXView(HtmxTemplateHelperMixin, View):
 @login_required
 def file_info_htmx(request, bucket_type, object_path):
     """Provide file metadata details via HTMX."""
-    bucket_service = BucketService()
+    bucket_service = get_bucket_service()
     target_id = request.GET.get("target_id") or request.GET.get("targetId")
 
     if not target_id:
@@ -506,8 +506,6 @@ class CreateBucketHTMXView(HtmxTemplateHelperMixin, View):
 
     def post(self, request):
         try:
-            from lacos.storage.services.bucket_service import BucketService
-
             # Get form data
             bucket_name = request.POST.get('bucketName', '').strip()
             enable_ocfl = request.POST.get('enableOCFL') == 'on'
@@ -516,7 +514,7 @@ class CreateBucketHTMXView(HtmxTemplateHelperMixin, View):
                 return HttpResponse("Bucket name is required", status=400)
 
             # Create the bucket using BucketService
-            bucket_service = BucketService()
+            bucket_service = get_bucket_service()
             result = bucket_service.create_bucket(bucket_name, enable_ocfl)
 
             if not result["success"]:
@@ -560,7 +558,7 @@ def delete_bucket_htmx(request, bucket_name):
     Returns updated bucket selector tabs.
     """
     try:
-        bucket_service = BucketService()
+        bucket_service = get_bucket_service()
 
         # Verify bucket access
         if bucket_name not in bucket_service.get_all_accessible_buckets():
@@ -681,7 +679,7 @@ class RenameBucketHTMXView(HtmxTemplateHelperMixin, View):
                 )
                 return HttpResponse(error_html, status=400)
 
-            bucket_service = BucketService()
+            bucket_service = get_bucket_service()
             result = bucket_service.rename_bucket(bucket_name, new_name)
 
             if not result.get('success'):

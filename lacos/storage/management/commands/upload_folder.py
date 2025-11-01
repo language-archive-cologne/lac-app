@@ -4,7 +4,7 @@ from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
 
-from lacos.storage.services.bucket_service import BucketService
+from lacos.storage.services.registry import get_bucket_service
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"Starting upload of folder: {folder_path}"))
         
         # Create bucket service and upload folder
-        bucket_service = BucketService()
+        bucket_service = get_bucket_service()
         result = bucket_service.upload_folder_to_bucket(
             str(folder_path), bucket_name, prefix
         )

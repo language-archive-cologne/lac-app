@@ -6,7 +6,7 @@ try:
 except ImportError:
     from huey.contrib.djhuey import HUEY as huey
 
-from lacos.storage.services.bucket_service import BucketService
+from lacos.storage.services.registry import get_bucket_service
 from lacos.storage.services.ocfl_service import OCFLService
 from lacos.storage.services.ocfl_fixture_manager import OCFLFixtureManager
 from lacos.storage.services.background_task_service import BackgroundTaskService
@@ -38,7 +38,7 @@ def convert_folder_to_ocfl_task(
 
     try:
         # Initialize services
-        bucket_service = BucketService()
+        bucket_service = get_bucket_service()
         ocfl_service = OCFLService(bucket_service)
         fixture_manager = OCFLFixtureManager(bucket_service)
 
@@ -188,7 +188,7 @@ def analyze_folder_for_ocfl_task(bucket_name: str, folder_path: str, tracking_id
 
     try:
         # Initialize services
-        bucket_service = BucketService()
+        bucket_service = get_bucket_service()
         ocfl_service = OCFLService(bucket_service)
 
         if tracking_id:

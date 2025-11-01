@@ -5,7 +5,7 @@ import threading
 from django.core.management.base import BaseCommand, CommandError
 from django.conf import settings
 
-from lacos.storage.services.bucket_service import BucketService
+from lacos.storage.services.registry import get_bucket_service
 from lacos.storage.services.ocfl_service import OCFLService
 from lacos.storage.services.bucket_ocfl_processor import BucketOCFLProcessor
 
@@ -59,7 +59,7 @@ class Command(BaseCommand):
 
         try:
             # Initialize services
-            bucket_service = BucketService()
+            bucket_service = get_bucket_service()
             ocfl_service = OCFLService(bucket_service)
             processor = BucketOCFLProcessor(bucket_service, ocfl_service)
 

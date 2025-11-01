@@ -8,8 +8,10 @@ from django.template.loader import render_to_string
 from django.views.decorators.http import require_POST
 
 from lacos.ingest.tasks import import_s3_collection, import_s3_bundle, process_s3_prefix
-from lacos.storage.services.bucket_service import BucketService
-from lacos.storage.services.file_discovery_service import FileDiscoveryService
+from lacos.storage.services.registry import (
+    get_bucket_service,
+    get_file_discovery_service,
+)
 from lacos.common.mixins.htmx_template_helpers import HtmxTemplateHelperMixin
 
 logger = logging.getLogger(__name__)
@@ -39,7 +41,7 @@ def validate_metadata_xml(bucket: str, s3_key: str, metadata_type: str) -> dict:
     # Check if file exists in S3
     try:
         logger.info(f"🔍 VALIDATE_XML: Reading S3 object bucket={bucket}, key={s3_key}")
-        discovery_service = FileDiscoveryService()
+        discovery_service = get_file_discovery_service()
         xml_bytes = discovery_service.read_s3_object(bucket=bucket, key=s3_key)
 
         if not xml_bytes:
@@ -135,7 +137,7 @@ def validate_metadata_xml(bucket: str, s3_key: str, metadata_type: str) -> dict:
 def metadata_ingest_modal(request, bucket_type, object_type, object_path):
     """Render the metadata ingest modal with sensible defaults."""
 
-    bucket_service = BucketService()
+    bucket_service = get_bucket_service()
     accessible_buckets = bucket_service.get_all_accessible_buckets()
 
     if bucket_type in accessible_buckets:
@@ -299,7 +301,7 @@ def validate_metadata_endpoint(request, bucket_type, object_path):
 
     logger.info(f"🔍 VALIDATE: bucket_type={bucket_type}, object_path={object_path}")
 
-    bucket_service = BucketService()
+    bucket_service = get_bucket_service()
     accessible_buckets = bucket_service.get_all_accessible_buckets()
 
     # Determine actual bucket name
@@ -396,7 +398,7 @@ def validate_metadata_endpoint(request, bucket_type, object_path):
 def _render_modal_with_error(request, payload, error):
     """Re-render the modal with an error message for HTMX requests."""
 
-    bucket_service = BucketService()
+    bucket_service = get_bucket_service()
     accessible_buckets = bucket_service.get_all_accessible_buckets()
 
     current_bucket = (payload.get('bucket') or '').strip()
@@ -485,7 +487,7 @@ def preview_metadata_ingest(request):
         context['error_message'] = 'Unable to infer the collection prefix for discovery. Try selecting the top-level folder instead.'
         return render(request, 'storage/metadata_ingest_preview.html', context)
 
-    discovery_service = FileDiscoveryService()
+    discovery_service = get_file_discovery_service()
     try:
         discovery_result = discovery_service.find_collection_and_bundle_xmls_s3(bucket, prefix=prefix)
     except Exception as exc:  # pragma: no cover - defensive logging

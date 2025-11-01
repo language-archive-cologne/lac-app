@@ -21,11 +21,6 @@ class FileDiscoveryService(BaseStorageService):
     
     _instance = None
     
-    def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            cls._instance = super(FileDiscoveryService, cls).__new__(cls)
-        return cls._instance
-    
     def __init__(self, skip_bucket_check=False):
         if hasattr(self, 'initialized'):
             return

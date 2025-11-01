@@ -6,7 +6,7 @@ from botocore.exceptions import ClientError
 from django.core.management.base import BaseCommand
 from django.conf import settings
 from urllib.parse import urlparse
-from lacos.storage.services.bucket_service import BucketService
+from lacos.storage.services.registry import get_bucket_service
 from lacos.storage.services.ocfl_service import OCFLService
 import logging
 
@@ -241,7 +241,7 @@ class Command(BaseCommand):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.bucket_service = BucketService()
+        self.bucket_service = get_bucket_service()
         self.ocfl_service = OCFLService(self.bucket_service)
 
     def add_arguments(self, parser):

@@ -14,8 +14,10 @@ from huey import crontab, Huey # Remove Task import
 # Importers and Services
 from lacos.blam.mappers.collection.read.collection_importer import CollectionImporter
 from lacos.blam.mappers.bundle.read.bundle_importer import BundleImporter
-from lacos.storage.services.resource_mapping_service import ResourceMappingService
-from lacos.storage.services.file_discovery_service import FileDiscoveryService
+from lacos.storage.services.registry import (
+    get_file_discovery_service,
+    get_resource_mapping_service,
+)
 from lacos.blam.services.resolve_links import resolve_collection_bundle_links as resolve_links_service
 from django.conf import settings
 from django.db import transaction # Import transaction
@@ -37,7 +39,7 @@ def find_s3_import_candidates(bucket: str = None, prefix: str = '') -> Dict[str,
         containing lists of S3 keys.
     """
     logger.info(f"Searching for import candidates in S3: {bucket or 'default bucket'}/{prefix}")
-    discovery_service = FileDiscoveryService()
+    discovery_service = get_file_discovery_service()
     try:
         # Use the specific method that finds both types based on configured patterns
         result = discovery_service.find_collection_and_bundle_xmls_s3(bucket, prefix)
@@ -63,7 +65,7 @@ def import_s3_collection(bucket: str, s3_key: str) -> Optional[UUID]:
         Collection database ID if successful, None otherwise.
     """
     logger.info(f"COLLECTION IMPORT: Starting import from S3: {bucket}/{s3_key}")
-    discovery_service = FileDiscoveryService()
+    discovery_service = get_file_discovery_service()
     collection_id = None
     collection_title = "Unknown"
     try:
@@ -117,7 +119,7 @@ def import_s3_bundle(bucket: str, s3_key: str) -> Optional[Tuple[UUID, UUID]]:
     task_id = f"BUNDLE-{s3_key.split('/')[-1]}"
     logger.info(f"{task_id}: Starting import from S3: {bucket}/{s3_key}")
     
-    discovery_service = FileDiscoveryService()
+    discovery_service = get_file_discovery_service()
     try:
         xml_content_bytes = discovery_service.read_s3_object(bucket, s3_key)
         if xml_content_bytes is None:
@@ -324,7 +326,7 @@ def map_collection_resources(collection_id: Optional[UUID], list_of_pairs: List[
         logger.warning(f"{task_id}: Warning - Error verifying collection {collection_id}: {e}")
 
     try:
-        mapping_service = ResourceMappingService()
+        mapping_service = get_resource_mapping_service()
         # Pass the explicitly received list of pairs to the service method
         logger.info(f"{task_id}: Calling map_collection_hierarchy for collection ID={collection_id} with {len(list_of_pairs)} pairs.")
         total_mapped = mapping_service.map_collection_hierarchy(collection_id=collection_id, bundle_resources_pairs=list_of_pairs)
@@ -344,7 +346,7 @@ def process_s3_prefix(bucket: str = None, prefix: str = ''):
     Passes data explicitly between tasks.
     """
     logger.info(f"Starting synchronous S3 candidate finding for: {bucket or 'default bucket'}/{prefix}")
-    discovery_service = FileDiscoveryService()
+    discovery_service = get_file_discovery_service()
     actual_bucket = bucket or discovery_service.production_bucket
 
     # 1. Find potential XML files locally

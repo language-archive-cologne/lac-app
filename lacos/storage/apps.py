@@ -1,9 +1,11 @@
 import logging
 import os
 import sys
+import time
 
 from django.apps import AppConfig
 from django.conf import settings
+
 
 logger = logging.getLogger(__name__)
 
@@ -40,21 +42,40 @@ class StorageConfig(AppConfig):
             return
 
         try:
-            from lacos.storage.services.acl_sync_service import ACLSyncService
+            from lacos.storage.services.registry import get_acl_sync_service, get_base_storage_service
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.error("Failed to import storage registry helpers: %s", exc, exc_info=True)
+            get_acl_sync_service = get_base_storage_service = None  # type: ignore[assignment]
 
-            service = ACLSyncService()
-            results = service.sync_all()
-            synced = sum(1 for result in results if result.updated and result.error is None)
-            logger.info("ACL sync on startup complete - processed %s objects", synced)
-        except Exception as exc:  # pragma: no cover - defensive logging
-            logger.error("ACL sync on startup failed: %s", exc, exc_info=True)
-
-        if getattr(settings, "STORAGE_PREFETCH_BUCKETS_ON_STARTUP", False):
+        if get_acl_sync_service:
             try:
-                from lacos.storage.services.base_storage_service import BaseStorageService
+                service = get_acl_sync_service()
+                sync_start = time.monotonic()
+                results = service.sync_all()
+                sync_duration = time.monotonic() - sync_start
+                synced = sum(1 for result in results if result.updated and result.error is None)
+                logger.info(
+                    "ACL sync on startup complete - processed %s objects in %.2fs",
+                    synced,
+                    sync_duration,
+                )
+            except Exception as exc:  # pragma: no cover - defensive logging
+                logger.error("ACL sync on startup failed: %s", exc, exc_info=True)
 
-                base_service = BaseStorageService(skip_bucket_check=True)
+        if get_base_storage_service and getattr(settings, "STORAGE_PREFETCH_BUCKETS_ON_STARTUP", False):
+            try:
+                base_service = get_base_storage_service(skip_bucket_check=True)
+                prefetch_start = time.monotonic()
                 buckets = base_service.get_all_accessible_buckets(force_refresh=True, raise_on_error=False)
-                logger.info("Prefetched %s storage bucket(s) on startup", len(buckets))
+                prefetch_duration = time.monotonic() - prefetch_start
+                logger.info(
+                    "Prefetched %s storage bucket(s) on startup in %.2fs",
+                    len(buckets),
+                    prefetch_duration,
+                )
             except Exception as exc:  # pragma: no cover - defensive logging
                 logger.warning("Bucket prefetch on startup failed: %s", exc, exc_info=True)
+
+        from lacos.storage.services.base_storage_service import BaseStorageService
+
+        BaseStorageService.mark_startup_complete()

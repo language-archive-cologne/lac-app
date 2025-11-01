@@ -13,12 +13,12 @@ from lacos.common.mixins.htmx_template_helpers import HtmxTemplateHelperMixin
 
 # Note: fixtures are now imported from conftest.py automatically
 
-@patch('lacos.storage.views.dashboard_views.BucketService')
+@patch('lacos.storage.views.dashboard_views.get_bucket_service')
 @patch('lacos.storage.views.dashboard_views.render')
-def test_archivist_dashboard_success(mock_render, mock_bucket_service, prepared_request):
+def test_archivist_dashboard_success(mock_render, mock_get_bucket_service, prepared_request):
     """Test successful loading of the archivist dashboard with root items."""
     # Configure mock service response
-    mock_instance = mock_bucket_service.return_value
+    mock_instance = mock_get_bucket_service.return_value
     mock_instance.get_all_accessible_buckets.return_value = ['test-ingest-bucket', 'test-production-bucket']
     mock_instance.bucket_cache_metadata = {"source": "refresh", "duration": 0.05, "expires_in": 15}
     mock_instance.ocfl_buckets = ['test-production-bucket']
@@ -46,11 +46,11 @@ def test_archivist_dashboard_success(mock_render, mock_bucket_service, prepared_
     assert context['auto_load_url'] == reverse('storage:bucket_content_htmx', args=['test-ingest-bucket'])
     assert request.session['storage_active_bucket'] == 'test-ingest-bucket'
 
-@patch('lacos.storage.views.dashboard_views.BucketService')
+@patch('lacos.storage.views.dashboard_views.get_bucket_service')
 @patch('lacos.storage.views.dashboard_views.render')
-def test_archivist_dashboard_empty_buckets(mock_render, mock_bucket_service, prepared_request):
+def test_archivist_dashboard_empty_buckets(mock_render, mock_get_bucket_service, prepared_request):
     """Test dashboard loading with empty buckets."""
-    mock_instance = mock_bucket_service.return_value
+    mock_instance = mock_get_bucket_service.return_value
     mock_instance.get_all_accessible_buckets.return_value = ['test-ingest-bucket', 'test-production-bucket']
     mock_instance.bucket_cache_metadata = {"source": "refresh", "duration": 0.05, "expires_in": 15}
     mock_instance.ocfl_buckets = []
@@ -65,11 +65,11 @@ def test_archivist_dashboard_empty_buckets(mock_render, mock_bucket_service, pre
     assert context['auto_load_url'] == reverse('storage:bucket_content_htmx', args=['test-ingest-bucket'])
     assert request.session['storage_active_bucket'] == 'test-ingest-bucket'
 
-@patch('lacos.storage.views.dashboard_views.BucketService')
+@patch('lacos.storage.views.dashboard_views.get_bucket_service')
 @patch('lacos.storage.views.dashboard_views.render')
-def test_archivist_dashboard_error_handling(mock_render, mock_bucket_service, prepared_request):
+def test_archivist_dashboard_error_handling(mock_render, mock_get_bucket_service, prepared_request):
     """Test dashboard error handling when bucket service fails."""
-    mock_instance = mock_bucket_service.return_value
+    mock_instance = mock_get_bucket_service.return_value
     mock_instance.get_all_accessible_buckets.return_value = ['test-ingest-bucket', 'test-production-bucket']
     mock_instance.bucket_cache_metadata = {"source": "refresh", "duration": 0.05, "expires_in": 15}
     mock_instance.ocfl_buckets = []
@@ -85,10 +85,10 @@ def test_archivist_dashboard_error_handling(mock_render, mock_bucket_service, pr
     assert context['auto_load_url'] == reverse('storage:bucket_content_htmx', args=['test-ingest-bucket'])
 
 
-@patch('lacos.storage.views.dashboard_views.BucketService')
+@patch('lacos.storage.views.dashboard_views.get_bucket_service')
 @patch('lacos.storage.views.dashboard_views.render')
-def test_archivist_dashboard_force_fresh_adds_query(mock_render, mock_bucket_service, prepared_request):
-    mock_instance = mock_bucket_service.return_value
+def test_archivist_dashboard_force_fresh_adds_query(mock_render, mock_get_bucket_service, prepared_request):
+    mock_instance = mock_get_bucket_service.return_value
     mock_instance.get_all_accessible_buckets.return_value = ['test-ingest-bucket']
     mock_instance.bucket_cache_metadata = {"source": "refresh", "duration": 0.05, "expires_in": 15}
     mock_instance.ocfl_buckets = []
@@ -125,11 +125,11 @@ def test_build_bucket_tabs_oob_response_adds_hidden_input(request_factory):
     assert 'id="current-active-bucket-input"' in result
     assert result.count('hx-swap-oob="outerHTML"') >= 2
 
-@patch('lacos.storage.views.dashboard_views.BucketService')
+@patch('lacos.storage.views.dashboard_views.get_bucket_service')
 @patch('lacos.storage.views.dashboard_views.render')
-def test_load_folder_contents_ingest_bucket(mock_render, mock_bucket_service, prepared_request):
+def test_load_folder_contents_ingest_bucket(mock_render, mock_get_bucket_service, prepared_request):
     """Test loading contents of a folder in the ingest bucket."""
-    mock_instance = mock_bucket_service.return_value
+    mock_instance = mock_get_bucket_service.return_value
     mock_instance.ingest_bucket = 'test-ingest-bucket'
     mock_instance.production_bucket = 'test-production-bucket'
     mock_instance.get_all_accessible_buckets.return_value = ['test-ingest-bucket', 'test-production-bucket']
@@ -158,11 +158,11 @@ def test_load_folder_contents_ingest_bucket(mock_render, mock_bucket_service, pr
     assert context['folder_path'] == 'folder1/'
     assert len(context['folder_contents']) == 2
 
-@patch('lacos.storage.views.dashboard_views.BucketService')
+@patch('lacos.storage.views.dashboard_views.get_bucket_service')
 @patch('lacos.storage.views.dashboard_views.render')
-def test_load_folder_contents_production_bucket(mock_render, mock_bucket_service, prepared_request):
+def test_load_folder_contents_production_bucket(mock_render, mock_get_bucket_service, prepared_request):
     """Test loading contents of a folder in the production bucket."""
-    mock_instance = mock_bucket_service.return_value
+    mock_instance = mock_get_bucket_service.return_value
     mock_instance.ingest_bucket = 'test-ingest-bucket'
     mock_instance.production_bucket = 'test-production-bucket'
     mock_instance.get_all_accessible_buckets.return_value = ['ingest', 'production']
@@ -191,11 +191,11 @@ def test_load_folder_contents_production_bucket(mock_render, mock_bucket_service
     assert context['folder_path'] == 'folder2/'
     assert len(context['folder_contents']) == 1
 
-@patch('lacos.storage.views.dashboard_views.BucketService')
+@patch('lacos.storage.views.dashboard_views.get_bucket_service')
 @patch('lacos.storage.views.dashboard_views.render')
-def test_load_folder_contents_empty_folder(mock_render, mock_bucket_service, prepared_request):
+def test_load_folder_contents_empty_folder(mock_render, mock_get_bucket_service, prepared_request):
     """Test loading contents of an empty folder."""
-    mock_instance = mock_bucket_service.return_value
+    mock_instance = mock_get_bucket_service.return_value
     mock_instance.ingest_bucket = 'test-ingest-bucket'
     mock_instance.production_bucket = 'test-production-bucket'
     mock_instance.get_all_accessible_buckets.return_value = ['test-ingest-bucket', 'test-production-bucket']
@@ -215,11 +215,11 @@ def test_load_folder_contents_empty_folder(mock_render, mock_bucket_service, pre
 
 
 @patch('lacos.storage.views.dashboard_views.get_token', return_value='csrf-token')
-@patch('lacos.storage.views.dashboard_views.BucketService')
+@patch('lacos.storage.views.dashboard_views.get_bucket_service')
 @patch.object(RenameBucketHTMXView, 'render_bucket_content_template', return_value='bucket-html')
 @patch.object(RenameBucketHTMXView, 'build_bucket_tabs_oob_response', return_value='combined-html')
-def test_rename_bucket_htmx_success(mock_build, mock_render_content, MockBucketService, mock_get_token, prepared_request):
-    mock_service = MockBucketService.return_value
+def test_rename_bucket_htmx_success(mock_build, mock_render_content, mock_get_bucket_service, mock_get_token, prepared_request):
+    mock_service = mock_get_bucket_service.return_value
     mock_service.rename_bucket.return_value = {
         'success': True,
         'message': 'renamed',
@@ -240,10 +240,10 @@ def test_rename_bucket_htmx_success(mock_build, mock_render_content, MockBucketS
 
 
 @patch('lacos.storage.views.dashboard_views.get_token', return_value='csrf-token')
-@patch('lacos.storage.views.dashboard_views.BucketService')
+@patch('lacos.storage.views.dashboard_views.get_bucket_service')
 @patch.object(RenameBucketHTMXView, 'render_bucket_content_template', return_value='bucket-html')
-def test_rename_bucket_htmx_failure(mock_render_content, MockBucketService, mock_get_token, prepared_request):
-    mock_service = MockBucketService.return_value
+def test_rename_bucket_htmx_failure(mock_render_content, mock_get_bucket_service, mock_get_token, prepared_request):
+    mock_service = mock_get_bucket_service.return_value
     mock_service.rename_bucket.return_value = {'success': False, 'error': 'Conflict'}
 
     request = prepared_request('/storage/htmx/rename-bucket/old/', method='post', htmx=True, data={'newName': 'exists'})
@@ -276,11 +276,11 @@ def test_rename_object_modal_htmx(mock_get_token, prepared_request):
     assert 'rename-object-modal-wrapper' in content
     assert 'item' in content
 
-@patch('lacos.storage.views.dashboard_views.BucketService')
+@patch('lacos.storage.views.dashboard_views.get_bucket_service')
 @patch('lacos.storage.views.dashboard_views.render')
-def test_load_folder_contents_error_handling(mock_render, mock_bucket_service, prepared_request):
+def test_load_folder_contents_error_handling(mock_render, mock_get_bucket_service, prepared_request):
     """Test error handling when loading folder contents fails."""
-    mock_instance = mock_bucket_service.return_value
+    mock_instance = mock_get_bucket_service.return_value
     mock_instance.ingest_bucket = 'test-ingest-bucket'
     mock_instance.production_bucket = 'test-production-bucket'
     mock_instance.get_folder_contents.side_effect = Exception("Service error")
