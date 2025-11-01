@@ -70,7 +70,7 @@ class BucketService(BaseStorageService):
 
         # Per-bucket folder cache helper
         self.folder_cache = FolderStructureCacheService()
-        
+
         logger.info("BucketService initialized")
         self.initialized = True
 
@@ -173,32 +173,62 @@ class BucketService(BaseStorageService):
             
         return result
     
-    def get_root_level_items(self, bucket_name: str, force_fresh: bool = False) -> Dict[str, Any]:
+    def get_root_level_items(
+        self,
+        bucket_name: str,
+        force_fresh: bool = False,
+        continuation_token: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         Get only the root level items (files and folders) from a bucket.
-        This is optimized for the initial dashboard load.
-        
+        This is optimized for the initial dashboard load and supports pagination.
+
         Args:
             bucket_name (str): The name of the bucket to list
-            
+            force_fresh (bool): Deprecated, retained for backwards compatibility
+            continuation_token (str, optional): Token for next page
+
         Returns:
-            Dict[str, Any]: Dictionary containing root level items
+            Dict[str, Any]: Dictionary containing root level items with pagination metadata
         """
         try:
-            if not force_fresh:
-                cached = self.folder_cache.get(bucket_name, None)
-                if cached is not None:
-                    return cached
+            from django.conf import settings
+            page_size = getattr(settings, "S3_LISTING_PAGE_SIZE", 100)
 
-            contents = self.collection_service.list_bucket_contents(
+            if not force_fresh and continuation_token is None:
+                cached_root = self.folder_cache.get(bucket_name, None)
+                if cached_root is not None:
+                    logger.debug(
+                        "Returning cached root listing for %s (%s children)",
+                        bucket_name,
+                        len(cached_root.get("children", [])),
+                    )
+                    return cached_root
+
+            started = time.monotonic()
+            listing_result = self.collection_service.list_bucket_contents(
                 bucket_name,
+                prefix="",
                 force_fresh=force_fresh,
+                max_keys=page_size,
+                continuation_token=continuation_token,
             )
-            
+            elapsed = time.monotonic() - started
+            logger.info(
+                "Root listing for %s returned %s items in %.2fs (force_fresh=%s, has_more=%s)",
+                bucket_name,
+                len(listing_result["items"]),
+                elapsed,
+                force_fresh,
+                listing_result.get("has_more", False),
+            )
+
             # Process items to add BLAM object information
             processed_children = []
-            for item in contents:
-                parent_info = self._split_parent_child(item["path"] if item["is_dir"] else item["path"])
+            for item in listing_result["items"]:
+                parent_info = self._split_parent_child(
+                    item["path"] if item["is_dir"] else item["path"]
+                )
 
                 child = {
                     "type": "folder" if item["is_dir"] else "file",
@@ -208,56 +238,92 @@ class BucketService(BaseStorageService):
                     "size": item.get("size"),
                     "last_modified": item.get("last_modified"),
                 }
-                
+
                 # If it's a folder, check if it's a BLAM object
                 if item["is_dir"]:
                     blam_info = self.is_blam_object(bucket_name, item["path"])
                     if blam_info["is_blam_object"]:
                         child.update(blam_info)
-                
+
                 processed_children.append(child)
-            
+
             # Transform the contents into the expected structure
             result = {
                 "type": "folder",
                 "name": bucket_name,
                 "path": "",
-                "children": processed_children
+                "children": processed_children,
+                "has_more": listing_result.get("has_more", False),
+                "next_token": listing_result.get("next_token"),
             }
-            self.folder_cache.set(bucket_name, None, result)
+
+            if continuation_token is None:
+                self.folder_cache.set(bucket_name, None, result)
+
             return result
         except Exception as e:
-            logger.error(f"Error getting root level items for bucket '{bucket_name}': {str(e)}")
-            return {"type": "folder", "name": bucket_name, "path": "", "children": []}
+            logger.error(
+                f"Error getting root level items for bucket '{bucket_name}': {str(e)}"
+            )
+            return {
+                "type": "folder",
+                "name": bucket_name,
+                "path": "",
+                "children": [],
+                "has_more": False,
+                "next_token": None,
+            }
 
-    def get_folder_contents(self, bucket_name: str, folder_path: str, force_fresh: bool = False) -> List[Dict[str, Any]]:
+    def get_folder_contents(
+        self,
+        bucket_name: str,
+        folder_path: str,
+        force_fresh: bool = False,
+        continuation_token: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         Get the contents of a specific folder.
-        This is used for lazy loading folder contents.
-        
+        This is used for lazy loading folder contents with pagination support.
+
         Args:
             bucket_name (str): The name of the bucket
             folder_path (str): The path to the folder
-            
+            force_fresh (bool): Deprecated, retained for backwards compatibility
+            continuation_token (str, optional): Token for next page
+
         Returns:
-            List[Dict[str, Any]]: List of items in the folder
+            Dict[str, Any]: Dictionary with items, has_more, and next_token
         """
         try:
-            if not force_fresh:
-                cached = self.folder_cache.get(bucket_name, folder_path)
-                if cached is not None:
-                    return cached
+            from django.conf import settings
 
-            contents = self.collection_service.list_bucket_contents(
+            page_size = getattr(settings, "S3_LISTING_PAGE_SIZE", 100)
+
+            started = time.monotonic()
+            listing_result = self.collection_service.list_bucket_contents(
                 bucket_name,
                 folder_path,
                 force_fresh=force_fresh,
+                max_keys=page_size,
+                continuation_token=continuation_token,
             )
-            
+            elapsed = time.monotonic() - started
+            logger.info(
+                "Folder listing for %s:%s returned %s items in %.2fs (force_fresh=%s, has_more=%s)",
+                bucket_name,
+                folder_path,
+                len(listing_result["items"]),
+                elapsed,
+                force_fresh,
+                listing_result.get("has_more", False),
+            )
+
             # Transform the contents and add BLAM object information
             processed_contents = []
-            for item in contents:
-                parent_info = self._split_parent_child(item["path"] if item["is_dir"] else item["path"])
+            for item in listing_result["items"]:
+                parent_info = self._split_parent_child(
+                    item["path"] if item["is_dir"] else item["path"]
+                )
 
                 result = {
                     "type": "folder" if item["is_dir"] else "file",
@@ -267,20 +333,30 @@ class BucketService(BaseStorageService):
                     "size": item.get("size"),
                     "last_modified": item.get("last_modified"),
                 }
-                
+
                 # If it's a folder, check if it's a BLAM object
                 if item["is_dir"]:
                     blam_info = self.is_blam_object(bucket_name, item["path"])
                     if blam_info["is_blam_object"]:
                         result.update(blam_info)
-                
+
                 processed_contents.append(result)
-            
-            self.folder_cache.set(bucket_name, folder_path, processed_contents)
-            return processed_contents
+
+            result = {
+                "items": processed_contents,
+                "has_more": listing_result.get("has_more", False),
+                "next_token": listing_result.get("next_token"),
+            }
+
+            if not continuation_token:
+                self.folder_cache.set(bucket_name, folder_path, result)
+
+            return result
         except Exception as e:
-            logger.error(f"Error getting folder contents for '{folder_path}' in bucket '{bucket_name}': {str(e)}")
-            return []
+            logger.error(
+                f"Error getting folder contents for '{folder_path}' in bucket '{bucket_name}': {str(e)}"
+            )
+            return {"items": [], "has_more": False, "next_token": None}
 
     def _invalidate_folder_cache(self, bucket_name: str, *folder_paths: Optional[str]) -> None:
         try:
@@ -389,6 +465,7 @@ class BucketService(BaseStorageService):
                 self.workspace_buckets.append(new_bucket)
 
             message = f"Bucket '{current_bucket}' renamed to '{new_bucket}'"
+            self.invalidate_bucket_cache()
             self._invalidate_folder_cache(current_bucket)
             self._invalidate_folder_cache(new_bucket)
             return {
@@ -465,7 +542,7 @@ class BucketService(BaseStorageService):
                 bucket_name,
                 parent['parent'],
                 old_prefix,
-                new_prefix
+                new_prefix,
             )
             return response
 
@@ -531,12 +608,22 @@ class BucketService(BaseStorageService):
         prefix: str = "",
         *,
         force_fresh: bool = False,
-    ) -> List[Dict[str, Any]]:
-        """Delegate to collection service to list bucket contents."""
+        max_keys: Optional[int] = None,
+        continuation_token: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Delegate to collection service to list bucket contents.
+
+        Returns Dict with 'items', 'has_more', and 'next_token' keys.
+        For backward compatibility, if no pagination params are used,
+        returns all items (legacy behavior).
+        """
         return self.collection_service.list_bucket_contents(
             bucket_name,
             prefix,
             force_fresh=force_fresh,
+            max_keys=max_keys,
+            continuation_token=continuation_token,
         )
     
     def get_folder_structure(self, bucket_name: str, prefix: str = "") -> Dict[str, Any]:
@@ -564,6 +651,11 @@ class BucketService(BaseStorageService):
         logger.info(f"Starting direct move to production for {source_prefix}")
         
         try:
+            if not self.ingest_bucket or not self.production_bucket:
+                error_message = "Ingest and production buckets must be configured for direct move operations"
+                logger.error(error_message)
+                return {"success": False, "error": error_message}
+
             # Verify ingest and production buckets are different
             if self.ingest_bucket == self.production_bucket:
                 error_message = "Error: Ingest and production buckets must be different"
@@ -636,13 +728,6 @@ class BucketService(BaseStorageService):
 
     def get_bucket_total_size(self, bucket_name: str, force_fresh: bool = False) -> Dict[str, Any]:
         """Calculate total size and object count for a bucket."""
-        cache_key = f"storage_bucket_size_{bucket_name}"
-
-        if not force_fresh:
-            cached_result = cache.get(cache_key)
-            if cached_result:
-                return cached_result
-
         start_time = time.time()
         total_size = 0
         object_count = 0
@@ -665,7 +750,6 @@ class BucketService(BaseStorageService):
                 "calculation_duration": duration,
             }
 
-            cache.set(cache_key, result, timeout=1800)
             return result
 
         except ClientError as exc:
@@ -860,6 +944,8 @@ class BucketService(BaseStorageService):
             # Add to workspace buckets list (in-memory for this session)
             # Note: For persistent storage, this would need to be saved to database or config
             self.workspace_buckets.append(bucket_name)
+            self.invalidate_bucket_cache()
+            self._invalidate_folder_cache(bucket_name)
 
             # Add to OCFL buckets if requested
             if enable_ocfl and bucket_name not in self.ocfl_buckets:

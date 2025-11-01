@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 from typing import Any, Dict, Optional, Generator
 import boto3
 from botocore.exceptions import ClientError
@@ -107,6 +108,7 @@ class BaseStorageService:
         
         # Mark as initialized
         self.initialized = True
+        self._bucket_cache_metadata: Dict[str, Any] = {}
     
     def set_client_and_buckets(self, service):
         """
@@ -340,26 +342,48 @@ class BaseStorageService:
                     if b not in ("*", "__all__"):
                         yield b
 
-    def get_all_accessible_buckets(self) -> list:
+    def get_all_accessible_buckets(self, force_refresh: bool = False, raise_on_error: bool = False) -> list:
         """
         Get all accessible buckets dynamically from S3/MinIO.
         
         This method uses lazy loading - buckets are only fetched when this method is called,
         not during service initialization. Use iter_buckets() for true lazy iteration.
         
+        Args:
+            force_refresh (bool): If True, bypass the in-memory cache and fetch fresh data.
+            raise_on_error (bool): If True, propagate underlying S3 errors instead of returning fallbacks.
+
         Returns:
             list: List of accessible bucket names
         """
-        # Check cache first
-        cache_key = "storage:bucket-names"
+        cache_key = self._bucket_cache_key()
+
+        if force_refresh:
+            cache.delete(cache_key)
+
         cached = cache.get(cache_key)
         if cached is not None:
-            logger.debug("Returning cached bucket list: %s", cached)
-            return cached
+            expires_in = None
+            ttl_fn = getattr(cache, "ttl", None)
+            if callable(ttl_fn):
+                try:
+                    expires_in = ttl_fn(cache_key)
+                except Exception:  # pragma: no cover - backend without ttl support
+                    expires_in = None
+            self._bucket_cache_metadata = {
+                "source": "cache",
+                "bucket_count": len(cached),
+                "expires_in": expires_in,
+                "duration": 0.0,
+                "force_refresh": force_refresh,
+            }
+            logger.debug("Returning cached bucket list (%d buckets)", len(cached))
+            return list(cached)
 
-        # Lazy fetch and cache the result
         try:
+            fetch_start = time.monotonic()
             bucket_names = list(self._lazy_fetch_buckets())
+            fetch_duration = time.monotonic() - fetch_start
             
             # Check if we should allow all buckets (for logging)
             allow_all = any(bucket in ("*", "__all__") for bucket in self.workspace_buckets)
@@ -369,12 +393,30 @@ class BaseStorageService:
                 logger.info("📦 BUCKETS: All buckets mode enabled, found %s buckets", len(bucket_names))
             else:
                 logger.info("📦 BUCKETS: Found %s accessible buckets (filtered)", len(bucket_names))
-            
-            # Cache for a short time to avoid repeated calls, but keep it short for freshness
-            cache.set(cache_key, bucket_names, timeout=60)  # Reduced from 300 to 60 seconds
+
+            ttl_seconds = self._bucket_cache_ttl()
+            self._bucket_cache_metadata = {
+                "source": "refresh",
+                "bucket_count": len(bucket_names),
+                "duration": fetch_duration,
+                "expires_in": ttl_seconds,
+                "force_refresh": force_refresh,
+            }
+            cache.set(cache_key, bucket_names, timeout=ttl_seconds)
+
             return bucket_names
         except Exception as e:
             logger.exception("❌ Error getting buckets: %s", e)
+            cache.delete(cache_key)
+
+            if raise_on_error:
+                raise
+
+            self._bucket_cache_metadata = {
+                "source": "fallback",
+                "error": str(e),
+                "force_refresh": force_refresh,
+            }
             # Fallback: return workspace buckets if configured, otherwise empty list
             if self.workspace_buckets and self.workspace_buckets != ["*"]:
                 return [b for b in self.workspace_buckets if b not in ("*", "__all__")]
@@ -739,3 +781,24 @@ class BaseStorageService:
             pass
         
         return False 
+    def _bucket_cache_key(self) -> str:
+        return "storage:bucket-names"
+
+    def _bucket_cache_ttl(self) -> int:
+        """Return the configured bucket list cache TTL in seconds."""
+        ttl = getattr(settings, "S3_BUCKET_LIST_CACHE_TTL", 300)
+        try:
+            ttl_int = int(ttl)
+        except (TypeError, ValueError):
+            ttl_int = 300
+        return max(ttl_int, 1)
+
+    def invalidate_bucket_cache(self) -> None:
+        """Clear the cached bucket list."""
+        cache.delete(self._bucket_cache_key())
+        self._bucket_cache_metadata = {}
+
+    @property
+    def bucket_cache_metadata(self) -> Dict[str, Any]:
+        """Return metadata about the most recent bucket cache population."""
+        return getattr(self, "_bucket_cache_metadata", {})

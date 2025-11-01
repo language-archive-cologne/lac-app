@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 from typing import Dict, Any, List, Optional
 
 from .base_storage_service import BaseStorageService
@@ -168,25 +169,37 @@ class CollectionService(BaseStorageService):
         prefix: str = "",
         *,
         force_fresh: bool = False,
-    ) -> List[Dict[str, Any]]:
+        max_keys: Optional[int] = None,
+        continuation_token: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         List the contents of a bucket with the given prefix.
-        
+
         Args:
             bucket_name (str): The name of the bucket to list
             prefix (str, optional): The prefix (path) to list. Defaults to "".
-            
+            force_fresh (bool): Whether to bypass cached results.
+            max_keys (int, optional): Maximum number of keys to return. If None, returns all.
+            continuation_token (str, optional): Token to continue from previous request
+
         Returns:
-            List[Dict[str, any]]: A list of dictionaries containing information about the objects
+            Dict[str, Any]: Dictionary with keys:
+                - items: List of item dictionaries
+                - has_more: Boolean indicating if more results available
+                - next_token: Token for next page (if has_more is True)
         """
         try:
             logger.info("Listing contents of bucket '%s' with prefix '%s'", bucket_name, prefix)
 
-            if not force_fresh:
-                cached = self._folder_cache.get(bucket_name, prefix)
-                if cached is not None:
+            cache_path = prefix or ""
+            if continuation_token:
+                cache_path = f"{cache_path}::token::{continuation_token}"
+
+            if not force_fresh and not continuation_token:
+                cached_result = self._folder_cache.get(bucket_name, cache_path)
+                if cached_result is not None:
                     logger.debug("Returning cached listing for %s:%s", bucket_name, prefix)
-                    return cached
+                    return cached_result
 
             # Ensure prefix ends with / if it's not empty to avoid partial matches
             listing_prefix = prefix
@@ -194,11 +207,39 @@ class CollectionService(BaseStorageService):
                 listing_prefix = f"{listing_prefix}/"
                 logger.debug("Adjusted prefix to '%s'", listing_prefix)
 
-            paginator = self.s3_client.get_paginator('list_objects_v2')
             contents: list[dict[str, Any]] = []
+            started = time.monotonic()
+            page_count = 0
+            has_more = False
+            next_token = None
 
-            for page in paginator.paginate(Bucket=bucket_name, Prefix=listing_prefix, Delimiter="/"):
-                for obj in page.get("Contents", []):
+            # Build pagination params
+            list_params = {
+                "Bucket": bucket_name,
+                "Prefix": listing_prefix,
+                "Delimiter": "/",
+            }
+
+            if max_keys:
+                list_params["MaxKeys"] = max_keys
+
+            if continuation_token:
+                list_params["ContinuationToken"] = continuation_token
+
+            # If max_keys is set, fetch only a single page
+            if max_keys:
+                response = self.s3_client.list_objects_v2(**list_params)
+                page_count = 1
+
+                logger.debug(
+                    "S3 page 1 for %s:%s -> %s objects, %s prefixes",
+                    bucket_name,
+                    listing_prefix or "/",
+                    len(response.get("Contents", [])),
+                    len(response.get("CommonPrefixes", [])),
+                )
+
+                for obj in response.get("Contents", []):
                     # Skip the directory marker itself if listing a directory
                     if listing_prefix and obj["Key"] == listing_prefix:
                         continue
@@ -213,7 +254,7 @@ class CollectionService(BaseStorageService):
                         }
                     )
 
-                for prefix_obj in page.get("CommonPrefixes", []):
+                for prefix_obj in response.get("CommonPrefixes", []):
                     prefix_str = prefix_obj.get("Prefix", "")
                     contents.append(
                         {
@@ -223,6 +264,47 @@ class CollectionService(BaseStorageService):
                         }
                     )
 
+                has_more = response.get("IsTruncated", False)
+                next_token = response.get("NextContinuationToken")
+            else:
+                # Legacy mode: paginate through all results
+                paginator = self.s3_client.get_paginator('list_objects_v2')
+
+                for page in paginator.paginate(**list_params):
+                    page_count += 1
+                    logger.debug(
+                        "S3 page %s for %s:%s -> %s objects, %s prefixes",
+                        page_count,
+                        bucket_name,
+                        listing_prefix or "/",
+                        len(page.get("Contents", [])),
+                        len(page.get("CommonPrefixes", [])),
+                    )
+                    for obj in page.get("Contents", []):
+                        # Skip the directory marker itself if listing a directory
+                        if listing_prefix and obj["Key"] == listing_prefix:
+                            continue
+
+                        contents.append(
+                            {
+                                "name": os.path.basename(obj["Key"]),
+                                "path": obj["Key"],
+                                "size": obj.get("Size"),
+                                "last_modified": obj.get("LastModified"),
+                                "is_dir": False,
+                            }
+                        )
+
+                    for prefix_obj in page.get("CommonPrefixes", []):
+                        prefix_str = prefix_obj.get("Prefix", "")
+                        contents.append(
+                            {
+                                "name": os.path.basename(prefix_str.rstrip("/")),
+                                "path": prefix_str,
+                                "is_dir": True,
+                            }
+                        )
+
             preview = ', '.join(item["name"] for item in contents[:5])
             logger.debug(
                 "Listed %s items for %s%s",
@@ -230,15 +312,31 @@ class CollectionService(BaseStorageService):
                 listing_prefix or f"{bucket_name}/",
                 f" — {preview}" if preview else "",
             )
+            logger.info(
+                "Completed listing for %s:%s in %.2fs (%s pages, %s total items, has_more=%s)",
+                bucket_name,
+                listing_prefix or "/",
+                time.monotonic() - started,
+                page_count,
+                len(contents),
+                has_more,
+            )
 
-            self._folder_cache.set(bucket_name, prefix, contents)
+            result = {
+                "items": contents,
+                "has_more": has_more,
+                "next_token": next_token,
+            }
 
-            return contents
+            if not continuation_token:
+                self._folder_cache.set(bucket_name, cache_path, result)
+
+            return result
         except Exception as e:
             logger.error(
                 f"Error listing bucket contents for bucket: '{bucket_name}'. Error: {e}"
             )
-            return []
+            return {"items": [], "has_more": False, "next_token": None}
     
     def get_folder_structure(self, bucket_name: str, prefix: str = "") -> Dict[str, Any]:
         """
@@ -259,13 +357,15 @@ class CollectionService(BaseStorageService):
             return {"type": "folder", "name": bucket_name, "path": "", "children": []}
         
         try:
-            contents = self.list_bucket_contents(bucket_name, prefix)
-            
+            # list_bucket_contents now returns a dict
+            listing_result = self.list_bucket_contents(bucket_name, prefix)
+            contents = listing_result.get("items", [])
+
             # Debug log the contents
             logger.info(f"DEBUG: Bucket contents for '{bucket_name}' with prefix '{prefix}':")
             for item in contents:
                 logger.info(f"  {item.get('name')} - type: {item.get('is_dir', False)}")
-            
+
             # Create the root folder
             root_name = bucket_name if not prefix else os.path.basename(prefix.rstrip('/'))
             structure = {
@@ -274,7 +374,7 @@ class CollectionService(BaseStorageService):
                 "path": prefix,
                 "children": []
             }
-            
+
             # Add items to the structure
             for item in contents:
                 if item.get("is_dir", False):

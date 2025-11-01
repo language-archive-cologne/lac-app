@@ -1,9 +1,12 @@
 import pytest
-
-from moto import mock_aws
-
 from unittest.mock import patch, MagicMock
 
+from django.core.cache import cache
+
+from botocore.exceptions import EndpointConnectionError
+from django.test import override_settings
+
+from lacos.storage.services.base_storage_service import BaseStorageService
 from lacos.storage.services.bucket_service import BucketService
 
 # Import constants from test_constants.py
@@ -160,8 +163,62 @@ def test_direct_move_to_production(mock_s3, mock_bucket_service):
             production_content = response["Body"].read().decode("utf-8")
             
             # Verify the content is the same
-            assert ingest_content == production_content
+        assert ingest_content == production_content
     finally:
         # Restore the original bucket names
         mock_bucket_service.ingest_bucket = original_ingest_bucket
         mock_bucket_service.production_bucket = original_production_bucket
+
+
+@override_settings(S3_WORKSPACE_BUCKETS=["fallback-ingest", "fallback-production"])
+def test_get_all_accessible_buckets_returns_defaults_when_s3_unreachable():
+    """Ensure the bucket service falls back gracefully when S3 cannot be reached."""
+    # Reset singleton instances to ensure a clean initialization for this test
+    BaseStorageService._instance = None
+    BucketService._instance = None
+
+    service = BucketService(skip_bucket_check=True)
+    service.is_minio = False
+    cache.delete("storage:bucket-names")
+
+    failing_client = MagicMock()
+    failing_client.head_bucket.side_effect = EndpointConnectionError(
+        endpoint_url="https://rdsp.fds.uni-koeln.de"
+    )
+    service.s3_client = failing_client
+
+    buckets = service.get_all_accessible_buckets(force_refresh=True)
+
+    assert buckets == ["fallback-ingest", "fallback-production"]
+    failing_client.head_bucket.assert_called_once_with(Bucket="fallback-ingest")
+
+    # Leave singletons reset so other tests get a fresh instance
+    BaseStorageService._instance = None
+    BucketService._instance = None
+
+
+@override_settings(S3_WORKSPACE_BUCKETS=["bucket-a", "bucket-b"])
+def test_get_all_accessible_buckets_filters_to_workspace_on_s3(settings):
+    """Verify we only expose configured workspace buckets when using external S3."""
+    BaseStorageService._instance = None
+    BucketService._instance = None
+
+    service = BucketService(skip_bucket_check=True)
+    service.is_minio = False
+    service.ingest_bucket = "bucket-a"
+    service.production_bucket = "bucket-b"
+    service.workspace_buckets = ["bucket-a", "bucket-b"]
+    cache.delete("storage:bucket-names")
+
+    s3_client = MagicMock()
+    s3_client.head_bucket.return_value = None
+    service.s3_client = s3_client
+
+    result = service.get_all_accessible_buckets(force_refresh=True)
+
+    assert result == ["bucket-a", "bucket-b"]
+    s3_client.head_bucket.assert_any_call(Bucket="bucket-a")
+    s3_client.head_bucket.assert_any_call(Bucket="bucket-b")
+
+    BaseStorageService._instance = None
+    BucketService._instance = None
