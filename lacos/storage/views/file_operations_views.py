@@ -9,7 +9,7 @@ from django.template.loader import render_to_string
 from django.middleware.csrf import get_token
 from django.urls import reverse
 
-from lacos.storage.services.registry import get_bucket_service
+from lacos.storage.services.bucket_service import BucketService
 from lacos.common.mixins.htmx_template_helpers import HtmxTemplateHelperMixin
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ def file_content(request, bucket_type, file_path):
     in a readable format.
     """
     try:
-        bucket_service = get_bucket_service()
+        bucket_service = BucketService()
 
         # Use the bucket_type parameter directly as the bucket name
         bucket = bucket_type
@@ -61,7 +61,7 @@ def file_content(request, bucket_type, file_path):
 @login_required
 def file_viewer_htmx(request, bucket_type, object_path):
     """Return modal content with a presigned URL for streaming file previews."""
-    bucket_service = get_bucket_service()
+    bucket_service = BucketService()
 
     accessible_buckets = set(bucket_service.get_all_accessible_buckets())
 
@@ -156,7 +156,7 @@ class RenameObjectHTMXView(HtmxTemplateHelperMixin, View):
     """HTMX endpoint for renaming files and folders within a bucket."""
 
     def post(self, request, bucket_name, object_type, object_path):
-        bucket_service = get_bucket_service()
+        bucket_service = BucketService()
 
         new_name = (request.POST.get('newName') or request.POST.get('prompt') or '').strip()
         if not new_name and request.body:
@@ -275,7 +275,7 @@ def delete_object(request, bucket_type, object_type, object_path):
         return JsonResponse({"success": False, "error": "Method not allowed"})
     
     try:
-        bucket_service = get_bucket_service()
+        bucket_service = BucketService()
         
         accessible_buckets = bucket_service.get_all_accessible_buckets()
         if isinstance(accessible_buckets, (list, tuple, set)) and bucket_type in accessible_buckets:

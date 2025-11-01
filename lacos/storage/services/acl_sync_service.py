@@ -12,6 +12,7 @@ from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.storage.models.acl_permissions import ACLPermissions
 from lacos.storage.services.base_storage_service import BaseStorageService
+from lacos.storage.services.resource_mapping_service import ResourceMappingService
 from lacos.storage.utils.acl import determine_access_level, extract_read_agents
 
 logger = logging.getLogger(__name__)
@@ -49,10 +50,8 @@ class ACLSyncService(BaseStorageService):
 
         super().__init__(skip_bucket_check=skip_bucket_check)
 
-        from lacos.storage.services.registry import get_resource_mapping_service
-
         # Share the same S3 client across dependent services to avoid redundant setup.
-        self.resource_mapping = get_resource_mapping_service(skip_bucket_check=True)
+        self.resource_mapping = ResourceMappingService(skip_bucket_check=True)
         self.set_client_and_buckets(self.resource_mapping)
 
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")

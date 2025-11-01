@@ -8,7 +8,6 @@ from django.middleware.csrf import get_token
 from django.template.loader import render_to_string
 
 from .bucket_coordinator import BucketCoordinatorMixin
-from lacos.storage.services.registry import get_bucket_service
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +31,9 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
         - Build context
         - Render template
         """
-        bucket_service = get_bucket_service()
+        from lacos.storage.services.bucket_service import BucketService
+
+        bucket_service = BucketService()
         workspace_buckets = bucket_service.get_all_accessible_buckets()
         ocfl_buckets = bucket_service.ocfl_buckets
 
@@ -64,6 +65,7 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
 
         Used for HTMX bucket switching to render the main content area.
         """
+        from lacos.storage.services.bucket_service import BucketService
         import time
 
         logger.info("─" * 80)
@@ -71,7 +73,7 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
 
         start_time = time.time()
 
-        bucket_service = get_bucket_service()
+        bucket_service = BucketService()
         force_fresh = request.GET.get('force_fresh', 'false').lower() == 'true'
         workspace_buckets = bucket_service.get_all_accessible_buckets(force_refresh=force_fresh)
         logger.info("Available buckets: %s", workspace_buckets)
@@ -137,7 +139,9 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
 
         Consolidates the repeated pattern for folder structure rendering.
         """
-        bucket_service = get_bucket_service()
+        from lacos.storage.services.bucket_service import BucketService
+
+        bucket_service = BucketService()
 
         if structure is None:
             try:
@@ -172,7 +176,9 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
 
         Used for the bucket header information area.
         """
-        bucket_service = get_bucket_service()
+        from lacos.storage.services.bucket_service import BucketService
+
+        bucket_service = BucketService()
 
         try:
             # Get bucket statistics (could be implemented in BucketService)

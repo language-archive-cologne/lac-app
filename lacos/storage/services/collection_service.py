@@ -18,6 +18,11 @@ class CollectionService(BaseStorageService):
     
     _instance = None
     
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(CollectionService, cls).__new__(cls)
+        return cls._instance
+    
     def __init__(self, skip_bucket_check=False):
         """
         Initialize the CollectionService with base storage configuration.

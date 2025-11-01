@@ -2,8 +2,7 @@ from django.core.management.base import BaseCommand, CommandError
 
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.collection.collection_repository import Collection
-from lacos.storage.services.acl_sync_service import ACLSyncResult
-from lacos.storage.services.registry import get_acl_sync_service
+from lacos.storage.services.acl_sync_service import ACLSyncService, ACLSyncResult
 
 
 class Command(BaseCommand):
@@ -34,7 +33,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        service = get_acl_sync_service()
+        service = ACLSyncService()
 
         collection_ids = options.get("collection_ids") or []
         bundle_ids = options.get("bundle_ids") or []

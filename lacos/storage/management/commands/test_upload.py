@@ -4,7 +4,7 @@ import json
 import shutil
 from pathlib import Path
 from django.core.management.base import BaseCommand
-from lacos.storage.services.registry import get_bucket_service
+from lacos.storage.services.bucket_service import BucketService
 
 class Command(BaseCommand):
     help = 'Test the upload and transformation of collections and bundles'
@@ -17,7 +17,7 @@ class Command(BaseCommand):
         test_type = options.get('test_type', 'collection')
         
         # Create bucket service
-        bucket_service = get_bucket_service()
+        bucket_service = BucketService()
         
         # Clean up any previous test data
         self._cleanup_test_data(bucket_service)

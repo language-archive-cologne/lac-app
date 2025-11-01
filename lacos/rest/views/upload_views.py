@@ -6,7 +6,7 @@ from rest_framework import status
 import logging
 import json
 
-from lacos.storage.services.registry import get_upload_service
+from lacos.storage.services.upload_service import UploadService
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ def get_upload_url(request):
         )
     
     # Call service layer
-    service = get_upload_service()
+    service = UploadService()
     result = service.generate_presigned_post(
         file_name=file_name,
         file_type=file_type,
@@ -86,7 +86,7 @@ def get_batch_upload_urls(request):
         )
     
     # Call service layer
-    service = get_upload_service()
+    service = UploadService()
     result = service.generate_batch_presigned_posts(
         files_metadata=files,
         path_prefix=folder_name,
@@ -138,7 +138,7 @@ def get_accelerated_upload_url(request):
         )
     
     # Call service layer
-    service = get_upload_service()
+    service = UploadService()
     result = service.get_upload_url_with_acceleration(
         file_name=file_name,
         file_type=file_type,
@@ -180,7 +180,7 @@ def mark_upload_complete(request):
         )
     
     # Call service layer
-    service = get_upload_service()
+    service = UploadService()
     result = service.mark_upload_complete(s3_key)
     
     # Handle service result and return appropriate HTTP response
@@ -236,7 +236,7 @@ def get_folder_upload_urls(request):
             logger.debug(f"Sample file metadata: {files_metadata[0]}")
         
         # Call service layer
-        service = get_upload_service()
+        service = UploadService()
         result = service.generate_batch_presigned_posts(
             files_metadata=files_metadata,
             path_prefix=folder_name,

@@ -5,7 +5,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework import status
 import logging
 
-from lacos.storage.services.registry import get_upload_service
+from lacos.storage.services.upload_service import UploadService
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ def copy_object(request):
         )
     
     # Call service layer
-    service = get_upload_service()
+    service = UploadService()
     result = service.copy_object(
         source_key=source_key,
         dest_key=dest_key,

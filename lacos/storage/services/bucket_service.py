@@ -14,6 +14,8 @@ from django.core.management import call_command
 
 
 from .base_storage_service import BaseStorageService
+from .collection_service import CollectionService
+from .upload_service import UploadService
 from .ocfl_service import OCFLService
 from .folder_cache_service import FolderStructureCacheService
 
@@ -34,6 +36,11 @@ class BucketService(BaseStorageService):
     
     _instance = None
     
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(BucketService, cls).__new__(cls)
+        return cls._instance
+    
     def __init__(self, skip_bucket_check=False):
         """
         Initialize the BucketService with all required sub-services.
@@ -47,11 +54,9 @@ class BucketService(BaseStorageService):
             
         super().__init__(skip_bucket_check=skip_bucket_check)
         
-        from .registry import get_collection_service, get_upload_service
-
         # Initialize the specialized services with skip_bucket_check=True
-        self.collection_service = get_collection_service(skip_bucket_check=True)
-        self.upload_service = get_upload_service(skip_bucket_check=True)
+        self.collection_service = CollectionService(skip_bucket_check=True)
+        self.upload_service = UploadService(skip_bucket_check=True)
         
         # Configure child services with consistent settings
         self.set_client_and_buckets(self.collection_service)
@@ -458,8 +463,6 @@ class BucketService(BaseStorageService):
                 self.workspace_buckets = [new_bucket if b == current_bucket else b for b in self.workspace_buckets]
             elif new_bucket not in self.workspace_buckets:
                 self.workspace_buckets.append(new_bucket)
-
-            self.sync_shared_runtime_state()
 
             message = f"Bucket '{current_bucket}' renamed to '{new_bucket}'"
             self.invalidate_bucket_cache()
@@ -941,7 +944,6 @@ class BucketService(BaseStorageService):
             # Add to workspace buckets list (in-memory for this session)
             # Note: For persistent storage, this would need to be saved to database or config
             self.workspace_buckets.append(bucket_name)
-            self.sync_shared_runtime_state()
             self.invalidate_bucket_cache()
             self._invalidate_folder_cache(bucket_name)
 

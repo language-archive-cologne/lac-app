@@ -25,6 +25,11 @@ class ResourceMappingService(BaseStorageService):
     
     _instance = None
     
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(ResourceMappingService, cls).__new__(cls)
+        return cls._instance
+    
     def __init__(self, skip_bucket_check=False):
         """
         Initialize the ResourceMappingService with base storage configuration.
@@ -229,10 +234,10 @@ class ResourceMappingService(BaseStorageService):
         Returns:
             int: Total number of objects mapped (Collection + Bundles + Resources)
         """
+        from lacos.storage.services.file_discovery_service import FileDiscoveryService
+        
         total_mapped = 0
-        from lacos.storage.services.registry import get_file_discovery_service
-
-        discovery_service = get_file_discovery_service()
+        discovery_service = FileDiscoveryService()
         bucket = discovery_service.production_bucket # Get bucket once
         
         # 1. Map the Collection object itself
@@ -474,9 +479,7 @@ class ACFLService:
             return None
         
         # Get the ACFL file from S3
-        from lacos.storage.services.registry import get_resource_mapping_service
-
-        resource_mapping_service = get_resource_mapping_service()
+        resource_mapping_service = ResourceMappingService()
         s3_client = resource_mapping_service.s3_client
         
         try:

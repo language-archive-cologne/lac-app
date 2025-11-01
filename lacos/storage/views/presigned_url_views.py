@@ -5,9 +5,42 @@ from django.contrib import messages
 from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
-from lacos.storage.services.registry import get_upload_service
+from lacos.storage.services.upload_service import UploadService
+from lacos.storage.services.base_storage_service import BaseStorageService
+from lacos.storage.services.collection_service import CollectionService
+from lacos.storage.services.bucket_service import BucketService
 
 logger = logging.getLogger(__name__)
+
+# Singleton instances
+_upload_service = None
+_base_storage_service = None
+_collection_service = None
+_bucket_service = None
+
+def get_upload_service():
+    global _upload_service
+    if _upload_service is None:
+        _upload_service = UploadService()
+    return _upload_service
+
+def get_base_storage_service():
+    global _base_storage_service
+    if _base_storage_service is None:
+        _base_storage_service = BaseStorageService()
+    return _base_storage_service
+
+def get_collection_service():
+    global _collection_service
+    if _collection_service is None:
+        _collection_service = CollectionService()
+    return _collection_service
+
+def get_bucket_service():
+    global _bucket_service
+    if _bucket_service is None:
+        _bucket_service = BucketService()
+    return _bucket_service
 
 @login_required
 @require_http_methods(["POST"])

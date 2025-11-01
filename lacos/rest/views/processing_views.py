@@ -7,7 +7,7 @@ import logging
 import json
 import os
 
-from lacos.storage.services.registry import get_upload_service
+from lacos.storage.services.upload_service import UploadService
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ def process_uploaded_files(request):
                 continue
             
             # Check if the file exists in S3
-            upload_service = get_upload_service()
+            upload_service = UploadService()
             if not upload_service.check_file_exists(s3_key):
                 failed_files.append({
                     'file_name': file_name,
@@ -195,7 +195,7 @@ def mark_upload_complete(request):
                 continue
             
             # Check if the file exists in S3
-            upload_service = get_upload_service()
+            upload_service = UploadService()
             if not upload_service.check_file_exists(s3_key):
                 failed_files.append({
                     'file_name': file_name,

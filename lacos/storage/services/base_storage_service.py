@@ -1,8 +1,6 @@
 import logging
 import os
-import threading
 import time
-from contextlib import contextmanager
 from typing import Any, Dict, Optional, Generator
 import boto3
 from botocore.exceptions import ClientError
@@ -22,73 +20,45 @@ class BaseStorageService:
     # Class-level flag to track if buckets have been checked
     _buckets_checked = False
     _instance = None
-    _instance_lock = threading.RLock()
-    _shared_runtime_lock = threading.RLock()
-    _shared_runtime: Optional[Dict[str, Any]] = None
-    _construction_context = threading.local()
-    _startup_complete = False
-    _post_startup_initializations = set()
-    _direct_instantiation_warnings = set()
-
+    
     def __new__(cls, *args, **kwargs):
-        if getattr(cls, "_instance", None) is None:
-            lock = getattr(cls, "_instance_lock", None)
-            if lock is None:
-                lock = threading.RLock()
-                setattr(cls, "_instance_lock", lock)
-            with lock:
-                if getattr(cls, "_instance", None) is None:
-                    cls._instance = super(BaseStorageService, cls).__new__(cls)
+        if cls._instance is None:
+            cls._instance = super(BaseStorageService, cls).__new__(cls)
         return cls._instance
-
-    def __init__(self, skip_bucket_check: bool = False):
-        if getattr(self, "initialized", False):
+    
+    def __init__(self, skip_bucket_check=False):
+        """
+        Initialize the BaseStorageService with S3 client.
+        
+        Args:
+            skip_bucket_check (bool): If True, skip bucket existence check (for child services)
+        """
+        # Skip initialization if already done
+        if hasattr(self, 'initialized'):
             return
-
-        self._maybe_warn_direct_construction()
-
-        runtime, created = self._get_or_create_runtime(skip_bucket_check=skip_bucket_check)
-        self._apply_runtime(runtime)
-        self._maybe_run_bucket_checks(skip_bucket_check, runtime)
-        self.initialized = True
-        self._record_service_initialized(created=created, source=self._current_construction_source())
-        self._maybe_emit_post_startup_warning(created=created)
-
-    def _get_or_create_runtime(self, skip_bucket_check: bool):
-        runtime = self._get_shared_runtime_snapshot()
-        if runtime is not None:
-            return runtime, False
-
-        with self._shared_runtime_lock:
-            runtime = self._shared_runtime
-            created = False
-            if runtime is None:
-                runtime = self._bootstrap_runtime(skip_bucket_check=skip_bucket_check)
-                self._shared_runtime = runtime
-                created = True
-            return runtime, created
-
-    @classmethod
-    def _get_shared_runtime_snapshot(cls):
-        with cls._shared_runtime_lock:
-            return cls._shared_runtime
-
-    def _bootstrap_runtime(self, skip_bucket_check: bool) -> Dict[str, Any]:
+            
         logger.info("Initializing BaseStorageService...")
-
+        
+        # Initialize settings
         self.is_minio = self._is_minio_environment()
         self.endpoint_url = self._get_endpoint_url()
         self.access_key = self._get_access_key()
         self.secret_key = self._get_secret_key()
         self.region = self._get_region()
+        
+        # Determine if we're running inside a container
+        # This helps us decide how to handle URLs for browser access
         self.in_container = self._is_running_in_container()
-
+        
+        # Initialize workspace buckets (flexible configuration)
         self.workspace_buckets = self._get_workspace_buckets()
         # OCFL buckets will be determined dynamically
 
+        # Initialize legacy buckets for backward compatibility
         self.ingest_bucket = self._get_ingest_bucket_name()
         self.production_bucket = self._get_production_bucket_name()
 
+        # Create S3 client
         logger.info(f"Creating S3 client with endpoint URL: {self.endpoint_url}")
         self.s3_client = self._create_s3_client()
 
@@ -97,80 +67,28 @@ class BaseStorageService:
         logger.info(f"Using region: {self.region}")
         logger.info(f"Workspace buckets: {self.workspace_buckets}")
 
+        # Only log legacy buckets if they're explicitly configured (not derived)
         explicit_ingest = getattr(settings, 'S3_INGEST_BUCKET', None) or getattr(settings, 'AWS_INGEST_BUCKET_NAME', None)
         explicit_production = getattr(settings, 'S3_PRODUCTION_BUCKET', None) or getattr(settings, 'AWS_PRODUCTION_BUCKET_NAME', None)
 
         if explicit_ingest or explicit_production:
             logger.debug(f"Legacy bucket mappings: ingest={self.ingest_bucket}, production={self.production_bucket}")
 
-        self._execute_bucket_checks(skip_bucket_check)
-
-        self._bucket_cache_metadata = {}
-
-        runtime = {
-            "is_minio": self.is_minio,
-            "endpoint_url": self.endpoint_url,
-            "access_key": self.access_key,
-            "secret_key": self.secret_key,
-            "region": self.region,
-            "in_container": self.in_container,
-            "workspace_buckets": self.workspace_buckets,
-            "ingest_bucket": self.ingest_bucket,
-            "production_bucket": self.production_bucket,
-            "s3_client": self.s3_client,
-            "presigned_client": getattr(self, "presigned_client", self.s3_client),
-            "buckets_checked": bool(getattr(self, "_buckets_checked", False)),
-            "bucket_cache_metadata": self._bucket_cache_metadata,
-        }
-        return runtime
-
-    def _apply_runtime(self, runtime: Dict[str, Any]) -> None:
-        self.is_minio = runtime["is_minio"]
-        self.endpoint_url = runtime["endpoint_url"]
-        self.access_key = runtime["access_key"]
-        self.secret_key = runtime["secret_key"]
-        self.region = runtime["region"]
-        self.in_container = runtime["in_container"]
-        self.workspace_buckets = runtime["workspace_buckets"]
-        self.ingest_bucket = runtime["ingest_bucket"]
-        self.production_bucket = runtime["production_bucket"]
-        self.s3_client = runtime["s3_client"]
-        self.presigned_client = runtime.get("presigned_client") or self.s3_client
-        self._buckets_checked = runtime.get("buckets_checked", False)
-        metadata = runtime.get("bucket_cache_metadata")
-        self._bucket_cache_metadata = dict(metadata) if metadata else {}
-
-    def _maybe_run_bucket_checks(self, skip_bucket_check: bool, runtime: Dict[str, Any]) -> None:
-        if skip_bucket_check:
-            return
-        if runtime.get("buckets_checked"):
-            return
-        if not self.is_minio:
-            return
-        self._execute_bucket_checks(False)
-        self._update_shared_runtime("buckets_checked", bool(getattr(self, "_buckets_checked", False)))
-
-    def ensure_buckets_checked(self) -> None:
-        """Ensure MinIO workspace buckets are verified once per process."""
-        if getattr(self, "_buckets_checked", False):
-            return
-        if not getattr(self, "is_minio", False):
-            return
-        self._execute_bucket_checks(False)
-        self._update_shared_runtime("buckets_checked", bool(getattr(self, "_buckets_checked", False)))
-
-    def _execute_bucket_checks(self, skip_bucket_check: bool) -> None:
-        if not skip_bucket_check and not getattr(self, "_buckets_checked", False) and self.is_minio:
-            allow_all = any(bucket in ("*", "__all__") for bucket in self.workspace_buckets)
-            allow_all = allow_all or not self.workspace_buckets
-
+        # Skip bucket checks for external S3 - assume buckets exist
+        # Only check buckets for local MinIO where we can create them
+        if not skip_bucket_check and not self._buckets_checked and self.is_minio:
+            # Only create buckets if specific buckets are listed (not "*")
+            allow_all = any(bucket in ("*", "__all__") for bucket in self.workspace_buckets) or not self.workspace_buckets
+            
             if not allow_all:
                 logger.info("Ensuring workspace buckets exist...")
                 buckets_to_check = [b for b in self.workspace_buckets if b not in ("*", "__all__")]
-
+                
+                # Ensure all specified workspace buckets exist
                 for bucket_name in buckets_to_check:
                     bucket_exists = self.ensure_bucket_exists(bucket_name)
                     if bucket_exists:
+                        # Ensure CORS is configured for upload buckets (needed for direct uploads)
                         logger.info(f"Ensuring CORS is configured for {bucket_name}...")
                         cors_result = self.ensure_cors_enabled(bucket_name)
                         if cors_result["success"]:
@@ -183,131 +101,14 @@ class BaseStorageService:
             else:
                 logger.info("All buckets mode enabled - skipping bucket creation checks (buckets will be discovered dynamically)")
 
+            # Set the class-level flag
             self._buckets_checked = True
         elif not self.is_minio:
             logger.info("Skipping bucket checks for external S3 (buckets will be discovered dynamically)")
-
-    @classmethod
-    def _update_shared_runtime(cls, key: str, value: Any) -> None:
-        with cls._shared_runtime_lock:
-            if cls._shared_runtime is not None:
-                cls._shared_runtime[key] = value
-
-    def sync_shared_runtime_state(self) -> None:
-        """Push mutable runtime fields back into the shared runtime cache."""
-        self._update_shared_runtime("workspace_buckets", self.workspace_buckets)
-        self._update_shared_runtime("ingest_bucket", self.ingest_bucket)
-        self._update_shared_runtime("production_bucket", self.production_bucket)
-
-    def _record_service_initialized(self, *, created: bool, source: Optional[str]) -> None:
-        try:
-            logger.info(
-                "storage.service.initialized",
-                extra={
-                    "event": "storage.service.initialized",
-                    "service": self.__class__.__name__,
-                    "created": bool(created),
-                    "source": source or "direct",
-                    "is_minio": bool(self.is_minio),
-                    "endpoint": self.endpoint_url or "aws-default",
-                    "buckets_checked": bool(getattr(self, "_buckets_checked", False)),
-                },
-            )
-        except Exception:
-            logger.info("storage.service.initialized %s (created=%s)", self.__class__.__name__, created)
-
-    def _maybe_warn_direct_construction(self) -> None:
-        if self._current_construction_source() is not None:
-            return
-
-        cls = self.__class__
-        if cls not in BaseStorageService._direct_instantiation_warnings:
-            logger.warning(
-                "Storage service %s instantiated without registry; use lacos.storage.services.registry helpers to ensure singleton reuse.",
-                cls.__name__,
-            )
-            BaseStorageService._direct_instantiation_warnings.add(cls)
-
-    @classmethod
-    def _current_construction_source(cls) -> Optional[str]:
-        stack = getattr(cls._construction_context, "stack", None)
-        if stack:
-            return stack[-1]
-        return None
-
-    def _maybe_emit_post_startup_warning(self, *, created: bool) -> None:
-        cls = self.__class__
-        if not created:
-            return
-        if not BaseStorageService._startup_complete:
-            return
-        if cls in BaseStorageService._post_startup_initializations:
-            return
-
-        logger.warning(
-            "Storage service %s initialised after startup; consider pre-warming via storage_prefetch if this is unexpected.",
-            cls.__name__,
-        )
-        BaseStorageService._post_startup_initializations.add(cls)
-
-    @classmethod
-    @contextmanager
-    def _construction_scope(cls, source: str):
-        stack = list(getattr(cls._construction_context, "stack", []))
-        stack.append(source)
-        cls._construction_context.stack = stack
-        try:
-            yield
-        finally:
-            stack = list(getattr(cls._construction_context, "stack", []))
-            if stack:
-                stack.pop()
-            if stack:
-                cls._construction_context.stack = stack
-            elif hasattr(cls._construction_context, "stack"):
-                del cls._construction_context.stack
-
-    @classmethod
-    @contextmanager
-    def allow_construction(cls, source: str):
-        with cls._construction_scope(source):
-            yield
-
-    @classmethod
-    @contextmanager
-    def allow_registry_construction(cls):
-        with cls.allow_construction("registry"):
-            yield
-
-    @classmethod
-    @contextmanager
-    def allow_test_construction(cls):
-        with cls.allow_construction("test"):
-            yield
-
-    @classmethod
-    def mark_startup_complete(cls) -> None:
-        cls._startup_complete = True
-
-    @classmethod
-    def reset_shared_state(cls) -> None:
-        with cls._shared_runtime_lock:
-            cls._shared_runtime = None
-        cls._buckets_checked = False
-        cls._post_startup_initializations.clear()
-        cls._direct_instantiation_warnings.clear()
-        cls._startup_complete = False
-
-    @staticmethod
-    def clear_service_singleton(target_cls: "BaseStorageService") -> None:
-        lock = getattr(target_cls, "_instance_lock", threading.RLock())
-        with lock:
-            instance = getattr(target_cls, "_instance", None)
-            target_cls._instance = None
-        if instance and hasattr(instance, "initialized"):
-            delattr(instance, "initialized")
-        if hasattr(target_cls, "_buckets_checked"):
-            target_cls._buckets_checked = False
+        
+        # Mark as initialized
+        self.initialized = True
+        self._bucket_cache_metadata: Dict[str, Any] = {}
     
     def set_client_and_buckets(self, service):
         """
@@ -576,17 +377,6 @@ class BaseStorageService:
                 "duration": 0.0,
                 "force_refresh": force_refresh,
             }
-            self._update_shared_runtime("bucket_cache_metadata", self._bucket_cache_metadata)
-            logger.info(
-                "storage.bucket_cache",
-                extra={
-                    "event": "storage.bucket_cache",
-                    "action": "hit",
-                    "bucket_count": len(cached),
-                    "expires_in": expires_in,
-                    "force_refresh": force_refresh,
-                },
-            )
             logger.debug("Returning cached bucket list (%d buckets)", len(cached))
             return list(cached)
 
@@ -612,18 +402,6 @@ class BaseStorageService:
                 "expires_in": ttl_seconds,
                 "force_refresh": force_refresh,
             }
-            self._update_shared_runtime("bucket_cache_metadata", self._bucket_cache_metadata)
-            logger.info(
-                "storage.bucket_cache",
-                extra={
-                    "event": "storage.bucket_cache",
-                    "action": "refresh",
-                    "bucket_count": len(bucket_names),
-                    "duration": fetch_duration,
-                    "ttl": ttl_seconds,
-                    "force_refresh": force_refresh,
-                },
-            )
             cache.set(cache_key, bucket_names, timeout=ttl_seconds)
 
             return bucket_names
@@ -639,16 +417,6 @@ class BaseStorageService:
                 "error": str(e),
                 "force_refresh": force_refresh,
             }
-            self._update_shared_runtime("bucket_cache_metadata", self._bucket_cache_metadata)
-            logger.warning(
-                "storage.bucket_cache",
-                extra={
-                    "event": "storage.bucket_cache",
-                    "action": "fallback",
-                    "error": str(e),
-                    "force_refresh": force_refresh,
-                },
-            )
             # Fallback: return workspace buckets if configured, otherwise empty list
             if self.workspace_buckets and self.workspace_buckets != ["*"]:
                 return [b for b in self.workspace_buckets if b not in ("*", "__all__")]
@@ -1029,7 +797,6 @@ class BaseStorageService:
         """Clear the cached bucket list."""
         cache.delete(self._bucket_cache_key())
         self._bucket_cache_metadata = {}
-        self._update_shared_runtime("bucket_cache_metadata", self._bucket_cache_metadata)
 
     @property
     def bucket_cache_metadata(self) -> Dict[str, Any]:

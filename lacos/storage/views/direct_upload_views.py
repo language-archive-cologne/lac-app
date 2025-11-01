@@ -7,7 +7,7 @@ from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, HttpResponse
 from django.urls import reverse
-from lacos.storage.services.registry import get_upload_service
+from lacos.storage.services.upload_service import UploadService
 from django.views.decorators.csrf import csrf_exempt
 import requests
 
@@ -32,7 +32,7 @@ def direct_upload(request):
                 logger.info(f"Found session data for folder: {folder_name} with {len(files_metadata)} files")
                 
                 # Generate presigned URLs
-                upload_service = get_upload_service()
+                upload_service = UploadService()
                 logger.info(f"Upload service configuration: is_minio={upload_service.is_minio}, endpoint_url={upload_service.endpoint_url}")
                 
                 result = upload_service.generate_batch_presigned_posts(
@@ -151,7 +151,7 @@ def direct_upload(request):
                 logger.debug(f"File {i+1}: {file_name}, type: {content_type}, path: {path}")
         
         # Generate presigned URLs
-        upload_service = get_upload_service()
+        upload_service = UploadService()
         logger.info(f"Upload service configuration: is_minio={upload_service.is_minio}, endpoint_url={upload_service.endpoint_url}")
         
         result = upload_service.generate_batch_presigned_posts(
@@ -290,7 +290,7 @@ def process_upload(request):
                 logger.debug(f"File {i+1}: {file_name}, type: {file_type}, path: {path}")
         
         # Generate presigned URLs directly
-        upload_service = get_upload_service()
+        upload_service = UploadService()
         logger.info(f"Upload service configuration: is_minio={upload_service.is_minio}, endpoint_url={upload_service.endpoint_url}")
         
         result = upload_service.generate_batch_presigned_posts(
@@ -419,7 +419,7 @@ def upload_complete(request):
         logger.info(f"Processing {len(uploaded_files)} completed uploads")
         
         # Process the uploaded files
-        upload_service = get_upload_service()
+        upload_service = UploadService()
         logger.info(f"Upload service configuration: is_minio={upload_service.is_minio}, endpoint_url={upload_service.endpoint_url}")
         
         result = upload_service.process_uploaded_files(
@@ -456,7 +456,7 @@ def debug_presigned_url(request):
     """Debug endpoint to test presigned URL generation."""
     logger.info(f"Debug presigned URL requested by user: {request.user.username}")
     
-    upload_service = get_upload_service()
+    upload_service = UploadService()
     
     # Log the service configuration
     logger.info(f"Upload service configuration:")

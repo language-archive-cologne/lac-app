@@ -28,10 +28,7 @@ from django.core.paginator import Paginator
 from lacos.explorer.permissions import ACLPermissionMixin
 from lacos.explorer.search import search_archives
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
-from lacos.storage.services.registry import (
-    get_file_discovery_service,
-    get_resource_mapping_service,
-)
+from lacos.storage.services.file_discovery_service import FileDiscoveryService
 
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
@@ -195,7 +192,7 @@ def _resolve_resource_to_presigned(
             getattr(collection_for_path, "import_object_key", None),
         )
 
-    discovery_service = get_file_discovery_service()
+    discovery_service = FileDiscoveryService()
     derived_key = None
     if collection_for_path:
         try:
@@ -720,7 +717,10 @@ class BundleResourcesView(View):
                 if decoded_resource_id.startswith('ID_'):
                     decoded_resource_id = decoded_resource_id[3:]
                 
-                resource_service = get_resource_mapping_service()
+                from lacos.storage.services.file_discovery_service import FileDiscoveryService
+                from lacos.storage.services.resource_mapping_service import ResourceMappingService
+
+                resource_service = ResourceMappingService()
                 location = resource_service.resolve_pid_to_s3(decoded_resource_id)
                 if not location:
                     raise ValueError(f"No S3 location found for PID: {decoded_resource_id}")
@@ -759,7 +759,7 @@ class BundleResourcesView(View):
 
                 if resource_obj and collection_for_path:
                     try:
-                        discovery_service = get_file_discovery_service()
+                        discovery_service = FileDiscoveryService()
                         derived_key = discovery_service.form_resource_path(
                             collection_for_path.id,
                             bundle.id,
@@ -856,7 +856,9 @@ class ResourceAccessView(View):
             )
             is_elan = extension in {'eaf', 'elan'} or normalized_mime_type == 'text/x-eaf+xml'
 
-            resource_service = get_resource_mapping_service()
+            from lacos.storage.services.resource_mapping_service import ResourceMappingService
+
+            resource_service = ResourceMappingService()
 
             storage_resolution = _resolve_resource_to_presigned(
                 resource_service,
