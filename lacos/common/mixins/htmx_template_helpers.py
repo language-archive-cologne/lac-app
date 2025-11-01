@@ -66,26 +66,45 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
         Used for HTMX bucket switching to render the main content area.
         """
         from lacos.storage.services.bucket_service import BucketService
+        import time
+
+        logger.info("─" * 80)
+        logger.info("📦 RENDER BUCKET CONTENT: %s", bucket_name)
+
+        start_time = time.time()
 
         bucket_service = BucketService()
-        workspace_buckets = bucket_service.get_all_accessible_buckets()
+        force_fresh = request.GET.get('force_fresh', 'false').lower() == 'true'
+        workspace_buckets = bucket_service.get_all_accessible_buckets(force_refresh=force_fresh)
+        logger.info("Available buckets: %s", workspace_buckets)
 
         # Verify bucket access
         if bucket_name not in workspace_buckets:
+            logger.warning("❌ Bucket not accessible: %s", bucket_name)
             return '<div class="alert alert-error"><span>Bucket not accessible</span></div>'
+
+        logger.info("✅ Bucket access verified")
 
         self.set_active_bucket(request, bucket_name, workspace_buckets)
 
         try:
-            force_fresh = request.GET.get('force_fresh', 'false').lower() == 'true'
+            logger.info("Force fresh: %s", force_fresh)
+
             # Get bucket structure
+            logger.info("Fetching root level items...")
+            fetch_start = time.time()
+
             if force_fresh:
                 structure = bucket_service.get_root_level_items(bucket_name, force_fresh=True)
             else:
                 structure = bucket_service.get_root_level_items(bucket_name)
 
-            logger.info(f"🎨 TEMPLATE_HELPER: render_bucket_content_template for {bucket_name}")
-            logger.info(f"📁 BUCKET_CONTENT: {len(structure.get('children', []))} items")
+            fetch_elapsed = time.time() - fetch_start
+            logger.info("✅ Root items fetched in %.2fs", fetch_elapsed)
+            logger.info("Items returned: %d", len(structure.get('children', [])))
+            logger.info("Has more: %s", structure.get('has_more', False))
+            if structure.get('next_token'):
+                logger.info("Next token available for pagination")
 
             context = {
                 'structure': structure,
@@ -95,13 +114,23 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
                 'csrf_token': get_token(request),
             }
 
-            return render_to_string(
+            logger.info("Rendering template...")
+            html = render_to_string(
                 'dashboard/bucket_content_partial.html',
                 context,
                 request=request
             )
+
+            total_elapsed = time.time() - start_time
+            logger.info("✅ Template rendered (total: %.2fs)", total_elapsed)
+            logger.info("─" * 80)
+
+            return html
         except Exception as e:
-            logger.exception(f"Error rendering bucket content for {bucket_name}: {str(e)}")
+            logger.error("─" * 80)
+            logger.error("❌ RENDER ERROR: %s", bucket_name)
+            logger.exception("Error rendering bucket content: %s", str(e))
+            logger.error("─" * 80)
             return f'<div class="alert alert-error"><span>Error loading bucket: {str(e)}</span></div>'
 
     def render_folder_structure_template(self, request, bucket_name, structure=None):

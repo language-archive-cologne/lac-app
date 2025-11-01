@@ -62,8 +62,15 @@
     <div class="card bg-base-100 shadow-xl">
         <div id="bucket-content">
             <!-- Initial bucket content -->
-            {% if active_bucket %}
-                {% include "dashboard/bucket_content_partial.html" with structure=active_bucket_structure bucket_name=active_bucket %}
+            {% if active_bucket and auto_load_url %}
+                <div class="card-body flex items-center justify-center min-h-[200px]"
+                     hx-get="{{ auto_load_url }}"
+                     hx-trigger="load"
+                     hx-target="#bucket-content"
+                     hx-indicator="#indicator">
+                    <span class="loading loading-spinner loading-lg mr-3"></span>
+                    <span class="text-base-content/70">Loading {{ active_bucket }}&hellip;</span>
+                </div>
             {% else %}
                 <div class="card-body p-6">
                     <div class="text-center py-12">
