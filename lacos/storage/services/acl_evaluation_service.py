@@ -18,6 +18,7 @@ from lacos.storage.constants import (
     WAC_AUTHENTICATED_AGENT,
 )
 from lacos.storage.utils.acl import determine_access_level
+from lacos.storage.models.acl_config import ACLConfig
 
 logger = logging.getLogger(__name__)
 
@@ -49,9 +50,22 @@ class ACLEvaluationService:
     """
 
     def __init__(self):
-        self.enforcement_enabled = getattr(settings, "ACL_ENFORCEMENT_ENABLED", True)
-        self.log_attempts = getattr(settings, "ACL_LOG_ACCESS_ATTEMPTS", True)
-        self.default_deny = getattr(settings, "ACL_DEFAULT_DENY", True)
+        # Prefer DB-backed configuration; fall back to settings for defaults
+        cfg = None
+        try:
+            cfg = ACLConfig.get_solo()
+        except Exception:
+            cfg = None
+
+        self.enforcement_enabled = (
+            cfg.enforcement_enabled if cfg is not None else getattr(settings, "ACL_ENFORCEMENT_ENABLED", True)
+        )
+        self.log_attempts = (
+            cfg.log_access_attempts if cfg is not None else getattr(settings, "ACL_LOG_ACCESS_ATTEMPTS", True)
+        )
+        self.default_deny = (
+            cfg.default_deny if cfg is not None else getattr(settings, "ACL_DEFAULT_DENY", True)
+        )
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     # Public API ---------------------------------------------------------------

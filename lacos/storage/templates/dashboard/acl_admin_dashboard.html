@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">ACL Admin Dashboard</h2>
+    <form
+      method="post"
+      action="{% url 'storage:acl_sync_all' %}"
+      hx-post="{% url 'storage:acl_sync_all' %}"
+      hx-trigger="click from:#acl-sync-button"
+      hx-target="#acl-sync-summary"
+      hx-swap="innerHTML"
+    >
+      {% csrf_token %}
+      <button id="acl-sync-button" type="submit" class="btn btn-primary">
+        Sync ACLs
+      </button>
+    </form>
+  </div>
+
+  {% if message %}
+  <div class="alert alert-info">{{ message }}</div>
+  {% endif %}
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-4" id="acl-settings-card">
+      {% include "dashboard/partials/acl_settings_card.html" %}
+    </div>
+
+    <div class="col-md-4">
+      <div class="card h-100">
+        <div class="card-header">Summary</div>
+        <div class="card-body">
+          <div><strong>Total entries:</strong> {{ total }}</div>
+          <hr>
+          {% for row in by_level %}
+            <div class="d-flex justify-content-between">
+              <span>{{ row.access_level|title }}</span>
+              <span class="badge text-bg-secondary">{{ row.count }}</span>
+            </div>
+          {% empty %}
+            <em>No data</em>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card h-100">
+        <div class="card-header">Last Sync Summary</div>
+        <div class="card-body" id="acl-sync-summary">
+          <em>Run a sync to see summary here.</em>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">Recent ACL Entries</div>
+    <div class="table-responsive">
+      <table class="table table-sm mb-0 align-middle">
+        <thead>
+          <tr>
+            <th>Object</th>
+            <th>Type</th>
+            <th>Access level</th>
+            <th>Last synced</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for perm in recent %}
+          <tr>
+            <td>{{ perm.object_id }}</td>
+            <td>{{ perm.content_type.model|title }}</td>
+            <td>{{ perm.access_level|title }}</td>
+            <td>{{ perm.last_synced|default:"–" }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="4" class="text-muted">No ACL permissions found.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+

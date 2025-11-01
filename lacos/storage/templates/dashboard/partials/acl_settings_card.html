@@ -1,0 +1,33 @@
+<div class="card h-100">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>Settings</span>
+  </div>
+  <div class="card-body">
+    <form
+      method="post"
+      action="{% url 'storage:acl_update_settings' %}"
+      hx-post="{% url 'storage:acl_update_settings' %}"
+      hx-target="#acl-settings-card"
+      hx-swap="outerHTML"
+    >
+      {% csrf_token %}
+      <div class="form-check mb-2">
+        <input class="form-check-input" type="checkbox" id="enforcement_enabled" name="enforcement_enabled" {% if acl_flags.ACL_ENFORCEMENT_ENABLED %}checked{% endif %}>
+        <label class="form-check-label" for="enforcement_enabled">Enforcement enabled</label>
+      </div>
+      <div class="form-check mb-2">
+        <input class="form-check-input" type="checkbox" id="log_access_attempts" name="log_access_attempts" {% if acl_flags.ACL_LOG_ACCESS_ATTEMPTS %}checked{% endif %}>
+        <label class="form-check-label" for="log_access_attempts">Log access attempts</label>
+      </div>
+      <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" id="default_deny" name="default_deny" {% if acl_flags.ACL_DEFAULT_DENY %}checked{% endif %}>
+        <label class="form-check-label" for="default_deny">Default deny</label>
+      </div>
+      <button type="submit" class="btn btn-secondary">Save</button>
+    </form>
+  </div>
+</div>
+
+
+
+

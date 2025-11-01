@@ -1,4 +1,6 @@
 from django.urls import path
+from django.views.decorators.http import require_http_methods
+from django.views.generic import RedirectView
 
 from . import views
 from .views import direct_upload_views
@@ -6,6 +8,7 @@ from .views import direct_upload_views
 app_name = "storage"
 
 urlpatterns = [
+    path("", views.archivist_dashboard, name="archivist_dashboard"),
     path("upload/", views.upload_form, name="upload_form"),
     path("upload/process/", views.process_upload, name="process_upload"),
     path('mark-uploads-complete/', views.mark_uploads_complete, name='mark_uploads_complete'),
@@ -38,9 +41,18 @@ urlpatterns = [
     path("tasks/<uuid:task_id>/status/", views.background_task_status, name="background_task_status"),
 
     # Archivist dashboard
-    path("dashboard/", views.archivist_dashboard, name="archivist_dashboard"),
+    path(
+        "dashboard/",
+        RedirectView.as_view(pattern_name="storage:archivist_dashboard", permanent=False),
+        name="archivist_dashboard_legacy_redirect",
+    ),
     path("dashboard/folder-contents/<str:bucket_type>/<path:folder_path>/", views.load_folder_contents, name="load_folder_contents"),
     path("dashboard/bucket-size/<str:bucket_name>/", views.bucket_size_info, name="bucket_size_info"),
+
+    # ACL Admin dashboard
+    path("dashboard/acl/", views.acl_admin_dashboard, name="acl_admin_dashboard"),
+    path("dashboard/acl/sync/", views.acl_sync_all, name="acl_sync_all"),
+    path("dashboard/acl/settings/", views.acl_update_settings, name="acl_update_settings"),
     
     # File operations
     path("file-content/<str:bucket_type>/<path:file_path>/", views.file_content, name="file_content"),
