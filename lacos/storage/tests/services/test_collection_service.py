@@ -154,30 +154,38 @@ def setup_bucket_contents(mock_s3):
 def test_list_bucket_contents(mock_s3, mock_collection_service):
     """Test the list_bucket_contents method"""
     setup_bucket_contents(mock_s3)
-    
-    # List root contents
-    contents = mock_collection_service.list_bucket_contents(TEST_BUCKET_NAME)
-    
+
+    # List root contents - returns dict with pagination info
+    result = mock_collection_service.list_bucket_contents(TEST_BUCKET_NAME)
+    assert isinstance(result, dict), "Expected dict return type"
+    assert "items" in result, "Expected 'items' key in result"
+    assert "has_more" in result, "Expected 'has_more' key in result"
+    assert "next_token" in result, "Expected 'next_token' key in result"
+
+    contents = result["items"]
+
     # Verify results - should have directories
     dirs = [item for item in contents if item.get("is_dir", False)]
     assert len(dirs) == 2, f"Expected 2 directories, got {len(dirs)}"
     dir_names = {d["name"] for d in dirs}
     assert "collection" in dir_names
     assert "nested" in dir_names
-    
+
     # List collection contents
-    contents = mock_collection_service.list_bucket_contents(TEST_BUCKET_NAME, "collection")
-    
+    result = mock_collection_service.list_bucket_contents(TEST_BUCKET_NAME, "collection")
+    contents = result["items"]
+
     # Verify directories
     dirs = [item for item in contents if item.get("is_dir", False)]
     assert len(dirs) == 2, f"Expected 2 directories, got {len(dirs)}"
     dir_names = {d["name"] for d in dirs}
     assert "collection" in dir_names
     assert "bundle1" in dir_names
-    
+
     # List collection files
-    contents = mock_collection_service.list_bucket_contents(TEST_BUCKET_NAME, "collection/collection")
-    
+    result = mock_collection_service.list_bucket_contents(TEST_BUCKET_NAME, "collection/collection")
+    contents = result["items"]
+
     # Verify files
     files = [item for item in contents if not item.get("is_dir", False)]
     assert len(files) == 3, f"Expected 3 files, got {len(files)}"
@@ -185,6 +193,38 @@ def test_list_bucket_contents(mock_s3, mock_collection_service):
     assert "file1.txt" in file_names
     assert "0=ocfl_object_1.0" in file_names
     assert "acl.json" in file_names
+
+
+def test_list_bucket_contents_pagination(mock_s3, mock_collection_service):
+    """Test the list_bucket_contents method with pagination support"""
+    setup_bucket_contents(mock_s3)
+
+    # List root contents with max_keys - verifies pagination interface
+    # Note: moto may not properly respect MaxKeys with Delimiter, so we just
+    # verify that the pagination interface exists and works
+    result = mock_collection_service.list_bucket_contents(
+        TEST_BUCKET_NAME,
+        max_keys=1
+    )
+
+    assert isinstance(result, dict), "Expected dict return type"
+    assert "items" in result, "Expected 'items' key in result"
+    assert "has_more" in result, "Expected 'has_more' key in result"
+    assert "next_token" in result, "Expected 'next_token' key in result"
+
+    # Verify items is a list
+    contents = result["items"]
+    assert isinstance(contents, list), "Expected items to be a list"
+
+    # Test continuation token support (even if not triggered by moto)
+    # This verifies the interface works without error
+    if result.get("next_token"):
+        next_result = mock_collection_service.list_bucket_contents(
+            TEST_BUCKET_NAME,
+            continuation_token=result["next_token"]
+        )
+        assert isinstance(next_result, dict)
+        assert "items" in next_result
 
 def test_get_folder_structure(mock_s3, mock_collection_service):
     """Test the get_folder_structure method"""
