@@ -311,16 +311,20 @@ RESOURCE_PATH_PATTERN = env("RESOURCE_PATH_PATTERN")
 # Storage Configuration
 # ------------------------------------------------------------------------------
 # S3/MinIO bucket configuration for flexible workspace access
-# Default workspace buckets - use actual bucket names, can be overridden by environment variables
-S3_WORKSPACE_BUCKETS = env.list("S3_WORKSPACE_BUCKETS", default=["lacos-ingest", "lacos-production"])
+# Workspace buckets can be provided via env; default to empty list and rely on runtime configuration.
+S3_WORKSPACE_BUCKETS = env.list("S3_WORKSPACE_BUCKETS", default=[])
 
 # Buckets where OCFL operations are allowed (subset of workspace buckets)
-S3_OCFL_BUCKETS = env.list("S3_OCFL_BUCKETS", default=["lacos-ingest", "lacos-production"])
+S3_OCFL_BUCKETS = env.list("S3_OCFL_BUCKETS", default=[])
 
 # Legacy bucket names for backward compatibility
 # These map to the actual bucket names used by the legacy configuration
-S3_INGEST_BUCKET = env("S3_INGEST_BUCKET", default="lacos-ingest")
-S3_PRODUCTION_BUCKET = env("S3_PRODUCTION_BUCKET", default="lacos-production")
+S3_INGEST_BUCKET = env("S3_INGEST_BUCKET", default=None)
+S3_PRODUCTION_BUCKET = env("S3_PRODUCTION_BUCKET", default=None)
+
+# Pagination settings for dashboard bucket listings
+# Default page size for root-level listings (prevents timeout on large buckets)
+S3_LISTING_PAGE_SIZE = env.int("S3_LISTING_PAGE_SIZE", default=100)
 
 # ACL Configuration
 # ------------------------------------------------------------------------------

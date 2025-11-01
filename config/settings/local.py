@@ -69,10 +69,14 @@ USE_MINIO = env.bool("USE_MINIO", default=True)
 AWS_S3_ENDPOINT_URL = env("AWS_S3_ENDPOINT_URL", default="http://minio:9000")
 AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID", default="minioadmin")
 AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY", default="minioadmin")
+workspace_defaults = S3_WORKSPACE_BUCKETS or []
 # Bucket for ingesting data
-AWS_STORAGE_BUCKET_NAME = env("AWS_STORAGE_BUCKET_NAME", default="lacos-ingest")
+AWS_STORAGE_BUCKET_NAME = env("AWS_STORAGE_BUCKET_NAME", default=workspace_defaults[0] if workspace_defaults else None)
 # Bucket for production/published data
-AWS_PRODUCTION_BUCKET_NAME = env("AWS_PRODUCTION_BUCKET_NAME", default="lacos-production")
+AWS_PRODUCTION_BUCKET_NAME = env(
+    "AWS_PRODUCTION_BUCKET_NAME",
+    default=workspace_defaults[1] if len(workspace_defaults) > 1 else AWS_STORAGE_BUCKET_NAME,
+)
 AWS_S3_REGION_NAME = env("AWS_S3_REGION_NAME", default="us-east-1")
 
 # Ensure the buckets exist on startup
