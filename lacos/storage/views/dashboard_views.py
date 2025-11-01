@@ -42,9 +42,6 @@ def archivist_dashboard(request):
         force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
 
         logger.info("Fetching accessible buckets...")
-        logger.info("Testing S3 connection handshake...")
-        logger.info("Endpoint: %s", bucket_service.endpoint_url)
-        logger.info("Region: %s", bucket_service.region)
         handshake_start = time.time()
 
         try:
@@ -62,6 +59,9 @@ def archivist_dashboard(request):
                     metadata.get("expires_in", 0.0) or 0.0,
                 )
             else:
+                logger.info("Testing S3 connection handshake...")
+                logger.info("Endpoint: %s", bucket_service.endpoint_url)
+                logger.info("Region: %s", bucket_service.region)
                 logger.info("✅ S3 connection successful (%.2fs)", handshake_elapsed)
                 if metadata.get("duration") is not None:
                     logger.info("Bucket listing duration: %.2fs", metadata["duration"])
