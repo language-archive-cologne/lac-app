@@ -222,3 +222,36 @@ def test_get_all_accessible_buckets_filters_to_workspace_on_s3(settings):
 
     BaseStorageService._instance = None
     BucketService._instance = None
+
+
+@override_settings(S3_WORKSPACE_BUCKETS=[], STORAGE_PREFETCH_BUCKETS_ON_STARTUP=False)
+def test_get_all_accessible_buckets_uses_cache_between_calls():
+    """Ensure S3 list_buckets is not called when cached results exist."""
+    BaseStorageService._instance = None
+    BucketService._instance = None
+    cache.delete("storage:bucket-names")
+
+    service = BucketService(skip_bucket_check=True)
+    service.is_minio = False
+
+    s3_client = MagicMock()
+    s3_client.list_buckets.return_value = {
+        "Buckets": [
+            {"Name": "alpha"},
+            {"Name": "beta"},
+        ]
+    }
+    service.s3_client = s3_client
+
+    first = service.get_all_accessible_buckets(force_refresh=True)
+    assert first == ["alpha", "beta"]
+    s3_client.list_buckets.assert_called_once()
+
+    s3_client.list_buckets.reset_mock()
+    second = service.get_all_accessible_buckets()
+    assert second == first
+    s3_client.list_buckets.assert_not_called()
+
+    BaseStorageService._instance = None
+    BucketService._instance = None
+    cache.delete("storage:bucket-names")
