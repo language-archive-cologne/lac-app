@@ -9,7 +9,19 @@ HTMX loads child contents when a folder is expanded.
         {% if item.type == 'folder' %}
         {% with folder_slug=item.path|slugify %}
         <li data-folder-path="{{ item.path }}">
-            <details data-folder-path="{{ item.path }}">
+            <details data-folder-path="{{ item.path }}"
+                     class="folder-details"
+                     data-load-url="{% url 'storage:load_folder_contents' bucket_type=bucket_type folder_path=item.path %}"
+                     data-target-id="children-{{ folder_slug }}"
+                     data-indicator-id="indicator-{{ folder_slug }}"
+                     ontoggle="
+                     if (this.open && !this.dataset.loaded) {
+                         this.dataset.loaded = 'true';
+                         const targetId = this.dataset.targetId;
+                         const indicatorId = this.dataset.indicatorId;
+                         const loadUrl = this.dataset.loadUrl;
+                         htmx.ajax('GET', loadUrl, {target: '#' + targetId, swap: 'innerHTML', indicator: '#' + indicatorId});
+                     }">
                 <summary class="flex items-center gap-3 py-3 px-4 hover:bg-base-200/40 rounded-lg cursor-pointer transition-colors">
                     <span class="flex items-center gap-3 font-medium flex-1">
                         <svg class="h-5 w-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -108,13 +120,8 @@ HTMX loads child contents when a folder is expanded.
                     </div>
                     <ul id="children-{{ folder_slug }}" class="menu menu-sm bg-base-50 rounded-lg border-l-2 border-primary/20 folder-children"
                         data-folder-path="{{ item.path }}"
-                        data-bucket-type="{{ bucket_type }}"
-                        hx-get="{% url 'storage:load_folder_contents' bucket_type=bucket_type folder_path=item.path %}"
-                        hx-trigger="revealed once"
-                        hx-target="this"
-                        hx-swap="innerHTML"
-                        hx-indicator="#indicator-{{ folder_slug }}">
-                        <li class="text-xs text-base-content/60 py-2">Expand to load contents</li>
+                        data-bucket-type="{{ bucket_type }}">
+                        <li class="text-xs text-base-content/60 py-2">Expand folder to load contents</li>
                     </ul>
                 </div>
             </details>
@@ -213,6 +220,22 @@ HTMX loads child contents when a folder is expanded.
             {% endwith %}
         {% endif %}
     {% endfor %}
+
+    {% if structure.has_more and structure.next_token %}
+    <li class="py-3">
+        <button type="button"
+                class="btn btn-outline btn-block"
+                hx-get="{% url 'storage:dashboard_content' bucket_type=bucket_type %}?continuation_token={{ structure.next_token }}"
+                hx-target="this"
+                hx-swap="outerHTML"
+                hx-indicator="#indicator">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+            Load More Items
+        </button>
+    </li>
+    {% endif %}
 </ul>
 {% else %}
 <div class="alert alert-info">

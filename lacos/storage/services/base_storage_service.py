@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Generator
 import boto3
 from botocore.exceptions import ClientError
 from django.conf import settings
@@ -65,31 +65,45 @@ class BaseStorageService:
         logger.info(f"Using endpoint: {self.endpoint_url or 'default S3 endpoint'}")
         logger.info(f"Using region: {self.region}")
         logger.info(f"Workspace buckets: {self.workspace_buckets}")
-        logger.info(f"All buckets are OCFL-capable")
-        logger.info(f"Legacy ingest bucket: {self.ingest_bucket}")
-        logger.info(f"Legacy production bucket: {self.production_bucket}")
-        
-        # Only check buckets if not skipped and not already checked
-        if not skip_bucket_check and not self._buckets_checked:
-            logger.info("Ensuring workspace buckets exist...")
 
-            # Ensure all workspace buckets exist
-            for bucket_name in self.workspace_buckets:
-                bucket_exists = self.ensure_bucket_exists(bucket_name)
-                if bucket_exists and bucket_name == self.ingest_bucket:
-                    # Ensure CORS is configured for ingest bucket (needed for direct uploads)
-                    logger.info(f"Ensuring CORS is configured for {bucket_name}...")
-                    cors_result = self.ensure_cors_enabled(bucket_name)
-                    if cors_result["success"]:
-                        if cors_result.get("updated", False):
-                            logger.info(f"✅ CORS configuration for {bucket_name} has been updated")
+        # Only log legacy buckets if they're explicitly configured (not derived)
+        explicit_ingest = getattr(settings, 'S3_INGEST_BUCKET', None) or getattr(settings, 'AWS_INGEST_BUCKET_NAME', None)
+        explicit_production = getattr(settings, 'S3_PRODUCTION_BUCKET', None) or getattr(settings, 'AWS_PRODUCTION_BUCKET_NAME', None)
+
+        if explicit_ingest or explicit_production:
+            logger.debug(f"Legacy bucket mappings: ingest={self.ingest_bucket}, production={self.production_bucket}")
+
+        # Skip bucket checks for external S3 - assume buckets exist
+        # Only check buckets for local MinIO where we can create them
+        if not skip_bucket_check and not self._buckets_checked and self.is_minio:
+            # Only create buckets if specific buckets are listed (not "*")
+            allow_all = any(bucket in ("*", "__all__") for bucket in self.workspace_buckets) or not self.workspace_buckets
+            
+            if not allow_all:
+                logger.info("Ensuring workspace buckets exist...")
+                buckets_to_check = [b for b in self.workspace_buckets if b not in ("*", "__all__")]
+                
+                # Ensure all specified workspace buckets exist
+                for bucket_name in buckets_to_check:
+                    bucket_exists = self.ensure_bucket_exists(bucket_name)
+                    if bucket_exists:
+                        # Ensure CORS is configured for upload buckets (needed for direct uploads)
+                        logger.info(f"Ensuring CORS is configured for {bucket_name}...")
+                        cors_result = self.ensure_cors_enabled(bucket_name)
+                        if cors_result["success"]:
+                            if cors_result.get("updated", False):
+                                logger.info(f"✅ CORS configuration for {bucket_name} has been updated")
+                            else:
+                                logger.info(f"✅ CORS configuration for {bucket_name} is already correct")
                         else:
-                            logger.info(f"✅ CORS configuration for {bucket_name} is already correct")
-                    else:
-                        logger.warning(f"⚠️ Failed to configure CORS for {bucket_name}: {cors_result.get('error', 'Unknown error')}")
+                            logger.warning(f"⚠️ Failed to configure CORS for {bucket_name}: {cors_result.get('error', 'Unknown error')}")
+            else:
+                logger.info("All buckets mode enabled - skipping bucket creation checks (buckets will be discovered dynamically)")
 
             # Set the class-level flag
             self._buckets_checked = True
+        elif not self.is_minio:
+            logger.info("Skipping bucket checks for external S3 (buckets will be discovered dynamically)")
         
         # Mark as initialized
         self.initialized = True
@@ -203,87 +217,184 @@ class BaseStorageService:
         # Default region
         return 'us-east-1'
     
-    def _get_ingest_bucket_name(self) -> str:
-        """Get the ingest bucket name for S3/MinIO."""
-        # First check for explicit setting
-        bucket_name = getattr(settings, 'AWS_INGEST_BUCKET_NAME', None)
+    def _get_ingest_bucket_name(self) -> Optional[str]:
+        """
+        Get the ingest bucket name for S3/MinIO.
+        
+        DEPRECATED: This is a legacy property. Use get_all_accessible_buckets() to get all buckets.
+        Only returns a value if explicitly configured. Returns None otherwise.
+        """
+        # Check new-style setting first
+        bucket_name = getattr(settings, 'S3_INGEST_BUCKET', None) or os.environ.get('S3_INGEST_BUCKET')
         if bucket_name:
             return bucket_name
+
+        # Legacy fallback
+        bucket_name = getattr(settings, 'AWS_INGEST_BUCKET_NAME', None) or os.environ.get('AWS_INGEST_BUCKET_NAME')
+        if bucket_name:
+            logger.debug("Using legacy AWS_INGEST_BUCKET_NAME setting")
+            return bucket_name
+
+        # Do NOT derive from workspace buckets - return None if not explicitly configured
+        return None
+
+    def _get_production_bucket_name(self) -> Optional[str]:
+        """
+        Get the production bucket name for S3/MinIO.
         
-        # Then check for environment variable
-        bucket_name_env = os.environ.get('AWS_INGEST_BUCKET_NAME', '')
-        if bucket_name_env:
-            return bucket_name_env
-        
-        # Fall back to the storage bucket name if ingest-specific not defined
-        storage_bucket = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', None)
-        if storage_bucket:
-            return storage_bucket
-            
-        storage_bucket_env = os.environ.get('AWS_STORAGE_BUCKET_NAME', '')
-        if storage_bucket_env:
-            return storage_bucket_env
-        
-        # Default bucket name
-        if self._is_minio_environment():
-            return 'lacos-ingest'
-        
-        # For production, we should have a setting or environment variable
-        logger.warning("No AWS_INGEST_BUCKET_NAME found in settings or environment")
-        return 'lacos-ingest'
-    
-    def _get_production_bucket_name(self) -> str:
-        """Get the production bucket name for S3/MinIO."""
-        # First check for explicit setting
-        bucket_name = getattr(settings, 'AWS_PRODUCTION_BUCKET_NAME', None)
+        DEPRECATED: This is a legacy property. Use get_all_accessible_buckets() to get all buckets.
+        Only returns a value if explicitly configured. Returns None otherwise.
+        """
+        # Check new-style setting first
+        bucket_name = getattr(settings, 'S3_PRODUCTION_BUCKET', None) or os.environ.get('S3_PRODUCTION_BUCKET')
         if bucket_name:
             return bucket_name
-        
-        # Then check for environment variable
-        bucket_name_env = os.environ.get('AWS_PRODUCTION_BUCKET_NAME', '')
-        if bucket_name_env:
-            return bucket_name_env
-        
-        # Default bucket name
-        if self._is_minio_environment():
-            return 'lacos-production'
-        
-        # For production, we should have a setting or environment variable
-        logger.warning("No AWS_PRODUCTION_BUCKET_NAME found in settings or environment")
-        return 'lacos-production'
+
+        # Legacy fallback
+        bucket_name = getattr(settings, 'AWS_PRODUCTION_BUCKET_NAME', None) or os.environ.get('AWS_PRODUCTION_BUCKET_NAME')
+        if bucket_name:
+            logger.debug("Using legacy AWS_PRODUCTION_BUCKET_NAME setting")
+            return bucket_name
+
+        # Do NOT derive from workspace buckets - return None if not explicitly configured
+        return None
 
     def _get_workspace_buckets(self) -> list:
         """Get the list of workspace buckets from settings."""
-        workspace_buckets = getattr(settings, 'S3_WORKSPACE_BUCKETS', ['ingest', 'production'])
-        logger.info(f"Loaded workspace buckets from settings: {workspace_buckets}")
+        workspace_buckets = getattr(settings, 'S3_WORKSPACE_BUCKETS', [])
+        if isinstance(workspace_buckets, (list, tuple)):
+            workspace_buckets = list(dict.fromkeys(str(bucket).strip() for bucket in workspace_buckets if bucket))
+        elif isinstance(workspace_buckets, str):
+            # Handle * or __all__ as wildcard for all buckets
+            workspace_buckets_str = workspace_buckets.strip()
+            if workspace_buckets_str in ("*", "__all__", ""):
+                workspace_buckets = ["*"]  # Use * as marker for "all buckets"
+            else:
+                # Split comma-separated list
+                workspace_buckets = [b.strip() for b in workspace_buckets_str.split(",") if b.strip()]
+        else:
+            workspace_buckets = []
+
+        logger.info("Loaded workspace buckets from settings: %s", workspace_buckets)
         return workspace_buckets
 
     @property
     def ocfl_buckets(self) -> list:
-        """Get all accessible buckets as OCFL-capable buckets."""
+        """
+        Get all accessible buckets as OCFL-capable buckets.
+        
+        Note: This property triggers lazy loading when first accessed.
+        All buckets are OCFL-capable.
+        """
         return self.get_all_accessible_buckets()
 
     def is_ocfl_bucket(self, bucket_name: str) -> bool:
         """Check if a bucket allows OCFL operations. All buckets are OCFL-capable."""
         return True
 
+    def _lazy_fetch_buckets(self) -> Generator[str, None, None]:
+        """
+        Lazy generator that yields buckets one at a time.
+        Only fetches from S3 when iterated, not on call.
+        
+        Returns:
+            Generator[str, None, None]: Lazy iterator yielding bucket names
+        """
+        # Check if we should allow all buckets
+        allow_all = any(bucket in ("*", "__all__") for bucket in self.workspace_buckets)
+        allow_all = allow_all or not self.workspace_buckets  # Empty list also means all buckets
+
+        if not allow_all:
+            # If specific buckets are configured, yield only those (no S3 call needed)
+            allowlist = [bucket for bucket in self.workspace_buckets if bucket not in ("*", "__all__")]
+            allowlist = list(dict.fromkeys(allowlist))
+            
+            if allowlist and not self.is_minio:
+                # For external S3 with allowlist, verify buckets exist as we yield them
+                for bucket_name in allowlist:
+                    try:
+                        # Lazy check: only verify bucket exists when yielding
+                        self.s3_client.head_bucket(Bucket=bucket_name)
+                        yield bucket_name
+                    except ClientError:
+                        logger.debug("Bucket '%s' not accessible, skipping", bucket_name)
+                return
+            elif allowlist:
+                # For MinIO with allowlist, just yield them
+                yield from allowlist
+                return
+
+        # For "all buckets" mode, fetch lazily from S3
+        try:
+            response = self.s3_client.list_buckets()
+            all_bucket_names = sorted(bucket['Name'] for bucket in response['Buckets'])
+            logger.debug("📦 BUCKETS: Lazy fetch found %s buckets", len(all_bucket_names))
+            
+            for bucket_name in all_bucket_names:
+                yield bucket_name
+        except Exception as e:
+            logger.exception("❌ Error listing buckets lazily: %s", e)
+            # Fallback: yield workspace buckets if configured
+            if self.workspace_buckets and self.workspace_buckets != ["*"]:
+                for b in self.workspace_buckets:
+                    if b not in ("*", "__all__"):
+                        yield b
+
     def get_all_accessible_buckets(self) -> list:
-        """Get all buckets that exist in MinIO."""
+        """
+        Get all accessible buckets dynamically from S3/MinIO.
+        
+        This method uses lazy loading - buckets are only fetched when this method is called,
+        not during service initialization. Use iter_buckets() for true lazy iteration.
+        
+        Returns:
+            list: List of accessible bucket names
+        """
+        # Check cache first
         cache_key = "storage:bucket-names"
         cached = cache.get(cache_key)
         if cached is not None:
             logger.debug("Returning cached bucket list: %s", cached)
             return cached
 
+        # Lazy fetch and cache the result
         try:
-            response = self.s3_client.list_buckets()
-            bucket_names = sorted(bucket['Name'] for bucket in response['Buckets'])
-            logger.info("📦 BUCKETS: Found %s buckets in MinIO", len(bucket_names))
-            cache.set(cache_key, bucket_names, timeout=300)
+            bucket_names = list(self._lazy_fetch_buckets())
+            
+            # Check if we should allow all buckets (for logging)
+            allow_all = any(bucket in ("*", "__all__") for bucket in self.workspace_buckets)
+            allow_all = allow_all or not self.workspace_buckets
+            
+            if allow_all:
+                logger.info("📦 BUCKETS: All buckets mode enabled, found %s buckets", len(bucket_names))
+            else:
+                logger.info("📦 BUCKETS: Found %s accessible buckets (filtered)", len(bucket_names))
+            
+            # Cache for a short time to avoid repeated calls, but keep it short for freshness
+            cache.set(cache_key, bucket_names, timeout=60)  # Reduced from 300 to 60 seconds
             return bucket_names
         except Exception as e:
-            logger.exception("❌ Error listing buckets from MinIO: %s", e)
-            return self.workspace_buckets.copy()
+            logger.exception("❌ Error getting buckets: %s", e)
+            # Fallback: return workspace buckets if configured, otherwise empty list
+            if self.workspace_buckets and self.workspace_buckets != ["*"]:
+                return [b for b in self.workspace_buckets if b not in ("*", "__all__")]
+            return []
+
+    def iter_buckets(self) -> Generator[str, None, None]:
+        """
+        Return a lazy iterator over accessible buckets.
+        Buckets are fetched from S3 only when iterated, not on call.
+        
+        Use this when you only need to iterate through buckets and don't need a list.
+        
+        Example:
+            for bucket in service.iter_buckets():
+                process(bucket)
+        
+        Returns:
+            Generator[str, None, None]: Lazy iterator yielding bucket names
+        """
+        return self._lazy_fetch_buckets()
 
     def _create_s3_client(self):
         """
@@ -308,7 +419,14 @@ class BaseStorageService:
             # For server-side operations, use the original endpoint URL
             server_endpoint = self.endpoint_url
             client_kwargs['endpoint_url'] = server_endpoint
-            
+
+            # For any custom endpoint (MinIO or S3-compatible), use path-style addressing
+            # This prevents boto3 from trying virtual-hosted-style URLs like https://bucket.endpoint.com
+            client_kwargs['config'] = boto3.session.Config(
+                signature_version='s3v4',
+                s3={'addressing_style': 'path'}
+            )
+
             # For MinIO in local development, we need special handling for presigned URLs
             if self.is_minio:
                 # Create a config that tells boto3 to use path-style addressing
@@ -441,7 +559,7 @@ class BaseStorageService:
             return {
                 "content": content,
                 "metadata": metadata,
-                "bucket_type": "ingest" if bucket_name == self.ingest_bucket else "production",
+                "bucket_name": bucket_name,
                 "path": file_path,
             }
         except ClientError as e:
@@ -506,21 +624,20 @@ class BaseStorageService:
             logger.error(f"Error deleting {object_path}: {str(e)}")
             return {"success": False, "error": str(e)}
     
-    def ensure_cors_enabled(self, bucket_name: str = None) -> Dict[str, Any]:
+    def ensure_cors_enabled(self, bucket_name: str) -> Dict[str, Any]:
         """
         Ensure CORS is properly configured for the specified bucket.
         
         This is required for browser-based uploads to work properly.
         
         Args:
-            bucket_name (str, optional): Name of the bucket to configure. 
-                                         Defaults to ingest bucket.
+            bucket_name (str): Name of the bucket to configure.
         
         Returns:
             Dict[str, Any]: Result of the operation
         """
-        if bucket_name is None:
-            bucket_name = self.ingest_bucket
+        if not bucket_name:
+            return {"success": False, "error": "Bucket name is required"}
         
         logger.info(f"Checking CORS configuration for bucket: {bucket_name}")
         
