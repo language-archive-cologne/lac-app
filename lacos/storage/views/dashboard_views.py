@@ -5,6 +5,7 @@ import time
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.db import models
 from django.http import HttpResponse, JsonResponse, QueryDict
 from django.middleware.csrf import get_token
 from django.shortcuts import render
