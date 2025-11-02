@@ -6,19 +6,7 @@ Nested folder contents returned via HTMX when a folder is expanded.
     {% if item.type == 'folder' %}
     {% with folder_slug=item.path|slugify %}
     <li data-folder-path="{{ item.path }}">
-        <details data-folder-path="{{ item.path }}"
-                 class="folder-details"
-                 data-load-url="{% url 'storage:load_folder_contents' bucket_type=bucket_type folder_path=item.path %}"
-                 data-target-id="children-{{ folder_slug }}"
-                 data-indicator-id="indicator-{{ folder_slug }}"
-                 ontoggle="
-                 if (this.open && !this.dataset.loaded) {
-                     this.dataset.loaded = 'true';
-                     const targetId = this.dataset.targetId;
-                     const indicatorId = this.dataset.indicatorId;
-                     const loadUrl = this.dataset.loadUrl;
-                     htmx.ajax('GET', loadUrl, {target: '#' + targetId, swap: 'innerHTML', indicator: '#' + indicatorId});
-                 }">
+        <details data-folder-path="{{ item.path }}">
             <summary class="flex items-center gap-3 py-2 px-3 hover:bg-base-200/40 rounded-lg cursor-pointer transition-colors">
                 <span class="flex items-center gap-2 font-medium flex-1 text-sm">
                     <svg class="h-4 w-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -65,8 +53,13 @@ Nested folder contents returned via HTMX when a folder is expanded.
                 </div>
                 <ul id="children-{{ folder_slug }}" class="menu menu-xs bg-base-50 rounded-lg border-l border-primary/20 folder-children"
                     data-folder-path="{{ item.path }}"
-                    data-bucket-type="{{ bucket_type }}">
-                    <li class="text-[11px] text-base-content/60 py-1">Expand folder to load contents</li>
+                    data-bucket-type="{{ bucket_type }}"
+                    hx-get="{% url 'storage:load_folder_contents' bucket_type=bucket_type folder_path=item.path %}"
+                    hx-trigger="revealed once"
+                    hx-target="this"
+                    hx-swap="innerHTML"
+                    hx-indicator="#indicator-{{ folder_slug }}">
+                    <li class="text-[11px] text-base-content/60 py-1">Expand to load contents</li>
                 </ul>
             </div>
         </details>
@@ -181,19 +174,3 @@ Nested folder contents returned via HTMX when a folder is expanded.
 {% empty %}
     <li class="py-2 px-3 text-sm text-base-content/60">Folder is empty.</li>
 {% endfor %}
-
-{% if has_more and next_token %}
-<li class="py-2">
-    <button type="button"
-            class="btn btn-sm btn-outline btn-block"
-            hx-get="{% url 'storage:load_folder_contents' bucket_type=bucket_type folder_path=folder_path %}?continuation_token={{ next_token }}"
-            hx-target="this"
-            hx-swap="outerHTML"
-            hx-indicator="#indicator">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-        </svg>
-        Load More
-    </button>
-</li>
-{% endif %}

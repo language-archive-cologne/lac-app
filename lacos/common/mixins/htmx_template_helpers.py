@@ -2,7 +2,6 @@
 
 import logging
 import json
-import re
 
 from django.http import HttpResponse
 from django.middleware.csrf import get_token
@@ -67,45 +66,26 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
         Used for HTMX bucket switching to render the main content area.
         """
         from lacos.storage.services.bucket_service import BucketService
-        import time
-
-        logger.info("─" * 80)
-        logger.info("📦 RENDER BUCKET CONTENT: %s", bucket_name)
-
-        start_time = time.time()
 
         bucket_service = BucketService()
-        force_fresh = request.GET.get('force_fresh', 'false').lower() == 'true'
-        workspace_buckets = bucket_service.get_all_accessible_buckets(force_refresh=force_fresh)
-        logger.info("Available buckets: %s", workspace_buckets)
+        workspace_buckets = bucket_service.get_all_accessible_buckets()
 
         # Verify bucket access
         if bucket_name not in workspace_buckets:
-            logger.warning("❌ Bucket not accessible: %s", bucket_name)
             return '<div class="alert alert-error"><span>Bucket not accessible</span></div>'
-
-        logger.info("✅ Bucket access verified")
 
         self.set_active_bucket(request, bucket_name, workspace_buckets)
 
         try:
-            logger.info("Force fresh: %s", force_fresh)
-
+            force_fresh = request.GET.get('force_fresh', 'false').lower() == 'true'
             # Get bucket structure
-            logger.info("Fetching root level items...")
-            fetch_start = time.time()
-
             if force_fresh:
                 structure = bucket_service.get_root_level_items(bucket_name, force_fresh=True)
             else:
                 structure = bucket_service.get_root_level_items(bucket_name)
 
-            fetch_elapsed = time.time() - fetch_start
-            logger.info("✅ Root items fetched in %.2fs", fetch_elapsed)
-            logger.info("Items returned: %d", len(structure.get('children', [])))
-            logger.info("Has more: %s", structure.get('has_more', False))
-            if structure.get('next_token'):
-                logger.info("Next token available for pagination")
+            logger.info(f"🎨 TEMPLATE_HELPER: render_bucket_content_template for {bucket_name}")
+            logger.info(f"📁 BUCKET_CONTENT: {len(structure.get('children', []))} items")
 
             context = {
                 'structure': structure,
@@ -115,23 +95,13 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
                 'csrf_token': get_token(request),
             }
 
-            logger.info("Rendering template...")
-            html = render_to_string(
+            return render_to_string(
                 'dashboard/bucket_content_partial.html',
                 context,
                 request=request
             )
-
-            total_elapsed = time.time() - start_time
-            logger.info("✅ Template rendered (total: %.2fs)", total_elapsed)
-            logger.info("─" * 80)
-
-            return html
         except Exception as e:
-            logger.error("─" * 80)
-            logger.error("❌ RENDER ERROR: %s", bucket_name)
-            logger.exception("Error rendering bucket content: %s", str(e))
-            logger.error("─" * 80)
+            logger.exception(f"Error rendering bucket content for {bucket_name}: {str(e)}")
             return f'<div class="alert alert-error"><span>Error loading bucket: {str(e)}</span></div>'
 
     def render_folder_structure_template(self, request, bucket_name, structure=None):
@@ -252,7 +222,6 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
 
         This is a specialized method for updating bucket tabs since they need
         outerHTML swap (the template includes the complete element with id).
-        Uses outerHTML swap for OOB updates.
 
         Args:
             main_html (str): The main response HTML (optional)
@@ -282,28 +251,16 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
                     oob=True
                 )
 
-            # For outerHTML swap, add hx-swap-oob="outerHTML" to the element itself
-            # Element with id gets hx-swap-oob attribute for proper OOB update
+            # Add hx-swap-oob="outerHTML" to the bucket-tabs element
             if 'id="bucket-tabs"' in tabs_html:
-                # Find the opening tag and add hx-swap-oob="outerHTML" to it
-                # Match the opening div tag with id="bucket-tabs"
-                pattern = r'(<div[^>]*id="bucket-tabs"[^>]*)>'
-                replacement = r'\1 hx-swap-oob="outerHTML">'
-                oob_tabs_html = re.sub(pattern, replacement, tabs_html, count=1)
-                
-                if oob_tabs_html == tabs_html:
-                    # If replacement didn't work, try simpler approach
-                    oob_tabs_html = tabs_html.replace(
-                        'id="bucket-tabs"',
-                        'id="bucket-tabs" hx-swap-oob="outerHTML"',
-                        1
-                    )
-                
-                logger.info("🔍 BUILD_OOB: Built bucket tabs OOB response with outerHTML swap (length: %d)", len(oob_tabs_html))
+                oob_tabs_html = tabs_html.replace(
+                    'id="bucket-tabs"',
+                    'id="bucket-tabs" hx-swap-oob="outerHTML"',
+                    1
+                )
                 return f'{main_html}{oob_tabs_html}{active_bucket_snippet}'
             else:
                 logger.warning("bucket-tabs id not found in tabs HTML, falling back to innerHTML")
-                # Fallback to innerHTML swap pattern
                 return f"{self.build_oob_response(main_html, {'bucket-tabs': tabs_html})}{active_bucket_snippet}"
 
         except Exception as e:

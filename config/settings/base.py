@@ -311,26 +311,16 @@ RESOURCE_PATH_PATTERN = env("RESOURCE_PATH_PATTERN")
 # Storage Configuration
 # ------------------------------------------------------------------------------
 # S3/MinIO bucket configuration for flexible workspace access
-# Workspace buckets can be provided via env; default to empty list and rely on runtime configuration.
-S3_WORKSPACE_BUCKETS = env.list("S3_WORKSPACE_BUCKETS", default=[])
+# Default workspace buckets - use actual bucket names, can be overridden by environment variables
+S3_WORKSPACE_BUCKETS = env.list("S3_WORKSPACE_BUCKETS", default=["lacos-ingest", "lacos-production"])
 
 # Buckets where OCFL operations are allowed (subset of workspace buckets)
-S3_OCFL_BUCKETS = env.list("S3_OCFL_BUCKETS", default=[])
+S3_OCFL_BUCKETS = env.list("S3_OCFL_BUCKETS", default=["lacos-ingest", "lacos-production"])
 
 # Legacy bucket names for backward compatibility
 # These map to the actual bucket names used by the legacy configuration
-S3_INGEST_BUCKET = env("S3_INGEST_BUCKET", default=None)
-S3_PRODUCTION_BUCKET = env("S3_PRODUCTION_BUCKET", default=None)
-
-# Pagination settings for dashboard bucket listings
-# Default page size for root-level listings (prevents timeout on large buckets)
-S3_LISTING_PAGE_SIZE = env.int("S3_LISTING_PAGE_SIZE", default=100)
-
-# Bucket list cache TTL (in seconds)
-# For external S3 over VPN, set this higher (e.g., 3600 = 1 hour) to avoid slow list_buckets() calls
-# For local MinIO, 300 seconds (5 minutes) is usually sufficient
-# Set to 0 to disable caching (not recommended for VPN connections)
-S3_BUCKET_LIST_CACHE_TTL = env.int("S3_BUCKET_LIST_CACHE_TTL", default=None)  # None = auto (1h for external S3, 5m for MinIO)
+S3_INGEST_BUCKET = env("S3_INGEST_BUCKET", default="lacos-ingest")
+S3_PRODUCTION_BUCKET = env("S3_PRODUCTION_BUCKET", default="lacos-production")
 
 # ACL Configuration
 # ------------------------------------------------------------------------------

@@ -1,7 +1,6 @@
 import ast
 import json
 import logging
-import time
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -11,8 +10,8 @@ from django.middleware.csrf import get_token
 from django.shortcuts import render
 from django.template.loader import render_to_string
 from django.urls import reverse
-from django.utils.decorators import method_decorator
 from django.utils.text import slugify
+from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.http import require_http_methods
 
@@ -28,123 +27,73 @@ def archivist_dashboard(request):
     Render the archivist dashboard showing all workspace buckets.
     Only loads root level items initially for better performance.
     """
-    logger.info("=" * 80)
-    logger.info("STORAGE DASHBOARD ACCESS")
-    logger.info("User: %s, Force Fresh: %s", request.user.username, request.GET.get("force_fresh", "false"))
-    logger.info("=" * 80)
+    bucket_service = BucketService()
+    bucket_state = BucketCoordinatorMixin()
+
+    force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
 
     try:
-        # Initialize service
-        service_init_start = time.time()
-        logger.info("Initializing BucketService...")
-        bucket_service = BucketService()
-        service_init_duration = time.time() - service_init_start
-        logger.info("✅ BucketService initialization completed in %.3fs", service_init_duration)
+        # Get root level items for all workspace buckets
+        bucket_structures = {}
+        workspace_buckets = bucket_service.get_all_accessible_buckets()
 
-        force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
+        for bucket_name in workspace_buckets:
+            try:
+                if force_fresh:
+                    bucket_structures[bucket_name] = bucket_service.get_root_level_items(bucket_name, force_fresh=True)
+                else:
+                    bucket_structures[bucket_name] = bucket_service.get_root_level_items(bucket_name)
+            except Exception as e:
+                logger.error(f"Error loading bucket {bucket_name}: {str(e)}")
+                # Return empty structure on error for this bucket
+                bucket_structures[bucket_name] = {
+                    "type": "folder",
+                    "name": bucket_name,
+                    "path": "",
+                    "children": []
+                }
 
-        logger.info("Fetching accessible buckets...")
-        handshake_start = time.time()
+        # Maintain backward compatibility - provide legacy bucket names
+        ingest_structure = bucket_structures.get(bucket_service.ingest_bucket, {})
+        production_structure = bucket_structures.get(bucket_service.production_bucket, {})
 
-        try:
-            workspace_buckets = bucket_service.get_all_accessible_buckets(
-                force_refresh=force_fresh,
-                raise_on_error=True,
-            )
-            handshake_elapsed = time.time() - handshake_start
-            metadata = bucket_service.bucket_cache_metadata
-            source = metadata.get("source")
-
-            if source == "cache":
-                logger.info(
-                    "Buckets served from cache (expires in %.2fs)",
-                    metadata.get("expires_in", 0.0) or 0.0,
-                )
-            else:
-                logger.info("Testing S3 connection handshake...")
-                logger.info("Endpoint: %s", bucket_service.endpoint_url)
-                logger.info("Region: %s", bucket_service.region)
-                logger.info("✅ S3 connection successful (%.2fs)", handshake_elapsed)
-                if metadata.get("duration") is not None:
-                    logger.info("Bucket listing duration: %.2fs", metadata["duration"])
-
-            logger.info("Buckets visible: %d", len(workspace_buckets))
-            if workspace_buckets:
-                logger.info("Bucket names: %s", workspace_buckets[:10])
-
-        except Exception as e:
-            handshake_elapsed = time.time() - handshake_start
-            logger.error("❌ S3 connection failed after %.2fs", handshake_elapsed)
-            logger.error("Error type: %s", type(e).__name__)
-            logger.error("Error message: %s", str(e))
-
-            if "timeout" in str(e).lower():
-                logger.error("→ Connection timeout - check network/firewall")
-            elif "connection" in str(e).lower():
-                logger.error("→ Connection refused/failed - check endpoint URL and network")
-            elif "ssl" in str(e).lower() or "certificate" in str(e).lower():
-                logger.error("→ SSL/TLS issue - check certificates")
-            elif "credentials" in str(e).lower() or "forbidden" in str(e).lower():
-                logger.error("→ Authentication issue - check access keys")
-
-            raise
-
-        bucket_state = BucketCoordinatorMixin()
-
-        active_bucket = bucket_state.ensure_active_bucket(request, workspace_buckets)
-        logger.info("Active bucket: %s", active_bucket or "None")
-
-        auto_load_url = None
-        if active_bucket:
-            auto_load_url = reverse("storage:bucket_content_htmx", kwargs={"bucket_name": active_bucket})
-            if force_fresh:
-                auto_load_url = f"{auto_load_url}?force_fresh=true"
-            logger.info("Auto-load URL: %s", auto_load_url)
-            
-            # Pre-warm cache in background for faster subsequent loads
-            # This doesn't block the response, but helps cache be ready for next visit
-            import threading
-            def warm_cache():
-                try:
-                    logger.info("🔄 Background: Pre-warming cache for bucket %s", active_bucket)
-                    # Just call list_bucket_contents which will cache the result
-                    bucket_service.collection_service.list_bucket_contents(active_bucket, prefix="", force_fresh=False, max_keys=10)
-                    logger.info("✅ Background: Cache warmed for bucket %s", active_bucket)
-                except Exception as e:
-                    logger.warning("⚠️ Background: Cache warming failed for %s: %s", active_bucket, e)
-            
-            # Check if cache already exists before warming
-            cache_check = bucket_service.collection_service._folder_cache.get(active_bucket, "")
-            if cache_check is None:
-                thread = threading.Thread(target=warm_cache, daemon=True)
-                thread.start()
-                logger.info("🔄 Started background cache warming for %s", active_bucket)
-            else:
-                logger.debug("Cache already exists for %s, skipping warm-up", active_bucket)
-
-        # Check for success message
-        message = request.GET.get('message', None)
-
-        logger.info("✅ Dashboard render complete")
-        logger.info("=" * 80)
-
-        return render(
-            request,
-            "dashboard/archivist_dashboard.html",
-            {
-                "workspace_buckets": workspace_buckets,
-                "active_bucket": active_bucket,
-                "auto_load_url": auto_load_url,
-                "ocfl_buckets": bucket_service.ocfl_buckets,
-                "message": message,
-            },
-        )
     except Exception as e:
-        logger.error("=" * 80)
-        logger.error("❌ DASHBOARD ERROR")
-        logger.exception("Error rendering dashboard: %s", str(e))
-        logger.error("=" * 80)
-        raise
+        logger.error(f"Error loading dashboard: {str(e)}")
+        # Return empty structures on error
+        bucket_structures = {}
+        workspace_buckets = bucket_service.get_all_accessible_buckets()
+        ingest_structure = {"type": "folder", "name": bucket_service.ingest_bucket, "path": "", "children": []}
+        production_structure = {"type": "folder", "name": bucket_service.production_bucket, "path": "", "children": []}
+
+    active_bucket = bucket_state.ensure_active_bucket(request, workspace_buckets)
+    active_bucket_structure = bucket_structures.get(active_bucket)
+
+    if active_bucket and active_bucket_structure is None:
+        active_bucket_structure = {
+            "type": "folder",
+            "name": active_bucket,
+            "path": "",
+            "children": [],
+        }
+
+    # Check for success message
+    message = request.GET.get('message', None)
+
+    return render(
+        request,
+        "dashboard/archivist_dashboard.html",
+        {
+            "bucket_structures": bucket_structures,
+            "workspace_buckets": workspace_buckets,
+            "active_bucket": active_bucket,
+            "active_bucket_structure": active_bucket_structure,
+            "ocfl_buckets": bucket_service.ocfl_buckets,
+            # Legacy backward compatibility
+            "ingest_structure": ingest_structure,
+            "production_structure": production_structure,
+            "message": message,
+        },
+    )
 
 
 @login_required
@@ -276,67 +225,48 @@ def acl_update_settings(request):
         logger.exception("Failed to update ACL settings: %s", e)
         return HttpResponse(f"Error updating settings: {e}", status=500)
 
+
 @login_required
 def load_folder_contents(request, bucket_type, folder_path):
     """
     Load contents of a specific folder when expanded.
     Now supports any workspace bucket, not just ingest/production.
-    Supports pagination via continuation_token parameter.
     """
     bucket_service = BucketService()
-    force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
 
     # Support new flexible bucket names
-    if bucket_type in bucket_service.get_all_accessible_buckets(force_refresh=force_fresh):
+    if bucket_type in bucket_service.get_all_accessible_buckets():
         bucket = bucket_type
     else:
         # Legacy backward compatibility
-        legacy_map = {
-            'ingest': bucket_service.ingest_bucket,
-            'production': bucket_service.production_bucket,
-        }
-        bucket = legacy_map.get(bucket_type)
-
-    if not bucket:
-        logger.warning("Requested bucket '%s' could not be resolved", bucket_type)
-        return HttpResponse(status=404)
-
+        bucket = bucket_service.ingest_bucket if bucket_type == 'ingest' else bucket_service.production_bucket
+    
     try:
         # Clean up the folder path to handle double slashes
         folder_path = folder_path.replace('//', '/')
         logger.info("Loading folder contents for %s bucket, path: %s", bucket_type, folder_path)
-        continuation_token = request.GET.get("continuation_token")
-
+        force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
+        
         # Get folder contents
-        folder_result = bucket_service.get_folder_contents(
-            bucket,
-            folder_path,
-            force_fresh=force_fresh,
-            continuation_token=continuation_token,
-        )
-
-        folder_contents = folder_result.get("items", [])
-        has_more = folder_result.get("has_more", False)
-        next_token = folder_result.get("next_token")
-
+        if force_fresh:
+            folder_contents = bucket_service.get_folder_contents(bucket, folder_path, force_fresh=True)
+        else:
+            folder_contents = bucket_service.get_folder_contents(bucket, folder_path)
         preview_names = ", ".join(item["name"] for item in folder_contents[:5])
         more_indicator = "…" if len(folder_contents) > 5 else ""
         logger.debug(
-            "Loaded %s items for %s%s%s (has_more=%s)",
+            "Loaded %s items for %s%s%s",
             len(folder_contents),
             folder_path,
             f" — {preview_names}" if preview_names else "",
             more_indicator,
-            has_more,
         )
-
+        
     except Exception as e:
         logger.error(f"Error loading folder contents for {folder_path}: {str(e)}")
         # Return empty list on error
         folder_contents = []
-        has_more = False
-        next_token = None
-
+    
     return render(
         request,
         "dashboard/folder_contents_partial.html",
@@ -344,8 +274,6 @@ def load_folder_contents(request, bucket_type, folder_path):
             "folder_contents": folder_contents,
             "bucket_type": bucket_type,
             "folder_path": folder_path,
-            "has_more": has_more,
-            "next_token": next_token,
         },
     )
 
@@ -354,12 +282,12 @@ def load_folder_contents(request, bucket_type, folder_path):
 def bucket_size_info(request, bucket_name):
     """HTMX endpoint returning bucket size details."""
     bucket_service = BucketService()
-    force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
-    accessible = set(bucket_service.get_all_accessible_buckets(force_refresh=force_fresh))
+    accessible = set(bucket_service.get_all_accessible_buckets())
 
     if bucket_name not in accessible:
         return HttpResponse(status=404)
 
+    force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
     size_result = bucket_service.get_bucket_total_size(bucket_name, force_fresh=force_fresh)
 
     context = {
@@ -377,43 +305,40 @@ def bucket_size_info(request, bucket_name):
 
 @login_required
 def dashboard_content(request, bucket_type):
-    """Return the structure content for a specific bucket via HTMX refresh."""
+    """
+    Return only the structure content for a specific bucket type.
+    This is used for AJAX/HTMX refreshes of just one section of the dashboard.
+    
+    Args:
+        bucket_type (str): Either "ingest" or "production"
+        
+    Returns:
+        Rendered partial template with the requested bucket structure
+    """
     try:
         bucket_service = BucketService()
         force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
-        continuation_token = request.GET.get("continuation_token")
-
-        accessible = set(bucket_service.get_all_accessible_buckets(force_refresh=force_fresh))
-        bucket_name = bucket_type if bucket_type in accessible else None
-        if not bucket_name:
-            legacy_map = {
-                "ingest": bucket_service.ingest_bucket,
-                "production": bucket_service.production_bucket,
-            }
-            bucket_name = legacy_map.get(bucket_type)
-
-        if not bucket_name:
+        
+        if bucket_type == "ingest":
+            if force_fresh:
+                structure = bucket_service.get_root_level_items(bucket_service.ingest_bucket, force_fresh=True)
+            else:
+                structure = bucket_service.get_root_level_items(bucket_service.ingest_bucket)
+        elif bucket_type == "production":
+            if force_fresh:
+                structure = bucket_service.get_root_level_items(bucket_service.production_bucket, force_fresh=True)
+            else:
+                structure = bucket_service.get_root_level_items(bucket_service.production_bucket)
+        else:
             return HttpResponse("Invalid bucket type", status=400)
-
-        structure = bucket_service.get_root_level_items(
-            bucket_name,
-            force_fresh=force_fresh,
-            continuation_token=continuation_token,
-        )
-
-        logger.info(
-            "Refreshing %s structure with %s items (force_fresh=%s, has_more=%s)",
-            bucket_name,
-            len(structure.get('children', [])),
-            force_fresh,
-            structure.get('has_more', False),
-        )
-
+            
+        logger.info(f"Refreshing {bucket_type} structure with {len(structure.get('children', []))} items")
+        
         # Render just the folder structure partial
         return render(
             request,
             "dashboard/folder_structure_partial.html",
-            {"structure": structure, "bucket_type": bucket_name}
+            {"structure": structure, "bucket_type": bucket_type}
         )
     except Exception as e:
         logger.exception(f"Error loading dashboard content for {bucket_type}: {str(e)}")
@@ -428,67 +353,22 @@ class BucketContentHTMXView(HtmxTemplateHelperMixin, View):
     """
 
     def get(self, request, bucket_name):
-        logger.info("=" * 80)
-        logger.info("BUCKET CONTENT LOAD: %s", bucket_name)
-        logger.info("User: %s, HTMX Request: %s", request.user.username, request.headers.get('HX-Request', 'No'))
-        logger.info("=" * 80)
-
         try:
-            logger.info("Rendering bucket content template for: %s", bucket_name)
-
             # Render the bucket content
             content_html = self.render_bucket_content_template(request, bucket_name)
-            logger.info("✅ Content template rendered (%d chars)", len(content_html))
 
             # Also update the bucket selector dropdown to show the new active bucket
-            logger.info("Building bucket tabs OOB response")
             selector_html = self.build_bucket_tabs_oob_response(
                 request=request,
                 active_bucket=bucket_name
             )
-            logger.info("✅ Bucket tabs OOB rendered (%d chars)", len(selector_html))
 
-            # Build bucket size OOB update - render loading placeholder that triggers async load
-            from django.template.loader import render_to_string
-            from django.urls import reverse
-            from django.template.defaultfilters import slugify
-            
-            bucket_size_url = reverse("storage:bucket_size_info", kwargs={"bucket_name": bucket_name})
-            
-            # Use template to render bucket size container with HTMX trigger
-            bucket_size_container_html = render_to_string(
-                'dashboard/partials/bucket_size_loading.html',
-                {
-                    'bucket_name': bucket_name,
-                    'bucket_size_url': bucket_size_url,
-                },
-                request=request
-            )
-            
-            # Build OOB updates using helper - match the ID format used in template (slugify filter)
-            # Note: bucket size needs outerHTML swap, so we add it manually after build_oob_response
-            bucket_size_target_id = f'bucket-size-container-{slugify(bucket_name)}'
-            
-            # Build OOB response for bucket tabs (which uses innerHTML for other updates if needed)
-            # Then manually add bucket size with outerHTML swap
-            response_html = self.build_oob_response(
-                content_html + selector_html,
-                {}
-            )
-            
-            # Add bucket size OOB update with outerHTML swap (needs to replace entire element)
-            bucket_size_oob = f'<div id="{bucket_size_target_id}" hx-swap-oob="outerHTML">{bucket_size_container_html}</div>'
-            response_html += bucket_size_oob
-
-            logger.info("✅ Bucket content load complete (total: %d chars)", len(response_html))
-            logger.info("=" * 80)
+            # Combine content update with selector OOB update
+            response_html = f'{content_html}{selector_html}'
 
             return HttpResponse(response_html)
         except Exception as e:
-            logger.error("=" * 80)
-            logger.error("❌ BUCKET CONTENT ERROR: %s", bucket_name)
-            logger.exception("Error loading bucket content: %s", str(e))
-            logger.error("=" * 80)
+            logger.exception(f"Error loading bucket content for {bucket_name}: {str(e)}")
             return HttpResponse(f"Error: {str(e)}", status=500)
 
 
@@ -516,14 +396,11 @@ def file_info_htmx(request, bucket_type, object_path):
 
     if bucket_type in accessible_buckets:
         bucket_name = bucket_type
+    elif bucket_type == "ingest":
+        bucket_name = bucket_service.ingest_bucket
+    elif bucket_type == "production":
+        bucket_name = bucket_service.production_bucket
     else:
-        legacy_map = {
-            "ingest": bucket_service.ingest_bucket,
-            "production": bucket_service.production_bucket,
-        }
-        bucket_name = legacy_map.get(bucket_type)
-
-    if not bucket_name:
         return HttpResponse(status=404)
 
     info_result = bucket_service.get_file_info(bucket_name, object_path)

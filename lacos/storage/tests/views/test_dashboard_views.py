@@ -1,6 +1,5 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from django.urls import reverse
 
 from lacos.storage.views.dashboard_views import (
     archivist_dashboard,
@@ -19,19 +18,46 @@ def test_archivist_dashboard_success(mock_render, mock_bucket_service, prepared_
     """Test successful loading of the archivist dashboard with root items."""
     # Configure mock service response
     mock_instance = mock_bucket_service.return_value
+    mock_instance.ingest_bucket = 'test-ingest-bucket'
+    mock_instance.production_bucket = 'test-production-bucket'
     mock_instance.get_all_accessible_buckets.return_value = ['test-ingest-bucket', 'test-production-bucket']
-    mock_instance.bucket_cache_metadata = {"source": "refresh", "duration": 0.05, "expires_in": 15}
     mock_instance.ocfl_buckets = ['test-production-bucket']
 
+    bucket_structures = {
+        'test-ingest-bucket': {
+            "type": "folder",
+            "name": "test-ingest-bucket",
+            "path": "",
+            "children": [
+                {"type": "folder", "name": "folder1", "path": "folder1/"},
+                {"type": "file", "name": "test.jpg", "path": "test.jpg"}
+            ]
+        },
+        'test-production-bucket': {
+            "type": "folder",
+            "name": "test-production-bucket",
+            "path": "",
+            "children": [
+                {"type": "folder", "name": "folder2", "path": "folder2/"},
+                {"type": "file", "name": "prod.jpg", "path": "prod.jpg"}
+            ]
+        }
+    }
+
+    def mock_get_root_items(bucket_name):
+        return bucket_structures[bucket_name]
+
+    mock_instance.get_root_level_items.side_effect = mock_get_root_items
+    
     # Create request with success message
     request = prepared_request('/storage/dashboard/', method='get', data={'message': 'Test message'})
     
     # Call the view
     archivist_dashboard(request)
-    mock_instance.get_all_accessible_buckets.assert_called_with(force_refresh=False, raise_on_error=True)
     
-    # The dashboard should not eagerly fetch bucket structures anymore
-    mock_instance.get_root_level_items.assert_not_called()
+    # Assert service was called with correct parameters
+    # The view now calls get_root_level_items for each accessible bucket
+    assert mock_instance.get_root_level_items.call_count == 2
     
     # Check that the correct template was rendered with the right context
     mock_render.assert_called_once()
@@ -39,30 +65,54 @@ def test_archivist_dashboard_success(mock_render, mock_bucket_service, prepared_
     context = mock_render.call_args[0][2]
     
     assert template_name == "dashboard/archivist_dashboard.html"
+    assert 'ingest_structure' in context
+    assert 'production_structure' in context
     assert 'message' in context
     assert context['message'] == 'Test message'
     assert context['active_bucket'] == 'test-ingest-bucket'
-    assert context['workspace_buckets'] == ['test-ingest-bucket', 'test-production-bucket']
-    assert context['auto_load_url'] == reverse('storage:bucket_content_htmx', args=['test-ingest-bucket'])
+    assert context['active_bucket_structure'] == bucket_structures['test-ingest-bucket']
     assert request.session['storage_active_bucket'] == 'test-ingest-bucket'
+    
+    # Verify the structure of the context data
+    ingest_structure = context['ingest_structure']
+    assert ingest_structure['type'] == 'folder'
+    assert ingest_structure['name'] == 'test-ingest-bucket'
+    assert len(ingest_structure['children']) == 2
+    
+    production_structure = context['production_structure']
+    assert production_structure['type'] == 'folder'
+    assert production_structure['name'] == 'test-production-bucket'
+    assert len(production_structure['children']) == 2
 
 @patch('lacos.storage.views.dashboard_views.BucketService')
 @patch('lacos.storage.views.dashboard_views.render')
 def test_archivist_dashboard_empty_buckets(mock_render, mock_bucket_service, prepared_request):
     """Test dashboard loading with empty buckets."""
     mock_instance = mock_bucket_service.return_value
+    mock_instance.ingest_bucket = 'test-ingest-bucket'
+    mock_instance.production_bucket = 'test-production-bucket'
     mock_instance.get_all_accessible_buckets.return_value = ['test-ingest-bucket', 'test-production-bucket']
-    mock_instance.bucket_cache_metadata = {"source": "refresh", "duration": 0.05, "expires_in": 15}
     mock_instance.ocfl_buckets = []
+
+    bucket_structures = {
+        'test-ingest-bucket': {"type": "folder", "name": "test-ingest-bucket", "path": "", "children": []},
+        'test-production-bucket': {"type": "folder", "name": "test-production-bucket", "path": "", "children": []}
+    }
+
+    def mock_get_root_items(bucket_name):
+        return bucket_structures[bucket_name]
+
+    mock_instance.get_root_level_items.side_effect = mock_get_root_items
     
     request = prepared_request('/storage/dashboard/')
     archivist_dashboard(request)
-    mock_instance.get_all_accessible_buckets.assert_called_with(force_refresh=False, raise_on_error=True)
     
+    # Verify empty structures are handled correctly
     context = mock_render.call_args[0][2]
+    assert len(context['ingest_structure']['children']) == 0
+    assert len(context['production_structure']['children']) == 0
     assert context['active_bucket'] == 'test-ingest-bucket'
-    assert context['workspace_buckets'] == ['test-ingest-bucket', 'test-production-bucket']
-    assert context['auto_load_url'] == reverse('storage:bucket_content_htmx', args=['test-ingest-bucket'])
+    assert context['active_bucket_structure']['name'] == 'test-ingest-bucket'
     assert request.session['storage_active_bucket'] == 'test-ingest-bucket'
 
 @patch('lacos.storage.views.dashboard_views.BucketService')
@@ -70,37 +120,21 @@ def test_archivist_dashboard_empty_buckets(mock_render, mock_bucket_service, pre
 def test_archivist_dashboard_error_handling(mock_render, mock_bucket_service, prepared_request):
     """Test dashboard error handling when bucket service fails."""
     mock_instance = mock_bucket_service.return_value
+    mock_instance.ingest_bucket = 'test-ingest-bucket'
+    mock_instance.production_bucket = 'test-production-bucket'
     mock_instance.get_all_accessible_buckets.return_value = ['test-ingest-bucket', 'test-production-bucket']
-    mock_instance.bucket_cache_metadata = {"source": "refresh", "duration": 0.05, "expires_in": 15}
     mock_instance.ocfl_buckets = []
-
+    mock_instance.get_root_level_items.side_effect = Exception("Service error")
+    
     request = prepared_request('/storage/dashboard/')
     archivist_dashboard(request)
-    mock_instance.get_all_accessible_buckets.assert_called_with(force_refresh=False, raise_on_error=True)
     
     # Verify empty structures are returned on error
     context = mock_render.call_args[0][2]
+    assert len(context['ingest_structure']['children']) == 0
+    assert len(context['production_structure']['children']) == 0
     assert context['active_bucket'] == 'test-ingest-bucket'
-    assert context['workspace_buckets'] == ['test-ingest-bucket', 'test-production-bucket']
-    assert context['auto_load_url'] == reverse('storage:bucket_content_htmx', args=['test-ingest-bucket'])
-
-
-@patch('lacos.storage.views.dashboard_views.BucketService')
-@patch('lacos.storage.views.dashboard_views.render')
-def test_archivist_dashboard_force_fresh_adds_query(mock_render, mock_bucket_service, prepared_request):
-    mock_instance = mock_bucket_service.return_value
-    mock_instance.get_all_accessible_buckets.return_value = ['test-ingest-bucket']
-    mock_instance.bucket_cache_metadata = {"source": "refresh", "duration": 0.05, "expires_in": 15}
-    mock_instance.ocfl_buckets = []
-
-    request = prepared_request('/storage/dashboard/?force_fresh=true')
-    archivist_dashboard(request)
-    mock_instance.get_all_accessible_buckets.assert_called_with(force_refresh=True, raise_on_error=True)
-
-    context = mock_render.call_args[0][2]
-    expected = reverse('storage:bucket_content_htmx', args=['test-ingest-bucket']) + '?force_fresh=true'
-    assert context['auto_load_url'] == expected
-    assert request.session['storage_active_bucket'] == 'test-ingest-bucket'
+    assert context['active_bucket_structure']['name'] == 'test-ingest-bucket'
     assert request.session['storage_active_bucket'] == 'test-ingest-bucket'
 
 
@@ -132,21 +166,16 @@ def test_load_folder_contents_ingest_bucket(mock_render, mock_bucket_service, pr
     mock_instance = mock_bucket_service.return_value
     mock_instance.ingest_bucket = 'test-ingest-bucket'
     mock_instance.production_bucket = 'test-production-bucket'
-    mock_instance.get_all_accessible_buckets.return_value = ['test-ingest-bucket', 'test-production-bucket']
-    mock_instance.get_folder_contents.return_value = {
-        "items": [
-            {"type": "folder", "name": "subfolder", "path": "folder1/subfolder/"},
-            {"type": "file", "name": "test.txt", "path": "folder1/test.txt"}
-        ],
-        "has_more": False,
-        "next_token": None,
-    }
+    mock_instance.get_folder_contents.return_value = [
+        {"type": "folder", "name": "subfolder", "path": "folder1/subfolder/"},
+        {"type": "file", "name": "test.txt", "path": "folder1/test.txt"}
+    ]
     
     request = prepared_request('/storage/dashboard/folder-contents/ingest/folder1/')
     load_folder_contents(request, 'ingest', 'folder1/')
     
     # Verify service was called with correct parameters
-    mock_instance.get_folder_contents.assert_called_once_with('test-ingest-bucket', 'folder1/', force_fresh=False, continuation_token=None)
+    mock_instance.get_folder_contents.assert_called_once_with('test-ingest-bucket', 'folder1/')
     
     # Verify template rendering
     mock_render.assert_called_once()
@@ -165,21 +194,15 @@ def test_load_folder_contents_production_bucket(mock_render, mock_bucket_service
     mock_instance = mock_bucket_service.return_value
     mock_instance.ingest_bucket = 'test-ingest-bucket'
     mock_instance.production_bucket = 'test-production-bucket'
-    mock_instance.get_all_accessible_buckets.return_value = ['ingest', 'production']
-    mock_instance.get_all_accessible_buckets.return_value = ['test-ingest-bucket', 'test-production-bucket']
-    mock_instance.get_folder_contents.return_value = {
-        "items": [
-            {"type": "file", "name": "prod.txt", "path": "folder2/prod.txt"}
-        ],
-        "has_more": False,
-        "next_token": None,
-    }
+    mock_instance.get_folder_contents.return_value = [
+        {"type": "file", "name": "prod.txt", "path": "folder2/prod.txt"}
+    ]
     
     request = prepared_request('/storage/dashboard/folder-contents/production/folder2/')
     load_folder_contents(request, 'production', 'folder2/')
     
     # Verify service was called with correct parameters
-    mock_instance.get_folder_contents.assert_called_once_with('test-production-bucket', 'folder2/', force_fresh=False, continuation_token=None)
+    mock_instance.get_folder_contents.assert_called_once_with('test-production-bucket', 'folder2/')
     
     # Verify template rendering
     mock_render.assert_called_once()
@@ -198,12 +221,7 @@ def test_load_folder_contents_empty_folder(mock_render, mock_bucket_service, pre
     mock_instance = mock_bucket_service.return_value
     mock_instance.ingest_bucket = 'test-ingest-bucket'
     mock_instance.production_bucket = 'test-production-bucket'
-    mock_instance.get_all_accessible_buckets.return_value = ['test-ingest-bucket', 'test-production-bucket']
-    mock_instance.get_folder_contents.return_value = {
-        "items": [],
-        "has_more": False,
-        "next_token": None,
-    }
+    mock_instance.get_folder_contents.return_value = []
     
     request = prepared_request('/storage/dashboard/folder-contents/ingest/empty_folder/')
     load_folder_contents(request, 'ingest', 'empty_folder/')

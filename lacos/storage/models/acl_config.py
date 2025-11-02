@@ -28,4 +28,3 @@ class ACLConfig(models.Model):
 
 
 
-

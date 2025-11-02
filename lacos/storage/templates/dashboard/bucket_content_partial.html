@@ -7,9 +7,13 @@
         <div class="flex items-center gap-3 text-sm text-base-content/70" id="bucket-info">
             <span class="text-base-content/70">{{ structure.children|length }} items</span>
             <div id="bucket-size-container-{{ bucket_name|slugify }}"
-                 class="btn btn-ghost btn-xs gap-2">
+                 class="btn btn-ghost btn-xs gap-2"
+                 hx-get="{% url 'storage:bucket_size_info' bucket_name %}"
+                 hx-trigger="load"
+                 hx-target="this"
+                 hx-swap="outerHTML">
                 <span class="loading loading-spinner loading-xs"></span>
-                <span class="text-base-content/50">Loading size...</span>
+                <span>Size</span>
             </div>
         </div>
     </div>

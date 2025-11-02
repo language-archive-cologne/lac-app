@@ -1,10 +1,8 @@
 import logging
 import os
-import time
-from typing import Any, Dict, Optional, Generator
+from typing import Any, Dict
 import boto3
 from botocore.exceptions import ClientError
-from botocore.config import Config as BotoConfig
 from django.conf import settings
 from django.core.cache import cache
 
@@ -38,92 +36,63 @@ class BaseStorageService:
         if hasattr(self, 'initialized'):
             return
             
-        init_start = time.monotonic()
         logger.info("Initializing BaseStorageService...")
         
         # Initialize settings
-        step_start = time.monotonic()
         self.is_minio = self._is_minio_environment()
         self.endpoint_url = self._get_endpoint_url()
         self.access_key = self._get_access_key()
         self.secret_key = self._get_secret_key()
         self.region = self._get_region()
-        logger.debug("  ✓ Settings loaded in %.3fs", time.monotonic() - step_start)
         
         # Determine if we're running inside a container
         # This helps us decide how to handle URLs for browser access
-        step_start = time.monotonic()
         self.in_container = self._is_running_in_container()
-        logger.debug("  ✓ Container detection in %.3fs", time.monotonic() - step_start)
         
         # Initialize workspace buckets (flexible configuration)
-        step_start = time.monotonic()
         self.workspace_buckets = self._get_workspace_buckets()
-        logger.debug("  ✓ Workspace buckets loaded in %.3fs", time.monotonic() - step_start)
         # OCFL buckets will be determined dynamically
 
         # Initialize legacy buckets for backward compatibility
-        step_start = time.monotonic()
         self.ingest_bucket = self._get_ingest_bucket_name()
         self.production_bucket = self._get_production_bucket_name()
-        logger.debug("  ✓ Legacy buckets loaded in %.3fs", time.monotonic() - step_start)
 
         # Create S3 client
-        step_start = time.monotonic()
         logger.info(f"Creating S3 client with endpoint URL: {self.endpoint_url}")
         self.s3_client = self._create_s3_client()
-        logger.debug("  ✓ S3 client created in %.3fs", time.monotonic() - step_start)
 
         logger.info(f"BaseStorageService initialized with {'MinIO' if self.is_minio else 'S3'}")
         logger.info(f"Using endpoint: {self.endpoint_url or 'default S3 endpoint'}")
         logger.info(f"Using region: {self.region}")
         logger.info(f"Workspace buckets: {self.workspace_buckets}")
+        logger.info(f"All buckets are OCFL-capable")
+        logger.info(f"Legacy ingest bucket: {self.ingest_bucket}")
+        logger.info(f"Legacy production bucket: {self.production_bucket}")
+        
+        # Only check buckets if not skipped and not already checked
+        if not skip_bucket_check and not self._buckets_checked:
+            logger.info("Ensuring workspace buckets exist...")
 
-        # Only log legacy buckets if they're explicitly configured (not derived)
-        explicit_ingest = getattr(settings, 'S3_INGEST_BUCKET', None) or getattr(settings, 'AWS_INGEST_BUCKET_NAME', None)
-        explicit_production = getattr(settings, 'S3_PRODUCTION_BUCKET', None) or getattr(settings, 'AWS_PRODUCTION_BUCKET_NAME', None)
-
-        if explicit_ingest or explicit_production:
-            logger.debug(f"Legacy bucket mappings: ingest={self.ingest_bucket}, production={self.production_bucket}")
-
-        # Skip bucket checks for external S3 - assume buckets exist
-        # Only check buckets for local MinIO where we can create them
-        step_start = time.monotonic()
-        if not skip_bucket_check and not self._buckets_checked and self.is_minio:
-            # Only create buckets if specific buckets are listed (not "*")
-            allow_all = any(bucket in ("*", "__all__") for bucket in self.workspace_buckets) or not self.workspace_buckets
-            
-            if not allow_all:
-                logger.info("Ensuring workspace buckets exist...")
-                buckets_to_check = [b for b in self.workspace_buckets if b not in ("*", "__all__")]
-                
-                # Ensure all specified workspace buckets exist
-                for bucket_name in buckets_to_check:
-                    bucket_exists = self.ensure_bucket_exists(bucket_name)
-                    if bucket_exists:
-                        # Ensure CORS is configured for upload buckets (needed for direct uploads)
-                        logger.info(f"Ensuring CORS is configured for {bucket_name}...")
-                        cors_result = self.ensure_cors_enabled(bucket_name)
-                        if cors_result["success"]:
-                            if cors_result.get("updated", False):
-                                logger.info(f"✅ CORS configuration for {bucket_name} has been updated")
-                            else:
-                                logger.info(f"✅ CORS configuration for {bucket_name} is already correct")
+            # Ensure all workspace buckets exist
+            for bucket_name in self.workspace_buckets:
+                bucket_exists = self.ensure_bucket_exists(bucket_name)
+                if bucket_exists and bucket_name == self.ingest_bucket:
+                    # Ensure CORS is configured for ingest bucket (needed for direct uploads)
+                    logger.info(f"Ensuring CORS is configured for {bucket_name}...")
+                    cors_result = self.ensure_cors_enabled(bucket_name)
+                    if cors_result["success"]:
+                        if cors_result.get("updated", False):
+                            logger.info(f"✅ CORS configuration for {bucket_name} has been updated")
                         else:
-                            logger.warning(f"⚠️ Failed to configure CORS for {bucket_name}: {cors_result.get('error', 'Unknown error')}")
-            else:
-                logger.info("All buckets mode enabled - skipping bucket creation checks (buckets will be discovered dynamically)")
+                            logger.info(f"✅ CORS configuration for {bucket_name} is already correct")
+                    else:
+                        logger.warning(f"⚠️ Failed to configure CORS for {bucket_name}: {cors_result.get('error', 'Unknown error')}")
 
             # Set the class-level flag
             self._buckets_checked = True
-        elif not self.is_minio:
-            logger.info("Skipping bucket checks for external S3 (buckets will be discovered dynamically)")
-        logger.debug("  ✓ Bucket checks completed in %.3fs", time.monotonic() - step_start)
         
         # Mark as initialized
         self.initialized = True
-        self._bucket_cache_metadata: Dict[str, Any] = {}
-        logger.info("✅ BaseStorageService initialization complete in %.3fs", time.monotonic() - init_start)
     
     def set_client_and_buckets(self, service):
         """
@@ -234,259 +203,87 @@ class BaseStorageService:
         # Default region
         return 'us-east-1'
     
-    def _get_ingest_bucket_name(self) -> Optional[str]:
-        """
-        Get the ingest bucket name for S3/MinIO.
+    def _get_ingest_bucket_name(self) -> str:
+        """Get the ingest bucket name for S3/MinIO."""
+        # First check for explicit setting
+        bucket_name = getattr(settings, 'AWS_INGEST_BUCKET_NAME', None)
+        if bucket_name:
+            return bucket_name
         
-        DEPRECATED: This is a legacy property. Use get_all_accessible_buckets() to get all buckets.
-        Only returns a value if explicitly configured. Returns None otherwise.
-        """
-        # Check new-style setting first
-        bucket_name = getattr(settings, 'S3_INGEST_BUCKET', None) or os.environ.get('S3_INGEST_BUCKET')
-        if bucket_name:
-            return bucket_name
-
-        # Legacy fallback
-        bucket_name = getattr(settings, 'AWS_INGEST_BUCKET_NAME', None) or os.environ.get('AWS_INGEST_BUCKET_NAME')
-        if bucket_name:
-            logger.debug("Using legacy AWS_INGEST_BUCKET_NAME setting")
-            return bucket_name
-
-        # Do NOT derive from workspace buckets - return None if not explicitly configured
-        return None
-
-    def _get_production_bucket_name(self) -> Optional[str]:
-        """
-        Get the production bucket name for S3/MinIO.
+        # Then check for environment variable
+        bucket_name_env = os.environ.get('AWS_INGEST_BUCKET_NAME', '')
+        if bucket_name_env:
+            return bucket_name_env
         
-        DEPRECATED: This is a legacy property. Use get_all_accessible_buckets() to get all buckets.
-        Only returns a value if explicitly configured. Returns None otherwise.
-        """
-        # Check new-style setting first
-        bucket_name = getattr(settings, 'S3_PRODUCTION_BUCKET', None) or os.environ.get('S3_PRODUCTION_BUCKET')
+        # Fall back to the storage bucket name if ingest-specific not defined
+        storage_bucket = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', None)
+        if storage_bucket:
+            return storage_bucket
+            
+        storage_bucket_env = os.environ.get('AWS_STORAGE_BUCKET_NAME', '')
+        if storage_bucket_env:
+            return storage_bucket_env
+        
+        # Default bucket name
+        if self._is_minio_environment():
+            return 'lacos-ingest'
+        
+        # For production, we should have a setting or environment variable
+        logger.warning("No AWS_INGEST_BUCKET_NAME found in settings or environment")
+        return 'lacos-ingest'
+    
+    def _get_production_bucket_name(self) -> str:
+        """Get the production bucket name for S3/MinIO."""
+        # First check for explicit setting
+        bucket_name = getattr(settings, 'AWS_PRODUCTION_BUCKET_NAME', None)
         if bucket_name:
             return bucket_name
-
-        # Legacy fallback
-        bucket_name = getattr(settings, 'AWS_PRODUCTION_BUCKET_NAME', None) or os.environ.get('AWS_PRODUCTION_BUCKET_NAME')
-        if bucket_name:
-            logger.debug("Using legacy AWS_PRODUCTION_BUCKET_NAME setting")
-            return bucket_name
-
-        # Do NOT derive from workspace buckets - return None if not explicitly configured
-        return None
+        
+        # Then check for environment variable
+        bucket_name_env = os.environ.get('AWS_PRODUCTION_BUCKET_NAME', '')
+        if bucket_name_env:
+            return bucket_name_env
+        
+        # Default bucket name
+        if self._is_minio_environment():
+            return 'lacos-production'
+        
+        # For production, we should have a setting or environment variable
+        logger.warning("No AWS_PRODUCTION_BUCKET_NAME found in settings or environment")
+        return 'lacos-production'
 
     def _get_workspace_buckets(self) -> list:
         """Get the list of workspace buckets from settings."""
-        workspace_buckets = getattr(settings, 'S3_WORKSPACE_BUCKETS', [])
-        if isinstance(workspace_buckets, (list, tuple)):
-            workspace_buckets = list(dict.fromkeys(str(bucket).strip() for bucket in workspace_buckets if bucket))
-        elif isinstance(workspace_buckets, str):
-            # Handle * or __all__ as wildcard for all buckets
-            workspace_buckets_str = workspace_buckets.strip()
-            if workspace_buckets_str in ("*", "__all__", ""):
-                workspace_buckets = ["*"]  # Use * as marker for "all buckets"
-            else:
-                # Split comma-separated list
-                workspace_buckets = [b.strip() for b in workspace_buckets_str.split(",") if b.strip()]
-        else:
-            workspace_buckets = []
-
-        logger.info("Loaded workspace buckets from settings: %s", workspace_buckets)
+        workspace_buckets = getattr(settings, 'S3_WORKSPACE_BUCKETS', ['ingest', 'production'])
+        logger.info(f"Loaded workspace buckets from settings: {workspace_buckets}")
         return workspace_buckets
 
     @property
     def ocfl_buckets(self) -> list:
-        """
-        Get all accessible buckets as OCFL-capable buckets.
-        
-        Note: This property triggers lazy loading when first accessed.
-        All buckets are OCFL-capable.
-        """
+        """Get all accessible buckets as OCFL-capable buckets."""
         return self.get_all_accessible_buckets()
 
     def is_ocfl_bucket(self, bucket_name: str) -> bool:
         """Check if a bucket allows OCFL operations. All buckets are OCFL-capable."""
         return True
 
-    def _fetch_buckets_from_s3(self) -> list:
-        """
-        Fetch bucket list from S3.
-        
-        Returns:
-            list: List of bucket names
-        """
-        # Check if we should allow all buckets
-        allow_all = any(bucket in ("*", "__all__") for bucket in self.workspace_buckets)
-        allow_all = allow_all or not self.workspace_buckets  # Empty list also means all buckets
+    def get_all_accessible_buckets(self) -> list:
+        """Get all buckets that exist in MinIO."""
+        cache_key = "storage:bucket-names"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            logger.debug("Returning cached bucket list: %s", cached)
+            return cached
 
-        if not allow_all:
-            # If specific buckets are configured, merge with any dynamically added buckets from cache
-            allowlist = [bucket for bucket in self.workspace_buckets if bucket not in ("*", "__all__")]
-            allowlist = list(dict.fromkeys(allowlist))
-            
-            if allowlist:
-                cache_key = self._bucket_cache_key()
-                cached_buckets = cache.get(cache_key)
-                
-                if cached_buckets:
-                    # Merge configured buckets with cached ones (union - configured + dynamically added)
-                    all_buckets = list(dict.fromkeys(allowlist + list(cached_buckets)))
-                    if len(all_buckets) > len(allowlist):
-                        logger.info("Merged configured buckets with %d dynamically added buckets from cache", 
-                                   len(all_buckets) - len(allowlist))
-                        # Update cache with merged list to persist it
-                        ttl_seconds = self._bucket_cache_ttl()
-                        cache.set(cache_key, sorted(all_buckets), timeout=ttl_seconds)
-                        return sorted(all_buckets)
-                    # Cached buckets are subset of configured, use configured
-                    return allowlist
-                else:
-                    # No cache exists - initialize it with configured buckets for future merges
-                    ttl_seconds = self._bucket_cache_ttl()
-                    cache.set(cache_key, allowlist, timeout=ttl_seconds)
-                    logger.info("Initialized bucket cache with configured buckets: %s", allowlist)
-                
-                # Return configured list (no S3 call needed)
-                logger.info("Using configured bucket list without S3 verification for performance: %s", allowlist)
-                return allowlist
-
-        # For "all buckets" mode, fetch from S3
-        logger.info("📦 Fetching all buckets from S3 (this may take time over VPN)...")
-        logger.info("📦 Calling s3_client.list_buckets() with endpoint: %s", self.endpoint_url)
-        list_start = time.monotonic()
         try:
             response = self.s3_client.list_buckets()
-            list_duration = time.monotonic() - list_start
-            logger.info("📦 S3 list_buckets() completed in %.3fs", list_duration)
-            
-            all_bucket_names = sorted(bucket['Name'] for bucket in response.get('Buckets', []))
-            logger.info("📦 BUCKETS: Found %s buckets from S3", len(all_bucket_names))
-            return all_bucket_names
-        except ClientError as e:
-            list_duration = time.monotonic() - list_start
-            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
-            error_message = e.response.get('Error', {}).get('Message', str(e))
-            logger.error("❌ S3 ClientError listing buckets after %.3fs: Code=%s, Message=%s", 
-                        list_duration, error_code, error_message)
-            logger.error("Full error response: %s", e.response)
-            # Re-raise to be handled by caller
-            raise
-        except Exception as e:
-            list_duration = time.monotonic() - list_start
-            logger.exception("❌ Unexpected error fetching buckets after %.3fs: %s", list_duration, e)
-            logger.error("Error type: %s", type(e).__name__)
-            raise
-
-
-    def get_all_accessible_buckets(self, force_refresh: bool = False, raise_on_error: bool = False) -> list:
-        """
-        Get all accessible buckets dynamically from S3/MinIO.
-        
-        Uses simple cache pattern:
-        - Check cache first, return if found (fast path)
-        - Fetch from S3 and cache if cache miss or force_refresh
-        - Merge configured buckets with cached ones (allows GUI-added buckets)
-        
-        Args:
-            force_refresh (bool): If True, bypass cache and fetch fresh data (blocking).
-            raise_on_error (bool): If True, propagate underlying S3 errors instead of returning fallbacks.
-
-        Returns:
-            list: List of accessible bucket names
-        """
-        method_start = time.monotonic()
-        cache_key = self._bucket_cache_key()
-
-        # Check cache first unless force_refresh
-        if not force_refresh:
-            cached = cache.get(cache_key)
-            if cached is not None:
-                # Merge configured buckets with cached ones (allows GUI-added buckets)
-                allow_all = any(bucket in ("*", "__all__") for bucket in self.workspace_buckets)
-                allow_all = allow_all or not self.workspace_buckets
-                if not allow_all:
-                    configured = [b for b in self.workspace_buckets if b not in ("*", "__all__")]
-                    configured = list(dict.fromkeys(configured))
-                    if configured:
-                        # Merge configured with cached (union)
-                        merged = sorted(list(dict.fromkeys(configured + list(cached))))
-                        if len(merged) > len(cached):
-                            # Update cache with merged list
-                            ttl_seconds = self._bucket_cache_ttl()
-                            cache.set(cache_key, merged, timeout=ttl_seconds)
-                            logger.debug("Merged configured buckets with cache (%d → %d buckets)", len(cached), len(merged))
-                            cached = merged
-                        # If merged is same length, use cached (may have same buckets)
-                
-                logger.debug("📋 Found %d cached buckets (skipping S3 call)", len(cached))
-                self._bucket_cache_metadata = {
-                    "source": "cache",
-                    "bucket_count": len(cached),
-                    "duration": time.monotonic() - method_start,
-                    "force_refresh": force_refresh,
-                }
-                return list(cached)
-        else:
-            logger.info("📋 Force fresh bucket list (cache bypassed)")
-            cache.delete(cache_key)
-
-        # Cache miss or force_refresh - fetch from S3
-        try:
-            logger.info("Cache miss - fetching buckets...")
-            fetch_start = time.monotonic()
-            bucket_names = self._fetch_buckets_from_s3()
-            fetch_duration = time.monotonic() - fetch_start
-            
-            # Cache the results
-            ttl_seconds = self._bucket_cache_ttl()
-            cache.set(cache_key, bucket_names, timeout=ttl_seconds)
-            
-            self._bucket_cache_metadata = {
-                "source": "refresh",
-                "bucket_count": len(bucket_names),
-                "duration": fetch_duration,
-                "expires_in": ttl_seconds,
-                "force_refresh": force_refresh,
-            }
-
-            logger.info("✓ Fetched and cached %d buckets in %.3fs (TTL: %ds)", 
-                       len(bucket_names), fetch_duration, ttl_seconds)
+            bucket_names = sorted(bucket['Name'] for bucket in response['Buckets'])
+            logger.info("📦 BUCKETS: Found %s buckets in MinIO", len(bucket_names))
+            cache.set(cache_key, bucket_names, timeout=300)
             return bucket_names
         except Exception as e:
-            logger.exception("❌ Error getting buckets: %s", e)
-            cache.delete(cache_key)
-
-            if raise_on_error:
-                raise
-
-            self._bucket_cache_metadata = {
-                "source": "fallback",
-                "error": str(e),
-                "force_refresh": force_refresh,
-            }
-            # Fallback: return workspace buckets if configured, otherwise empty list
-            if self.workspace_buckets and self.workspace_buckets != ["*"]:
-                return [b for b in self.workspace_buckets if b not in ("*", "__all__")]
-            return []
-
-    def iter_buckets(self) -> Generator[str, None, None]:
-        """
-        Return a lazy iterator over accessible buckets.
-        Buckets are fetched from S3 when first accessed, then cached.
-        
-        Use this when you only need to iterate through buckets and don't need a list.
-        
-        Example:
-            for bucket in service.iter_buckets():
-                process(bucket)
-        
-        Returns:
-            Generator[str, None, None]: Iterator yielding bucket names
-        """
-        # Fetch buckets (will use cache if available) and yield them
-        buckets = self.get_all_accessible_buckets()
-        yield from buckets
+            logger.exception("❌ Error listing buckets from MinIO: %s", e)
+            return self.workspace_buckets.copy()
 
     def _create_s3_client(self):
         """
@@ -506,48 +303,19 @@ class BaseStorageService:
         if self.region:
             client_kwargs['region_name'] = self.region
         
-        # Optimize timeouts for VPN connections
-        # Get timeout settings from environment or use VPN-optimized defaults
-        connect_timeout = int(os.environ.get('S3_CONNECT_TIMEOUT', '30'))  # 30s default for VPN
-        read_timeout = int(os.environ.get('S3_READ_TIMEOUT', '60'))  # 60s default for VPN
-        max_pool_connections = int(os.environ.get('S3_MAX_POOL_CONNECTIONS', '50'))
-        
-        # Configure retries with exponential backoff for VPN reliability
-        max_retries = int(os.environ.get('S3_MAX_RETRIES', '3'))
-        retries_config = {
-            'max_attempts': max_retries,
-            'mode': 'adaptive'  # Adaptive retry mode for better VPN handling
-        }
-        
         # Add endpoint URL for MinIO or custom S3 endpoints
         if self.endpoint_url:
             # For server-side operations, use the original endpoint URL
             server_endpoint = self.endpoint_url
             client_kwargs['endpoint_url'] = server_endpoint
-
-            # For any custom endpoint (MinIO or S3-compatible), use path-style addressing
-            # This prevents boto3 from trying virtual-hosted-style URLs like https://bucket.endpoint.com
-            # Also configure timeouts and connection pooling for VPN optimization
-            client_kwargs['config'] = BotoConfig(
-                signature_version='s3v4',
-                s3={'addressing_style': 'path'},
-                connect_timeout=connect_timeout,
-                read_timeout=read_timeout,
-                max_pool_connections=max_pool_connections,
-                retries=retries_config
-            )
-
+            
             # For MinIO in local development, we need special handling for presigned URLs
             if self.is_minio:
                 # Create a config that tells boto3 to use path-style addressing
                 # This is required for MinIO
-                client_kwargs['config'] = BotoConfig(
+                client_kwargs['config'] = boto3.session.Config(
                     signature_version='s3v4',
-                    s3={'addressing_style': 'path'},
-                    connect_timeout=connect_timeout,
-                    read_timeout=read_timeout,
-                    max_pool_connections=max_pool_connections,
-                    retries=retries_config
+                    s3={'addressing_style': 'path'}
                 )
                 
                 # For presigned URLs that will be used by the browser,
@@ -572,38 +340,19 @@ class BaseStorageService:
                     aws_secret_access_key=self.secret_key,
                     region_name=self.region if self.region else None,
                     endpoint_url=browser_endpoint,
-                    config=BotoConfig(
+                    config=boto3.session.Config(
                         signature_version='s3v4',
-                        s3={'addressing_style': 'path'},
-                        connect_timeout=connect_timeout,
-                        read_timeout=read_timeout,
-                        max_pool_connections=max_pool_connections,
-                        retries=retries_config
+                        s3={'addressing_style': 'path'}
                     )
                 )
                 logger.info(f"Created separate client for presigned URLs with endpoint: {browser_endpoint}")
         
         # Create the primary client
-        # If no config was set (no endpoint_url), add VPN-optimized config
-        if 'config' not in client_kwargs:
-            client_kwargs['config'] = BotoConfig(
-                connect_timeout=connect_timeout,
-                read_timeout=read_timeout,
-                max_pool_connections=max_pool_connections,
-                retries=retries_config
-            )
-        
         client = boto3.client(**client_kwargs)
 
         # Ensure a presigned client always exists; fall back to the primary client
         if not hasattr(self, "presigned_client"):
             self.presigned_client = client
-
-        logger.info(
-            f"S3 client created with VPN-optimized settings: "
-            f"connect_timeout={connect_timeout}s, read_timeout={read_timeout}s, "
-            f"max_pool_connections={max_pool_connections}, retries={max_retries}"
-        )
 
         return client
     
@@ -692,7 +441,7 @@ class BaseStorageService:
             return {
                 "content": content,
                 "metadata": metadata,
-                "bucket_name": bucket_name,
+                "bucket_type": "ingest" if bucket_name == self.ingest_bucket else "production",
                 "path": file_path,
             }
         except ClientError as e:
@@ -757,20 +506,21 @@ class BaseStorageService:
             logger.error(f"Error deleting {object_path}: {str(e)}")
             return {"success": False, "error": str(e)}
     
-    def ensure_cors_enabled(self, bucket_name: str) -> Dict[str, Any]:
+    def ensure_cors_enabled(self, bucket_name: str = None) -> Dict[str, Any]:
         """
         Ensure CORS is properly configured for the specified bucket.
         
         This is required for browser-based uploads to work properly.
         
         Args:
-            bucket_name (str): Name of the bucket to configure.
+            bucket_name (str, optional): Name of the bucket to configure. 
+                                         Defaults to ingest bucket.
         
         Returns:
             Dict[str, Any]: Result of the operation
         """
-        if not bucket_name:
-            return {"success": False, "error": "Bucket name is required"}
+        if bucket_name is None:
+            bucket_name = self.ingest_bucket
         
         logger.info(f"Checking CORS configuration for bucket: {bucket_name}")
         
@@ -872,38 +622,3 @@ class BaseStorageService:
             pass
         
         return False 
-    def _bucket_cache_key(self) -> str:
-        return "storage:bucket-names"
-
-    def _bucket_cache_ttl(self) -> int:
-        """Return the configured bucket list cache TTL in seconds."""
-        # For VPN/Slow connections: 24 hours to minimize expensive list_buckets() calls
-        # For local MinIO: 5 minutes is sufficient
-        # Use stale-while-revalidate: serve stale cache immediately, refresh in background
-        default_ttl = 86400 if not self.is_minio else 300  # 24h for external S3, 5m for MinIO
-        ttl = getattr(settings, "S3_BUCKET_LIST_CACHE_TTL", None)
-        
-        # If None or not set, use automatic defaults based on environment
-        if ttl is None:
-            return default_ttl
-            
-        try:
-            ttl_int = int(ttl)
-        except (TypeError, ValueError):
-            ttl_int = default_ttl
-        return max(ttl_int, 1)
-    
-    def _get_stale_cache_ttl(self) -> int:
-        """Return TTL for stale cache (can serve stale for this long)."""
-        # Allow serving stale cache for up to 7 days if fresh fetch fails
-        return 604800  # 7 days
-
-    def invalidate_bucket_cache(self) -> None:
-        """Clear the cached bucket list."""
-        cache.delete(self._bucket_cache_key())
-        self._bucket_cache_metadata = {}
-
-    @property
-    def bucket_cache_metadata(self) -> Dict[str, Any]:
-        """Return metadata about the most recent bucket cache population."""
-        return getattr(self, "_bucket_cache_metadata", {})

@@ -1,6 +1,4 @@
 # ruff: noqa: E501
-from django.core.exceptions import ImproperlyConfigured
-
 from .base import *  # noqa: F403
 from .base import DATABASES
 from .base import INSTALLED_APPS
@@ -71,22 +69,10 @@ AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID")
 # https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html#settings
 AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY")
 # https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html#settings
-# Bucket for ingesting data / default storage backend
-_workspace_defaults = S3_WORKSPACE_BUCKETS or []
-AWS_STORAGE_BUCKET_NAME = env(
-    "AWS_STORAGE_BUCKET_NAME",
-    default=_workspace_defaults[0] if _workspace_defaults else None,
-)
+# Bucket for ingesting data
+AWS_STORAGE_BUCKET_NAME = env("AWS_STORAGE_BUCKET_NAME")
 # Bucket for production/published data
-AWS_PRODUCTION_BUCKET_NAME = env(
-    "AWS_PRODUCTION_BUCKET_NAME",
-    default=_workspace_defaults[1] if len(_workspace_defaults) > 1 else AWS_STORAGE_BUCKET_NAME,
-)
-
-if not AWS_STORAGE_BUCKET_NAME:
-    raise ImproperlyConfigured(
-        "AWS_STORAGE_BUCKET_NAME is required. Provide it explicitly or add at least one bucket to S3_WORKSPACE_BUCKETS."
-    )
+AWS_PRODUCTION_BUCKET_NAME = env("AWS_PRODUCTION_BUCKET_NAME")
 # https://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html#settings
 AWS_QUERYSTRING_AUTH = False
 # DO NOT change these unless you know what you're doing.
