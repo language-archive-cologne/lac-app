@@ -1,0 +1,10 @@
+<div id="bucket-size-container-{{ bucket_name|slugify }}"
+     class="btn btn-ghost btn-xs gap-2"
+     hx-get="{{ bucket_size_url }}"
+     hx-trigger="load delay:1s"
+     hx-target="this"
+     hx-swap="outerHTML">
+    <span class="loading loading-spinner loading-xs"></span>
+    <span class="text-base-content/50">Loading size...</span>
+</div>
+

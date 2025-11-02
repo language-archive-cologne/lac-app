@@ -100,6 +100,27 @@ def archivist_dashboard(request):
             if force_fresh:
                 auto_load_url = f"{auto_load_url}?force_fresh=true"
             logger.info("Auto-load URL: %s", auto_load_url)
+            
+            # Pre-warm cache in background for faster subsequent loads
+            # This doesn't block the response, but helps cache be ready for next visit
+            import threading
+            def warm_cache():
+                try:
+                    logger.info("🔄 Background: Pre-warming cache for bucket %s", active_bucket)
+                    # Just call list_bucket_contents which will cache the result
+                    bucket_service.collection_service.list_bucket_contents(active_bucket, prefix="", force_fresh=False, max_keys=10)
+                    logger.info("✅ Background: Cache warmed for bucket %s", active_bucket)
+                except Exception as e:
+                    logger.warning("⚠️ Background: Cache warming failed for %s: %s", active_bucket, e)
+            
+            # Check if cache already exists before warming
+            cache_check = bucket_service.collection_service._folder_cache.get(active_bucket, "")
+            if cache_check is None:
+                thread = threading.Thread(target=warm_cache, daemon=True)
+                thread.start()
+                logger.info("🔄 Started background cache warming for %s", active_bucket)
+            else:
+                logger.debug("Cache already exists for %s, skipping warm-up", active_bucket)
 
         # Check for success message
         message = request.GET.get('message', None)
@@ -427,8 +448,37 @@ class BucketContentHTMXView(HtmxTemplateHelperMixin, View):
             )
             logger.info("✅ Bucket tabs OOB rendered (%d chars)", len(selector_html))
 
-            # Combine content update with selector OOB update
-            response_html = f'{content_html}{selector_html}'
+            # Build bucket size OOB update - render loading placeholder that triggers async load
+            from django.template.loader import render_to_string
+            from django.urls import reverse
+            from django.template.defaultfilters import slugify
+            
+            bucket_size_url = reverse("storage:bucket_size_info", kwargs={"bucket_name": bucket_name})
+            
+            # Use template to render bucket size container with HTMX trigger
+            bucket_size_container_html = render_to_string(
+                'dashboard/partials/bucket_size_loading.html',
+                {
+                    'bucket_name': bucket_name,
+                    'bucket_size_url': bucket_size_url,
+                },
+                request=request
+            )
+            
+            # Build OOB updates using helper - match the ID format used in template (slugify filter)
+            # Note: bucket size needs outerHTML swap, so we add it manually after build_oob_response
+            bucket_size_target_id = f'bucket-size-container-{slugify(bucket_name)}'
+            
+            # Build OOB response for bucket tabs (which uses innerHTML for other updates if needed)
+            # Then manually add bucket size with outerHTML swap
+            response_html = self.build_oob_response(
+                content_html + selector_html,
+                {}
+            )
+            
+            # Add bucket size OOB update with outerHTML swap (needs to replace entire element)
+            bucket_size_oob = f'<div id="{bucket_size_target_id}" hx-swap-oob="outerHTML">{bucket_size_container_html}</div>'
+            response_html += bucket_size_oob
 
             logger.info("✅ Bucket content load complete (total: %d chars)", len(response_html))
             logger.info("=" * 80)

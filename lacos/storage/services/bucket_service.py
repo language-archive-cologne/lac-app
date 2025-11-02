@@ -209,17 +209,53 @@ class BucketService(BaseStorageService):
         """
         try:
             from django.conf import settings
-            page_size = getattr(settings, "S3_LISTING_PAGE_SIZE", 100)
+            # For root level, we only need a small number of items initially
+            # Over-fetching causes slow S3 responses - use tiny limit (10) for fastest initial load
+            # Large buckets can have many folders, but we paginate
+            page_size = getattr(settings, "S3_LISTING_PAGE_SIZE", 10)
 
+            # Check cache from collection_service (which actually handles the S3 calls)
+            # This ensures we use the same cache that list_bucket_contents uses
             if not force_fresh and continuation_token is None:
-                cached_root = self.folder_cache.get(bucket_name, None)
-                if cached_root is not None:
-                    logger.debug(
-                        "Returning cached root listing for %s (%s children)",
+                cached_result = self.collection_service._folder_cache.get(bucket_name, "")
+                if cached_result is not None:
+                    logger.info(
+                        "📋 Found %d cached items for %s root (skipping S3 call)",
+                        len(cached_result.get("items", [])),
                         bucket_name,
-                        len(cached_root.get("children", [])),
                     )
-                    return cached_root
+                    # Transform cached result to expected format
+                    processed_children = []
+                    for item in cached_result.get("items", []):
+                        parent_info = self._split_parent_child(
+                            item["path"] if item["is_dir"] else item["path"]
+                        )
+
+                        child = {
+                            "type": "folder" if item["is_dir"] else "file",
+                            "name": item["name"],
+                            "path": item["path"],
+                            "parent_path": parent_info["parent"],
+                            "size": item.get("size"),
+                            "last_modified": item.get("last_modified"),
+                        }
+
+                        # If it's a folder, check if it's a BLAM object (only for production bucket)
+                        if item["is_dir"] and bucket_name == self.production_bucket:
+                            blam_info = self.is_blam_object(bucket_name, item["path"])
+                            if blam_info["is_blam_object"]:
+                                child.update(blam_info)
+
+                        processed_children.append(child)
+                    
+                    # Return in expected format
+                    return {
+                        "type": "folder",
+                        "name": bucket_name,
+                        "path": "",
+                        "children": processed_children,
+                        "has_more": cached_result.get("has_more", False),
+                    }
 
             started = time.monotonic()
             listing_result = self.collection_service.list_bucket_contents(
@@ -319,7 +355,7 @@ class BucketService(BaseStorageService):
         try:
             from django.conf import settings
 
-            page_size = getattr(settings, "S3_LISTING_PAGE_SIZE", 100)
+            page_size = getattr(settings, "S3_LISTING_PAGE_SIZE", 10)
 
             started = time.monotonic()
             listing_result = self.collection_service.list_bucket_contents(

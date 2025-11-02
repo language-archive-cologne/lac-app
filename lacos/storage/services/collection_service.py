@@ -222,14 +222,31 @@ class CollectionService(BaseStorageService):
             next_token = None
 
             # Build pagination params
+            # Delimiter="/" ensures we only get items at the current level (not recursive)
+            # This dramatically reduces the amount of data S3 needs to process
             list_params = {
                 "Bucket": bucket_name,
                 "Prefix": listing_prefix,
-                "Delimiter": "/",
+                "Delimiter": "/",  # Critical: only list current level, not recursive
             }
 
+            # Limit items per page to reduce S3 response time
+            # Even with Delimiter, requesting too many items causes S3 to scan more data
+            # Smaller max_keys = faster response times over slow VPN
+            # For root level (empty prefix), use even smaller limit
             if max_keys:
-                list_params["MaxKeys"] = max_keys
+                # For root level listing, use very small limit (10 items) for fastest response
+                # For subdirectories, allow more (up to 20)
+                if not listing_prefix:
+                    # Root level - very small limit for fastest initial load
+                    effective_max_keys = min(max_keys, 10) if max_keys > 10 else max_keys
+                else:
+                    # Subdirectory - slightly more items
+                    effective_max_keys = min(max_keys, 20) if max_keys > 20 else max_keys
+                list_params["MaxKeys"] = effective_max_keys
+                if effective_max_keys < max_keys:
+                    logger.info("Capped max_keys from %d to %d for faster response (prefix: %s)", 
+                               max_keys, effective_max_keys, listing_prefix or "/")
 
             if continuation_token:
                 list_params["ContinuationToken"] = continuation_token
@@ -250,6 +267,8 @@ class CollectionService(BaseStorageService):
                     len(response.get("CommonPrefixes", [])),
                 )
 
+                # Process files first (Contents)
+                # Note: With Delimiter="/", Contents only contains files at current level
                 for obj in response.get("Contents", []):
                     # Skip the directory marker itself if listing a directory
                     if listing_prefix and obj["Key"] == listing_prefix:
@@ -265,6 +284,10 @@ class CollectionService(BaseStorageService):
                         }
                     )
 
+                # Process folders (CommonPrefixes)
+                # Note: With Delimiter="/", CommonPrefixes contains only folders at current level
+                # MaxKeys applies to TOTAL (Contents + CommonPrefixes), so if we hit the limit,
+                # we might get fewer folders if there are files too
                 for prefix_obj in response.get("CommonPrefixes", []):
                     prefix_str = prefix_obj.get("Prefix", "")
                     contents.append(
