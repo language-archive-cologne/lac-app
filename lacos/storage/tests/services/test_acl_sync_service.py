@@ -2,6 +2,8 @@ import json
 
 import pytest
 from django.contrib.contenttypes.models import ContentType
+from django.core.cache import cache
+from unittest.mock import patch
 
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
@@ -20,6 +22,7 @@ def acl_sync_service(mock_s3):
     original_mapping = ResourceMappingService._instance
     ACLSyncService._instance = None
     ResourceMappingService._instance = None
+    cache.clear()
     try:
         service = ACLSyncService()
         service.s3_client = mock_s3
@@ -27,6 +30,7 @@ def acl_sync_service(mock_s3):
         service.set_client_and_buckets(service.resource_mapping)
         yield service
     finally:
+        cache.clear()
         ACLSyncService._instance = original_sync
         ResourceMappingService._instance = original_mapping
 
@@ -72,6 +76,34 @@ def test_sync_collection_creates_permissions(mock_s3, acl_sync_service):
     assert permissions.last_synced is not None
     assert permissions.access_level == ACL_LEVEL_PUBLIC
     assert permissions.read_agents == ["foaf:Agent"]
+
+
+@pytest.mark.django_db
+def test_sync_collection_uses_cached_acl(mock_s3, acl_sync_service):
+    collection = _create_collection(identifier="collection-cache")
+    collection.import_bucket = TEST_BUCKET_NAME
+    collection.import_object_key = "collections/collection-cache"
+    collection.save()
+
+    acl_rules = [
+        {"agentClass": "acl:AuthenticatedAgent", "mode": ["acl:Read"]},
+    ]
+
+    mock_s3.put_object(
+        Bucket=TEST_BUCKET_NAME,
+        Key="collections/collection-cache/acl.json",
+        Body=json.dumps(acl_rules),
+    )
+
+    with patch.object(acl_sync_service.s3_client, "get_object", wraps=acl_sync_service.s3_client.get_object) as spy_get_object:
+        first = acl_sync_service.sync_collection(collection)
+        assert first.found is True
+        assert spy_get_object.call_count == 1
+
+    with patch.object(acl_sync_service.s3_client, "get_object", side_effect=AssertionError("Unexpected S3 fetch")):
+        second = acl_sync_service.sync_collection(collection)
+        assert second.found is True
+        assert second.updated is False
 
 
 @pytest.mark.django_db

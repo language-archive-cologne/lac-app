@@ -322,6 +322,9 @@ S3_OCFL_BUCKETS = env.list("S3_OCFL_BUCKETS", default=["lacos-ingest", "lacos-pr
 S3_INGEST_BUCKET = env("S3_INGEST_BUCKET", default="lacos-ingest")
 S3_PRODUCTION_BUCKET = env("S3_PRODUCTION_BUCKET", default="lacos-production")
 
+# Cache configuration for storage subsystems
+STORAGE_ACL_CACHE_TIMEOUT = env.int("STORAGE_ACL_CACHE_TIMEOUT", default=900)
+
 # ACL Configuration
 # ------------------------------------------------------------------------------
 ACL_ENFORCEMENT_ENABLED = env.bool("ACL_ENFORCEMENT_ENABLED", default=True)

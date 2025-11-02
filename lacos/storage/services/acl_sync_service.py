@@ -1,5 +1,6 @@
 import json
 import logging
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Optional, Sequence
 
@@ -11,6 +12,7 @@ from django.utils import timezone
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.storage.models.acl_permissions import ACLPermissions
+from lacos.storage.cache import get_acl_entry, set_acl_entry
 from lacos.storage.services.base_storage_service import BaseStorageService
 from lacos.storage.services.resource_mapping_service import ResourceMappingService
 from lacos.storage.utils.acl import determine_access_level, extract_read_agents
@@ -94,10 +96,10 @@ class ACLSyncService(BaseStorageService):
             self.logger.warning("%s for %s (%s)", message, type(obj).__name__, getattr(obj, "pk", "unknown"))
             return ACLSyncResult(obj=obj, bucket=bucket, key=key, found=False, updated=False, error=message)
 
-        permissions_data, found, error = self._fetch_acl(bucket, key)
+        permissions_data, found, error, source_info = self._fetch_acl(bucket, key)
 
         try:
-            result = self._persist_permissions(obj, bucket, key, permissions_data, found, error)
+            result = self._persist_permissions(obj, bucket, key, permissions_data, found, error, source_info)
             return result
         except Exception as exc:  # Defensive: avoid crashing sync loop
             self.logger.exception("Failed to persist ACL for %s (%s): %s", type(obj).__name__, getattr(obj, "pk", "unknown"), exc)
@@ -111,6 +113,7 @@ class ACLSyncService(BaseStorageService):
         permissions_data: Optional[Sequence[dict[str, Any]]],
         found: bool,
         fetch_error: Optional[str],
+        source_info: Optional[dict[str, Any]] = None,
     ) -> ACLSyncResult:
         """
         Store the permissions data on the `ACLPermissions` record for the object.
@@ -124,6 +127,8 @@ class ACLSyncService(BaseStorageService):
             fetch_error: Optional error message from the fetch step.
         """
         ct = ContentType.objects.get_for_model(obj)
+
+        from_cache = bool(source_info and source_info.get("from_cache"))
 
         with transaction.atomic():
             record, created = ACLPermissions.objects.get_or_create(
@@ -148,10 +153,14 @@ class ACLSyncService(BaseStorageService):
 
             if found and fetch_error is None:
                 record.permissions_data = permissions_data
-                record.last_synced = timezone.now()
-                fields_to_update.update({"permissions_data", "last_synced"})
                 current_permissions = permissions_data
-                updated = True
+                if from_cache and not created:
+                    # Keep last_synced untouched to avoid unnecessary writes.
+                    pass
+                else:
+                    record.last_synced = timezone.now()
+                    fields_to_update.update({"permissions_data", "last_synced"})
+                    updated = True
             elif fetch_error:
                 # Keep existing permissions data, but surface the error.
                 self.logger.error(
@@ -197,27 +206,77 @@ class ACLSyncService(BaseStorageService):
         Returns:
             Tuple of (permissions_data, found, error_message)
         """
+        cached_entry = get_acl_entry(bucket, key)
+        if cached_entry is not None:
+            return (
+                deepcopy(cached_entry.data),
+                cached_entry.found,
+                cached_entry.error,
+                {
+                    "from_cache": True,
+                    "etag": cached_entry.etag,
+                    "last_modified": cached_entry.last_modified,
+                },
+            )
+
         try:
             response = self.s3_client.get_object(Bucket=bucket, Key=key)
         except ClientError as exc:
             error_code = exc.response.get("Error", {}).get("Code")
             if error_code in {"NoSuchKey", "404"}:
-                return None, False, None
-            return None, False, f"S3 error retrieving ACL: {error_code or exc}"
+                set_acl_entry(
+                    bucket,
+                    key,
+                    data=None,
+                    found=False,
+                    error=None,
+                    etag=None,
+                    last_modified=None,
+                )
+                return None, False, None, {"from_cache": False}
+            return None, False, f"S3 error retrieving ACL: {error_code or exc}", {"from_cache": False}
 
         raw = response["Body"].read()
         if not raw:
-            return [], True, None
+            data: Sequence[dict[str, Any]] = []
+            set_acl_entry(
+                bucket,
+                key,
+                data=data,
+                found=True,
+                error=None,
+                etag=response.get("ETag"),
+                last_modified=response.get("LastModified"),
+            )
+            return data, True, None, {
+                "from_cache": False,
+                "etag": response.get("ETag"),
+                "last_modified": response.get("LastModified"),
+            }
 
         try:
             data = json.loads(raw.decode("utf-8"))
         except json.JSONDecodeError as json_error:
-            return None, True, f"Invalid JSON content: {json_error}"
+            return None, True, f"Invalid JSON content: {json_error}", {"from_cache": False}
 
         if not isinstance(data, list):
-            return None, True, "ACL JSON must be a list of rule objects"
+            return None, True, "ACL JSON must be a list of rule objects", {"from_cache": False}
 
-        return data, True, None
+        set_acl_entry(
+            bucket,
+            key,
+            data=data,
+            found=True,
+            error=None,
+            etag=response.get("ETag"),
+            last_modified=response.get("LastModified"),
+        )
+
+        return data, True, None, {
+            "from_cache": False,
+            "etag": response.get("ETag"),
+            "last_modified": response.get("LastModified"),
+        }
 
     def _build_collection_acl_key(self, collection: Collection) -> Optional[str]:
         base_prefix = self._resolve_object_prefix(collection)

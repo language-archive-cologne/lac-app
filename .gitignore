@@ -1,6 +1,7 @@
 # Documentation and planning files
 *.md
 !README.md
+!docs/storage_lazy_loading_plan.md
 
 ### Python template
 # Byte-compiled / optimized / DLL files
