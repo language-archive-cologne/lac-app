@@ -82,51 +82,14 @@ def archivist_dashboard(request):
     bucket_service = BucketService()
     bucket_state = BucketCoordinatorMixin()
 
-    force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
-
-    try:
-        # Get root level items for all workspace buckets
-        bucket_structures = {}
-        workspace_buckets = bucket_service.get_all_accessible_buckets()
-
-        for bucket_name in workspace_buckets:
-            try:
-                if force_fresh:
-                    bucket_structures[bucket_name] = bucket_service.get_root_level_items(bucket_name, force_fresh=True)
-                else:
-                    bucket_structures[bucket_name] = bucket_service.get_root_level_items(bucket_name)
-            except Exception as e:
-                logger.error(f"Error loading bucket {bucket_name}: {str(e)}")
-                # Return empty structure on error for this bucket
-                bucket_structures[bucket_name] = {
-                    "type": "folder",
-                    "name": bucket_name,
-                    "path": "",
-                    "children": []
-                }
-
-        # Maintain backward compatibility - provide legacy bucket names
-        ingest_structure = bucket_structures.get(bucket_service.ingest_bucket, {})
-        production_structure = bucket_structures.get(bucket_service.production_bucket, {})
-
-    except Exception as e:
-        logger.error(f"Error loading dashboard: {str(e)}")
-        # Return empty structures on error
-        bucket_structures = {}
-        workspace_buckets = bucket_service.get_all_accessible_buckets()
-        ingest_structure = {"type": "folder", "name": bucket_service.ingest_bucket, "path": "", "children": []}
-        production_structure = {"type": "folder", "name": bucket_service.production_bucket, "path": "", "children": []}
-
+    workspace_buckets = bucket_service.get_all_accessible_buckets()
     active_bucket = bucket_state.ensure_active_bucket(request, workspace_buckets)
-    active_bucket_structure = bucket_structures.get(active_bucket)
 
-    if active_bucket and active_bucket_structure is None:
-        active_bucket_structure = {
-            "type": "folder",
-            "name": active_bucket,
-            "path": "",
-            "children": [],
-        }
+    auto_load_url = None
+    if active_bucket:
+        auto_load_url = reverse("storage:bucket_content_htmx", kwargs={"bucket_name": active_bucket})
+        if request.GET.get("force_fresh", "false").lower() == "true":
+            auto_load_url = f"{auto_load_url}?force_fresh=true"
 
     # Check for success message
     message = request.GET.get('message', None)
@@ -135,15 +98,11 @@ def archivist_dashboard(request):
         request,
         "dashboard/archivist_dashboard.html",
         {
-            "bucket_structures": bucket_structures,
             "workspace_buckets": workspace_buckets,
             "active_bucket": active_bucket,
-            "active_bucket_structure": active_bucket_structure,
             "ocfl_buckets": bucket_service.ocfl_buckets,
-            # Legacy backward compatibility
-            "ingest_structure": ingest_structure,
-            "production_structure": production_structure,
             "message": message,
+            "auto_load_url": auto_load_url,
         },
     )
 

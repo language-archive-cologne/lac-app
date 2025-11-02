@@ -77,12 +77,8 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
         self.set_active_bucket(request, bucket_name, workspace_buckets)
 
         try:
-            force_fresh = request.GET.get('force_fresh', 'false').lower() == 'true'
-            # Get bucket structure
-            if force_fresh:
-                structure = bucket_service.get_root_level_items(bucket_name, force_fresh=True)
-            else:
-                structure = bucket_service.get_root_level_items(bucket_name)
+            # Always fetch fresh content for now to guarantee up-to-date listings.
+            structure = bucket_service.get_root_level_items(bucket_name, force_fresh=True)
 
             logger.info(f"🎨 TEMPLATE_HELPER: render_bucket_content_template for {bucket_name}")
             logger.info(f"📁 BUCKET_CONTENT: {len(structure.get('children', []))} items")
@@ -116,10 +112,7 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
 
         if structure is None:
             try:
-                if request.GET.get('force_fresh', 'false').lower() == 'true':
-                    structure = bucket_service.get_root_level_items(bucket_name, force_fresh=True)
-                else:
-                    structure = bucket_service.get_root_level_items(bucket_name)
+                structure = bucket_service.get_root_level_items(bucket_name, force_fresh=True)
             except Exception as e:
                 logger.exception(f"Error getting structure for {bucket_name}: {str(e)}")
                 structure = {
