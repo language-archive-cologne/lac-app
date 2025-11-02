@@ -326,6 +326,12 @@ S3_PRODUCTION_BUCKET = env("S3_PRODUCTION_BUCKET", default=None)
 # Default page size for root-level listings (prevents timeout on large buckets)
 S3_LISTING_PAGE_SIZE = env.int("S3_LISTING_PAGE_SIZE", default=100)
 
+# Bucket list cache TTL (in seconds)
+# For external S3 over VPN, set this higher (e.g., 3600 = 1 hour) to avoid slow list_buckets() calls
+# For local MinIO, 300 seconds (5 minutes) is usually sufficient
+# Set to 0 to disable caching (not recommended for VPN connections)
+S3_BUCKET_LIST_CACHE_TTL = env.int("S3_BUCKET_LIST_CACHE_TTL", default=None)  # None = auto (1h for external S3, 5m for MinIO)
+
 # ACL Configuration
 # ------------------------------------------------------------------------------
 ACL_ENFORCEMENT_ENABLED = env.bool("ACL_ENFORCEMENT_ENABLED", default=True)

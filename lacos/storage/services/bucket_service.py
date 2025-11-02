@@ -52,26 +52,42 @@ class BucketService(BaseStorageService):
         if hasattr(self, 'initialized'):
             return
             
+        init_start = time.monotonic()
+        logger.debug("BucketService.__init__() started")
+        
+        super_init_start = time.monotonic()
         super().__init__(skip_bucket_check=skip_bucket_check)
+        logger.debug("  ✓ BaseStorageService.__init__() completed in %.3fs", time.monotonic() - super_init_start)
         
         # Initialize the specialized services with skip_bucket_check=True
+        collection_start = time.monotonic()
         self.collection_service = CollectionService(skip_bucket_check=True)
+        logger.debug("  ✓ CollectionService initialized in %.3fs", time.monotonic() - collection_start)
+        
+        upload_start = time.monotonic()
         self.upload_service = UploadService(skip_bucket_check=True)
+        logger.debug("  ✓ UploadService initialized in %.3fs", time.monotonic() - upload_start)
         
         # Configure child services with consistent settings
+        config_start = time.monotonic()
         self.set_client_and_buckets(self.collection_service)
         self.set_client_and_buckets(self.upload_service)
+        logger.debug("  ✓ Child services configured in %.3fs", time.monotonic() - config_start)
         
         # Initialize OCFL service after other services are ready
+        ocfl_start = time.monotonic()
         self.ocfl_service = OCFLService(self)
         # OCFL service uses this instance's bucket references, so just set the client
         if hasattr(self.ocfl_service, 's3_client'):
             self.ocfl_service.s3_client = self.s3_client
+        logger.debug("  ✓ OCFLService initialized in %.3fs", time.monotonic() - ocfl_start)
 
         # Per-bucket folder cache helper
+        cache_start = time.monotonic()
         self.folder_cache = FolderStructureCacheService()
+        logger.debug("  ✓ FolderStructureCacheService initialized in %.3fs", time.monotonic() - cache_start)
 
-        logger.info("BucketService initialized")
+        logger.info("✅ BucketService initialized in %.3fs total", time.monotonic() - init_start)
         self.initialized = True
 
     def _download_directory(self, bucket_name: str, prefix: str, local_dir: str) -> None:
@@ -224,7 +240,9 @@ class BucketService(BaseStorageService):
             )
 
             # Process items to add BLAM object information
+            # Defer BLAM checks for performance - only check production bucket and skip for other buckets
             processed_children = []
+            blam_check_start = time.monotonic()
             for item in listing_result["items"]:
                 parent_info = self._split_parent_child(
                     item["path"] if item["is_dir"] else item["path"]
@@ -239,13 +257,17 @@ class BucketService(BaseStorageService):
                     "last_modified": item.get("last_modified"),
                 }
 
-                # If it's a folder, check if it's a BLAM object
-                if item["is_dir"]:
+                # If it's a folder, check if it's a BLAM object (only for production bucket to avoid DB overhead)
+                if item["is_dir"] and bucket_name == self.production_bucket:
                     blam_info = self.is_blam_object(bucket_name, item["path"])
                     if blam_info["is_blam_object"]:
                         child.update(blam_info)
 
                 processed_children.append(child)
+            
+            blam_check_duration = time.monotonic() - blam_check_start
+            if blam_check_duration > 0.1:
+                logger.debug("BLAM object checks took %.3fs", blam_check_duration)
 
             # Transform the contents into the expected structure
             result = {
@@ -944,7 +966,24 @@ class BucketService(BaseStorageService):
             # Add to workspace buckets list (in-memory for this session)
             # Note: For persistent storage, this would need to be saved to database or config
             self.workspace_buckets.append(bucket_name)
-            self.invalidate_bucket_cache()
+            
+            # Update the bucket cache to include the new bucket
+            # Get current cached buckets and add the new one
+            cache_key = self._bucket_cache_key()
+            cached_buckets = cache.get(cache_key)
+            if cached_buckets is not None:
+                # Add new bucket to cached list if not already present
+                if bucket_name not in cached_buckets:
+                    updated_buckets = sorted(list(cached_buckets) + [bucket_name])
+                    ttl_seconds = self._bucket_cache_ttl()
+                    cache.set(cache_key, updated_buckets, timeout=ttl_seconds)
+                    logger.info(f"Updated bucket cache with new bucket '{bucket_name}' (now {len(updated_buckets)} buckets)")
+                else:
+                    logger.debug(f"Bucket '{bucket_name}' already in cache")
+            else:
+                # No cache exists, invalidate to force refresh on next access
+                self.invalidate_bucket_cache()
+            
             self._invalidate_folder_cache(bucket_name)
 
             # Add to OCFL buckets if requested

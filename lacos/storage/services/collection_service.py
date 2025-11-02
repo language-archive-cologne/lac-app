@@ -195,11 +195,19 @@ class CollectionService(BaseStorageService):
             if continuation_token:
                 cache_path = f"{cache_path}::token::{continuation_token}"
 
+            # Check cache first - this avoids expensive S3 calls
             if not force_fresh and not continuation_token:
+                cache_check_start = time.monotonic()
                 cached_result = self._folder_cache.get(bucket_name, cache_path)
+                cache_check_duration = time.monotonic() - cache_check_start
                 if cached_result is not None:
-                    logger.debug("Returning cached listing for %s:%s", bucket_name, prefix)
+                    logger.info("📋 Found %d cached items for %s:%s (cache lookup: %.3fs, skipping S3 call)", 
+                               len(cached_result.get("items", [])), bucket_name, prefix or "/", cache_check_duration)
                     return cached_result
+                else:
+                    logger.debug("Cache miss for %s:%s (cache lookup: %.3fs)", bucket_name, prefix or "/", cache_check_duration)
+            elif force_fresh:
+                logger.info("📋 Force fresh listing for %s:%s (cache bypassed)", bucket_name, prefix or "/")
 
             # Ensure prefix ends with / if it's not empty to avoid partial matches
             listing_prefix = prefix
@@ -228,13 +236,16 @@ class CollectionService(BaseStorageService):
 
             # If max_keys is set, fetch only a single page
             if max_keys:
+                logger.info("📦 S3 LIST: Calling list_objects_v2 for %s:%s (max_keys=%s)", 
+                           bucket_name, listing_prefix or "/", max_keys)
+                s3_call_start = time.monotonic()
                 response = self.s3_client.list_objects_v2(**list_params)
+                s3_call_duration = time.monotonic() - s3_call_start
                 page_count = 1
 
-                logger.debug(
-                    "S3 page 1 for %s:%s -> %s objects, %s prefixes",
-                    bucket_name,
-                    listing_prefix or "/",
+                logger.info(
+                    "📦 S3 LIST: Completed in %.3fs -> %s objects, %s prefixes",
+                    s3_call_duration,
                     len(response.get("Contents", [])),
                     len(response.get("CommonPrefixes", [])),
                 )
@@ -328,8 +339,13 @@ class CollectionService(BaseStorageService):
                 "next_token": next_token,
             }
 
+            # Cache the results for 5 minutes (300 seconds)
             if not continuation_token:
+                cache_set_start = time.monotonic()
                 self._folder_cache.set(bucket_name, cache_path, result)
+                cache_set_duration = time.monotonic() - cache_set_start
+                logger.info("📋 Cached %d items for %s:%s (cache set: %.3fs, TTL: 300s)", 
+                           len(contents), bucket_name, prefix or "/", cache_set_duration)
 
             return result
         except Exception as e:

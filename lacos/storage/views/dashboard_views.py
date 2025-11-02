@@ -35,9 +35,11 @@ def archivist_dashboard(request):
 
     try:
         # Initialize service
+        service_init_start = time.time()
         logger.info("Initializing BucketService...")
         bucket_service = BucketService()
-        logger.info("✅ BucketService initialized")
+        service_init_duration = time.time() - service_init_start
+        logger.info("✅ BucketService initialization completed in %.3fs", service_init_duration)
 
         force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
 

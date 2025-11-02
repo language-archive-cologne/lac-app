@@ -2,6 +2,7 @@
 
 import logging
 import json
+import re
 
 from django.http import HttpResponse
 from django.middleware.csrf import get_token
@@ -251,6 +252,7 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
 
         This is a specialized method for updating bucket tabs since they need
         outerHTML swap (the template includes the complete element with id).
+        Uses outerHTML swap for OOB updates.
 
         Args:
             main_html (str): The main response HTML (optional)
@@ -280,16 +282,28 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
                     oob=True
                 )
 
-            # Add hx-swap-oob="outerHTML" to the bucket-tabs element
+            # For outerHTML swap, add hx-swap-oob="outerHTML" to the element itself
+            # Element with id gets hx-swap-oob attribute for proper OOB update
             if 'id="bucket-tabs"' in tabs_html:
-                oob_tabs_html = tabs_html.replace(
-                    'id="bucket-tabs"',
-                    'id="bucket-tabs" hx-swap-oob="outerHTML"',
-                    1
-                )
+                # Find the opening tag and add hx-swap-oob="outerHTML" to it
+                # Match the opening div tag with id="bucket-tabs"
+                pattern = r'(<div[^>]*id="bucket-tabs"[^>]*)>'
+                replacement = r'\1 hx-swap-oob="outerHTML">'
+                oob_tabs_html = re.sub(pattern, replacement, tabs_html, count=1)
+                
+                if oob_tabs_html == tabs_html:
+                    # If replacement didn't work, try simpler approach
+                    oob_tabs_html = tabs_html.replace(
+                        'id="bucket-tabs"',
+                        'id="bucket-tabs" hx-swap-oob="outerHTML"',
+                        1
+                    )
+                
+                logger.info("🔍 BUILD_OOB: Built bucket tabs OOB response with outerHTML swap (length: %d)", len(oob_tabs_html))
                 return f'{main_html}{oob_tabs_html}{active_bucket_snippet}'
             else:
                 logger.warning("bucket-tabs id not found in tabs HTML, falling back to innerHTML")
+                # Fallback to innerHTML swap pattern
                 return f"{self.build_oob_response(main_html, {'bucket-tabs': tabs_html})}{active_bucket_snippet}"
 
         except Exception as e:
