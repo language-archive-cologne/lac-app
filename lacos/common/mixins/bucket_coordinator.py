@@ -26,7 +26,7 @@ class BucketCoordinatorMixin:
 
         from lacos.storage.services.bucket_service import BucketService  # Lazy import to avoid circular deps
 
-        buckets = BucketService().get_all_accessible_buckets()
+        buckets = BucketService(skip_bucket_check=True).get_all_accessible_buckets()
         return self._normalize_bucket_sequence(buckets)
 
     def ensure_active_bucket(self, request, workspace_buckets: Optional[Sequence[str]] = None) -> Optional[str]:

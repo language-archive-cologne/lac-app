@@ -79,7 +79,7 @@ def archivist_dashboard(request):
     Render the archivist dashboard showing all workspace buckets.
     Only loads root level items initially for better performance.
     """
-    bucket_service = BucketService()
+    bucket_service = BucketService(skip_bucket_check=True)
     bucket_state = BucketCoordinatorMixin()
 
     workspace_buckets = bucket_service.get_all_accessible_buckets()
@@ -374,7 +374,7 @@ def load_folder_contents(request, bucket_type, folder_path):
     Load contents of a specific folder when expanded.
     Now supports any workspace bucket, not just ingest/production.
     """
-    bucket_service = BucketService()
+    bucket_service = BucketService(skip_bucket_check=True)
 
     # Support new flexible bucket names
     if bucket_type in bucket_service.get_all_accessible_buckets():
@@ -423,7 +423,7 @@ def load_folder_contents(request, bucket_type, folder_path):
 @login_required
 def bucket_size_info(request, bucket_name):
     """HTMX endpoint returning bucket size details."""
-    bucket_service = BucketService()
+    bucket_service = BucketService(skip_bucket_check=True)
     accessible = set(bucket_service.get_all_accessible_buckets())
 
     if bucket_name not in accessible:
@@ -458,7 +458,7 @@ def dashboard_content(request, bucket_type):
         Rendered partial template with the requested bucket structure
     """
     try:
-        bucket_service = BucketService()
+        bucket_service = BucketService(skip_bucket_check=True)
         force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
         
         if bucket_type == "ingest":
@@ -520,7 +520,7 @@ class BucketContentHTMXView(HtmxTemplateHelperMixin, View):
 @login_required
 def file_info_htmx(request, bucket_type, object_path):
     """Provide file metadata details via HTMX."""
-    bucket_service = BucketService()
+    bucket_service = BucketService(skip_bucket_check=True)
     target_id = request.GET.get("target_id") or request.GET.get("targetId")
 
     if not target_id:
@@ -587,7 +587,7 @@ class CreateBucketHTMXView(HtmxTemplateHelperMixin, View):
                 return HttpResponse("Bucket name is required", status=400)
 
             # Create the bucket using BucketService
-            bucket_service = BucketService()
+            bucket_service = BucketService(skip_bucket_check=True)
             result = bucket_service.create_bucket(bucket_name, enable_ocfl)
 
             if not result["success"]:
@@ -631,7 +631,7 @@ def delete_bucket_htmx(request, bucket_name):
     Returns updated bucket selector tabs.
     """
     try:
-        bucket_service = BucketService()
+        bucket_service = BucketService(skip_bucket_check=True)
 
         # Verify bucket access
         if bucket_name not in bucket_service.get_all_accessible_buckets():
@@ -752,7 +752,7 @@ class RenameBucketHTMXView(HtmxTemplateHelperMixin, View):
                 )
                 return HttpResponse(error_html, status=400)
 
-            bucket_service = BucketService()
+            bucket_service = BucketService(skip_bucket_check=True)
             result = bucket_service.rename_bucket(bucket_name, new_name)
 
             if not result.get('success'):

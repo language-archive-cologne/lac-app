@@ -33,7 +33,7 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
         """
         from lacos.storage.services.bucket_service import BucketService
 
-        bucket_service = BucketService()
+        bucket_service = BucketService(skip_bucket_check=True)
         workspace_buckets = bucket_service.get_all_accessible_buckets()
         ocfl_buckets = bucket_service.ocfl_buckets
 
@@ -67,7 +67,7 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
         """
         from lacos.storage.services.bucket_service import BucketService
 
-        bucket_service = BucketService()
+        bucket_service = BucketService(skip_bucket_check=True)
         workspace_buckets = bucket_service.get_all_accessible_buckets()
 
         # Verify bucket access
@@ -108,7 +108,7 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
         """
         from lacos.storage.services.bucket_service import BucketService
 
-        bucket_service = BucketService()
+        bucket_service = BucketService(skip_bucket_check=True)
 
         if structure is None:
             try:
@@ -142,7 +142,7 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
         """
         from lacos.storage.services.bucket_service import BucketService
 
-        bucket_service = BucketService()
+        bucket_service = BucketService(skip_bucket_check=True)
 
         try:
             # Get bucket statistics (could be implemented in BucketService)
