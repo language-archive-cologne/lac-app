@@ -6,7 +6,12 @@ Nested folder contents returned via HTMX when a folder is expanded.
     {% if item.type == 'folder' %}
     {% with folder_slug=item.path|slugify %}
     <li data-folder-path="{{ item.path }}">
-        <details data-folder-path="{{ item.path }}">
+        <details data-folder-path="{{ item.path }}"
+                 hx-get="{% url 'storage:load_folder_contents' bucket_type=bucket_type folder_path=item.path %}"
+                 hx-trigger="toggle once"
+                 hx-target="#children-{{ folder_slug }}"
+                 hx-swap="innerHTML"
+                 hx-indicator="#indicator-{{ folder_slug }}">
             <summary class="flex items-center gap-3 py-2 px-3 hover:bg-base-200/40 rounded-lg cursor-pointer transition-colors">
                 <span class="flex items-center gap-2 font-medium flex-1 text-sm">
                     <svg class="h-4 w-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -53,14 +58,7 @@ Nested folder contents returned via HTMX when a folder is expanded.
                 </div>
                 <ul id="children-{{ folder_slug }}" class="menu menu-xs bg-base-50 rounded-lg border-l border-primary/20 folder-children"
                     data-folder-path="{{ item.path }}"
-                    data-bucket-type="{{ bucket_type }}"
-                    hx-get="{% url 'storage:load_folder_contents' bucket_type=bucket_type folder_path=item.path %}"
-                    hx-trigger="revealed once"
-                    hx-target="this"
-                    hx-swap="innerHTML"
-                    hx-indicator="#indicator-{{ folder_slug }}">
-                    <li class="text-[11px] text-base-content/60 py-1">Expand to load contents</li>
-                </ul>
+                    data-bucket-type="{{ bucket_type }}"></ul>
             </div>
         </details>
     </li>
