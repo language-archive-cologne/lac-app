@@ -5,6 +5,7 @@ from moto import mock_aws
 from unittest.mock import patch, MagicMock
 
 from lacos.storage.services.bucket_service import BucketService
+from lacos.storage.services.collection_service import BucketListingPage
 
 # Import constants from test_constants.py
 from .test_constants import TEST_BUCKET_NAME, TEST_INGEST_BUCKET, TEST_PRODUCTION_BUCKET
@@ -160,8 +161,64 @@ def test_direct_move_to_production(mock_s3, mock_bucket_service):
             production_content = response["Body"].read().decode("utf-8")
             
             # Verify the content is the same
-            assert ingest_content == production_content
+        assert ingest_content == production_content
     finally:
         # Restore the original bucket names
         mock_bucket_service.ingest_bucket = original_ingest_bucket
         mock_bucket_service.production_bucket = original_production_bucket
+
+
+@patch('lacos.storage.services.bucket_service.Bundle')
+@patch('lacos.storage.services.bucket_service.Collection')
+def test_get_folder_contents_enriches_blam_metadata(MockCollection, MockBundle, mock_bucket_service):
+    """BLAM directory metadata should be derived via batched lookups."""
+    mock_bucket_service.folder_cache = MagicMock()
+    mock_bucket_service.folder_cache.get.return_value = None
+    mock_bucket_service.folder_cache.set = MagicMock()
+    mock_bucket_service.production_bucket = TEST_PRODUCTION_BUCKET
+
+    listing_items = [
+        {"name": "collectionA", "path": "collectionA/collectionA/", "is_dir": True},
+        {"name": "bundleB", "path": "bundles/bundleB/", "is_dir": True},
+        {"name": "notes.txt", "path": "notes.txt", "is_dir": False},
+    ]
+    listing_page = BucketListingPage(
+        items=listing_items,
+        has_more=False,
+        next_token=None,
+        bucket=TEST_PRODUCTION_BUCKET,
+        prefix='',
+    )
+    mock_bucket_service.collection_service.list_bucket_contents = MagicMock(return_value=listing_page)
+    mock_bucket_service.collection_service.is_collection_path = MagicMock(
+        side_effect=lambda path: path == 'collectionA/collectionA/'
+    )
+
+    collection_qs = MagicMock()
+    collection_qs.values_list.return_value = [('collectionA', 101)]
+    MockCollection.objects.filter.return_value = collection_qs
+
+    bundle_qs = MagicMock()
+    bundle_qs.values_list.return_value = [('bundleB', 202)]
+    MockBundle.objects.filter.return_value = bundle_qs
+
+    result_page = mock_bucket_service.get_folder_contents(TEST_PRODUCTION_BUCKET, '')
+
+    assert isinstance(result_page, BucketListingPage)
+    assert len(result_page.items) == 3
+    collection_entry = next(item for item in result_page.items if item['name'] == 'collectionA')
+    assert collection_entry['is_blam_object'] is True
+    assert collection_entry['blam_type'] == 'collection'
+    assert collection_entry['blam_id'] == '101'
+
+    bundle_entry = next(item for item in result_page.items if item['name'] == 'bundleB')
+    assert bundle_entry['is_blam_object'] is True
+    assert bundle_entry['blam_type'] == 'bundle'
+    assert bundle_entry['blam_id'] == '202'
+
+    file_entry = next(item for item in result_page.items if item['name'] == 'notes.txt')
+    assert file_entry['type'] == 'file'
+    assert 'is_blam_object' not in file_entry or file_entry['is_blam_object'] is False
+
+    MockCollection.objects.filter.assert_called_once()
+    MockBundle.objects.filter.assert_called_once()

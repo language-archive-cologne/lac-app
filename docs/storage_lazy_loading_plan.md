@@ -37,10 +37,11 @@
 - Ensure the UX remains accessible and keyboard-friendly.
 
 ## 6. Enhanced Caching Strategy
-- Decide between:
-  - Extending `FolderStructureCacheService` with size-aware entry eviction, or
-  - Introducing Redis-backed caches keyed by bucket + prefix + token.
-- Plan invalidation hooks for upload/delete flows and scheduled refresh tasks.
+- Expand the dedicated cache helper (`lacos.cache.core`) to handle folder listings alongside ACL payloads:
+  - Redis-backed entries keyed by `(bucket, prefix)` with optional metadata (etag, last_modified).
+  - No default TTL; rely on explicit invalidation via helper functions.
+- Provide `StorageCache` utilities for uploads/deletes to invalidate affected prefixes immediately.
+- Leave a feature flag (e.g. `STORAGE_FOLDER_CACHE_ENABLED`) to disable caching if needed.
 
 ## 7. Testing & Observability
 - Add integration tests to `lacos/storage/tests/views/test_dashboard_views.py` and service tests for pagination behavior.

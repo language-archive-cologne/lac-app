@@ -1,11 +1,42 @@
 import logging
 import os
-from typing import Dict, Any, List, Optional
+import time
+from dataclasses import dataclass, field
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Union
 
 from .base_storage_service import BaseStorageService
 from .folder_cache_service import FolderStructureCacheService
+from lacos.storage.observability import record_cache_event, record_s3_listing_page
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class BucketListingPage(Sequence[Dict[str, Any]]):
+    """Paginated listing response that behaves like a list for legacy callers."""
+
+    items: List[Dict[str, Any]] = field(default_factory=list)
+    has_more: bool = False
+    next_token: Optional[str] = None
+    bucket: Optional[str] = None
+    prefix: str = ""
+    raw_response: Dict[str, Any] = field(default_factory=dict)
+
+    def __iter__(self) -> Iterator[Dict[str, Any]]:
+        return iter(self.items)
+
+    def __len__(self) -> int:
+        return len(self.items)
+
+    def __getitem__(self, index: Union[int, slice]) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+        return self.items[index]
+
+    def __bool__(self) -> bool:
+        return bool(self.items)
+
+    def as_list(self) -> List[Dict[str, Any]]:
+        """Return a shallow copy of the item list."""
+        return list(self.items)
 
 class CollectionService(BaseStorageService):
     """
@@ -167,26 +198,52 @@ class CollectionService(BaseStorageService):
         bucket_name: str,
         prefix: str = "",
         *,
+        max_keys: Optional[int] = None,
+        continuation_token: Optional[str] = None,
         force_fresh: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> BucketListingPage:
         """
         List the contents of a bucket with the given prefix.
         
         Args:
             bucket_name (str): The name of the bucket to list
             prefix (str, optional): The prefix (path) to list. Defaults to "".
+            max_keys (int, optional): Maximum number of keys to return for lazy loading.
+            continuation_token (str, optional): S3 continuation token for pagination.
             
         Returns:
-            List[Dict[str, any]]: A list of dictionaries containing information about the objects
+            BucketListingPage: Paginated results including continuation metadata.
         """
         try:
             logger.info("Listing contents of bucket '%s' with prefix '%s'", bucket_name, prefix)
 
-            if not force_fresh:
+            paginated = max_keys is not None or continuation_token is not None
+            cached_response: Optional[BucketListingPage] = None
+
+            if not paginated and not force_fresh:
                 cached = self._folder_cache.get(bucket_name, prefix)
                 if cached is not None:
                     logger.debug("Returning cached listing for %s:%s", bucket_name, prefix)
+                    record_cache_event(
+                        event="folder_listing",
+                        bucket=bucket_name,
+                        prefix=prefix,
+                        hit=True,
+                        metadata={"source": "collection_service"},
+                    )
                     return cached
+            if not paginated:
+                record_cache_event(
+                    event="folder_listing",
+                    bucket=bucket_name,
+                    prefix=prefix,
+                    hit=False,
+                    metadata={
+                        "source": "collection_service",
+                        "forced": force_fresh,
+                        "paginated": False,
+                    },
+                )
 
             # Ensure prefix ends with / if it's not empty to avoid partial matches
             listing_prefix = prefix
@@ -194,16 +251,62 @@ class CollectionService(BaseStorageService):
                 listing_prefix = f"{listing_prefix}/"
                 logger.debug("Adjusted prefix to '%s'", listing_prefix)
 
-            paginator = self.s3_client.get_paginator('list_objects_v2')
-            contents: list[dict[str, Any]] = []
+            pages: List[Dict[str, Any]] = []
+            last_page: Dict[str, Any] = {}
 
-            for page in paginator.paginate(Bucket=bucket_name, Prefix=listing_prefix, Delimiter="/"):
+            if paginated:
+                params = {
+                    "Bucket": bucket_name,
+                    "Prefix": listing_prefix,
+                    "Delimiter": "/",
+                }
+                if max_keys is not None:
+                    params["MaxKeys"] = max_keys
+                if continuation_token:
+                    params["ContinuationToken"] = continuation_token
+                page_start = time.perf_counter()
+                response = self.s3_client.list_objects_v2(**params)
+                duration_ms = (time.perf_counter() - page_start) * 1000
+                page_key_count = len(response.get("Contents", [])) + len(response.get("CommonPrefixes", []))
+                page_size_bytes = sum(obj.get("Size") or 0 for obj in response.get("Contents", []))
+                record_s3_listing_page(
+                    bucket=bucket_name,
+                    prefix=listing_prefix or "",
+                    key_count=page_key_count,
+                    size_bytes=page_size_bytes,
+                    duration_ms=duration_ms,
+                    continuation_token=response.get("NextContinuationToken"),
+                    is_truncated=response.get("IsTruncated", False),
+                    cache_hit=False,
+                )
+                pages.append(response)
+                last_page = response
+            else:
+                paginator = self.s3_client.get_paginator('list_objects_v2')
+                for page in paginator.paginate(Bucket=bucket_name, Prefix=listing_prefix, Delimiter="/"):
+                    page_start = time.perf_counter()
+                    pages.append(page)
+                    page_key_count = len(page.get("Contents", [])) + len(page.get("CommonPrefixes", []))
+                    page_size_bytes = sum(obj.get("Size") or 0 for obj in page.get("Contents", []))
+                    duration_ms = (time.perf_counter() - page_start) * 1000
+                    record_s3_listing_page(
+                        bucket=bucket_name,
+                        prefix=listing_prefix or "",
+                        key_count=page_key_count,
+                        size_bytes=page_size_bytes,
+                        duration_ms=duration_ms,
+                        continuation_token=page.get("NextContinuationToken"),
+                        is_truncated=page.get("IsTruncated", False),
+                        cache_hit=False,
+                    )
+                    last_page = page
+
+            items: List[Dict[str, Any]] = []
+            for page in pages:
                 for obj in page.get("Contents", []):
-                    # Skip the directory marker itself if listing a directory
                     if listing_prefix and obj["Key"] == listing_prefix:
                         continue
-
-                    contents.append(
+                    items.append(
                         {
                             "name": os.path.basename(obj["Key"]),
                             "path": obj["Key"],
@@ -212,10 +315,9 @@ class CollectionService(BaseStorageService):
                             "is_dir": False,
                         }
                     )
-
                 for prefix_obj in page.get("CommonPrefixes", []):
                     prefix_str = prefix_obj.get("Prefix", "")
-                    contents.append(
+                    items.append(
                         {
                             "name": os.path.basename(prefix_str.rstrip("/")),
                             "path": prefix_str,
@@ -223,22 +325,32 @@ class CollectionService(BaseStorageService):
                         }
                     )
 
-            preview = ', '.join(item["name"] for item in contents[:5])
+            preview = ', '.join(item["name"] for item in items[:5])
             logger.debug(
                 "Listed %s items for %s%s",
-                len(contents),
+                len(items),
                 listing_prefix or f"{bucket_name}/",
                 f" — {preview}" if preview else "",
             )
 
-            self._folder_cache.set(bucket_name, prefix, contents)
+            listing = BucketListingPage(
+                items=items,
+                has_more=bool(last_page.get("IsTruncated")),
+                next_token=last_page.get("NextContinuationToken"),
+                bucket=bucket_name,
+                prefix=prefix,
+                raw_response=last_page or {},
+            )
 
-            return contents
+            if not paginated:
+                self._folder_cache.set(bucket_name, prefix, listing)
+
+            return listing
         except Exception as e:
             logger.error(
                 f"Error listing bucket contents for bucket: '{bucket_name}'. Error: {e}"
             )
-            return []
+            return BucketListingPage(items=[], has_more=False, next_token=None, bucket=bucket_name, prefix=prefix)
     
     def get_folder_structure(self, bucket_name: str, prefix: str = "") -> Dict[str, Any]:
         """

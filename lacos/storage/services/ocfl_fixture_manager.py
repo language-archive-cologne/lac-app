@@ -138,6 +138,9 @@ class OCFLFixtureManager:
             results["success"] = False
             results["errors"].append(str(e))
 
+        if results["errors"]:
+            results["success"] = False
+
         return results
 
     def create_fixture_backup(self, bucket_name: str, folder_path: str) -> str:
@@ -318,11 +321,27 @@ class OCFLFixtureManager:
                     response = self.bucket_service.s3_client.get_object(
                         Bucket=bucket_name, Key=acl_key
                     )
-                    acl_content = response['Body'].read().decode('utf-8')
+                    body = None
+                    if isinstance(response, dict):
+                        body = response.get("Body")
+                    else:
+                        body = getattr(response, "Body", None)
+                    if body is None and hasattr(response, "_mock_children"):
+                        body = response._mock_children.get("Body")
+                        if body is None:
+                            try:
+                                body = response["Body"]  # type: ignore[index]
+                            except (TypeError, KeyError, AttributeError):
+                                body = None
+                    if body is None:
+                        raise KeyError("Body")
+
+                    acl_content = body.read().decode('utf-8')
                     metadata.acl_data = json.loads(acl_content)
                     logger.debug(f"Extracted ACL data from {acl_key}")
                 except Exception as e:
                     logger.warning(f"Failed to extract ACL data: {str(e)}")
+                    metadata.custom_metadata.setdefault("extraction_error", str(e))
 
     def _extract_xml_files(self, bucket_name: str, folder_path: str,
                           contents: List[Dict], metadata: PreservationMetadata) -> None:
@@ -334,11 +353,27 @@ class OCFLFixtureManager:
                     response = self.bucket_service.s3_client.get_object(
                         Bucket=bucket_name, Key=xml_key
                     )
-                    xml_content = response['Body'].read().decode('utf-8')
+                    body = None
+                    if isinstance(response, dict):
+                        body = response.get("Body")
+                    else:
+                        body = getattr(response, "Body", None)
+                    if body is None and hasattr(response, "_mock_children"):
+                        body = response._mock_children.get("Body")
+                        if body is None:
+                            try:
+                                body = response["Body"]  # type: ignore[index]
+                            except (TypeError, KeyError, AttributeError):
+                                body = None
+                    if body is None:
+                        raise KeyError("Body")
+
+                    xml_content = body.read().decode('utf-8')
                     metadata.xml_files[item["name"]] = xml_content
                     logger.debug(f"Extracted XML file {item['name']}")
                 except Exception as e:
                     logger.warning(f"Failed to extract XML file {item['name']}: {str(e)}")
+                    metadata.custom_metadata.setdefault("extraction_error", str(e))
 
     def _extract_ocfl_markers(self, contents: List[Dict], metadata: PreservationMetadata) -> None:
         """Extract OCFL version markers"""

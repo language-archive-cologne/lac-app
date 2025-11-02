@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 import shutil
 import tempfile
 from pathlib import Path
@@ -14,10 +14,15 @@ from django.core.management import call_command
 
 
 from .base_storage_service import BaseStorageService
-from .collection_service import CollectionService
+from .collection_service import CollectionService, BucketListingPage
 from .upload_service import UploadService
 from .ocfl_service import OCFLService
 from .folder_cache_service import FolderStructureCacheService
+from .service_context import StorageServiceContext
+from .bucket_listing_service import BucketListingService
+from .bucket_metadata_service import BucketMetadataService
+from .bucket_mutation_service import BucketMutationService
+from lacos.storage.observability import get_current_session
 
 # Import BLAM models for direct access
 from lacos.blam.models.collection.collection_repository import Collection
@@ -44,24 +49,24 @@ class BucketService(BaseStorageService):
     def __init__(self, skip_bucket_check=False):
         """
         Initialize the BucketService with all required sub-services.
-        
+
         Args:
             skip_bucket_check (bool): If True, skip bucket existence check
         """
         # Skip initialization if already done
         if hasattr(self, 'initialized'):
             return
-            
+
         super().__init__(skip_bucket_check=skip_bucket_check)
-        
+
         # Initialize the specialized services with skip_bucket_check=True
         self.collection_service = CollectionService(skip_bucket_check=True)
         self.upload_service = UploadService(skip_bucket_check=True)
-        
+
         # Configure child services with consistent settings
         self.set_client_and_buckets(self.collection_service)
         self.set_client_and_buckets(self.upload_service)
-        
+
         # Initialize OCFL service after other services are ready
         self.ocfl_service = OCFLService(self)
         # OCFL service uses this instance's bucket references, so just set the client
@@ -70,8 +75,20 @@ class BucketService(BaseStorageService):
 
         # Per-bucket folder cache helper
         self.folder_cache = FolderStructureCacheService()
-        
-        logger.info("BucketService initialized")
+
+        # Dashboard pagination controls
+        self.dashboard_pagination_enabled = getattr(settings, "STORAGE_DASHBOARD_PAGINATION_ENABLED", True)
+        self.dashboard_page_size = getattr(settings, "STORAGE_DASHBOARD_PAGE_SIZE", 200)
+
+        # Create shared service context
+        self._service_context = StorageServiceContext.from_base_service(self)
+
+        # Initialize new helper services
+        self._listing_service = BucketListingService(self._service_context, self.collection_service)
+        self._metadata_service = BucketMetadataService(self._service_context, self.collection_service)
+        self._mutation_service = BucketMutationService(self._service_context)
+
+        logger.info("BucketService initialized with helper services")
         self.initialized = True
 
     def _download_directory(self, bucket_name: str, prefix: str, local_dir: str) -> None:
@@ -106,99 +123,73 @@ class BucketService(BaseStorageService):
     def is_blam_object(self, bucket_name: str, path: str) -> Dict[str, Any]:
         """
         Check if a path corresponds to a BLAM model (Collection or Bundle).
-        
+
+        Delegates to BucketMetadataService.
+
         Args:
-            bucket_name (str): The bucket name 
+            bucket_name (str): The bucket name
             path (str): The path to check
-            
+
         Returns:
             Dict with keys:
                 is_blam_object (bool): Whether this is a BLAM object
                 blam_type (str, optional): "collection" or "bundle" if applicable
                 blam_id (str, optional): The database ID if applicable
         """
-        result = {
-            "is_blam_object": False,
-            "blam_type": None,
-            "blam_id": None
-        }
-        
-        # Only check production bucket
-        if bucket_name != self.production_bucket:
-            return result
-            
-        try:
-            # Check for collection path pattern
-            if self.collection_service.is_collection_path(path):
-                # Extract the collection name
-                collection_name = path.rstrip('/').split('/')[-1]
-                
-                # Query the database for a matching collection
-                try:
-                    collection = Collection.objects.filter(
-                        general_info__directory_name=collection_name
-                    ).first()
-                    
-                    if collection:
-                        result["is_blam_object"] = True
-                        result["blam_type"] = "collection"
-                        result["blam_id"] = str(collection.pk)
-                        logger.info(f"Identified path {path} as Collection with ID {collection.pk}")
-                        return result
-                except Exception as e:
-                    logger.error(f"Error querying Collection for path {path}: {str(e)}")
-            
-            # Check if this might be a bundle
-            parts = path.rstrip('/').split('/')
-            if len(parts) >= 2:
-                bundle_name = parts[-1]
-                
-                # Query the database for a matching bundle
-                try:
-                    bundle = Bundle.objects.filter(
-                        general_info__directory_name=bundle_name
-                    ).first()
-                    
-                    if bundle:
-                        result["is_blam_object"] = True
-                        result["blam_type"] = "bundle"
-                        result["blam_id"] = str(bundle.pk)
-                        logger.info(f"Identified path {path} as Bundle with ID {bundle.pk}")
-                        return result
-                except Exception as e:
-                    logger.error(f"Error querying Bundle for path {path}: {str(e)}")
-                    
-        except Exception as e:
-            logger.error(f"Error in is_blam_object for path {path}: {str(e)}")
-            
-        return result
+        return self._metadata_service.is_blam_object(bucket_name, path)
     
     def get_root_level_items(self, bucket_name: str, force_fresh: bool = False) -> Dict[str, Any]:
         """
         Get only the root level items (files and folders) from a bucket.
         This is optimized for the initial dashboard load.
-        
+
+        Delegates to BucketListingService and BucketMetadataService.
+
         Args:
             bucket_name (str): The name of the bucket to list
-            
+            force_fresh (bool): Force bypass cache
+
         Returns:
             Dict[str, Any]: Dictionary containing root level items
         """
+        start_time = time.perf_counter()
+        session = get_current_session()
+        operation_meta = None
+        if session:
+            operation_meta = {
+                "operation": "get_root_level_items",
+                "bucket": bucket_name,
+                "force_fresh": force_fresh,
+                "cache_hit": False,
+            }
+            session.metadata.setdefault("bucket_service_calls", []).append(operation_meta)
         try:
             if not force_fresh:
                 cached = self.folder_cache.get(bucket_name, None)
                 if cached is not None:
+                    if operation_meta is not None:
+                        operation_meta.update(
+                            {
+                                "cache_hit": True,
+                                "children": len(cached.get("children", [])),
+                            }
+                        )
                     return cached
 
+            # Get listing from listing service
             contents = self.collection_service.list_bucket_contents(
                 bucket_name,
                 force_fresh=force_fresh,
             )
-            
+
+            # Enrich with BLAM metadata
+            folder_items = [entry for entry in contents if entry.get("is_dir")]
+            blam_metadata = self._metadata_service.build_blam_metadata_index(bucket_name, folder_items)
+
             # Process items to add BLAM object information
             processed_children = []
             for item in contents:
-                parent_info = self._split_parent_child(item["path"] if item["is_dir"] else item["path"])
+                parent_info = self._split_parent_child(item["path"])
 
                 child = {
                     "type": "folder" if item["is_dir"] else "file",
@@ -208,15 +199,14 @@ class BucketService(BaseStorageService):
                     "size": item.get("size"),
                     "last_modified": item.get("last_modified"),
                 }
-                
-                # If it's a folder, check if it's a BLAM object
+
                 if item["is_dir"]:
-                    blam_info = self.is_blam_object(bucket_name, item["path"])
-                    if blam_info["is_blam_object"]:
+                    blam_info = blam_metadata.get(item["path"])
+                    if blam_info:
                         child.update(blam_info)
-                
+
                 processed_children.append(child)
-            
+
             # Transform the contents into the expected structure
             result = {
                 "type": "folder",
@@ -225,39 +215,95 @@ class BucketService(BaseStorageService):
                 "children": processed_children
             }
             self.folder_cache.set(bucket_name, None, result)
+            if operation_meta is not None:
+                operation_meta.update(
+                    {
+                        "children": len(processed_children),
+                        "cache_hit": False,
+                    }
+                )
             return result
         except Exception as e:
             logger.error(f"Error getting root level items for bucket '{bucket_name}': {str(e)}")
+            if operation_meta is not None:
+                operation_meta["error"] = str(e)
             return {"type": "folder", "name": bucket_name, "path": "", "children": []}
+        finally:
+            if operation_meta is not None:
+                operation_meta["duration_ms"] = round((time.perf_counter() - start_time) * 1000, 3)
 
-    def get_folder_contents(self, bucket_name: str, folder_path: str, force_fresh: bool = False) -> List[Dict[str, Any]]:
+    def get_folder_contents(
+        self,
+        bucket_name: str,
+        folder_path: str,
+        *,
+        max_keys: Optional[int] = None,
+        continuation_token: Optional[str] = None,
+        force_fresh: bool = False,
+    ) -> BucketListingPage:
         """
         Get the contents of a specific folder.
         This is used for lazy loading folder contents.
-        
+
+        Delegates to BucketListingService and BucketMetadataService.
+
         Args:
             bucket_name (str): The name of the bucket
             folder_path (str): The path to the folder
-            
+            max_keys (int, optional): Maximum number of items to return
+            continuation_token (str, optional): Token for pagination
+            force_fresh (bool): Force bypass cache
+
         Returns:
-            List[Dict[str, Any]]: List of items in the folder
+            BucketListingPage: Paginated list of items in the folder
         """
+        start_time = time.perf_counter()
+        session = get_current_session()
+        operation_meta = None
+        if session:
+            operation_meta = {
+                "operation": "get_folder_contents",
+                "bucket": bucket_name,
+                "folder_path": folder_path,
+                "max_keys": max_keys,
+                "continuation_token": continuation_token,
+                "force_fresh": force_fresh,
+                "cache_hit": False,
+            }
+            session.metadata.setdefault("bucket_service_calls", []).append(operation_meta)
         try:
-            if not force_fresh:
+            paginated = max_keys is not None or continuation_token is not None
+            if not paginated and not force_fresh:
                 cached = self.folder_cache.get(bucket_name, folder_path)
                 if cached is not None:
+                    if operation_meta is not None:
+                        operation_meta.update(
+                            {
+                                "cache_hit": True,
+                                "items": len(cached),
+                                "has_more": getattr(cached, "has_more", False),
+                                "next_token": getattr(cached, "next_token", None),
+                            }
+                        )
                     return cached
 
-            contents = self.collection_service.list_bucket_contents(
+            # Get listing from collection service
+            listing_page = self.collection_service.list_bucket_contents(
                 bucket_name,
                 folder_path,
+                max_keys=max_keys,
+                continuation_token=continuation_token,
                 force_fresh=force_fresh,
             )
-            
+
+            # Enrich with BLAM metadata
+            folder_items = [entry for entry in listing_page if entry.get("is_dir")]
+            blam_metadata = self._metadata_service.build_blam_metadata_index(bucket_name, folder_items)
+
             # Transform the contents and add BLAM object information
             processed_contents = []
-            for item in contents:
-                parent_info = self._split_parent_child(item["path"] if item["is_dir"] else item["path"])
+            for item in listing_page:
+                parent_info = self._split_parent_child(item["path"])
 
                 result = {
                     "type": "folder" if item["is_dir"] else "file",
@@ -267,20 +313,63 @@ class BucketService(BaseStorageService):
                     "size": item.get("size"),
                     "last_modified": item.get("last_modified"),
                 }
-                
-                # If it's a folder, check if it's a BLAM object
+
                 if item["is_dir"]:
-                    blam_info = self.is_blam_object(bucket_name, item["path"])
-                    if blam_info["is_blam_object"]:
+                    blam_info = blam_metadata.get(item["path"])
+                    if blam_info:
                         result.update(blam_info)
-                
+
                 processed_contents.append(result)
-            
-            self.folder_cache.set(bucket_name, folder_path, processed_contents)
-            return processed_contents
+
+            result_page = BucketListingPage(
+                items=processed_contents,
+                has_more=listing_page.has_more,
+                next_token=listing_page.next_token,
+                bucket=bucket_name,
+                prefix=folder_path,
+                raw_response=listing_page.raw_response,
+            )
+
+            if not paginated:
+                self.folder_cache.set(bucket_name, folder_path, result_page)
+
+            if operation_meta is not None:
+                operation_meta.update(
+                    {
+                        "items": len(processed_contents),
+                        "cache_hit": False,
+                        "has_more": listing_page.has_more,
+                        "next_token": listing_page.next_token,
+                    }
+                )
+            return result_page
         except Exception as e:
             logger.error(f"Error getting folder contents for '{folder_path}' in bucket '{bucket_name}': {str(e)}")
-            return []
+            if operation_meta is not None:
+                operation_meta["error"] = str(e)
+            return BucketListingPage(items=[], has_more=False, next_token=None, bucket=bucket_name, prefix=folder_path)
+        finally:
+            if operation_meta is not None:
+                operation_meta["duration_ms"] = round((time.perf_counter() - start_time) * 1000, 3)
+
+    def _build_blam_metadata_index(
+        self,
+        bucket_name: str,
+        folder_items: List[Dict[str, Any]],
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        Build a lookup of BLAM metadata for a collection of folder entries.
+
+        DEPRECATED: Delegates to BucketMetadataService.
+
+        Args:
+            bucket_name: The bucket being inspected.
+            folder_items: Folder entries returned from S3.
+
+        Returns:
+            Mapping of folder path -> BLAM metadata dict.
+        """
+        return self._metadata_service.build_blam_metadata_index(bucket_name, folder_items)
 
     def _invalidate_folder_cache(self, bucket_name: str, *folder_paths: Optional[str]) -> None:
         try:
@@ -335,207 +424,70 @@ class BucketService(BaseStorageService):
         return {"parent": f"{parent}/", "name": name}
 
     def rename_bucket(self, current_bucket: str, new_bucket: str) -> Dict[str, Any]:
-        """Rename a bucket by copying all objects to a new bucket and deleting the old one."""
-        try:
-            current_bucket = current_bucket.strip()
-            new_bucket = new_bucket.strip()
+        """
+        Rename a bucket by copying all objects to a new bucket and deleting the old one.
 
-            if not current_bucket:
-                return {"success": False, "error": "Current bucket name is required"}
+        Delegates to BucketMutationService with bucket list management.
+        """
+        # Validate bucket accessibility before delegating
+        accessible = self.get_all_accessible_buckets()
+        if current_bucket.strip() not in accessible:
+            return {"success": False, "error": f"Bucket '{current_bucket}' is not accessible"}
 
-            if not new_bucket:
-                return {"success": False, "error": "New bucket name is required"}
+        if new_bucket.strip() in accessible:
+            return {"success": False, "error": f"Bucket '{new_bucket}' already exists"}
 
-            if current_bucket == new_bucket:
-                return {"success": False, "error": "New bucket name must be different"}
+        # Ensure new bucket exists
+        if not self.ensure_bucket_exists(new_bucket.strip()):
+            return {"success": False, "error": f"Failed to create bucket '{new_bucket}'"}
 
-            if not self._is_valid_bucket_name(new_bucket):
-                return {
-                    "success": False,
-                    "error": "Invalid bucket name. Use only letters, numbers, hyphens, and underscores."
-                }
+        # Delegate to mutation service
+        result = self._mutation_service.rename_bucket(current_bucket, new_bucket)
 
-            accessible = self.get_all_accessible_buckets()
-            if current_bucket not in accessible:
-                return {"success": False, "error": f"Bucket '{current_bucket}' is not accessible"}
+        # Update in-memory workspace buckets if successful
+        if result.get("success"):
+            current = current_bucket.strip()
+            new = new_bucket.strip()
+            if current in self.workspace_buckets:
+                self.workspace_buckets = [
+                    new if b == current else b for b in self.workspace_buckets
+                ]
+            elif new not in self.workspace_buckets:
+                self.workspace_buckets.append(new)
 
-            if new_bucket in accessible:
-                return {"success": False, "error": f"Bucket '{new_bucket}' already exists"}
-
-            if not self.ensure_bucket_exists(new_bucket):
-                return {"success": False, "error": f"Failed to create bucket '{new_bucket}'"}
-
-            paginator = self.s3_client.get_paginator("list_objects_v2")
-            copied_objects = 0
-
-            for page in paginator.paginate(Bucket=current_bucket):
-                for obj in page.get("Contents", []):
-                    key = obj["Key"]
-                    self.s3_client.copy_object(
-                        Bucket=new_bucket,
-                        CopySource={"Bucket": current_bucket, "Key": key},
-                        Key=key
-                    )
-                    self.s3_client.delete_object(Bucket=current_bucket, Key=key)
-                    copied_objects += 1
-
-            # Delete the now-empty bucket
-            self.s3_client.delete_bucket(Bucket=current_bucket)
-
-            # Update in-memory workspace buckets (if configured)
-            if current_bucket in self.workspace_buckets:
-                self.workspace_buckets = [new_bucket if b == current_bucket else b for b in self.workspace_buckets]
-            elif new_bucket not in self.workspace_buckets:
-                self.workspace_buckets.append(new_bucket)
-
-            message = f"Bucket '{current_bucket}' renamed to '{new_bucket}'"
-            self._invalidate_folder_cache(current_bucket)
-            self._invalidate_folder_cache(new_bucket)
-            return {
-                "success": True,
-                "message": message,
-                "objects_moved": copied_objects,
-                "bucket_name": new_bucket
-            }
-
-        except ClientError as e:
-            logger.error(f"Error renaming bucket {current_bucket} -> {new_bucket}: {str(e)}")
-            return {"success": False, "error": str(e)}
-        except Exception as e:
-            logger.exception(f"Unexpected error renaming bucket {current_bucket}")
-            return {"success": False, "error": str(e)}
+        return result
 
     def rename_folder(self, bucket_name: str, old_path: str, new_name: str) -> Dict[str, Any]:
-        """Rename a folder within a bucket by copying to a new prefix and deleting the old."""
-        try:
-            new_name = new_name.strip()
-            if not new_name:
-                return {"success": False, "error": "New folder name is required"}
+        """
+        Rename a folder within a bucket by copying to a new prefix and deleting the old.
 
-            if '/' in new_name:
-                return {"success": False, "error": "Folder name must not contain '/'"}
-
-            old_prefix = old_path if old_path.endswith('/') else f"{old_path}/"
-            parent = self._split_parent_child(old_prefix)
-            if not parent['name']:
-                return {"success": False, "error": "Invalid folder path"}
-
-            if parent['name'] == new_name:
-                return {"success": True, "message": "Folder name unchanged"}
-
-            new_prefix = f"{parent['parent']}{new_name}/"
-
-            # Ensure target prefix does not already exist
-            existing = self.s3_client.list_objects_v2(
-                Bucket=bucket_name,
-                Prefix=new_prefix,
-                MaxKeys=1
-            )
-            if existing.get('KeyCount', 0) > 0:
-                return {"success": False, "error": f"Folder '{new_name}' already exists"}
-
-            paginator = self.s3_client.get_paginator("list_objects_v2")
-            moved = 0
-
-            for page in paginator.paginate(Bucket=bucket_name, Prefix=old_prefix):
-                for obj in page.get("Contents", []):
-                    old_key = obj["Key"]
-                    suffix = old_key[len(old_prefix):]
-                    new_key = f"{new_prefix}{suffix}" if suffix else new_prefix
-
-                    self.s3_client.copy_object(
-                        Bucket=bucket_name,
-                        CopySource={"Bucket": bucket_name, "Key": old_key},
-                        Key=new_key
-                    )
-                    self.s3_client.delete_object(Bucket=bucket_name, Key=old_key)
-                    moved += 1
-
-            if moved == 0:
-                response = {"success": True, "message": "Folder was empty", "folder_path": new_prefix}
-            else:
-                response = {
-                    "success": True,
-                    "message": f"Folder renamed to '{new_name}'",
-                    "folder_path": new_prefix,
-                    "objects_moved": moved
-                }
-
-            self._invalidate_folder_cache(
-                bucket_name,
-                parent['parent'],
-                old_prefix,
-                new_prefix
-            )
-            return response
-
-        except ClientError as e:
-            logger.error(f"Error renaming folder {old_path} -> {new_name}: {str(e)}")
-            return {"success": False, "error": str(e)}
-        except Exception as e:
-            logger.exception(f"Unexpected error renaming folder {old_path}")
-            return {"success": False, "error": str(e)}
+        Delegates to BucketMutationService.
+        """
+        return self._mutation_service.rename_folder(bucket_name, old_path, new_name)
 
     def rename_file(self, bucket_name: str, file_path: str, new_name: str) -> Dict[str, Any]:
-        """Rename a single file within a bucket."""
-        try:
-            new_name = new_name.strip()
-            if not new_name:
-                return {"success": False, "error": "New file name is required"}
+        """
+        Rename a single file within a bucket.
 
-            if '/' in new_name:
-                return {"success": False, "error": "File name must not contain '/'"}
-
-            parent = self._split_parent_child(file_path)
-            if not parent['name']:
-                return {"success": False, "error": "Invalid file path"}
-
-            if parent['name'] == new_name:
-                return {"success": True, "message": "File name unchanged"}
-
-            new_key = f"{parent['parent']}{new_name}"
-
-            # Ensure target does not already exist
-            try:
-                self.s3_client.head_object(Bucket=bucket_name, Key=new_key)
-                return {"success": False, "error": f"File '{new_name}' already exists"}
-            except ClientError as head_error:
-                if head_error.response['Error']['Code'] not in ('404', 'NoSuchKey'):
-                    raise
-
-            self.s3_client.copy_object(
-                Bucket=bucket_name,
-                CopySource={"Bucket": bucket_name, "Key": file_path},
-                Key=new_key
-            )
-            self.s3_client.delete_object(Bucket=bucket_name, Key=file_path)
-
-            response = {
-                "success": True,
-                "message": f"File renamed to '{new_name}'",
-                "file_path": new_key
-            }
-            self._invalidate_folder_cache(bucket_name, parent['parent'])
-            return response
-
-        except ClientError as e:
-            logger.error(f"Error renaming file {file_path} -> {new_name}: {str(e)}")
-            return {"success": False, "error": str(e)}
-        except Exception as e:
-            logger.exception(f"Unexpected error renaming file {file_path}")
-            return {"success": False, "error": str(e)}
+        Delegates to BucketMutationService.
+        """
+        return self._mutation_service.rename_file(bucket_name, file_path, new_name)
     
     def list_bucket_contents(
         self,
         bucket_name: str,
         prefix: str = "",
         *,
+        max_keys: Optional[int] = None,
+        continuation_token: Optional[str] = None,
         force_fresh: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> BucketListingPage:
         """Delegate to collection service to list bucket contents."""
         return self.collection_service.list_bucket_contents(
             bucket_name,
             prefix,
+            max_keys=max_keys,
+            continuation_token=continuation_token,
             force_fresh=force_fresh,
         )
     
@@ -789,23 +741,23 @@ class BucketService(BaseStorageService):
     def delete_folder(self, bucket_name, folder_path):
         """
         Delete a folder and all its contents from the specified bucket.
-        
+
+        Delegates to BucketMutationService.
+
         Args:
             bucket_name: The name of the bucket
             folder_path: Path to the folder to delete
-        
+
         Returns:
             dict: Result of the operation with success flag and error message if applicable
         """
-        result = super().delete_object(bucket_name, folder_path, is_directory=True)
-        if result.get("success"):
-            parent = self._split_parent_child(folder_path)
-            self._invalidate_folder_cache(bucket_name, parent['parent'], folder_path)
-        return result
-        
+        return self._mutation_service.delete_folder(bucket_name, folder_path)
+
     def delete_file(self, bucket_name, file_path):
         """
         Delete a single file from the specified bucket.
+
+        Delegates to BucketMutationService.
 
         Args:
             bucket_name: The name of the bucket
@@ -814,11 +766,7 @@ class BucketService(BaseStorageService):
         Returns:
             dict: Result of the operation with success flag and error message if applicable
         """
-        result = super().delete_object(bucket_name, file_path, is_directory=False)
-        if result.get("success"):
-            parent = self._split_parent_child(file_path)
-            self._invalidate_folder_cache(bucket_name, parent['parent'])
-        return result
+        return self._mutation_service.delete_file(bucket_name, file_path)
 
     def create_bucket(self, bucket_name: str, enable_ocfl: bool = False) -> Dict[str, Any]:
         """

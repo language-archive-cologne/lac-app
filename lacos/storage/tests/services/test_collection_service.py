@@ -1,6 +1,6 @@
 import pytest
 
-from lacos.storage.services.collection_service import CollectionService
+from lacos.storage.services.collection_service import CollectionService, BucketListingPage
 
 # Import constants from test_constants.py
 from .test_constants import TEST_BUCKET_NAME, TEST_INGEST_BUCKET, TEST_PRODUCTION_BUCKET
@@ -18,6 +18,21 @@ def mock_collection_service(mock_s3):
     # Override the S3 client with our mock client
     service.s3_client = mock_s3
     return service
+
+
+def test_bucket_listing_page_behaves_like_sequence():
+    page = BucketListingPage(
+        items=[{"name": "alpha"}, {"name": "beta"}],
+        has_more=True,
+        next_token="token-1",
+        bucket="bucket",
+        prefix="",
+    )
+    assert len(page) == 2
+    assert page[0]["name"] == "alpha"
+    assert [item["name"] for item in page] == ["alpha", "beta"]
+    assert page.has_more is True
+    assert page.next_token == "token-1"
 
 def test_is_collection_path(mock_collection_service):
     """Test the is_collection_path method"""
@@ -157,6 +172,8 @@ def test_list_bucket_contents(mock_s3, mock_collection_service):
     
     # List root contents
     contents = mock_collection_service.list_bucket_contents(TEST_BUCKET_NAME)
+    assert isinstance(contents, BucketListingPage)
+    assert contents.has_more is False
     
     # Verify results - should have directories
     dirs = [item for item in contents if item.get("is_dir", False)]
@@ -167,6 +184,8 @@ def test_list_bucket_contents(mock_s3, mock_collection_service):
     
     # List collection contents
     contents = mock_collection_service.list_bucket_contents(TEST_BUCKET_NAME, "collection")
+    assert isinstance(contents, BucketListingPage)
+    assert contents.has_more is False
     
     # Verify directories
     dirs = [item for item in contents if item.get("is_dir", False)]
@@ -177,6 +196,8 @@ def test_list_bucket_contents(mock_s3, mock_collection_service):
     
     # List collection files
     contents = mock_collection_service.list_bucket_contents(TEST_BUCKET_NAME, "collection/collection")
+    assert isinstance(contents, BucketListingPage)
+    assert contents.has_more is False
     
     # Verify files
     files = [item for item in contents if not item.get("is_dir", False)]
@@ -185,6 +206,29 @@ def test_list_bucket_contents(mock_s3, mock_collection_service):
     assert "file1.txt" in file_names
     assert "0=ocfl_object_1.0" in file_names
     assert "acl.json" in file_names
+
+
+def test_list_bucket_contents_pagination(mock_s3, mock_collection_service):
+    """list_bucket_contents should honour max_keys and continuation tokens."""
+    setup_bucket_contents(mock_s3)
+
+    first_page = mock_collection_service.list_bucket_contents(
+        TEST_BUCKET_NAME,
+        max_keys=1,
+    )
+    assert isinstance(first_page, BucketListingPage)
+    assert len(first_page) == 1
+    assert first_page.has_more is True
+    assert first_page.next_token is not None
+
+    second_page = mock_collection_service.list_bucket_contents(
+        TEST_BUCKET_NAME,
+        max_keys=1,
+        continuation_token=first_page.next_token,
+    )
+    assert isinstance(second_page, BucketListingPage)
+    assert len(second_page) == 1
+    assert second_page.next_token != first_page.next_token
 
 def test_get_folder_structure(mock_s3, mock_collection_service):
     """Test the get_folder_structure method"""
