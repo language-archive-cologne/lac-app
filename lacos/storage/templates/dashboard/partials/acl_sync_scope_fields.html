@@ -1,0 +1,35 @@
+{% if scope == 'collection' %}
+  <div class="form-control">
+    <label class="label text-sm font-medium text-base-content">Select collection</label>
+    <select name="collection_id" class="select select-bordered w-full" required>
+      <option value="" disabled selected>Choose a collection…</option>
+      {% for option in collection_options %}
+      <option value="{{ option.id }}">{{ option.label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <p class="text-xs text-base-content/60">
+    Only the selected collection will be processed.
+  </p>
+{% elif scope == 'bundles' %}
+  <p class="text-sm text-base-content/70">All bundles will be synced. Collections are skipped.</p>
+{% elif scope == 'collections' %}
+  <p class="text-sm text-base-content/70">All collections will be synced. Bundles are skipped.</p>
+{% elif scope == 'bundle' %}
+  <div class="form-control">
+    <label class="label text-sm font-medium text-base-content">Select bundle</label>
+    <select name="bundle_id" class="select select-bordered w-full" required>
+      <option value="" disabled selected>Choose a bundle…</option>
+      {% for option in bundle_options %}
+      <option value="{{ option.id }}">{{ option.label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <p class="text-xs text-base-content/60">
+    Only the selected bundle will be processed.
+  </p>
+{% else %}
+  <p class="text-sm text-base-content/70">
+    Collections and bundles will both be included in this sync.
+  </p>
+{% endif %}

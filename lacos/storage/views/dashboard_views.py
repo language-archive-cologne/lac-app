@@ -1,24 +1,67 @@
 import ast
 import json
 import logging
+from urllib.parse import quote_plus
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db import models
-from django.http import HttpResponse, JsonResponse, QueryDict
+from django.http import HttpResponse, QueryDict
 from django.middleware.csrf import get_token
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.template.loader import render_to_string
 from django.urls import reverse
-from django.utils.text import slugify
 from django.utils.decorators import method_decorator
+from django.utils.text import slugify
 from django.views import View
 from django.views.decorators.http import require_http_methods
 
+from lacos.blam.models.bundle.bundle_repository import Bundle
+from lacos.blam.models.collection.collection_repository import Collection
 from lacos.common.mixins import BucketCoordinatorMixin, HtmxTemplateHelperMixin
+from lacos.storage.models.acl_config import ACLConfig
+from lacos.storage.models.acl_permissions import ACLPermissions
 from lacos.storage.services.bucket_service import BucketService
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_acl_display_name(obj):
+    if obj is None:
+        return None
+    candidate = getattr(obj, "name", None) or getattr(obj, "title", None)
+    if not candidate and hasattr(obj, "get_general_info"):
+        general_info = obj.get_general_info
+        if general_info:
+            candidate = getattr(general_info, "display_title", None) or getattr(general_info, "title", None)
+    if not candidate:
+        candidate = getattr(obj, "identifier", None)
+    return candidate or str(getattr(obj, "pk", ""))
+
+
+def _get_acl_options(model):
+    options = []
+    for obj in model.objects.order_by("identifier"):
+        display_name = _resolve_acl_display_name(obj)
+        identifier = getattr(obj, "identifier", str(obj.pk))
+        options.append(
+            {
+                "id": str(obj.pk),
+                "identifier": identifier,
+                "name": display_name,
+                "label": f"{identifier}{f' — {display_name}' if display_name else ''}",
+            }
+        )
+    return options
+
+
+def _render_sync_summary_partial(request, summary=None, error_message=None):
+    html = render_to_string(
+        "dashboard/partials/acl_sync_summary.html",
+        {"sync_summary": summary, "error_message": error_message},
+        request=request,
+    )
+    return HttpResponse(html)
 
 
 @login_required
@@ -104,6 +147,10 @@ def acl_admin_dashboard(request):
     """
     # Settings flags (DB-backed with settings fallback)
     from lacos.storage.models.acl_config import ACLConfig
+    from lacos.blam.models.collection.collection_repository import Collection
+    from lacos.blam.models.bundle.bundle_repository import Bundle
+    from django.contrib.contenttypes.models import ContentType
+
     cfg = None
     try:
         cfg = ACLConfig.get_solo()
@@ -128,15 +175,74 @@ def acl_admin_dashboard(request):
         )
 
         # Recent entries
-        recent = (
-            ACLPermissions.objects.select_related("content_type")
-            .order_by("-last_synced")[:25]
-        )
+        recent = ACLPermissions.objects.select_related("content_type").order_by("-last_synced")[:25]
     except Exception as e:
         logger.exception("Error preparing ACL dashboard: %s", e)
         total = 0
         by_level = []
         recent = []
+
+    def build_acl_summary(model, perms_qs):
+        total_objects = model.objects.count()
+        sync_object_ids = [str(obj_id) for obj_id in perms_qs.values_list("object_id", flat=True)]
+        distinct_synced = len(set(sync_object_ids))
+        unsynced_qs = model.objects.exclude(pk__in=sync_object_ids)
+        unsynced_objects = unsynced_qs.count()
+        unsynced_samples = [
+            {
+                "identifier": getattr(obj, "identifier", str(obj.pk)),
+                "name": _resolve_acl_display_name(obj),
+            }
+            for obj in unsynced_qs[:5]
+        ]
+        by_level_local = list(perms_qs.values("access_level").order_by().annotate(count=models.Count("id")))
+        recent_perms = list(perms_qs.order_by("-last_synced")[:10])
+        recent_ids = [str(perm.object_id) for perm in recent_perms]
+        recent_objects = {
+            str(obj.pk): obj
+            for obj in model.objects.filter(pk__in=recent_ids)
+        }
+        recent_local = []
+        for perm in recent_perms:
+            obj = recent_objects.get(str(perm.object_id))
+            recent_local.append(
+                {
+                    "identifier": getattr(obj, "identifier", perm.object_id) if obj else perm.object_id,
+                    "name": _resolve_acl_display_name(obj) if obj else None,
+                    "access_level": perm.access_level,
+                    "last_synced": perm.last_synced,
+                }
+            )
+        last_synced_at = perms_qs.aggregate(models.Max("last_synced"))["last_synced__max"]
+        return {
+            "records": perms_qs.count(),
+            "synced_objects": distinct_synced,
+            "unsynced_objects": unsynced_objects,
+            "unsynced_samples": unsynced_samples,
+            "total_objects": total_objects,
+            "by_level": by_level_local,
+            "recent": recent_local,
+            "last_synced_at": last_synced_at,
+        }
+
+    collection_ct = ContentType.objects.get_for_model(Collection)
+    bundle_ct = ContentType.objects.get_for_model(Bundle)
+
+    collection_perms = ACLPermissions.objects.filter(content_type=collection_ct)
+    bundle_perms = ACLPermissions.objects.filter(content_type=bundle_ct)
+
+    collection_summary = build_acl_summary(Collection, collection_perms)
+    bundle_summary = build_acl_summary(Bundle, bundle_perms)
+
+    overall_summary = {
+        "records": collection_summary["records"] + bundle_summary["records"],
+        "synced_objects": collection_summary["synced_objects"] + bundle_summary["synced_objects"],
+        "unsynced_objects": collection_summary["unsynced_objects"] + bundle_summary["unsynced_objects"],
+        "total_objects": collection_summary["total_objects"] + bundle_summary["total_objects"],
+    }
+
+    collection_options = _get_acl_options(Collection)
+    bundle_options = _get_acl_options(Bundle)
 
     return render(
         request,
@@ -146,6 +252,12 @@ def acl_admin_dashboard(request):
             "total": total,
             "by_level": by_level,
             "recent": recent,
+            "collection_summary": collection_summary,
+            "bundle_summary": bundle_summary,
+            "overall_summary": overall_summary,
+            "sync_summary": None,
+            "collection_options": collection_options,
+            "bundle_options": bundle_options,
             "message": request.GET.get("message"),
         },
     )
@@ -160,8 +272,46 @@ def acl_sync_all(request):
     """
     from lacos.storage.services.acl_sync_service import ACLSyncService
 
+    from lacos.storage.services.acl_sync_service import ACLSyncService
+
+    scope = request.POST.get("scope", "all")
     service = ACLSyncService(skip_bucket_check=True)
-    results = service.sync_all()
+    results = []
+    scope_label = "Collections & Bundles"
+
+    try:
+        if scope == "all":
+            results = service.sync_all()
+        elif scope == "collections":
+            scope_label = "All Collections"
+            results = [service.sync_collection(obj) for obj in Collection.objects.all()]
+        elif scope == "bundles":
+            scope_label = "All Bundles"
+            results = [service.sync_bundle(obj) for obj in Bundle.objects.select_related("structural_info__is_member_of_collection")]
+        elif scope == "collection":
+            collection_id = request.POST.get("collection_id")
+            if not collection_id:
+                raise ValueError("Please select a collection to sync.")
+            collection = Collection.objects.filter(pk=collection_id).first()
+            if not collection:
+                raise ValueError("Collection not found.")
+            scope_label = f"Collection {getattr(collection, 'identifier', collection_id)}"
+            results = [service.sync_collection(collection)]
+        elif scope == "bundle":
+            bundle_id = request.POST.get("bundle_id")
+            if not bundle_id:
+                raise ValueError("Please select a bundle to sync.")
+            bundle = Bundle.objects.select_related("structural_info__is_member_of_collection").filter(pk=bundle_id).first()
+            if not bundle:
+                raise ValueError("Bundle not found.")
+            scope_label = f"Bundle {getattr(bundle, 'identifier', bundle_id)}"
+            results = [service.sync_bundle(bundle)]
+        else:
+            raise ValueError("Invalid sync scope.")
+    except ValueError as exc:
+        if request.headers.get("HX-Request"):
+            return _render_sync_summary_partial(request, summary=None, error_message=str(exc))
+        return redirect(f"{reverse('storage:acl_admin_dashboard')}?message={quote_plus(str(exc))}")
 
     updated = sum(1 for r in results if r.updated)
     found = sum(1 for r in results if r.found)
@@ -172,24 +322,25 @@ def acl_sync_all(request):
         "found": found,
         "updated": updated,
         "errors": len(errors),
+        "missing": len(results) - found,
+        "scope": scope,
+        "scope_label": scope_label,
+        "by_type": {
+            "collections": sum(1 for r in results if r.object_type == "Collection"),
+            "bundles": sum(1 for r in results if r.object_type == "Bundle"),
+        },
     }
 
-    # HTMX request -> return partial JSON
+    # HTMX request -> return partial HTML
     if request.headers.get("HX-Request"):
-        return JsonResponse({"success": True, "summary": summary})
+        return _render_sync_summary_partial(request, summary=summary)
 
     # Regular POST -> redirect back to dashboard with message
     message = (
-        f"Synced {summary['total']} objects — found {summary['found']}, updated {summary['updated']}, "
-        f"errors {summary['errors']}"
+        f"{scope_label}: processed {summary['total']} objects — found {summary['found']}, "
+        f"updated {summary['updated']}, errors {summary['errors']}"
     )
-    # Fall back to rendering dashboard with message
-    return render(
-        request,
-        "dashboard/acl_admin_dashboard.html",
-        {"message": message, "acl_flags": {}, "total": 0, "by_level": [], "recent": []},
-        status=200,
-    )
+    return redirect(f"{reverse('storage:acl_admin_dashboard')}?message={quote_plus(message)}")
 
 
 @login_required
@@ -224,6 +375,22 @@ def acl_update_settings(request):
     except Exception as e:
         logger.exception("Failed to update ACL settings: %s", e)
         return HttpResponse(f"Error updating settings: {e}", status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def acl_sync_scope_fields(request):
+    scope = request.GET.get("scope", "all")
+    context = {
+        "scope": scope,
+        "collection_options": _get_acl_options(Collection),
+        "bundle_options": _get_acl_options(Bundle),
+    }
+    return render(
+        request,
+        "dashboard/partials/acl_sync_scope_fields.html",
+        context,
+    )
 
 
 @login_required

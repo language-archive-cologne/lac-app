@@ -1,0 +1,41 @@
+{% if error_message %}
+  <div class="alert alert-error text-sm">
+    <span>{{ error_message }}</span>
+  </div>
+{% endif %}
+
+{% if sync_summary %}
+  <div class="space-y-4" data-close-modal="true">
+    <div class="text-sm text-base-content/70">
+      Scope: <span class="font-medium text-base-content">{{ sync_summary.scope_label }}</span>
+    </div>
+    <div class="stats stats-vertical sm:stats-horizontal shadow-sm">
+      <div class="stat">
+        <div class="stat-title">Processed</div>
+        <div class="stat-value text-primary">{{ sync_summary.total }}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-title">Updated</div>
+        <div class="stat-value text-success">{{ sync_summary.updated }}</div>
+        <div class="stat-desc text-xs text-base-content/70">
+          Missing: {{ sync_summary.missing }}
+        </div>
+      </div>
+      <div class="stat">
+        <div class="stat-title">Errors</div>
+        <div class="stat-value text-error">{{ sync_summary.errors }}</div>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap gap-2 text-xs text-base-content/70">
+      <span class="badge badge-outline badge-sm">Collections: {{ sync_summary.by_type.collections }}</span>
+      <span class="badge badge-outline badge-sm">Bundles: {{ sync_summary.by_type.bundles }}</span>
+    </div>
+  </div>
+{% else %}
+  <div data-close-modal="false">
+    <p class="text-sm text-base-content/60">
+      Run a sync to populate the latest summary. Results appear here instantly.
+    </p>
+  </div>
+{% endif %}

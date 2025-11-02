@@ -1,9 +1,8 @@
-<div class="card h-100">
-  <div class="card-header d-flex justify-content-between align-items-center">
-    <span>Settings</span>
-  </div>
-  <div class="card-body">
+<div class="card bg-base-100 shadow-sm h-full">
+  <div class="card-body space-y-4">
+    <h2 class="card-title text-lg">Settings</h2>
     <form
+      class="space-y-3"
       method="post"
       action="{% url 'storage:acl_update_settings' %}"
       hx-post="{% url 'storage:acl_update_settings' %}"
@@ -11,23 +10,42 @@
       hx-swap="outerHTML"
     >
       {% csrf_token %}
-      <div class="form-check mb-2">
-        <input class="form-check-input" type="checkbox" id="enforcement_enabled" name="enforcement_enabled" {% if acl_flags.ACL_ENFORCEMENT_ENABLED %}checked{% endif %}>
-        <label class="form-check-label" for="enforcement_enabled">Enforcement enabled</label>
-      </div>
-      <div class="form-check mb-2">
-        <input class="form-check-input" type="checkbox" id="log_access_attempts" name="log_access_attempts" {% if acl_flags.ACL_LOG_ACCESS_ATTEMPTS %}checked{% endif %}>
-        <label class="form-check-label" for="log_access_attempts">Log access attempts</label>
-      </div>
-      <div class="form-check mb-3">
-        <input class="form-check-input" type="checkbox" id="default_deny" name="default_deny" {% if acl_flags.ACL_DEFAULT_DENY %}checked{% endif %}>
-        <label class="form-check-label" for="default_deny">Default deny</label>
-      </div>
-      <button type="submit" class="btn btn-secondary">Save</button>
+      <label class="label cursor-pointer justify-start gap-3">
+        <input
+          type="checkbox"
+          id="enforcement_enabled"
+          name="enforcement_enabled"
+          class="checkbox checkbox-primary"
+          {% if acl_flags.ACL_ENFORCEMENT_ENABLED %}checked{% endif %}
+        >
+        <span class="label-text">Enforcement enabled</span>
+      </label>
+
+      <label class="label cursor-pointer justify-start gap-3">
+        <input
+          type="checkbox"
+          id="log_access_attempts"
+          name="log_access_attempts"
+          class="checkbox checkbox-primary"
+          {% if acl_flags.ACL_LOG_ACCESS_ATTEMPTS %}checked{% endif %}
+        >
+        <span class="label-text">Log access attempts</span>
+      </label>
+
+      <label class="label cursor-pointer justify-start gap-3">
+        <input
+          type="checkbox"
+          id="default_deny"
+          name="default_deny"
+          class="checkbox checkbox-primary"
+          {% if acl_flags.ACL_DEFAULT_DENY %}checked{% endif %}
+        >
+        <span class="label-text">Default deny</span>
+      </label>
+
+      <button type="submit" class="btn btn-secondary w-full">
+        Save changes
+      </button>
     </form>
   </div>
 </div>
-
-
-
-

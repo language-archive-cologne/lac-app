@@ -52,6 +52,7 @@ urlpatterns = [
     # ACL Admin dashboard
     path("dashboard/acl/", views.acl_admin_dashboard, name="acl_admin_dashboard"),
     path("dashboard/acl/sync/", views.acl_sync_all, name="acl_sync_all"),
+    path("dashboard/acl/sync/scope/", views.acl_sync_scope_fields, name="acl_sync_scope"),
     path("dashboard/acl/settings/", views.acl_update_settings, name="acl_update_settings"),
     
     # File operations
