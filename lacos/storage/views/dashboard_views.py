@@ -19,9 +19,9 @@ from django.views.decorators.http import require_http_methods
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.common.mixins import BucketCoordinatorMixin, HtmxTemplateHelperMixin
-from lacos.storage.models.acl_config import ACLConfig
 from lacos.storage.models.acl_permissions import ACLPermissions
 from lacos.storage.services.bucket_service import BucketService
+from lacos.storage.models.acl_config import ACLConfig
 
 logger = logging.getLogger(__name__)
 
@@ -287,7 +287,8 @@ def acl_sync_all(request):
             results = [service.sync_collection(obj) for obj in Collection.objects.all()]
         elif scope == "bundles":
             scope_label = "All Bundles"
-            results = [service.sync_bundle(obj) for obj in Bundle.objects.select_related("structural_info__is_member_of_collection")]
+            bundle_qs = Bundle.objects.prefetch_related("structural_info")
+            results = [service.sync_bundle(obj) for obj in bundle_qs]
         elif scope == "collection":
             collection_id = request.POST.get("collection_id")
             if not collection_id:
@@ -301,7 +302,7 @@ def acl_sync_all(request):
             bundle_id = request.POST.get("bundle_id")
             if not bundle_id:
                 raise ValueError("Please select a bundle to sync.")
-            bundle = Bundle.objects.select_related("structural_info__is_member_of_collection").filter(pk=bundle_id).first()
+            bundle = Bundle.objects.prefetch_related("structural_info").filter(pk=bundle_id).first()
             if not bundle:
                 raise ValueError("Bundle not found.")
             scope_label = f"Bundle {getattr(bundle, 'identifier', bundle_id)}"
