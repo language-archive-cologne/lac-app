@@ -19,9 +19,12 @@ from django.views.decorators.http import require_http_methods
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.common.mixins import BucketCoordinatorMixin, HtmxTemplateHelperMixin
+from lacos.common.mixins.htmx_template_helpers import ROOT_FOLDER_SENTINEL
 from lacos.storage.models.acl_permissions import ACLPermissions
 from lacos.storage.services.bucket_service import BucketService
 from lacos.storage.models.acl_config import ACLConfig
+from lacos.storage.observability import profiling_scope
+from lacos.storage.services.collection_service import BucketListingPage
 
 logger = logging.getLogger(__name__)
 
@@ -79,32 +82,43 @@ def archivist_dashboard(request):
     Render the archivist dashboard showing all workspace buckets.
     Only loads root level items initially for better performance.
     """
-    bucket_service = BucketService(skip_bucket_check=True)
-    bucket_state = BucketCoordinatorMixin()
-
-    workspace_buckets = bucket_service.get_all_accessible_buckets()
-    active_bucket = bucket_state.ensure_active_bucket(request, workspace_buckets)
-
-    auto_load_url = None
-    if active_bucket:
-        auto_load_url = reverse("storage:bucket_content_htmx", kwargs={"bucket_name": active_bucket})
-        if request.GET.get("force_fresh", "false").lower() == "true":
-            auto_load_url = f"{auto_load_url}?force_fresh=true"
-
-    # Check for success message
-    message = request.GET.get('message', None)
-
-    return render(
-        request,
-        "dashboard/archivist_dashboard.html",
-        {
-            "workspace_buckets": workspace_buckets,
-            "active_bucket": active_bucket,
-            "ocfl_buckets": bucket_service.ocfl_buckets,
-            "message": message,
-            "auto_load_url": auto_load_url,
+    request_id = request.headers.get("X-Request-ID") or request.headers.get("HX-Request")
+    with profiling_scope(
+        "archivist_dashboard",
+        request_id=request_id,
+        metadata={
+            "htmx": bool(request.headers.get("HX-Request")),
+            "force_fresh": request.GET.get("force_fresh", "false").lower() == "true",
         },
-    )
+    ) as session:
+        bucket_service = BucketService(skip_bucket_check=True)
+        bucket_state = BucketCoordinatorMixin()
+
+        workspace_buckets = bucket_service.get_all_accessible_buckets()
+        session.metadata["workspace_bucket_count"] = len(workspace_buckets)
+
+        active_bucket = bucket_state.ensure_active_bucket(request, workspace_buckets)
+        session.metadata["active_bucket"] = active_bucket
+
+        auto_load_url = None
+        if active_bucket:
+            auto_load_url = reverse("storage:bucket_content_htmx", kwargs={"bucket_name": active_bucket})
+            if request.GET.get("force_fresh", "false").lower() == "true":
+                auto_load_url = f"{auto_load_url}?force_fresh=true"
+
+        message = request.GET.get('message', None)
+
+        return render(
+            request,
+            "dashboard/archivist_dashboard.html",
+            {
+                "workspace_buckets": workspace_buckets,
+                "active_bucket": active_bucket,
+                "ocfl_buckets": bucket_service.ocfl_buckets,
+                "message": message,
+                "auto_load_url": auto_load_url,
+            },
+        )
 
 
 @login_required
@@ -374,50 +388,86 @@ def load_folder_contents(request, bucket_type, folder_path):
     Load contents of a specific folder when expanded.
     Now supports any workspace bucket, not just ingest/production.
     """
-    bucket_service = BucketService(skip_bucket_check=True)
-
-    # Support new flexible bucket names
-    if bucket_type in bucket_service.get_all_accessible_buckets():
-        bucket = bucket_type
-    else:
-        # Legacy backward compatibility
-        bucket = bucket_service.ingest_bucket if bucket_type == 'ingest' else bucket_service.production_bucket
-    
-    try:
-        # Clean up the folder path to handle double slashes
-        folder_path = folder_path.replace('//', '/')
-        logger.info("Loading folder contents for %s bucket, path: %s", bucket_type, folder_path)
-        force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
-        
-        # Get folder contents
-        if force_fresh:
-            folder_contents = bucket_service.get_folder_contents(bucket, folder_path, force_fresh=True)
-        else:
-            folder_contents = bucket_service.get_folder_contents(bucket, folder_path)
-        preview_names = ", ".join(item["name"] for item in folder_contents[:5])
-        more_indicator = "…" if len(folder_contents) > 5 else ""
-        logger.debug(
-            "Loaded %s items for %s%s%s",
-            len(folder_contents),
-            folder_path,
-            f" — {preview_names}" if preview_names else "",
-            more_indicator,
-        )
-        
-    except Exception as e:
-        logger.error(f"Error loading folder contents for {folder_path}: {str(e)}")
-        # Return empty list on error
-        folder_contents = []
-    
-    return render(
-        request,
-        "dashboard/folder_contents_partial.html",
-        {
-            "folder_contents": folder_contents,
+    request_id = request.headers.get("X-Request-ID") or request.headers.get("HX-Request")
+    with profiling_scope(
+        "load_folder_contents",
+        request_id=request_id,
+        metadata={
             "bucket_type": bucket_type,
             "folder_path": folder_path,
+            "htmx": True,
         },
-    )
+    ) as session:
+        bucket_service = BucketService(skip_bucket_check=True)
+
+        if bucket_type in bucket_service.get_all_accessible_buckets():
+            bucket = bucket_type
+        else:
+            bucket = bucket_service.ingest_bucket if bucket_type == 'ingest' else bucket_service.production_bucket
+        session.metadata["resolved_bucket"] = bucket
+
+        sanitized_path = folder_path
+        try:
+            if sanitized_path == ROOT_FOLDER_SENTINEL:
+                sanitized_path = ""
+            sanitized_path = sanitized_path.replace('//', '/')
+            logger.info("Loading folder contents for %s bucket, path: %s", bucket_type, sanitized_path or "/")
+            force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
+            session.metadata["force_fresh"] = force_fresh
+
+            try:
+                requested_max_keys = int(request.GET.get("max_keys", "") or 0)
+            except ValueError:
+                requested_max_keys = 0
+            pagination_enabled = getattr(bucket_service, "dashboard_pagination_enabled", True)
+            if requested_max_keys <= 0:
+                requested_max_keys = bucket_service.dashboard_page_size if pagination_enabled else 0
+            continuation_token = request.GET.get("continuation_token") or None
+            session.metadata["continuation_token"] = continuation_token
+            session.metadata["max_keys"] = requested_max_keys
+
+            listing_page = bucket_service.get_folder_contents(
+                bucket,
+                sanitized_path,
+                max_keys=requested_max_keys if pagination_enabled else None,
+                continuation_token=continuation_token,
+                force_fresh=force_fresh,
+            )
+            session.metadata["returned_item_count"] = len(listing_page)
+            session.metadata["has_more"] = listing_page.has_more
+            session.metadata["next_token"] = listing_page.next_token
+
+            preview_names = ", ".join(item["name"] for item in listing_page[:5])
+            more_indicator = "…" if len(listing_page) > 5 else ""
+            logger.debug(
+                "Loaded %s items for %s%s%s",
+                len(listing_page),
+                sanitized_path,
+                f" — {preview_names}" if preview_names else "",
+                more_indicator,
+            )
+
+        except Exception as e:
+            logger.error(f"Error loading folder contents for {sanitized_path or ROOT_FOLDER_SENTINEL}: {str(e)}")
+            session.metadata["error"] = str(e)
+            listing_page = BucketListingPage(items=[], has_more=False, next_token=None, bucket=bucket, prefix=sanitized_path)
+            requested_max_keys = locals().get("requested_max_keys", 0)
+            continuation_token = locals().get("continuation_token", None)
+
+        session.metadata["folder_path"] = sanitized_path
+        return render(
+            request,
+            "dashboard/folder_contents_partial.html",
+            {
+                "listing": listing_page,
+                "bucket_type": bucket_type,
+                "folder_path": sanitized_path,
+                "folder_path_param": sanitized_path or ROOT_FOLDER_SENTINEL,
+                "is_root": sanitized_path in ("", None),
+                "max_keys": requested_max_keys,
+                "root_folder_sentinel": ROOT_FOLDER_SENTINEL,
+            },
+        )
 
 
 @login_required
@@ -457,34 +507,54 @@ def dashboard_content(request, bucket_type):
     Returns:
         Rendered partial template with the requested bucket structure
     """
-    try:
-        bucket_service = BucketService(skip_bucket_check=True)
-        force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
-        
-        if bucket_type == "ingest":
-            if force_fresh:
-                structure = bucket_service.get_root_level_items(bucket_service.ingest_bucket, force_fresh=True)
+    request_id = request.headers.get("X-Request-ID") or request.headers.get("HX-Request")
+    with profiling_scope(
+        "dashboard_content",
+        request_id=request_id,
+        metadata={"bucket_type": bucket_type, "htmx": True},
+    ) as session:
+        try:
+            bucket_service = BucketService(skip_bucket_check=True)
+            force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
+            session.metadata["force_fresh"] = force_fresh
+
+            if bucket_type == "ingest":
+                resolved_bucket = bucket_service.ingest_bucket
+            elif bucket_type == "production":
+                resolved_bucket = bucket_service.production_bucket
             else:
-                structure = bucket_service.get_root_level_items(bucket_service.ingest_bucket)
-        elif bucket_type == "production":
-            if force_fresh:
-                structure = bucket_service.get_root_level_items(bucket_service.production_bucket, force_fresh=True)
-            else:
-                structure = bucket_service.get_root_level_items(bucket_service.production_bucket)
-        else:
-            return HttpResponse("Invalid bucket type", status=400)
-            
-        logger.info(f"Refreshing {bucket_type} structure with {len(structure.get('children', []))} items")
-        
-        # Render just the folder structure partial
-        return render(
-            request,
-            "dashboard/folder_structure_partial.html",
-            {"structure": structure, "bucket_type": bucket_type}
-        )
-    except Exception as e:
-        logger.exception(f"Error loading dashboard content for {bucket_type}: {str(e)}")
-        return HttpResponse(f"Error: {str(e)}", status=500)
+                return HttpResponse("Invalid bucket type", status=400)
+
+            pagination_enabled = getattr(bucket_service, "dashboard_pagination_enabled", True)
+            page_size = bucket_service.dashboard_page_size if pagination_enabled else None
+
+            listing = bucket_service.get_folder_contents(
+                resolved_bucket,
+                "",
+                max_keys=page_size if pagination_enabled else None,
+                force_fresh=force_fresh,
+            )
+
+            session.metadata["resolved_bucket"] = resolved_bucket
+            session.metadata["child_count"] = len(listing)
+            session.metadata["has_more"] = listing.has_more
+            session.metadata["next_token"] = listing.next_token
+
+            logger.info(f"Refreshing {bucket_type} structure with {len(listing)} items (has_more={listing.has_more})")
+
+            return render(
+                request,
+                "dashboard/folder_structure_partial.html",
+                {
+                    "listing": listing,
+                    "bucket_type": bucket_type,
+                    "page_size": page_size,
+                }
+            )
+        except Exception as e:
+            logger.exception(f"Error loading dashboard content for {bucket_type}: {str(e)}")
+            session.metadata["error"] = str(e)
+            return HttpResponse(f"Error: {str(e)}", status=500)
 
 
 @method_decorator(login_required, name='dispatch')
@@ -495,23 +565,55 @@ class BucketContentHTMXView(HtmxTemplateHelperMixin, View):
     """
 
     def get(self, request, bucket_name):
-        try:
-            # Render the bucket content
-            content_html = self.render_bucket_content_template(request, bucket_name)
+        request_id = request.headers.get("X-Request-ID") or request.headers.get("HX-Request")
+        with profiling_scope(
+            "bucket_content_htmx",
+            request_id=request_id,
+            metadata={"bucket": bucket_name, "htmx": True},
+        ) as session:
+            try:
+                force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
+                try:
+                    requested_max_keys = int(request.GET.get("max_keys", "") or 0)
+                except ValueError:
+                    requested_max_keys = 0
+                continuation_token = request.GET.get("continuation_token") or None
 
-            # Also update the bucket selector dropdown to show the new active bucket
-            selector_html = self.build_bucket_tabs_oob_response(
-                request=request,
-                active_bucket=bucket_name
-            )
+                session.metadata.update(
+                    {
+                        "force_fresh": force_fresh,
+                        "continuation_token": continuation_token,
+                        "max_keys": requested_max_keys,
+                    }
+                )
 
-            # Combine content update with selector OOB update
-            response_html = f'{content_html}{selector_html}'
+                prefetch_root = bool(continuation_token or requested_max_keys > 0)
+                prefetch_param = request.GET.get("prefetch_root")
+                if prefetch_param is not None:
+                    prefetch_root = prefetch_param.lower() == "true"
+                session.metadata["prefetch_root"] = prefetch_root
 
-            return HttpResponse(response_html)
-        except Exception as e:
-            logger.exception(f"Error loading bucket content for {bucket_name}: {str(e)}")
-            return HttpResponse(f"Error: {str(e)}", status=500)
+                content_html = self.render_bucket_content_template(
+                    request,
+                    bucket_name,
+                    continuation_token=continuation_token,
+                    max_keys=requested_max_keys if requested_max_keys > 0 else None,
+                    force_fresh=force_fresh,
+                    prefetch_root=prefetch_root,
+                )
+                selector_html = self.build_bucket_tabs_oob_response(
+                    request=request,
+                    active_bucket=bucket_name
+                )
+                session.metadata["rendered"] = True
+
+                response_html = f'{content_html}{selector_html}'
+
+                return HttpResponse(response_html)
+            except Exception as e:
+                logger.exception(f"Error loading bucket content for {bucket_name}: {str(e)}")
+                session.metadata["error"] = str(e)
+                return HttpResponse(f"Error: {str(e)}", status=500)
 
 
 # Class-based view is now used directly in URLs

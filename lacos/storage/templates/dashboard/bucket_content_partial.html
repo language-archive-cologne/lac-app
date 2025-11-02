@@ -5,7 +5,17 @@
             {{ bucket_name }}
         </h2>
         <div class="flex items-center gap-3 text-sm text-base-content/70" id="bucket-info">
-            <span class="text-base-content/70">{{ structure.children|length }} items</span>
+            <span id="bucket-item-count" class="flex items-center gap-2 text-base-content/70">
+                {% if listing is not None %}
+                    {{ listing|length }} items
+                    {% if listing.has_more %}
+                        <span class="text-xs text-primary/80 ml-2">More available</span>
+                    {% endif %}
+                {% else %}
+                    <span class="loading loading-spinner loading-xs"></span>
+                    Loading items…
+                {% endif %}
+            </span>
             <div id="bucket-size-container-{{ bucket_name|slugify }}"
                  class="btn btn-ghost btn-xs gap-2"
                  hx-get="{% url 'storage:bucket_size_info' bucket_name %}"
@@ -21,9 +31,8 @@
 
 <div class="card-body p-6">
     <div id="bucket-folder-structure" class="min-h-[400px]">
-        {% if structure.children %}
-            {% include "dashboard/folder_structure_partial.html" with structure=structure bucket_type=bucket_name %}
-        {% else %}
+        {% include "dashboard/folder_structure_partial.html" with listing=listing bucket_type=bucket_name page_size=page_size root_autoload=root_autoload force_fresh=force_fresh root_load_url=root_load_url root_folder_sentinel=root_folder_sentinel %}
+        {% if listing is not None and not listing.items %}
             <div class="text-center py-12">
                 <div class="text-base-content/50 mb-4">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

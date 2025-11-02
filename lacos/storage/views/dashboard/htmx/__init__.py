@@ -1,0 +1,3 @@
+"""
+HTMX handlers for dashboard.
+"""

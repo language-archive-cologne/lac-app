@@ -6,10 +6,13 @@ import json
 from django.http import HttpResponse
 from django.middleware.csrf import get_token
 from django.template.loader import render_to_string
+from django.urls import reverse
 
 from .bucket_coordinator import BucketCoordinatorMixin
 
 logger = logging.getLogger(__name__)
+
+ROOT_FOLDER_SENTINEL = "__root__"
 
 
 class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
@@ -59,7 +62,16 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
             request=request
         )
 
-    def render_bucket_content_template(self, request, bucket_name):
+    def render_bucket_content_template(
+        self,
+        request,
+        bucket_name,
+        *,
+        continuation_token=None,
+        max_keys=None,
+        force_fresh=False,
+        prefetch_root=True,
+    ):
         """
         Render bucket content template with standard context.
 
@@ -77,19 +89,62 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
         self.set_active_bucket(request, bucket_name, workspace_buckets)
 
         try:
-            # Always fetch fresh content for now to guarantee up-to-date listings.
-            structure = bucket_service.get_root_level_items(bucket_name, force_fresh=True)
+            pagination_enabled = getattr(bucket_service, "dashboard_pagination_enabled", True)
+            page_size = (
+                max_keys
+                if max_keys
+                else (bucket_service.dashboard_page_size if pagination_enabled else None)
+            )
 
-            logger.info(f"🎨 TEMPLATE_HELPER: render_bucket_content_template for {bucket_name}")
-            logger.info(f"📁 BUCKET_CONTENT: {len(structure.get('children', []))} items")
+            listing_page = None
+            if prefetch_root:
+                listing_page = bucket_service.get_folder_contents(
+                    bucket_name,
+                    "",
+                    max_keys=page_size if pagination_enabled else None,
+                    continuation_token=continuation_token,
+                    force_fresh=force_fresh,
+                )
+
+                logger.info(f"🎨 TEMPLATE_HELPER: render_bucket_content_template for {bucket_name}")
+                logger.info(
+                    "📁 BUCKET_CONTENT: %s items (has_more=%s)",
+                    len(listing_page),
+                    listing_page.has_more,
+                )
+            else:
+                logger.info("🎨 TEMPLATE_HELPER: deferring root listing fetch for %s", bucket_name)
 
             context = {
-                'structure': structure,
+                'listing': listing_page,
                 'bucket_name': bucket_name,
-                'bucket_type': bucket_name,  # For backward compatibility
+                'bucket_type': bucket_name,
+                'pagination_enabled': pagination_enabled,
+                'page_size': page_size or 0,
+                'continuation_token': continuation_token,
                 'ocfl_buckets': bucket_service.ocfl_buckets,
                 'csrf_token': get_token(request),
+                'root_autoload': not prefetch_root,
+                'force_fresh': force_fresh,
+                'root_folder_sentinel': ROOT_FOLDER_SENTINEL,
             }
+
+            try:
+                root_load_url = reverse(
+                    'storage:load_folder_contents',
+                    kwargs={'bucket_type': bucket_name, 'folder_path': ROOT_FOLDER_SENTINEL},
+                )
+                query_params = []
+                if pagination_enabled and page_size:
+                    query_params.append(f"max_keys={page_size}")
+                if force_fresh:
+                    query_params.append("force_fresh=true")
+                if query_params:
+                    root_load_url = f"{root_load_url}?{'&'.join(query_params)}"
+                context['root_load_url'] = root_load_url
+            except Exception as exc:
+                logger.debug("Unable to build root load URL for %s: %s", bucket_name, exc)
+                context['root_load_url'] = ''
 
             return render_to_string(
                 'dashboard/bucket_content_partial.html',
