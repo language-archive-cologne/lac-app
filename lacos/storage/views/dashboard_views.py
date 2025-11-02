@@ -41,7 +41,8 @@ def _resolve_acl_display_name(obj):
 
 def _get_acl_options(model):
     options = []
-    for obj in model.objects.order_by("identifier"):
+    queryset = _get_acl_queryset(model).order_by("identifier")
+    for obj in queryset:
         display_name = _resolve_acl_display_name(obj)
         identifier = getattr(obj, "identifier", str(obj.pk))
         options.append(
@@ -53,6 +54,14 @@ def _get_acl_options(model):
             }
         )
     return options
+
+
+def _get_acl_queryset(model):
+    if model is Collection:
+        return model.objects.all().prefetch_related("general_info")
+    if model is Bundle:
+        return model.objects.all().prefetch_related("general_info", "structural_info__is_member_of_collection")
+    return model.objects.all()
 
 
 def _render_sync_summary_partial(request, summary=None, error_message=None):
@@ -183,24 +192,30 @@ def acl_admin_dashboard(request):
         recent = []
 
     def build_acl_summary(model, perms_qs):
+        pk_field = model._meta.pk
+        base_qs = _get_acl_queryset(model)
+
         total_objects = model.objects.count()
-        sync_object_ids = [str(obj_id) for obj_id in perms_qs.values_list("object_id", flat=True)]
-        distinct_synced = len(set(sync_object_ids))
-        unsynced_qs = model.objects.exclude(pk__in=sync_object_ids)
+        sync_object_ids = [
+            pk_field.to_python(obj_id) for obj_id in perms_qs.values_list("object_id", flat=True)
+        ]
+        distinct_synced = len({str(obj_id) for obj_id in sync_object_ids})
+
+        unsynced_qs = base_qs.exclude(pk__in=sync_object_ids)
         unsynced_objects = unsynced_qs.count()
         unsynced_samples = [
             {
                 "identifier": getattr(obj, "identifier", str(obj.pk)),
                 "name": _resolve_acl_display_name(obj),
             }
-            for obj in unsynced_qs[:5]
+            for obj in unsynced_qs.order_by("identifier")[:5]
         ]
         by_level_local = list(perms_qs.values("access_level").order_by().annotate(count=models.Count("id")))
         recent_perms = list(perms_qs.order_by("-last_synced")[:10])
-        recent_ids = [str(perm.object_id) for perm in recent_perms]
+        recent_ids = [pk_field.to_python(perm.object_id) for perm in recent_perms]
         recent_objects = {
             str(obj.pk): obj
-            for obj in model.objects.filter(pk__in=recent_ids)
+            for obj in _get_acl_queryset(model).filter(pk__in=recent_ids)
         }
         recent_local = []
         for perm in recent_perms:
@@ -287,13 +302,13 @@ def acl_sync_all(request):
             results = [service.sync_collection(obj) for obj in Collection.objects.all()]
         elif scope == "bundles":
             scope_label = "All Bundles"
-            bundle_qs = Bundle.objects.prefetch_related("structural_info")
+            bundle_qs = _get_acl_queryset(Bundle)
             results = [service.sync_bundle(obj) for obj in bundle_qs]
         elif scope == "collection":
             collection_id = request.POST.get("collection_id")
             if not collection_id:
                 raise ValueError("Please select a collection to sync.")
-            collection = Collection.objects.filter(pk=collection_id).first()
+            collection = _get_acl_queryset(Collection).filter(pk=collection_id).first()
             if not collection:
                 raise ValueError("Collection not found.")
             scope_label = f"Collection {getattr(collection, 'identifier', collection_id)}"
@@ -302,7 +317,7 @@ def acl_sync_all(request):
             bundle_id = request.POST.get("bundle_id")
             if not bundle_id:
                 raise ValueError("Please select a bundle to sync.")
-            bundle = Bundle.objects.prefetch_related("structural_info").filter(pk=bundle_id).first()
+            bundle = _get_acl_queryset(Bundle).filter(pk=bundle_id).first()
             if not bundle:
                 raise ValueError("Bundle not found.")
             scope_label = f"Bundle {getattr(bundle, 'identifier', bundle_id)}"
