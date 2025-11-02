@@ -89,6 +89,7 @@ THIRD_PARTY_APPS = [
 LOCAL_APPS = [
     "lacos.users",
     "lacos.common",  # Common utilities and mixins
+    "lacos.cache",
     "lacos.blam",
     "lacos.storage",
     "lacos.rest",

@@ -1,8 +1,9 @@
 """
-Storage cache helpers sharing a common key namespace.
+Shared cache helpers for storage and ACL subsystems.
 
-Currently used for ACL payload caching to avoid repeated S3 downloads, but
-designed so other storage subsystems can reuse the same primitives.
+This module centralises cache key construction, payload serialisation, and
+convenience accessors so different parts of the project can share the same
+Redis-backed (or Django cache) implementation without duplicating logic.
 """
 
 from __future__ import annotations
@@ -30,8 +31,8 @@ def build_key(namespace: str, *parts: str) -> str:
     """
     Construct a namespaced cache key with colon separators.
     """
-    sanitized = [part.replace(" ", "_") for part in parts if part]
-    parts_string = ":".join(sanitized)
+    sanitised = [part.replace(" ", "_") for part in parts if part]
+    parts_string = ":".join(sanitised)
     return f"{_CACHE_NAMESPACE}:{namespace}:{parts_string}"
 
 
@@ -103,3 +104,4 @@ def set_acl_entry(
 def invalidate_acl_entry(bucket: str, key: str) -> None:
     cache_key = build_key(_ACL_NAMESPACE, bucket, key)
     cache.delete(cache_key)
+

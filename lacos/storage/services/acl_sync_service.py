@@ -12,7 +12,7 @@ from django.utils import timezone
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.storage.models.acl_permissions import ACLPermissions
-from lacos.storage.cache import get_acl_entry, set_acl_entry
+from lacos.cache import get_acl_entry, set_acl_entry
 from lacos.storage.services.base_storage_service import BaseStorageService
 from lacos.storage.services.resource_mapping_service import ResourceMappingService
 from lacos.storage.utils.acl import determine_access_level, extract_read_agents
