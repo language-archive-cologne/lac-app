@@ -1,16 +1,20 @@
 import ast
 import json
 import logging
+from datetime import datetime
 from urllib.parse import quote_plus
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.contrib.contenttypes.models import ContentType
+from django.core.paginator import Paginator
 from django.db import models
 from django.http import HttpResponse, QueryDict
 from django.middleware.csrf import get_token
 from django.shortcuts import render, redirect
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.text import slugify
 from django.views import View
@@ -76,63 +80,141 @@ def _render_sync_summary_partial(request, summary=None, error_message=None):
     return HttpResponse(html)
 
 
-@login_required
-def archivist_dashboard(request):
-    """
-    Render the archivist dashboard showing all workspace buckets.
-    Only loads root level items initially for better performance.
-    """
-    request_id = request.headers.get("X-Request-ID") or request.headers.get("HX-Request")
-    with profiling_scope(
-        "archivist_dashboard",
-        request_id=request_id,
-        metadata={
-            "htmx": bool(request.headers.get("HX-Request")),
-            "force_fresh": request.GET.get("force_fresh", "false").lower() == "true",
-        },
-    ) as session:
-        bucket_service = BucketService(skip_bucket_check=True)
-        bucket_state = BucketCoordinatorMixin()
+def _build_acl_table_rows(model, perms_qs, scope_type):
+    """Compose table rows for ACL managed objects."""
+    pk_field = model._meta.pk
+    permissions = list(perms_qs)
+    perm_map = {str(pk_field.to_python(perm.object_id)): perm for perm in permissions}
 
-        workspace_buckets = bucket_service.get_all_accessible_buckets()
-        session.metadata["workspace_bucket_count"] = len(workspace_buckets)
+    queryset = _get_acl_queryset(model).order_by("identifier")
+    rows = []
+    seen = set()
 
-        active_bucket = bucket_state.ensure_active_bucket(request, workspace_buckets)
-        session.metadata["active_bucket"] = active_bucket
+    for obj in queryset:
+        object_key = str(pk_field.to_python(obj.pk))
+        perm = perm_map.get(object_key)
 
-        auto_load_url = None
-        if active_bucket:
-            auto_load_url = reverse("storage:bucket_content_htmx", kwargs={"bucket_name": active_bucket})
-            if request.GET.get("force_fresh", "false").lower() == "true":
-                auto_load_url = f"{auto_load_url}?force_fresh=true"
-
-        message = request.GET.get('message', None)
-
-        return render(
-            request,
-            "dashboard/archivist_dashboard.html",
+        rows.append(
             {
-                "workspace_buckets": workspace_buckets,
-                "active_bucket": active_bucket,
-                "ocfl_buckets": bucket_service.ocfl_buckets,
-                "message": message,
-                "auto_load_url": auto_load_url,
-            },
+                "scope": scope_type,
+                "object_id": object_key,
+                "identifier": getattr(obj, "identifier", object_key),
+                "name": _resolve_acl_display_name(obj),
+                "permission_id": perm.pk if perm else None,
+                "has_permission": perm is not None,
+                "object_exists": True,
+                "access_level": perm.access_level if perm else None,
+                "last_synced": perm.last_synced if perm else None,
+                "read_agents": perm.read_agents or [],
+                "bucket": perm.ACL_file_bucket if perm else None,
+                "key": perm.ACL_file_key if perm else None,
+            }
+        )
+        seen.add(object_key)
+
+    # Surface ACL entries that reference missing objects for transparency
+    for object_key, perm in perm_map.items():
+        if object_key in seen:
+            continue
+        rows.append(
+            {
+                "scope": scope_type,
+                "object_id": perm.object_id,
+                "identifier": perm.object_id,
+                "name": None,
+                "permission_id": perm.pk,
+                "has_permission": True,
+                "object_exists": False,
+                "access_level": perm.access_level,
+                "last_synced": perm.last_synced,
+                "read_agents": perm.read_agents or [],
+                "bucket": perm.ACL_file_bucket,
+                "key": perm.ACL_file_key,
+            }
         )
 
+    return rows
 
-@login_required
-def acl_admin_dashboard(request):
-    """
-    Render the ACL Admin Dashboard with current settings, summary stats,
-    and recent permission records.
-    """
-    # Settings flags (DB-backed with settings fallback)
-    from lacos.storage.models.acl_config import ACLConfig
-    from lacos.blam.models.collection.collection_repository import Collection
-    from lacos.blam.models.bundle.bundle_repository import Bundle
-    from django.contrib.contenttypes.models import ContentType
 
+def _redirect_with_message(target_url: str | None, message: str):
+    destination = target_url or reverse("storage:acl_admin_dashboard")
+    separator = "&" if "?" in destination else "?"
+    return redirect(f"{destination}{separator}message={quote_plus(message)}")
+
+
+def _get_acl_scope_model(scope: str):
+    if scope == "collection":
+        return Collection
+    if scope == "bundle":
+        return Bundle
+    raise ValueError(f"Unsupported ACL scope: {scope}")
+
+
+def _build_acl_table_context(request, scope: str) -> dict[str, object]:
+    model = _get_acl_scope_model(scope)
+    content_type = ContentType.objects.get_for_model(model)
+    perms = ACLPermissions.objects.filter(content_type=content_type).select_related("content_type")
+
+    rows = _build_acl_table_rows(model, perms, scope)
+
+    sort = request.GET.get("sort", "identifier")
+    direction = request.GET.get("dir", "asc")
+    valid_sorts = {"identifier", "access_level", "last_synced"}
+    if sort not in valid_sorts:
+        sort = "identifier"
+    if direction not in {"asc", "desc"}:
+        direction = "asc"
+
+    def sort_key(row):
+        if sort == "access_level":
+            value = row["access_level"] or ""
+            return (value == "", value)
+        if sort == "last_synced":
+            stamp = row["last_synced"]
+            if stamp is None:
+                return (True, timezone.make_aware(datetime(1970, 1, 1)))
+            return (False, stamp)
+        identifier = row["identifier"] or ""
+        return (identifier == "", identifier)
+
+    rows.sort(key=sort_key, reverse=(direction == "desc"))
+
+    page_size = getattr(settings, "STORAGE_ACL_TABLE_PAGE_SIZE", 25)
+    paginator = Paginator(rows, page_size)
+    page_number = request.GET.get("page") or 1
+    page_obj = paginator.get_page(page_number)
+
+    base_url = reverse("storage:acl_admin_dashboard")
+    next_url = (
+        f"{base_url}?tab=records&scope={scope}&sort={sort}&dir={direction}&page={page_obj.number}"
+    )
+
+    sort_toggles = {}
+    for field in ("identifier", "access_level", "last_synced"):
+        if field == sort and direction == "asc":
+            sort_toggles[field] = "desc"
+        else:
+            sort_toggles[field] = "asc"
+
+    return {
+        "scope": scope,
+        "page_obj": page_obj,
+        "sort": sort,
+        "direction": direction,
+        "available_sorts": [
+            {"id": "identifier", "label": "Identifier"},
+            {"id": "access_level", "label": "Access"},
+            {"id": "last_synced", "label": "Last synced"},
+        ],
+        "endpoint": reverse("storage:acl_records_table", args=[scope]),
+        "access_level_choices": ACLPermissions.ACCESS_LEVEL_CHOICES,
+        "next_url": next_url,
+        "page_size": page_size,
+        "sort_toggles": sort_toggles,
+    }
+
+
+def _build_acl_overview_context():
     cfg = None
     try:
         cfg = ACLConfig.get_solo()
@@ -146,9 +228,6 @@ def acl_admin_dashboard(request):
     }
 
     try:
-        from lacos.storage.models.acl_permissions import ACLPermissions
-
-        # Stats
         total = ACLPermissions.objects.count()
         by_level = (
             ACLPermissions.objects.values("access_level")
@@ -156,10 +235,9 @@ def acl_admin_dashboard(request):
             .annotate(count=models.Count("id"))
         )
 
-        # Recent entries
         recent = ACLPermissions.objects.select_related("content_type").order_by("-last_synced")[:25]
-    except Exception as e:
-        logger.exception("Error preparing ACL dashboard: %s", e)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.exception("Error preparing ACL dashboard: %s", exc)
         total = 0
         by_level = []
         recent = []
@@ -216,8 +294,8 @@ def acl_admin_dashboard(request):
     collection_ct = ContentType.objects.get_for_model(Collection)
     bundle_ct = ContentType.objects.get_for_model(Bundle)
 
-    collection_perms = ACLPermissions.objects.filter(content_type=collection_ct)
-    bundle_perms = ACLPermissions.objects.filter(content_type=bundle_ct)
+    collection_perms = ACLPermissions.objects.filter(content_type=collection_ct).select_related("content_type")
+    bundle_perms = ACLPermissions.objects.filter(content_type=bundle_ct).select_related("content_type")
 
     collection_summary = build_acl_summary(Collection, collection_perms)
     bundle_summary = build_acl_summary(Bundle, bundle_perms)
@@ -232,22 +310,143 @@ def acl_admin_dashboard(request):
     collection_options = _get_acl_options(Collection)
     bundle_options = _get_acl_options(Bundle)
 
+    return {
+        "acl_flags": acl_flags,
+        "total": total,
+        "by_level": by_level,
+        "recent": recent,
+        "collection_summary": collection_summary,
+        "bundle_summary": bundle_summary,
+        "overall_summary": overall_summary,
+        "collection_options": collection_options,
+        "bundle_options": bundle_options,
+    }
+
+
+@login_required
+def archivist_dashboard(request):
+    """
+    Render the archivist dashboard showing all workspace buckets.
+    Only loads root level items initially for better performance.
+    """
+    request_id = request.headers.get("X-Request-ID") or request.headers.get("HX-Request")
+    with profiling_scope(
+        "archivist_dashboard",
+        request_id=request_id,
+        metadata={
+            "htmx": bool(request.headers.get("HX-Request")),
+            "force_fresh": request.GET.get("force_fresh", "false").lower() == "true",
+        },
+    ) as session:
+        bucket_service = BucketService(skip_bucket_check=True)
+        bucket_state = BucketCoordinatorMixin()
+
+        workspace_buckets = bucket_service.get_all_accessible_buckets()
+        session.metadata["workspace_bucket_count"] = len(workspace_buckets)
+
+        active_bucket = bucket_state.ensure_active_bucket(request, workspace_buckets)
+        session.metadata["active_bucket"] = active_bucket
+
+        auto_load_url = None
+        if active_bucket:
+            auto_load_url = reverse("storage:bucket_content_htmx", kwargs={"bucket_name": active_bucket})
+            if request.GET.get("force_fresh", "false").lower() == "true":
+                auto_load_url = f"{auto_load_url}?force_fresh=true"
+
+        message = request.GET.get('message', None)
+
+        return render(
+            request,
+            "dashboard/archivist_dashboard.html",
+            {
+                "workspace_buckets": workspace_buckets,
+                "active_bucket": active_bucket,
+                "ocfl_buckets": bucket_service.ocfl_buckets,
+                "message": message,
+                "auto_load_url": auto_load_url,
+            },
+        )
+
+
+@login_required
+def acl_admin_dashboard(request):
+    """
+    Render the ACL Admin Dashboard with current settings, summary stats,
+    and recent permission records.
+    """
+    overview = _build_acl_overview_context()
+    active_tab = request.GET.get("tab", "dashboard")
+    if active_tab not in {"dashboard", "records"}:
+        active_tab = "dashboard"
+
+    scope = request.GET.get("scope", "collection")
+    records_context = None
+    if active_tab == "records":
+        try:
+            records_context = _build_acl_table_context(request, scope)
+        except ValueError:
+            scope = "collection"
+            records_context = _build_acl_table_context(request, scope)
+
+    context = {
+        **overview,
+        "sync_summary": None,
+        "active_tab": active_tab,
+        "records_context": records_context,
+        "records_scope": scope,
+        "message": request.GET.get("message"),
+    }
+
     return render(
         request,
         "dashboard/acl_admin_dashboard.html",
+        context,
+    )
+
+
+@login_required
+@require_http_methods(["GET"])
+def acl_dashboard_panel(request):
+    """HTMX endpoint rendering the overview dashboard panel."""
+    overview = _build_acl_overview_context()
+    return render(
+        request,
+        "dashboard/partials/acl_dashboard_overview.html",
+        {**overview, "sync_summary": None},
+    )
+
+
+@login_required
+@require_http_methods(["GET"])
+def acl_records_panel(request):
+    scope = request.GET.get("scope", "collection")
+    try:
+        records_context = _build_acl_table_context(request, scope)
+    except ValueError:
+        records_context = _build_acl_table_context(request, "collection")
+        scope = "collection"
+
+    return render(
+        request,
+        "dashboard/partials/acl_records_panel.html",
         {
-            "acl_flags": acl_flags,
-            "total": total,
-            "by_level": by_level,
-            "recent": recent,
-            "collection_summary": collection_summary,
-            "bundle_summary": bundle_summary,
-            "overall_summary": overall_summary,
-            "sync_summary": None,
-            "collection_options": collection_options,
-            "bundle_options": bundle_options,
-            "message": request.GET.get("message"),
+            "records_context": records_context,
+            "records_scope": scope,
         },
+    )
+
+
+@login_required
+@require_http_methods(["GET"])
+def acl_records_table(request, scope: str):
+    try:
+        records_context = _build_acl_table_context(request, scope)
+    except ValueError:
+        return HttpResponse(status=400)
+    return render(
+        request,
+        "dashboard/partials/acl_records_table_wrapper.html",
+        records_context,
     )
 
 
@@ -379,6 +578,72 @@ def acl_sync_scope_fields(request):
         request,
         "dashboard/partials/acl_sync_scope_fields.html",
         context,
+    )
+
+
+@login_required
+@require_http_methods(["POST"])
+def acl_update_permission(request):
+    """Allow administrators to manually adjust an object's recorded ACL level."""
+    access_level = request.POST.get("access_level")
+    object_type = request.POST.get("object_type")
+    object_id = request.POST.get("object_id")
+    permission_id = request.POST.get("permission_id")
+    next_url = request.POST.get("next")
+
+    valid_levels = {choice[0] for choice in ACLPermissions.ACCESS_LEVEL_CHOICES}
+    if not access_level or access_level not in valid_levels:
+        return _redirect_with_message(next_url, "Invalid access level selected.")
+
+    if object_type not in {"collection", "bundle"}:
+        return _redirect_with_message(next_url, "Unknown ACL object type.")
+
+    if not object_id:
+        return _redirect_with_message(next_url, "Missing object identifier.")
+
+    model = Collection if object_type == "collection" else Bundle
+
+    obj = None
+    try:
+        obj = model.objects.get(pk=object_id)
+    except model.DoesNotExist:
+        obj = None
+
+    expected_ct = ContentType.objects.get_for_model(model)
+
+    perm = None
+    if permission_id:
+        perm = ACLPermissions.objects.filter(pk=permission_id).first()
+        if perm is None:
+            return _redirect_with_message(next_url, "ACL record could not be found.")
+        if perm.content_type_id != expected_ct.id:
+            return _redirect_with_message(next_url, "ACL record does not match the selected object.")
+        if obj and str(perm.object_id) != str(obj.pk):
+            return _redirect_with_message(next_url, "ACL record does not match the selected object.")
+    else:
+        if obj is None:
+            return _redirect_with_message(next_url, "Cannot create ACL record for a missing object.")
+        perm, _ = ACLPermissions.objects.get_or_create(
+            content_type=expected_ct,
+            object_id=str(obj.pk),
+            defaults={
+                "ACL_file_bucket": getattr(obj, "import_bucket", None),
+                "ACL_file_key": getattr(obj, "import_object_key", None),
+            },
+        )
+
+    # Update the record
+    perm.access_level = access_level
+    perm.last_synced = timezone.now()
+    perm.save(update_fields=["access_level", "last_synced"])
+
+    label = dict(ACLPermissions.ACCESS_LEVEL_CHOICES).get(access_level, access_level)
+    identifier = object_id
+    if obj is not None:
+        identifier = getattr(obj, "identifier", str(obj.pk)) or str(obj.pk)
+    return _redirect_with_message(
+        next_url,
+        f"Updated {object_type} {identifier} to {label}.",
     )
 
 

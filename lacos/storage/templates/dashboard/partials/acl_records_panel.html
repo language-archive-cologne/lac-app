@@ -1,0 +1,32 @@
+{% include "dashboard/partials/acl_tab_controls.html" with active_tab='records' records_scope=records_scope hx_oob=True %}
+
+<div class="space-y-4">
+  <div data-record-tab-group class="tabs tabs-boxed w-fit" role="tablist">
+    <button
+      type="button"
+      data-record-tab
+      class="tab {% if records_scope == 'collection' %}tab-active{% endif %}"
+      hx-get="{% url 'storage:acl_records_table' 'collection' %}?sort={{ records_context.sort }}&dir={{ records_context.direction }}&page=1"
+      hx-target="#acl-records-table"
+      hx-swap="innerHTML"
+      hx-push-url="false"
+      hx-on="click: this.parentElement.querySelectorAll('[data-record-tab]').forEach(btn => btn.classList.remove('tab-active')); this.classList.add('tab-active')"
+    >
+      Collections
+    </button>
+    <button
+      type="button"
+      data-record-tab
+      class="tab {% if records_scope == 'bundle' %}tab-active{% endif %}"
+      hx-get="{% url 'storage:acl_records_table' 'bundle' %}?sort={{ records_context.sort }}&dir={{ records_context.direction }}&page=1"
+      hx-target="#acl-records-table"
+      hx-swap="innerHTML"
+      hx-push-url="false"
+      hx-on="click: this.parentElement.querySelectorAll('[data-record-tab]').forEach(btn => btn.classList.remove('tab-active')); this.classList.add('tab-active')"
+    >
+      Bundles
+    </button>
+  </div>
+
+  {% include "dashboard/partials/acl_records_table_wrapper.html" with scope=records_context.scope page_obj=records_context.page_obj sort=records_context.sort direction=records_context.direction available_sorts=records_context.available_sorts endpoint=records_context.endpoint access_level_choices=records_context.access_level_choices next_url=records_context.next_url page_size=records_context.page_size sort_toggles=records_context.sort_toggles %}
+</div>

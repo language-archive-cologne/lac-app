@@ -1,0 +1,116 @@
+<input type="checkbox" id="acl-sync-modal" class="modal-toggle" />
+<div class="modal" role="dialog">
+  <div class="modal-box space-y-4">
+    <h3 class="text-lg font-semibold text-base-content">Run ACL Sync</h3>
+    <p class="text-sm text-base-content/70">Choose which repositories to include in this sync.</p>
+    <form
+      id="acl-sync-form"
+      class="space-y-4"
+      method="post"
+      action="{% url 'storage:acl_sync_all' %}"
+      hx-post="{% url 'storage:acl_sync_all' %}"
+      hx-target="#acl-sync-summary"
+      hx-swap="innerHTML"
+      hx-indicator="#acl-sync-indicator"
+      hx-on="htmx:afterSwap: if (event.detail.target.querySelector('[data-close-modal="true"]')) { document.getElementById('acl-sync-modal').checked = false; this.reset(); this.querySelector('input[name=scope][value=all]').click(); }"
+    >
+      {% csrf_token %}
+      <div class="space-y-3">
+        <label class="flex items-start gap-3 rounded-lg border border-base-300 px-3 py-2 hover:border-primary/60">
+          <input
+            type="radio"
+            name="scope"
+            value="all"
+            class="radio radio-primary mt-1"
+            checked
+            hx-get="{% url 'storage:acl_sync_scope' %}?scope=all"
+            hx-target="#acl-sync-scope-fields"
+            hx-trigger="change"
+            hx-swap="innerHTML"
+          >
+          <span>
+            <span class="font-medium text-base-content">All collections &amp; bundles</span>
+            <p class="text-xs text-base-content/60">Complete sync covering every repository.</p>
+          </span>
+        </label>
+        <label class="flex items-start gap-3 rounded-lg border border-base-300 px-3 py-2 hover:border-primary/60">
+          <input
+            type="radio"
+            name="scope"
+            value="collections"
+            class="radio radio-primary mt-1"
+            hx-get="{% url 'storage:acl_sync_scope' %}?scope=collections"
+            hx-target="#acl-sync-scope-fields"
+            hx-trigger="change"
+            hx-swap="innerHTML"
+          >
+          <span>
+            <span class="font-medium text-base-content">All collections</span>
+            <p class="text-xs text-base-content/60">Sync only collection ACL metadata.</p>
+          </span>
+        </label>
+        <label class="flex items-start gap-3 rounded-lg border border-base-300 px-3 py-2 hover:border-primary/60">
+          <input
+            type="radio"
+            name="scope"
+            value="bundles"
+            class="radio radio-primary mt-1"
+            hx-get="{% url 'storage:acl_sync_scope' %}?scope=bundles"
+            hx-target="#acl-sync-scope-fields"
+            hx-trigger="change"
+            hx-swap="innerHTML"
+          >
+          <span>
+            <span class="font-medium text-base-content">All bundles</span>
+            <p class="text-xs text-base-content/60">Sync bundle ACL metadata only.</p>
+          </span>
+        </label>
+        <label class="flex items-start gap-3 rounded-lg border border-base-300 px-3 py-2 hover:border-primary/60">
+          <input
+            type="radio"
+            name="scope"
+            value="collection"
+            class="radio radio-primary mt-1"
+            hx-get="{% url 'storage:acl_sync_scope' %}?scope=collection"
+            hx-target="#acl-sync-scope-fields"
+            hx-trigger="change"
+            hx-swap="innerHTML"
+          >
+          <span>
+            <span class="font-medium text-base-content">Single collection</span>
+            <p class="text-xs text-base-content/60">Choose one collection to sync.</p>
+          </span>
+        </label>
+        <label class="flex items-start gap-3 rounded-lg border border-base-300 px-3 py-2 hover:border-primary/60">
+          <input
+            type="radio"
+            name="scope"
+            value="bundle"
+            class="radio radio-primary mt-1"
+            hx-get="{% url 'storage:acl_sync_scope' %}?scope=bundle"
+            hx-target="#acl-sync-scope-fields"
+            hx-trigger="change"
+            hx-swap="innerHTML"
+          >
+          <span>
+            <span class="font-medium text-base-content">Single bundle</span>
+            <p class="text-xs text-base-content/60">Choose one bundle to sync.</p>
+          </span>
+        </label>
+      </div>
+
+      <div id="acl-sync-scope-fields" class="space-y-3">
+        {% include "dashboard/partials/acl_sync_scope_fields.html" with scope='all' collection_options=collection_options bundle_options=bundle_options %}
+      </div>
+
+      <div class="modal-action">
+        <label for="acl-sync-modal" class="btn btn-ghost">Cancel</label>
+        <button type="submit" class="btn btn-primary">
+          <span id="acl-sync-indicator" class="hidden htmx-indicator loading loading-spinner loading-xs"></span>
+          Start sync
+        </button>
+      </div>
+    </form>
+  </div>
+  <label class="modal-backdrop" for="acl-sync-modal"></label>
+</div>

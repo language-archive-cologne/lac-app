@@ -51,9 +51,13 @@ urlpatterns = [
 
     # ACL Admin dashboard
     path("dashboard/acl/", views.acl_admin_dashboard, name="acl_admin_dashboard"),
+    path("dashboard/acl/panel/", views.acl_dashboard_panel, name="acl_dashboard_panel"),
+    path("dashboard/acl/records/", views.acl_records_panel, name="acl_records_panel"),
+    path("dashboard/acl/records/<str:scope>/", views.acl_records_table, name="acl_records_table"),
     path("dashboard/acl/sync/", views.acl_sync_all, name="acl_sync_all"),
     path("dashboard/acl/sync/scope/", views.acl_sync_scope_fields, name="acl_sync_scope"),
     path("dashboard/acl/settings/", views.acl_update_settings, name="acl_update_settings"),
+    path("dashboard/acl/permissions/update/", views.acl_update_permission, name="acl_update_permission"),
     
     # File operations
     path("file-content/<str:bucket_type>/<path:file_path>/", views.file_content, name="file_content"),

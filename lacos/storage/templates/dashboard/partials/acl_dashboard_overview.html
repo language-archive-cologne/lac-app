@@ -1,0 +1,94 @@
+{% include "dashboard/partials/acl_tab_controls.html" with active_tab='dashboard' records_scope='collection' hx_oob=True %}
+
+<div class="grid gap-6 md:grid-cols-4">
+  <div id="acl-settings-card">
+      {% include "dashboard/partials/acl_settings_card.html" %}
+    </div>
+
+    <div class="card bg-base-100 shadow-sm h-full">
+      <div class="card-body space-y-3">
+        <h2 class="card-title text-lg">Quick Sync</h2>
+        <p class="text-sm text-base-content/70">
+          Trigger common sync actions instantly. Use “Advanced options” for targeted runs.
+        </p>
+        <div class="space-y-2">
+          <form
+            method="post"
+            action="{% url 'storage:acl_sync_all' %}"
+            hx-post="{% url 'storage:acl_sync_all' %}"
+            hx-target="#acl-sync-summary"
+            hx-swap="innerHTML"
+            hx-indicator="#acl-sync-indicator"
+            class="w-full"
+          >
+            {% csrf_token %}
+            <input type="hidden" name="scope" value="all">
+            <button type="submit" class="btn btn-outline btn-primary w-full">Sync all collections &amp; bundles</button>
+          </form>
+          <div class="grid gap-2 md:grid-cols-2">
+            <form
+              method="post"
+              action="{% url 'storage:acl_sync_all' %}"
+              hx-post="{% url 'storage:acl_sync_all' %}"
+              hx-target="#acl-sync-summary"
+              hx-swap="innerHTML"
+              hx-indicator="#acl-sync-indicator"
+            >
+              {% csrf_token %}
+              <input type="hidden" name="scope" value="collections">
+              <button type="submit" class="btn btn-outline w-full">Sync collections</button>
+            </form>
+            <form
+              method="post"
+              action="{% url 'storage:acl_sync_all' %}"
+              hx-post="{% url 'storage:acl_sync_all' %}"
+              hx-target="#acl-sync-summary"
+              hx-swap="innerHTML"
+              hx-indicator="#acl-sync-indicator"
+            >
+              {% csrf_token %}
+              <input type="hidden" name="scope" value="bundles">
+              <button type="submit" class="btn btn-outline w-full">Sync bundles</button>
+            </form>
+          </div>
+        </div>
+        <label for="acl-sync-modal" class="btn btn-primary btn-sm">Advanced options</label>
+      </div>
+    </div>
+
+    <div class="card bg-base-100 shadow-sm h-full">
+      <div class="card-body space-y-4">
+        <h2 class="card-title text-lg">Overall Summary</h2>
+        <div class="stats stats-vertical lg:stats-horizontal shadow-sm">
+          <div class="stat">
+            <div class="stat-title">Synced records</div>
+            <div class="stat-value text-primary">{{ overall_summary.records }}</div>
+            <div class="stat-desc text-xs text-base-content/70">
+              Distinct objects {{ overall_summary.synced_objects }}
+            </div>
+          </div>
+          <div class="stat">
+            <div class="stat-title">Unsynced objects</div>
+            <div class="stat-value text-warning">{{ overall_summary.unsynced_objects }}</div>
+            <div class="stat-desc text-xs text-base-content/70">
+              Out of {{ overall_summary.total_objects }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card bg-base-100 shadow-sm h-full">
+      <div class="card-body space-y-3">
+        <h2 class="card-title text-lg">Last Sync Summary</h2>
+        <div id="acl-sync-summary">
+          {% include "dashboard/partials/acl_sync_summary.html" with sync_summary=sync_summary %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid gap-6 lg:grid-cols-2">
+    {% include "dashboard/partials/acl_entity_summary.html" with title="Collections" summary=collection_summary %}
+    {% include "dashboard/partials/acl_entity_summary.html" with title="Bundles" summary=bundle_summary %}
+  </div>
