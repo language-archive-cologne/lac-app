@@ -16,6 +16,8 @@ if READ_DOT_ENV_FILE:
     # OS environment variables take precedence over variables from .env
     env.read_env(str(BASE_DIR / ".env"))
 
+SAML_LOGIN_ENABLED = env.bool("SAML_LOGIN_ENABLED", default=False)
+
 # GENERAL
 # ------------------------------------------------------------------------------
 # https://docs.djangoproject.com/en/dev/ref/settings/#debug
@@ -85,6 +87,8 @@ THIRD_PARTY_APPS = [
     "drf_spectacular",
     "huey.contrib.djhuey",
 ]
+if SAML_LOGIN_ENABLED:
+    THIRD_PARTY_APPS.append("djangosaml2")
 
 LOCAL_APPS = [
     "lacos.users",
@@ -110,8 +114,10 @@ MIGRATION_MODULES = {"sites": "lacos.contrib.sites.migrations"}
 # https://docs.djangoproject.com/en/dev/ref/settings/#authentication-backends
 AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
-    "allauth.account.auth_backends.AuthenticationBackend",
 ]
+if SAML_LOGIN_ENABLED:
+    AUTHENTICATION_BACKENDS.append("lacos.users.backends.LacosSaml2Backend")
+AUTHENTICATION_BACKENDS.append("allauth.account.auth_backends.AuthenticationBackend")
 # https://docs.djangoproject.com/en/dev/ref/settings/#auth-user-model
 AUTH_USER_MODEL = "users.User"
 # https://docs.djangoproject.com/en/dev/ref/settings/#login-redirect-url
@@ -154,6 +160,17 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
 ]
+
+if SAML_LOGIN_ENABLED:
+    session_middleware = "django.contrib.sessions.middleware.SessionMiddleware"
+    try:
+        session_index = MIDDLEWARE.index(session_middleware)
+    except ValueError:
+        session_index = 0
+    MIDDLEWARE.insert(
+        session_index + 1,
+        "djangosaml2.middleware.SamlSessionMiddleware",
+    )
 
 # STATIC
 # ------------------------------------------------------------------------------
@@ -406,3 +423,120 @@ SPECTACULAR_SETTINGS = {
     "SERVE_PERMISSIONS": ["rest_framework.permissions.IsAdminUser"],
     "SCHEMA_PATH_PREFIX": "/api/",
 }
+
+# SAML / Shibboleth
+# ------------------------------------------------------------------------------
+if SAML_LOGIN_ENABLED:
+    from saml2 import BINDING_HTTP_POST, BINDING_HTTP_REDIRECT  # type: ignore[import-not-found]
+
+    SAML_SP_BASE_URL = env("SAML_SP_BASE_URL", default="http://localhost:8000")
+    _saml_base = SAML_SP_BASE_URL.rstrip("/")
+    SAML_ENTITY_ID = env("SAML_ENTITY_ID", default=f"{_saml_base}/saml2/metadata/")
+    SAML_ASSERTION_CONSUMER_SERVICE_URL = env(
+        "SAML_ASSERTION_CONSUMER_SERVICE_URL",
+        default=f"{_saml_base}/saml2/acs/",
+    )
+    SAML_SINGLE_LOGOUT_SERVICE_URL = env(
+        "SAML_SINGLE_LOGOUT_SERVICE_URL",
+        default=f"{_saml_base}/saml2/ls/",
+    )
+    SAML_DEFAULT_NAME_ID_FORMAT = env(
+        "SAML_NAME_ID_FORMAT",
+        default="urn:oasis:names:tc:SAML:2.0:nameid-format:persistent",
+    )
+    SAML_USE_NAME_ID_AS_USERNAME = env.bool(
+        "SAML_USE_NAME_ID_AS_USERNAME",
+        default=True,
+    )
+    SAML_DJANGO_USER_MAIN_ATTRIBUTE = env(
+        "SAML_DJANGO_USER_MAIN_ATTRIBUTE",
+        default="saml_persistent_id",
+    )
+    SAML_METADATA_LOCAL = env.list(
+        "SAML_IDP_METADATA_LOCAL",
+        default=[str(BASE_DIR / "idptest.rrz.uni-koeln.de.xml")],
+    )
+    SAML_METADATA_REMOTE = [
+        {"url": url}
+        for url in env.list("SAML_IDP_METADATA_REMOTE", default=[])
+    ]
+    SAML_ATTRIBUTE_MAPPING = {
+        "eduPersonPrincipalName": ("username",),
+        "urn:oid:1.3.6.1.4.1.5923.1.1.1.6": ("username",),
+        "uid": ("username",),
+        "urn:oid:0.9.2342.19200300.100.1.1": ("username",),
+        "mail": ("email",),
+        "urn:oid:0.9.2342.19200300.100.1.3": ("email",),
+        "email": ("email",),
+        "displayName": ("name",),
+        "cn": ("name",),
+        "urn:oid:2.16.840.1.113730.3.1.241": ("name",),
+    }
+    _saml_metadata: dict[str, list] = {}
+    if SAML_METADATA_LOCAL:
+        _saml_metadata["local"] = SAML_METADATA_LOCAL
+    if SAML_METADATA_REMOTE:
+        _saml_metadata["remote"] = SAML_METADATA_REMOTE
+    if not _saml_metadata:
+        _saml_metadata["local"] = [str(BASE_DIR / "idptest.rrz.uni-koeln.de.xml")]
+    SAML_CONFIG = {
+        "debug": DEBUG,
+        "entityid": SAML_ENTITY_ID,
+        "allow_unknown_attributes": True,
+        "service": {
+            "sp": {
+                "name": "Language Archive Cologne",
+                "endpoints": {
+                    "assertion_consumer_service": [
+                        (SAML_ASSERTION_CONSUMER_SERVICE_URL, BINDING_HTTP_POST),
+                    ],
+                    "single_logout_service": [
+                        (SAML_SINGLE_LOGOUT_SERVICE_URL, BINDING_HTTP_REDIRECT),
+                    ],
+                },
+                "allow_unsolicited": env.bool(
+                    "SAML_ALLOW_UNSOLICITED",
+                    default=True,
+                ),
+                "authn_requests_signed": env.bool(
+                    "SAML_AUTHN_REQUESTS_SIGNED",
+                    default=False,
+                ),
+                "logout_requests_signed": env.bool(
+                    "SAML_LOGOUT_REQUESTS_SIGNED",
+                    default=False,
+                ),
+                "want_assertions_signed": env.bool(
+                    "SAML_WANT_ASSERTIONS_SIGNED",
+                    default=True,
+                ),
+                "want_response_signed": env.bool(
+                    "SAML_WANT_RESPONSE_SIGNED",
+                    default=False,
+                ),
+                "name_id_format": [SAML_DEFAULT_NAME_ID_FORMAT],
+            },
+        },
+        "metadata": _saml_metadata,
+        "security": {
+            "wantAttributeStatementSigned": True,
+            "requestedAuthnContext": env.list(
+                "SAML_REQUESTED_AUTHN_CONTEXT",
+                default=[
+                    "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport",
+                ],
+            ),
+        },
+    }
+    _saml_key_file = env("SAML_SP_KEY_FILE", default="")
+    if _saml_key_file:
+        SAML_CONFIG["key_file"] = _saml_key_file
+    _saml_cert_file = env("SAML_SP_CERT_FILE", default="")
+    if _saml_cert_file:
+        SAML_CONFIG["cert_file"] = _saml_cert_file
+    _saml_xmlsec = env("SAML_XMLSEC_BINARY", default="")
+    if _saml_xmlsec:
+        SAML_CONFIG["xmlsec_binary"] = _saml_xmlsec
+else:
+    SAML_ATTRIBUTE_MAPPING = {}
+    SAML_CONFIG: dict[str, object] = {}

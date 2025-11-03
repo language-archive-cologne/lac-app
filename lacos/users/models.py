@@ -16,6 +16,16 @@ class User(AbstractUser):
     name = CharField(_("Name of User"), blank=True, max_length=255)
     first_name = None  # type: ignore[assignment]
     last_name = None  # type: ignore[assignment]
+    saml_persistent_id = models.CharField(
+        _("SAML persistent identifier"),
+        blank=True,
+        null=True,
+        unique=True,
+        max_length=255,
+        help_text=_(
+            "Immutable identifier supplied by the Identity Provider for returning SAML users.",
+        ),
+    )
     acl_agent_uri = models.URLField(
         _("ACL agent URI"),
         blank=True,

@@ -35,6 +35,9 @@ urlpatterns = [
     # Media files
     *static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT),
 ]
+
+if settings.SAML_LOGIN_ENABLED:
+    urlpatterns.append(path("saml2/", include("djangosaml2.urls")))
 if settings.DEBUG:
     # Static file serving when using Gunicorn + Uvicorn for local web socket development
     urlpatterns += staticfiles_urlpatterns()

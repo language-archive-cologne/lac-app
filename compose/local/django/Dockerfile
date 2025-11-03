@@ -49,6 +49,8 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     wait-for-it \
     # Translations dependencies
     gettext \
+    # XML Security tooling for SAML assertions
+    xmlsec1 \
     # Graphviz for blueprint visualization
     graphviz \
     # cleaning up unused files

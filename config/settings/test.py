@@ -1,6 +1,8 @@
-"""
-With these settings, tests run faster.
-"""
+"""With these settings, tests run faster."""
+
+import os
+
+os.environ.setdefault("SAML_LOGIN_ENABLED", "true")
 
 from .base import *  # noqa: F403
 from .base import TEMPLATES

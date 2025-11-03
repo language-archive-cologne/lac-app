@@ -5,16 +5,34 @@ import typing
 from allauth.account.adapter import DefaultAccountAdapter
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from django.conf import settings
+from django.http import HttpRequest
 
 if typing.TYPE_CHECKING:
     from allauth.socialaccount.models import SocialLogin
-    from django.http import HttpRequest
 
     from lacos.users.models import User
 
 
+TRUSTED_SAML_SESSION_KEY = "users.saml_trusted_signup"
+
+
+def _is_trusted_auto_provision(request: HttpRequest | None) -> bool:
+    if request is None:
+        return False
+
+    if getattr(request, "trusted_saml_signup", False):
+        return True
+
+    try:
+        return bool(request.session.get(TRUSTED_SAML_SESSION_KEY))
+    except AttributeError:
+        return False
+
+
 class AccountAdapter(DefaultAccountAdapter):
     def is_open_for_signup(self, request: HttpRequest) -> bool:
+        if _is_trusted_auto_provision(request):
+            return True
         return getattr(settings, "ACCOUNT_ALLOW_REGISTRATION", True)
 
 
@@ -24,6 +42,8 @@ class SocialAccountAdapter(DefaultSocialAccountAdapter):
         request: HttpRequest,
         sociallogin: SocialLogin,
     ) -> bool:
+        if _is_trusted_auto_provision(request):
+            return True
         return getattr(settings, "ACCOUNT_ALLOW_REGISTRATION", True)
 
     def populate_user(

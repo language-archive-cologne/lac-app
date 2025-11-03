@@ -32,4 +32,5 @@ class TestUserViewSet:
             "username": user.username,
             "url": f"http://testserver/api/users/{user.username}/",
             "name": user.name,
+            "saml_persistent_id": user.saml_persistent_id,
         }

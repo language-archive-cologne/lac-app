@@ -18,6 +18,13 @@ services:
     env_file:
       - ./.envs/.production/.django
       - ./.envs/.production/.postgres
+    environment:
+      SAML_LOGIN_ENABLED: ${SAML_LOGIN_ENABLED:-false}
+      SAML_SP_BASE_URL: ${SAML_SP_BASE_URL:-https://lacos.uni-koeln.de}
+      SAML_IDP_METADATA_LOCAL: ${SAML_IDP_METADATA_LOCAL:-/app/idptest.rrz.uni-koeln.de.xml}
+      SAML_SP_CERT_FILE: ${SAML_SP_CERT_FILE:-}
+      SAML_SP_KEY_FILE: ${SAML_SP_KEY_FILE:-}
+      SAML_XMLSEC_BINARY: ${SAML_XMLSEC_BINARY:-/usr/bin/xmlsec1}
     command: /start
 
   postgres:

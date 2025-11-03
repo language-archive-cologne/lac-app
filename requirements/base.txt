@@ -16,6 +16,8 @@ django-crispy-forms==2.3  # https://github.com/django-crispy-forms/django-crispy
 crispy-bootstrap5==2024.10  # https://github.com/django-crispy-forms/crispy-bootstrap5
 django-redis==5.4.0  # https://github.com/jazzband/django-redis
 humanize==4.11.0  # https://github.com/python-humanize/humanize
+djangosaml2==1.10.0  # https://github.com/IdentityPython/djangosaml2
+pysaml2==7.5.0  # https://github.com/IdentityPython/pysaml2
 # Django REST Framework
 djangorestframework==3.15.2  # https://github.com/encode/django-rest-framework
 django-cors-headers==4.7.0  # https://github.com/adamchainz/django-cors-headers

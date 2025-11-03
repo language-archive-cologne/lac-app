@@ -19,9 +19,13 @@ if settings.DJANGO_ADMIN_FORCE_ALLAUTH:
 class UserAdmin(auth_admin.UserAdmin):
     form = UserAdminChangeForm
     add_form = UserAdminCreationForm
+    readonly_fields = ("saml_persistent_id",)
     fieldsets = (
         (None, {"fields": ("username", "password")}),
-        (_("Personal info"), {"fields": ("name", "email", "acl_agent_uri")}),
+        (
+            _("Personal info"),
+            {"fields": ("name", "email", "saml_persistent_id", "acl_agent_uri")},
+        ),
         (
             _("Permissions"),
             {
@@ -36,8 +40,20 @@ class UserAdmin(auth_admin.UserAdmin):
         ),
         (_("Important dates"), {"fields": ("last_login", "date_joined")}),
     )
-    list_display = ["username", "name", "acl_agent_uri", "is_superuser"]
-    search_fields = ["username", "name", "email", "acl_agent_uri"]
+    list_display = [
+        "username",
+        "name",
+        "saml_persistent_id",
+        "acl_agent_uri",
+        "is_superuser",
+    ]
+    search_fields = [
+        "username",
+        "name",
+        "email",
+        "saml_persistent_id",
+        "acl_agent_uri",
+    ]
 
 
 @admin.register(GroupACL)
