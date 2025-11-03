@@ -92,6 +92,7 @@ LOCAL_APPS = [
     "lacos.cache",
     "lacos.blam",
     "lacos.storage",
+    "lacos.oaipmh",
     "lacos.rest",
     "lacos.ingest",
     "lacos.explorer",

@@ -30,6 +30,7 @@ urlpatterns = [
     path("storage/", include("lacos.storage.urls", namespace="storage")),
     path("blam/", include("lacos.blam.urls")),
     path("explorer/", include("lacos.explorer.urls", namespace="explorer")),
+    path("oai/", include("lacos.oaipmh.urls", namespace="oaipmh")),
 
     # Media files
     *static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT),
