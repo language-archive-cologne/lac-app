@@ -336,7 +336,10 @@ class FileDiscoveryService(BaseStorageService):
         Returns:
             Dictionary with lists of collection and bundle XML paths
         """
-        logger.info(f"Starting S3 XML discovery in bucket '{bucket}', prefix '{prefix}' for sibling structure.")
+        logger.info(
+            "Starting S3 XML discovery for collections",
+            extra={"bucket": bucket, "prefix": prefix},
+        )
         result = {
             'potential_collection_xmls': [],
             'potential_bundle_xmls': []
@@ -351,7 +354,14 @@ class FileDiscoveryService(BaseStorageService):
             # --- Pass 1: Find the Collection ID and its XML ---
             collection_page_iterator = paginator.paginate(Bucket=bucket, Prefix=prefix, Delimiter='/')
             top_level_prefixes = list(collection_page_iterator.search('CommonPrefixes')) # Convert generator
-            logger.debug(f"Found {len(top_level_prefixes)} potential top-level prefixes: {[p.get('Prefix') for p in top_level_prefixes if p]}")
+            logger.debug(
+                "Top-level prefixes discovered",
+                extra={
+                    "prefix": prefix,
+                    "count": len(top_level_prefixes),
+                    "prefixes": [p.get('Prefix') for p in top_level_prefixes if p],
+                },
+            )
 
             for prefix_obj in top_level_prefixes:
                 if not prefix_obj: continue # Skip if None
@@ -387,7 +397,14 @@ class FileDiscoveryService(BaseStorageService):
                 result['potential_collection_xmls'].append(collection_xml_to_add)
                 logger.info(f"Using Collection ID '{found_collection_id}' from prefix '{found_collection_prefix}' for bundle search.")
             else:
-                logger.warning(f"No collection XML found under prefix '{prefix}'. Cannot search for associated bundles.")
+                logger.warning(
+                    "No collection XML found under prefix; skipping bundle discovery",
+                    extra={
+                        "bucket": bucket,
+                        "prefix": prefix,
+                        "top_level_prefixes": [p.get('Prefix') for p in top_level_prefixes if p],
+                    },
+                )
                 return result # No collection, so no bundles to find this way
 
             # --- Pass 2: Find Bundles as Siblings ---

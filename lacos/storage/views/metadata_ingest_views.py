@@ -457,6 +457,16 @@ def preview_metadata_ingest(request):
     object_type = (request.GET.get('object_type') or 'file').strip().lower()
     metadata_type = (request.GET.get('metadata_type') or '').strip().lower()
 
+    logger.info(
+        "Preview metadata ingest requested",
+        extra={
+            "bucket": bucket,
+            "s3_key": s3_key,
+            "object_type": object_type,
+            "metadata_type": metadata_type,
+        },
+    )
+
     context = {
         'bucket': bucket,
         's3_key': s3_key,
@@ -469,6 +479,11 @@ def preview_metadata_ingest(request):
         return render(request, 'storage/metadata_ingest_preview.html', context)
 
     prefix = _infer_pipeline_prefix(object_type, s3_key)
+    logger.debug(
+        "Inferred pipeline prefix for ingest preview",
+        extra={"prefix": prefix},
+    )
+
     if metadata_type == 'bundle':
         # Bundle imports operate on the single XML the user selected.
         context.update({
@@ -483,6 +498,10 @@ def preview_metadata_ingest(request):
 
     if not prefix:
         context['error_message'] = 'Unable to infer the collection prefix for discovery. Try selecting the top-level folder instead.'
+        logger.warning(
+            "Unable to infer collection prefix for ingest preview",
+            extra={"bucket": bucket, "s3_key": s3_key, "object_type": object_type},
+        )
         return render(request, 'storage/metadata_ingest_preview.html', context)
 
     discovery_service = FileDiscoveryService()
@@ -498,7 +517,25 @@ def preview_metadata_ingest(request):
 
     if not collection_xmls:
         context['error_message'] = 'No collection XML could be located under the inferred prefix.'
+        logger.warning(
+            "No collection XML discovered under prefix",
+            extra={
+                "bucket": bucket,
+                "prefix": prefix,
+                "bundle_candidates": bundle_xmls,
+            },
+        )
         return render(request, 'storage/metadata_ingest_preview.html', context)
+
+    logger.info(
+        "Metadata ingest discovery result",
+        extra={
+            "bucket": bucket,
+            "prefix": prefix,
+            "collection_count": len(collection_xmls),
+            "bundle_count": len(bundle_xmls),
+        },
+    )
 
     context.update({
         'collection_xmls': collection_xmls,
