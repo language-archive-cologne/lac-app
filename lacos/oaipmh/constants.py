@@ -31,4 +31,9 @@ SUPPORTED_METADATA_FORMATS = (
     },
 )
 
+SUPPORTED_SETS = {
+    "collections": "Collections",
+    "bundles": "Bundles",
+}
+
 DEFAULT_PAGE_SIZE = 100

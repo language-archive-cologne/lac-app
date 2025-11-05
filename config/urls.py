@@ -10,6 +10,7 @@ from django.views.generic import RedirectView, TemplateView
 from drf_spectacular.views import SpectacularAPIView
 from drf_spectacular.views import SpectacularSwaggerView
 from rest_framework.authtoken.views import obtain_auth_token
+from lacos.oaipmh.views import OAIPMHOverviewView
 
 urlpatterns = [
     path(
@@ -21,6 +22,11 @@ urlpatterns = [
         "about/",
         TemplateView.as_view(template_name="pages/about.html"),
         name="about",
+    ),
+    path(
+        "oai-pmh/",
+        OAIPMHOverviewView.as_view(),
+        name="oai-pmh",
     ),
     # Django Admin, use {% url 'admin:index' %}
     path(settings.ADMIN_URL, admin.site.urls),

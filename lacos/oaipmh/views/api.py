@@ -11,7 +11,7 @@ from django.views.decorators.http import require_http_methods
 from django.http import HttpRequest, HttpResponse
 from django.utils.dateparse import parse_date, parse_datetime
 
-from ..constants import SUPPORTED_METADATA_FORMATS, DEFAULT_PAGE_SIZE
+from ..constants import SUPPORTED_METADATA_FORMATS, SUPPORTED_SETS, DEFAULT_PAGE_SIZE
 from ..errors import OAIPMHError
 from ..request_parser import OAIRequestParser
 from ..resumption import ResumptionTokenService
@@ -30,10 +30,6 @@ logger = logging.getLogger(__name__)
 
 _resumption = ResumptionTokenService(page_size=DEFAULT_PAGE_SIZE)
 SUPPORTED_PREFIXES = {entry["metadata_prefix"] for entry in SUPPORTED_METADATA_FORMATS}
-SUPPORTED_SETS = {
-    "collections": "Collections",
-    "bundles": "Bundles",
-}
 
 
 @csrf_exempt
