@@ -14,7 +14,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.generic import DetailView, ListView, View
 from geopy.geocoders import Nominatim
-from urllib.parse import unquote
+from urllib.parse import quote, unquote
 from django.utils.translation import gettext_lazy as _
 
 # Assuming your Collection model is here. Adjust if necessary.
@@ -25,6 +25,7 @@ from lacos.blam.models.bundle.bundle_structural_info import (
 )
 from django.core.paginator import Paginator
 
+from lacos.explorer.media_utils import determine_media_type, guess_source_mime_type
 from lacos.explorer.permissions import ACLPermissionMixin
 from lacos.explorer.search import search_archives
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
@@ -34,6 +35,55 @@ from lacos.storage.services.file_discovery_service import FileDiscoveryService
 logger = logging.getLogger(__name__)
 
 BUNDLES_PER_PAGE = 10
+
+
+def _annotate_resource(resource):
+    if resource is None:
+        return None
+
+    resource.detected_media_type = determine_media_type(
+        getattr(resource, "mime_type", None),
+        getattr(resource, "file_name", None),
+    )
+    return resource
+
+
+def _prepare_resource_lists(resources_container):
+    if not resources_container:
+        return [], [], []
+
+    media = [_annotate_resource(res) for res in resources_container.bundle_media_resources.all()]
+    written = [_annotate_resource(res) for res in resources_container.bundle_written_resources.all()]
+    other = [_annotate_resource(res) for res in resources_container.bundle_other_resources.all()]
+
+    media = [res for res in media if res]
+    written = [res for res in written if res]
+    other = [res for res in other if res]
+
+    media_candidates = [res for res in other if getattr(res, "detected_media_type", None) in {"audio", "video"}]
+    if media_candidates:
+        media.extend(media_candidates)
+        other = [res for res in other if res not in media_candidates]
+
+    return media, written, other
+
+
+def _build_content_disposition(file_name: Optional[str]) -> str:
+    if not file_name:
+        return "attachment"
+
+    try:
+        ascii_filename = file_name.encode("ascii", "ignore").decode("ascii")
+    except Exception:  # pragma: no cover - defensive fallback
+        ascii_filename = "download"
+
+    ascii_filename = ascii_filename or "download"
+    disposition = f'attachment; filename="{ascii_filename}"'
+
+    if ascii_filename != file_name:
+        disposition += f"; filename*=UTF-8''{quote(file_name)}"
+
+    return disposition
 
 
 def _bundle_queryset_for_collection(collection):
@@ -60,29 +110,11 @@ def _bundle_queryset_for_collection(collection):
 
 def _build_bundle_context(struct_info):
     bundle = struct_info.bundle
-    bundle_resources = list(bundle.resources.all())
-    primary_resources = bundle_resources[0] if bundle_resources else None
+    primary_resources = bundle.resources.first()
 
-    if primary_resources:
-        media_resources = list(primary_resources.bundle_media_resources.all())
-        written_resources = list(primary_resources.bundle_written_resources.all())
-        other_resources = list(primary_resources.bundle_other_resources.all())
-    else:
-        media_resources = []
-        written_resources = []
-        other_resources = []
-
-    media_like_other = []
-    for res in other_resources:
-        mime = getattr(res, 'mime_type', '') or ''
-        lowered = mime.lower()
-        if lowered.startswith('video/') or lowered.startswith('audio/'):
-            media_like_other.append(res)
-    if media_like_other:
-        media_resources.extend(media_like_other)
-        other_resources = [res for res in other_resources if res not in media_like_other]
-
-    metadata_files = list(struct_info.additional_metadata_files.all())
+    media_resources, written_resources, other_resources = _prepare_resource_lists(primary_resources)
+    metadata_files = [_annotate_resource(res) for res in struct_info.additional_metadata_files.all()]
+    metadata_files = [res for res in metadata_files if res]
     topics = list(struct_info.bundle_topics.all())
 
     return {
@@ -155,6 +187,8 @@ def _resolve_resource_to_presigned(
     resource,
     bundle,
     collection_for_path,
+    *,
+    response_headers: Optional[dict] = None,
 ):
     """Resolve a resource to its storage location and presigned URL."""
 
@@ -221,6 +255,7 @@ def _resolve_resource_to_presigned(
     presigned_url = resource_service.generate_presigned_url(
         bucket_name,
         object_key,
+        response_headers=response_headers,
     )
 
     return {
@@ -682,12 +717,17 @@ class BundleDetailView(ACLPermissionMixin, DetailView):
         
         if self.object.resources.first():
             resources = self.object.resources.first()
-            context['media_resources'] = resources.bundle_media_resources.all()
-            context['written_resources'] = resources.bundle_written_resources.all()
-            context['other_resources'] = resources.bundle_other_resources.all()
+            media_resources, written_resources, other_resources = _prepare_resource_lists(resources)
+            context['media_resources'] = media_resources
+            context['written_resources'] = written_resources
+            context['other_resources'] = other_resources
             
         if hasattr(self.object, 'structural_info') and self.object.structural_info.first():
-            context['metadata_files'] = self.object.structural_info.first().additional_metadata_files.all()
+            metadata_files = [
+                _annotate_resource(res)
+                for res in self.object.structural_info.first().additional_metadata_files.all()
+            ]
+            context['metadata_files'] = [res for res in metadata_files if res]
             
         return context
 
@@ -808,17 +848,22 @@ class BundleResourcesView(View):
 
         resources = bundle.resources.first()
         if can_read and resources:
-            context['media_resources'] = resources.bundle_media_resources.all()
-            context['written_resources'] = resources.bundle_written_resources.all()
-            context['other_resources'] = resources.bundle_other_resources.all()
+            media_resources, written_resources, other_resources = _prepare_resource_lists(resources)
+            context['media_resources'] = media_resources
+            context['written_resources'] = written_resources
+            context['other_resources'] = other_resources
         elif resources:
             context['restricted_resources'] = True
 
-        if hasattr(bundle, 'structural_info') and bundle.structural_info.first():
-            context['collection'] = bundle.structural_info.first().is_member_of_collection
-            context['metadata_files'] = bundle.structural_info.first().additional_metadata_files.all()
+        struct_info_manager = getattr(bundle, 'structural_info', None)
+        structural_info = struct_info_manager.first() if struct_info_manager else None
+        if structural_info:
+            context['collection'] = structural_info.is_member_of_collection
+            metadata_files = [_annotate_resource(res) for res in structural_info.additional_metadata_files.all()]
+            metadata_files = [res for res in metadata_files if res]
             if not can_read:
-                context['metadata_files'] = []
+                metadata_files = []
+            context['metadata_files'] = metadata_files
         
         return render(request, 'bundle_resources.html', context)
 
@@ -874,6 +919,8 @@ class ResourceAccessView(View):
             object_key = storage_resolution['key']
             presigned_url = storage_resolution['url']
 
+            detected_media_type = determine_media_type(mime_type, getattr(resource, 'file_name', None))
+            source_mime_type = guess_source_mime_type(mime_type, getattr(resource, 'file_name', None), detected_media_type)
             elan_context = None
             if is_elan:
                 elan_data = _parse_elan_document(
@@ -909,29 +956,34 @@ class ResourceAccessView(View):
                     'tier_headers': elan_data.get('tier_headers', []),
                 }
 
+            download_headers = {
+                'ResponseContentDisposition': _build_content_disposition(
+                    getattr(resource, 'file_name', None)
+                ),
+            }
+            if source_mime_type:
+                download_headers['ResponseContentType'] = source_mime_type
+
+            download_url = resource_service.generate_presigned_url(
+                bucket_name,
+                object_key,
+                response_headers=download_headers,
+            )
+
             is_htmx = request.headers.get('HX-Request') == 'true'
 
             if is_htmx and action in {'play', 'view'}:
-                media_type = None
-                if normalized_mime_type.startswith('audio/'):
-                    media_type = 'audio'
-                elif normalized_mime_type.startswith('video/'):
-                    media_type = 'video'
-                elif normalized_mime_type.startswith('image/'):
-                    media_type = 'image'
-                elif normalized_mime_type == 'application/pdf':
-                    media_type = 'pdf'
-                elif is_elan:
-                    media_type = 'elan'
+                media_type = 'elan' if is_elan else detected_media_type
 
                 modal_context = {
                     'resource_name': resource.file_name,
                     'resource_description': getattr(resource, 'file_description', ''),
                     'mime_type': mime_type,
                     'media_type': media_type,
+                    'source_mime_type': source_mime_type,
                     'stream_url': presigned_url if media_type in {'audio', 'video'} else None,
                     'preview_url': presigned_url,
-                    'download_url': presigned_url,
+                    'download_url': download_url,
                     'elan_context': elan_context,
                 }
 
@@ -945,10 +997,10 @@ class ResourceAccessView(View):
 
             # For direct download, just redirect to the presigned URL
             if action == 'download':
-                return redirect(presigned_url)
+                return redirect(download_url)
 
             # For streaming/viewing, handle based on the mime type
-            if normalized_mime_type.startswith('audio/') or normalized_mime_type.startswith('video/'):
+            if detected_media_type in {'audio', 'video'}:
                 if action == 'play':
                     return render(
                         request,
@@ -956,19 +1008,21 @@ class ResourceAccessView(View):
                         {
                             'resource_name': resource.file_name,
                             'mime_type': mime_type,
+                            'media_type': detected_media_type,
+                            'source_mime_type': source_mime_type,
                             'stream_url': presigned_url,
-                            'download_url': presigned_url,
+                            'download_url': download_url,
                         },
                     )
 
                 return redirect(presigned_url)
             
-            elif normalized_mime_type.startswith('image/') or normalized_mime_type == 'application/pdf':
+            elif detected_media_type in {'image', 'pdf'}:
                 # For images and PDFs, redirect to view in browser
                 return redirect(presigned_url)
             else:
                 # For other file types, default to download
-                return redirect(presigned_url)
+                return redirect(download_url)
                 
         except ValueError as e:
             logger.error(f"Resource mapping service error: {e}")

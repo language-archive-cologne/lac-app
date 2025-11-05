@@ -4,6 +4,11 @@ from django.utils.html import mark_safe
 from django.utils.safestring import SafeString
 from django.template.defaultfilters import stringfilter
 
+from lacos.explorer.media_utils import (
+    determine_media_type,
+    is_media_type as media_utils_is_media_type,
+)
+
 register = template.Library()
 
 @register.filter
@@ -46,4 +51,34 @@ def urlize_text(text):
     # Use a single regex operation to find and replace all URLs
     result = re.sub(pattern, replace_match, text, flags=re.IGNORECASE)
     
-    return mark_safe(result) 
+    return mark_safe(result)
+
+
+@register.filter
+def media_type(resource):
+    """
+    Return a normalized media type string for the supplied resource.
+    """
+    if not resource:
+        return ""
+
+    detected = determine_media_type(
+        getattr(resource, "mime_type", None),
+        getattr(resource, "file_name", None),
+    )
+    return detected or ""
+
+
+@register.filter
+def is_media_type(resource, target_type: str) -> bool:
+    """
+    Convenience filter to check whether a resource matches a specific media type.
+    """
+    if not resource or not target_type:
+        return False
+
+    return media_utils_is_media_type(
+        getattr(resource, "mime_type", None),
+        getattr(resource, "file_name", None),
+        target_type,
+    )

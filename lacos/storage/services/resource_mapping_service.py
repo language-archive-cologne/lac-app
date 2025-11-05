@@ -183,14 +183,18 @@ class ResourceMappingService(BaseStorageService):
         )
         return location
     
-    def generate_presigned_url(self, bucket, key, expires_in=3600):
+    def generate_presigned_url(self, bucket, key, expires_in=3600, response_headers=None):
         """Generate a presigned URL for temporary access"""
+        params = {
+            'Bucket': bucket,
+            'Key': key
+        }
+        if response_headers:
+            params.update(response_headers)
+
         url = self.presigned_client.generate_presigned_url(
             'get_object',
-            Params={
-                'Bucket': bucket,
-                'Key': key
-            },
+            Params=params,
             ExpiresIn=expires_in
         )
         return url

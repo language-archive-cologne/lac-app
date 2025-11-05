@@ -1,0 +1,138 @@
+from __future__ import annotations
+
+import mimetypes
+from pathlib import Path
+from typing import Optional
+
+AUDIO_EXTENSIONS = {
+    ".aac",
+    ".aif",
+    ".aiff",
+    ".flac",
+    ".m4a",
+    ".m4b",
+    ".mp3",
+    ".oga",
+    ".ogg",
+    ".opus",
+    ".wav",
+    ".wma",
+}
+
+VIDEO_EXTENSIONS = {
+    ".3gp",
+    ".3g2",
+    ".avi",
+    ".m2ts",
+    ".m4v",
+    ".mkv",
+    ".mov",
+    ".mp4",
+    ".mpeg",
+    ".mpg",
+    ".ogv",
+    ".ts",
+    ".webm",
+    ".wmv",
+}
+
+IMAGE_EXTENSIONS = {
+    ".bmp",
+    ".gif",
+    ".heic",
+    ".jpeg",
+    ".jpg",
+    ".png",
+    ".svg",
+    ".tif",
+    ".tiff",
+    ".webp",
+}
+
+PDF_EXTENSIONS = {".pdf"}
+
+
+def _normalize_mime(mime_type: Optional[str]) -> str:
+    return (mime_type or "").strip().lower()
+
+
+def _extract_extension(file_name: Optional[str]) -> str:
+    if not file_name:
+        return ""
+    return Path(file_name).suffix.lower()
+
+
+def determine_media_type(
+    mime_type: Optional[str],
+    file_name: Optional[str],
+) -> Optional[str]:
+    """
+    Infer the media type for a resource based on its MIME type and file extension.
+
+    Returns one of ``audio``, ``video``, ``image``, ``pdf`` or ``None`` when no
+    sensible inference can be made.
+    """
+    normalized_mime = _normalize_mime(mime_type)
+    extension = _extract_extension(file_name)
+
+    if normalized_mime.startswith("audio/"):
+        return "audio"
+    if normalized_mime.startswith("video/"):
+        return "video"
+    if normalized_mime.startswith("image/"):
+        return "image"
+    if normalized_mime == "application/pdf":
+        return "pdf"
+
+    if extension in AUDIO_EXTENSIONS:
+        return "audio"
+    if extension in VIDEO_EXTENSIONS:
+        return "video"
+    if extension in IMAGE_EXTENSIONS:
+        return "image"
+    if extension in PDF_EXTENSIONS:
+        return "pdf"
+
+    return None
+
+
+def is_media_type(
+    mime_type: Optional[str],
+    file_name: Optional[str],
+    target_type: str,
+) -> bool:
+    """
+    Return ``True`` when the supplied resource metadata matches ``target_type``.
+    """
+    if not target_type:
+        return False
+    detected = determine_media_type(mime_type, file_name)
+    return detected == target_type.strip().lower()
+
+
+def guess_source_mime_type(
+    mime_type: Optional[str],
+    file_name: Optional[str],
+    media_type: Optional[str],
+) -> str:
+    """
+    Provide a reasonable MIME type string for the HTML media player.
+    """
+    normalized = _normalize_mime(mime_type)
+    if normalized:
+        return normalized
+
+    guess, _ = mimetypes.guess_type(file_name or "")
+    if guess:
+        return guess
+
+    if media_type == "audio":
+        return "audio/mpeg"
+    if media_type == "video":
+        return "video/mp4"
+    if media_type == "image":
+        return "image/jpeg"
+    if media_type == "pdf":
+        return "application/pdf"
+
+    return "application/octet-stream"

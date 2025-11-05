@@ -12,10 +12,25 @@
     </h1>
 
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-      {% if mime_type|slice:":5" == "video" %}
-        <video controls preload="metadata" class="w-full rounded-lg shadow" src="{{ stream_url }}"></video>
+      {% if media_type == 'video' %}
+        <video controls preload="metadata" class="w-full rounded-lg shadow">
+          <source src="{{ stream_url }}" type="{{ source_mime_type }}">
+          <p>{% translate "Your browser does not support the video element." %}</p>
+        </video>
+        <p class="mt-4 text-sm text-slate-600">
+          {% translate "If this video does not play, your browser may not support its codecs." %}
+          {% if download_url %}
+            <a href="{{ download_url }}" target="_blank" rel="noopener noreferrer" class="underline hover:text-slate-800">
+              {% translate "Download the file" %}
+            </a>
+            {% translate "or try a different browser." %}
+          {% endif %}
+        </p>
       {% else %}
-        <audio controls preload="metadata" class="w-full" src="{{ stream_url }}"></audio>
+        <audio controls preload="metadata" class="w-full">
+          <source src="{{ stream_url }}" type="{{ source_mime_type }}">
+          <p>{% translate "Your browser does not support the audio element." %}</p>
+        </audio>
       {% endif %}
     </div>
   </div>
