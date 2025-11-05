@@ -10,7 +10,15 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Albert Sans', 'system-ui', 'sans-serif'], // This makes Albert Sans your default font
+        sans: [
+          'system-ui',
+          '-apple-system',
+          'BlinkMacSystemFont',
+          '"Segoe UI"',
+          '"Helvetica Neue"',
+          'Arial',
+          'sans-serif',
+        ],
       },
     },
   },
