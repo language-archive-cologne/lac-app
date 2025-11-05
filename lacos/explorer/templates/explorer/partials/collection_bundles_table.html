@@ -1,4 +1,5 @@
 {% load i18n %}
+{% load explorer_extras %}
 {% if bundle_contexts %}
   {% if bundle_page_obj %}
     <div class="flex items-center justify-between mb-3 text-sm text-slate-600">
@@ -161,7 +162,7 @@
                         <ul class="space-y-1.5">
                           {% for resource in bundle_info.media_resources %}
                             <li class="text-xs flex items-center">
-                              <span class="truncate max-w-[150px] mr-2 text-slate-700">{{ resource.file_name }}</span>
+                              <span class="truncate max-w-[150px] mr-2 text-slate-700" title="{{ resource.file_name }}">{{ resource.file_name }}</span>
                               <div class="flex space-x-1">
                                 <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}"
                                    class="inline-flex items-center px-2 py-1 text-xs rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200"
@@ -170,7 +171,7 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                   </svg>
                                 </a>
-                                {% if resource.mime_type and resource.mime_type|slice:":6" == "audio/" or resource.mime_type|slice:":6" == "video/" %}
+                                {% if resource|is_media_type:"audio" or resource|is_media_type:"video" %}
                                   <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play"
                                      hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play"
                                      hx-target="#resource-modal-content"
@@ -197,7 +198,7 @@
                         <ul class="space-y-1.5">
                           {% for resource in bundle_info.written_resources %}
                             <li class="text-xs flex items-center">
-                              <span class="truncate max-w-[150px] mr-2 text-slate-700">{{ resource.file_name }}</span>
+                              <span class="truncate max-w-[150px] mr-2 text-slate-700" title="{{ resource.file_name }}">{{ resource.file_name }}</span>
                               <div class="flex space-x-1">
                                 <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}"
                                    class="inline-flex items-center px-2 py-1 text-xs rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200"
@@ -206,7 +207,7 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                   </svg>
                                 </a>
-                                {% if resource.mime_type and resource.mime_type == "application/pdf" or resource.mime_type == "text/x-eaf+xml" or resource.file_name|lower|slice:"-4:" == ".eaf" or resource.file_name|lower|slice:"-5:" == ".elan" %}
+                                {% if resource|is_media_type:"pdf" or resource.mime_type == "text/x-eaf+xml" or resource.file_name|lower|slice:"-4:" == ".eaf" or resource.file_name|lower|slice:"-5:" == ".elan" %}
                                   <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view"
                                      hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view"
                                      hx-target="#resource-modal-content"
@@ -233,7 +234,7 @@
                         <ul class="space-y-1.5">
                           {% for resource in bundle_info.other_resources %}
                             <li class="text-xs flex items-center">
-                              <span class="truncate max-w-[150px] mr-2 text-slate-700">{{ resource.file_name }}</span>
+                              <span class="truncate max-w-[150px] mr-2 text-slate-700" title="{{ resource.file_name }}">{{ resource.file_name }}</span>
                               <div class="flex space-x-1">
                                 <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}"
                                    class="inline-flex items-center px-2 py-1 text-xs rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200"
@@ -255,7 +256,7 @@
                         <ul class="space-y-1.5">
                           {% for resource in bundle_info.metadata_files %}
                             <li class="text-xs flex items-center">
-                              <span class="truncate max-w-[150px] mr-2 text-slate-700">{{ resource.file_name }}</span>
+                              <span class="truncate max-w-[150px] mr-2 text-slate-700" title="{{ resource.file_name }}">{{ resource.file_name }}</span>
                               <div class="flex space-x-1">
                                 <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}"
                                    class="inline-flex items-center px-2 py-1 text-xs rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200"
@@ -264,7 +265,7 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                   </svg>
                                 </a>
-                                {% if resource.mime_type and resource.mime_type|slice:":6" == "image/" or resource.mime_type == "application/pdf" %}
+                                {% if resource|is_media_type:"image" or resource|is_media_type:"pdf" %}
                                   <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view"
                                      hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view"
                                      hx-target="#resource-modal-content"

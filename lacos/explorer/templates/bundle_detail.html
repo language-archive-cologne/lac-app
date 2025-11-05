@@ -134,7 +134,7 @@
                       {% translate "Download" %}
                     </a>
                     
-                    {% if resource.mime_type and resource.mime_type|slice:":6" == "audio/" or resource.mime_type|slice:":6" == "video/" %}
+                    {% if resource|is_media_type:"audio" or resource|is_media_type:"video" %}
                     <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play" 
                        hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play"
                        hx-target="#resource-modal-content"
@@ -147,7 +147,7 @@
                       </svg>
                       {% translate "Play" %}
                     </a>
-                    {% elif resource.mime_type and resource.mime_type|slice:":6" == "image/" or resource.mime_type == "application/pdf" or resource.mime_type == "text/x-eaf+xml" or resource.file_name|lower|slice:"-4:" == ".eaf" or resource.file_name|lower|slice:"-5:" == ".elan" %}
+                    {% elif resource|is_media_type:"image" or resource|is_media_type:"pdf" or resource.mime_type == "text/x-eaf+xml" or resource.file_name|lower|slice:"-4:" == ".eaf" or resource.file_name|lower|slice:"-5:" == ".elan" %}
                     <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view" 
                        hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view"
                        hx-target="#resource-modal-content"
@@ -198,7 +198,7 @@
                       {% translate "Download" %}
                     </a>
                     
-                    {% if resource.mime_type and resource.mime_type|slice:":6" == "audio/" or resource.mime_type|slice:":6" == "video/" %}
+                    {% if resource|is_media_type:"audio" or resource|is_media_type:"video" %}
                     <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play" 
                        hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play"
                        hx-target="#resource-modal-content"
@@ -211,7 +211,7 @@
                       </svg>
                       {% translate "Play" %}
                     </a>
-                    {% elif resource.mime_type and resource.mime_type|slice:":6" == "image/" or resource.mime_type == "application/pdf" or resource.mime_type == "text/x-eaf+xml" or resource.file_name|lower|slice:"-4:" == ".eaf" or resource.file_name|lower|slice:"-5:" == ".elan" %}
+                    {% elif resource|is_media_type:"image" or resource|is_media_type:"pdf" or resource.mime_type == "text/x-eaf+xml" or resource.file_name|lower|slice:"-4:" == ".eaf" or resource.file_name|lower|slice:"-5:" == ".elan" %}
                     <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view" 
                        hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view"
                        hx-target="#resource-modal-content"
@@ -262,7 +262,7 @@
                       {% translate "Download" %}
                     </a>
                     
-                    {% if resource.mime_type and resource.mime_type|slice:":6" == "audio/" or resource.mime_type|slice:":6" == "video/" %}
+                    {% if resource|is_media_type:"audio" or resource|is_media_type:"video" %}
                     <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play" 
                        hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play"
                        hx-target="#resource-modal-content"
@@ -275,7 +275,7 @@
                       </svg>
                       {% translate "Play" %}
                     </a>
-                    {% elif resource.mime_type and resource.mime_type|slice:":6" == "image/" or resource.mime_type == "application/pdf" %}
+                    {% elif resource|is_media_type:"image" or resource|is_media_type:"pdf" %}
                     <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view" 
                        hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view"
                        hx-target="#resource-modal-content"
@@ -333,7 +333,7 @@
                     {% translate "Download" %}
                   </a>
                   
-                  {% if metadata_file.mime_type and metadata_file.mime_type|slice:":6" == "audio/" or metadata_file.mime_type|slice:":6" == "video/" %}
+                  {% if metadata_file|is_media_type:"audio" or metadata_file|is_media_type:"video" %}
                   <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=metadata_file.id %}?action=play" 
                      hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=metadata_file.id %}?action=play"
                      hx-target="#resource-modal-content"
@@ -346,7 +346,7 @@
                     </svg>
                     {% translate "Play" %}
                   </a>
-                  {% elif metadata_file.mime_type and metadata_file.mime_type|slice:":6" == "image/" or metadata_file.mime_type == "application/pdf" %}
+                  {% elif metadata_file|is_media_type:"image" or metadata_file|is_media_type:"pdf" %}
                   <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=metadata_file.id %}?action=view" 
                      hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=metadata_file.id %}?action=view"
                      hx-target="#resource-modal-content"

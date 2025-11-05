@@ -30,7 +30,11 @@
           {% for collection in collection_list %}
             <tr class="hover:bg-slate-50 transition-colors">
               <td class="px-8 py-5">
-                <a href="{% url 'explorer:collection_detail' pk=collection.pk %}" class="text-slate-700 hover:text-slate-900 font-medium">
+                <a
+                  href="{% url 'explorer:collection_detail' pk=collection.pk %}"
+                  class="text-slate-700 hover:text-slate-900 font-medium"
+                  title="{% if collection.get_general_info.display_title %}{{ collection.get_general_info.display_title }}{% elif collection.get_general_info.title %}{{ collection.get_general_info.title }}{% else %}{{ collection.identifier }}{% endif %}"
+                >
                   {% if collection.get_general_info.display_title %}
                     {{ collection.get_general_info.display_title }}
                   {% elif collection.get_general_info.title %}
