@@ -73,14 +73,18 @@ def _get_acl_options(model):
     return options
 
 
-def _render_sync_summary_partial(request, summary=None, error_message=None):
-    """Render sync summary partial template."""
+def _render_load_summary_partial(request, summary=None, error_message=None):
+    """Render load summary partial template."""
     html = render_to_string(
-        "dashboard/partials/acl_sync_summary.html",
-        {"sync_summary": summary, "error_message": error_message},
+        "dashboard/partials/acl_load_summary.html",
+        {"load_summary": summary, "error_message": error_message},
         request=request,
     )
     return HttpResponse(html)
+
+
+# Backwards compatibility alias
+_render_sync_summary_partial = _render_load_summary_partial
 
 
 @login_required
@@ -214,57 +218,53 @@ def acl_admin_dashboard(request):
 
 @login_required
 @require_http_methods(["POST"])
-def acl_sync_all(request):
+def acl_load_all(request):
     """
-    Trigger a full ACL sync for Collections and Bundles.
-    Returns a sync summary for HTMX or redirects with a message.
+    Load ACLs from S3 for Collections and Bundles.
+    Returns a load summary for HTMX or redirects with a message.
     """
-    from lacos.storage.services.acl_sync_service import ACLSyncService
+    from lacos.storage.services.acl_service import ACLService
 
     scope = request.POST.get("scope", "all")
-    service = ACLSyncService(skip_bucket_check=True)
+    service = ACLService(skip_bucket_check=True)
     results = []
     scope_label = "Collections & Bundles"
 
     try:
         if scope == "all":
-            results = service.sync_all()
+            results = service.load_all()
         elif scope == "collections":
-            scope_label = "All Collections"
-            results = [service.sync_collections()]
+            scope_label = "Collections"
+            results = [service.load_collection(c) for c in Collection.objects.all()]
         elif scope == "bundles":
-            scope_label = "All Bundles"
-            results = [service.sync_bundles()]
+            scope_label = "Bundles"
+            results = [service.load_bundle(b) for b in Bundle.objects.all()]
         else:
-            return _render_sync_summary_partial(request, error_message=f"Invalid scope: {scope}")
+            return _render_load_summary_partial(request, error_message=f"Invalid scope: {scope}")
 
-        # Flatten results and compute summary
-        total_synced = sum(r.get("synced", 0) for r in results)
-        total_created = sum(r.get("created", 0) for r in results)
-        total_updated = sum(r.get("updated", 0) for r in results)
-        total_errors = sum(r.get("errors", 0) for r in results)
+        # Compute summary
+        total_loaded = sum(1 for r in results if r.success)
+        total_errors = sum(1 for r in results if not r.success)
 
         summary = {
             "scope": scope_label,
-            "synced": total_synced,
-            "created": total_created,
-            "updated": total_updated,
+            "loaded": total_loaded,
             "errors": total_errors,
-            "results": results,
+            "total": len(results),
         }
 
         if request.headers.get("HX-Request"):
-            return _render_sync_summary_partial(request, summary=summary)
+            return _render_load_summary_partial(request, summary=summary)
         else:
-            msg = f"Synced {total_synced} permissions for {scope_label}"
+            msg = f"Loaded {total_loaded} ACLs for {scope_label}"
             return redirect(f"{reverse('storage:acl_admin_dashboard')}?message={msg}")
 
     except Exception as e:
-        logger.exception("Error in acl_sync_all: %s", e)
+        logger.exception("Error in acl_load_all: %s", e)
         if request.headers.get("HX-Request"):
-            return _render_sync_summary_partial(request, error_message=str(e))
+            return _render_load_summary_partial(request, error_message=str(e))
         else:
-            return redirect(f"{reverse('storage:acl_admin_dashboard')}?message=Sync failed: {e}")
+            return redirect(f"{reverse('storage:acl_admin_dashboard')}?message=Load failed: {e}")
 
 
 @login_required
@@ -419,26 +419,33 @@ def acl_update_permission(request):
             except GroupACL.DoesNotExist:
                 pass
 
-    # Update the record
+    # Update the DB record
     perm.access_level = access_level
     perm.permissions_data = permissions_data if permissions_data else None
     perm.read_agents = read_agents if read_agents else None
     perm.last_synced = timezone.now()
     perm.save(update_fields=["access_level", "permissions_data", "read_agents", "last_synced"])
 
+    # Save to S3
+    from lacos.storage.services.acl_service import ACLService
+    acl_service = ACLService(skip_bucket_check=True)
+    save_result = acl_service.save_permission(perm)
+
     label = dict(ACLPermissions.ACCESS_LEVEL_CHOICES).get(access_level, access_level)
     identifier = object_id
     if obj is not None:
         identifier = getattr(obj, "identifier", str(obj.pk)) or str(obj.pk)
 
+    if save_result.success:
+        message = f"Saved {object_type} {identifier} as {label}"
+    else:
+        message = f"Updated DB but failed to save to S3: {save_result.error}"
+
     # Handle HTMX partial return
     if request.POST.get("return_partial") == "true" and request.headers.get("HX-Request"):
         return redirect(reverse("storage:acl_records_table", args=[object_type]))
 
-    return _redirect_with_message(
-        next_url,
-        f"Updated {object_type} {identifier} to {label}.",
-    )
+    return _redirect_with_message(next_url, message)
 
 
 @login_required

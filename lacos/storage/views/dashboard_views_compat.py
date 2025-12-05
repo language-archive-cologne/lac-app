@@ -18,12 +18,13 @@ from .dashboard.archivist import (
 # ACL views
 from .dashboard.acl import (
     acl_admin_dashboard,
-    acl_sync_all,
+    acl_load_all,
     acl_update_settings,
-    acl_sync_scope_fields,
     acl_update_permission,
     acl_edit_permission_form,
 )
+# Backwards compatibility
+acl_sync_all = acl_load_all
 
 # HTMX bucket views
 from .dashboard.htmx.bucket import (
@@ -45,9 +46,9 @@ __all__ = [
     "bucket_size_info",
     # ACL
     "acl_admin_dashboard",
-    "acl_sync_all",
+    "acl_load_all",
+    "acl_sync_all",  # backwards compat
     "acl_update_settings",
-    "acl_sync_scope_fields",
     "acl_update_permission",
     "acl_edit_permission_form",
     # HTMX

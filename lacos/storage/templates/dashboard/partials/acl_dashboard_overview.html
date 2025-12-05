@@ -5,14 +5,15 @@
 
   <div class="card bg-base-100 shadow-sm h-full">
     <div class="card-body space-y-3">
-      <h2 class="card-title text-lg">Quick Sync</h2>
-      <div id="acl-sync-summary"></div>
+      <h2 class="card-title text-lg">Load ACLs</h2>
+      <p class="text-sm text-base-content/60">Import ACL rules from S3</p>
+      <div id="acl-load-summary"></div>
       <div class="space-y-2">
         <form
           method="post"
-          action="{% url 'storage:acl_sync_all' %}"
-          hx-post="{% url 'storage:acl_sync_all' %}"
-          hx-target="#acl-sync-summary"
+          action="{% url 'storage:acl_load_all' %}"
+          hx-post="{% url 'storage:acl_load_all' %}"
+          hx-target="#acl-load-summary"
           hx-swap="innerHTML"
           class="w-full"
         >
@@ -20,15 +21,15 @@
           <input type="hidden" name="scope" value="all">
           <button type="submit" class="btn btn-primary w-full">
             <span class="loading loading-spinner loading-xs htmx-indicator"></span>
-            Sync all
+            Load all
           </button>
         </form>
         <div class="grid gap-2 grid-cols-2">
           <form
             method="post"
-            action="{% url 'storage:acl_sync_all' %}"
-            hx-post="{% url 'storage:acl_sync_all' %}"
-            hx-target="#acl-sync-summary"
+            action="{% url 'storage:acl_load_all' %}"
+            hx-post="{% url 'storage:acl_load_all' %}"
+            hx-target="#acl-load-summary"
             hx-swap="innerHTML"
           >
             {% csrf_token %}
@@ -37,9 +38,9 @@
           </form>
           <form
             method="post"
-            action="{% url 'storage:acl_sync_all' %}"
-            hx-post="{% url 'storage:acl_sync_all' %}"
-            hx-target="#acl-sync-summary"
+            action="{% url 'storage:acl_load_all' %}"
+            hx-post="{% url 'storage:acl_load_all' %}"
+            hx-target="#acl-load-summary"
             hx-swap="innerHTML"
           >
             {% csrf_token %}

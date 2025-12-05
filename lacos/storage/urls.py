@@ -54,8 +54,9 @@ urlpatterns = [
     path("dashboard/acl/panel/", views.acl_dashboard_panel, name="acl_dashboard_panel"),
     path("dashboard/acl/records/", views.acl_records_panel, name="acl_records_panel"),
     path("dashboard/acl/records/<str:scope>/", views.acl_records_table, name="acl_records_table"),
-    path("dashboard/acl/sync/", views.acl_sync_all, name="acl_sync_all"),
-    path("dashboard/acl/sync/scope/", views.acl_sync_scope_fields, name="acl_sync_scope"),
+    path("dashboard/acl/load/", views.acl_load_all, name="acl_load_all"),
+    # Backwards compatibility
+    path("dashboard/acl/sync/", views.acl_load_all, name="acl_sync_all"),
     path("dashboard/acl/settings/", views.acl_update_settings, name="acl_update_settings"),
     path("dashboard/acl/permissions/update/", views.acl_update_permission, name="acl_update_permission"),
     path("dashboard/acl/permissions/edit/<str:object_type>/<str:object_id>/", views.acl_edit_permission_form, name="acl_edit_permission_form"),
