@@ -156,7 +156,7 @@ def metadata_ingest_modal(request, bucket_type, object_type, object_path):
         initial_key = f"{clean_path}/" if clean_path else ''
 
     lower_path = clean_path.lower()
-    default_type = 'collection' if 'collection' in lower_path else 'bundle'
+    default_type = 'bundle' if 'bundle' in lower_path else 'collection'
 
     if bucket_name not in accessible_buckets:
         accessible_buckets = sorted({*accessible_buckets, bucket_name})
