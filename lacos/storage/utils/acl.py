@@ -89,3 +89,70 @@ def extract_read_agents(entries: Iterable[Mapping[str, object]] | None) -> list[
 
     # Preserve order while deduplicating
     return list(dict.fromkeys(agents))
+
+
+# Known URI prefixes that should be preserved as-is
+_KNOWN_PREFIXES = (
+    "urn:lacos:",  # Our format
+    "mailto:",
+    "https://",
+    "http://",
+    "urn:",  # Other URN schemes
+)
+
+
+def normalize_agent_uri(uri: str | None) -> str | None:
+    """
+    Normalize an agent URI to our urn:lacos: format.
+
+    - URIs with known prefixes (mailto:, https://, urn:, etc.) are preserved
+    - URIs that look like eppn (contain @, no prefix) become urn:lacos:eppn:<uri>
+    - Other plain strings become urn:lacos:agent:<uri>
+
+    Returns None if uri is None or empty.
+    """
+    if not uri:
+        return None
+
+    uri = uri.strip()
+    if not uri:
+        return None
+
+    # Already has a known prefix - keep as-is
+    for prefix in _KNOWN_PREFIXES:
+        if uri.startswith(prefix):
+            return uri
+
+    # Looks like an eppn (email-like format) - normalize to urn:lacos:eppn:
+    if "@" in uri:
+        return f"urn:lacos:eppn:{uri}"
+
+    # Other plain string - normalize to urn:lacos:agent:
+    return f"urn:lacos:agent:{uri}"
+
+
+def normalize_permissions_data(
+    entries: Sequence[dict[str, object]] | None,
+) -> list[dict[str, object]] | None:
+    """
+    Normalize all agent URIs in a permissions data list.
+
+    Returns a new list with normalized URIs, or None if input is None.
+    """
+    if entries is None:
+        return None
+
+    normalized = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            normalized.append(entry)
+            continue
+
+        new_entry = dict(entry)
+        agent = entry.get("agent")
+        if isinstance(agent, str):
+            new_entry["agent"] = normalize_agent_uri(agent)
+
+        normalized.append(new_entry)
+
+    return normalized

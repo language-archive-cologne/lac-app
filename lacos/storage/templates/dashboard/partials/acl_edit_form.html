@@ -55,15 +55,15 @@
         size="4"
       >
         {% for user in available_users %}
-        <option value="{{ user.id }}" {% if user.id in selected_user_ids %}selected{% endif %}>
-          {{ user.username }}{% if user.name %} ({{ user.name }}){% endif %}
+        <option value="{{ user.id }}" {% if user.id in selected_user_ids %}selected{% endif %} title="{{ user.acl_agent_uri }}">
+          {{ user.username }}{% if user.name %} ({{ user.name }}){% endif %} - {{ user.acl_agent_uri }}
         </option>
         {% empty %}
         <option disabled>No users with ACL URIs configured</option>
         {% endfor %}
       </select>
       <label class="label">
-        <span class="label-text-alt text-base-content/60">Hold Ctrl/Cmd to select multiple</span>
+        <span class="label-text-alt text-base-content/60">Hold Ctrl/Cmd to select multiple. URIs shown will be stored in acl.json</span>
       </label>
     </div>
 
@@ -78,8 +78,8 @@
         size="3"
       >
         {% for group in available_groups %}
-        <option value="{{ group.id }}" {% if group.id in selected_group_ids %}selected{% endif %}>
-          {{ group.group.name }}
+        <option value="{{ group.id }}" {% if group.id in selected_group_ids %}selected{% endif %} title="{{ group.acl_agent_uri }}">
+          {{ group.group.name }} - {{ group.acl_agent_uri }}
         </option>
         {% empty %}
         <option disabled>No groups with ACL profiles configured</option>

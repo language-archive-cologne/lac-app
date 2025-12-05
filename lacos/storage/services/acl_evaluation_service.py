@@ -212,9 +212,19 @@ class ACLEvaluationService:
             return set()
 
         uris = set()
+
+        # Add the explicit ACL agent URI (urn:lacos:eppn:... or urn:lacos:user:...)
         acl_agent_uri = getattr(user, "acl_agent_uri", None)
         if acl_agent_uri:
             uris.add(acl_agent_uri.strip())
+
+        # For Shibboleth users, also add the raw username (eppn) to match
+        # external ACLs that don't use our urn:lacos: prefix
+        saml_persistent_id = getattr(user, "saml_persistent_id", None)
+        if saml_persistent_id:
+            username = getattr(user, "username", None)
+            if username:
+                uris.add(username.strip())
 
         return {uri for uri in uris if uri}
 

@@ -15,7 +15,7 @@ from lacos.storage.models.acl_permissions import ACLPermissions
 from lacos.cache import get_acl_entry, set_acl_entry, invalidate_acl_entry
 from lacos.storage.services.base_storage_service import BaseStorageService
 from lacos.storage.services.resource_mapping_service import ResourceMappingService
-from lacos.storage.utils.acl import determine_access_level, extract_read_agents
+from lacos.storage.utils.acl import determine_access_level, extract_read_agents, normalize_permissions_data
 
 logger = logging.getLogger(__name__)
 
@@ -142,13 +142,15 @@ class ACLService(BaseStorageService):
                 fields_to_update.add("ACL_file_key")
 
             if found and fetch_error is None:
-                record.permissions_data = permissions_data
+                # Normalize agent URIs to our urn:lacos: format
+                normalized_data = normalize_permissions_data(permissions_data)
+                record.permissions_data = normalized_data
                 if not (from_cache and not created):
                     record.last_synced = timezone.now()
                     fields_to_update.update({"permissions_data", "last_synced"})
 
-                access_level = determine_access_level(permissions_data or [])
-                read_agents = extract_read_agents(permissions_data or [])
+                access_level = determine_access_level(normalized_data or [])
+                read_agents = extract_read_agents(normalized_data or [])
                 if record.access_level != access_level:
                     record.access_level = access_level
                     fields_to_update.add("access_level")
