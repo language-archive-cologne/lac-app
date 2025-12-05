@@ -267,6 +267,72 @@ def acl_load_all(request):
             return redirect(f"{reverse('storage:acl_admin_dashboard')}?message=Load failed: {e}")
 
 
+def _render_save_summary_partial(request, summary=None, error_message=None):
+    """Render save summary partial template."""
+    html = render_to_string(
+        "dashboard/partials/acl_save_summary.html",
+        {"save_summary": summary, "error_message": error_message},
+        request=request,
+    )
+    return HttpResponse(html)
+
+
+@login_required
+@require_http_methods(["POST"])
+def acl_save_all(request):
+    """
+    Save ACLs from DB to S3 for Collections and Bundles.
+    Returns a save summary for HTMX or redirects with a message.
+    """
+    from lacos.storage.services.acl_service import ACLService
+    from django.contrib.contenttypes.models import ContentType
+
+    scope = request.POST.get("scope", "all")
+    service = ACLService(skip_bucket_check=True)
+    results = []
+    scope_label = "Collections & Bundles"
+
+    try:
+        if scope == "all":
+            scope_label = "Collections & Bundles"
+            for collection in Collection.objects.all():
+                results.append(service.save_collection(collection))
+            for bundle in Bundle.objects.all():
+                results.append(service.save_bundle(bundle))
+        elif scope == "collections":
+            scope_label = "Collections"
+            results = [service.save_collection(c) for c in Collection.objects.all()]
+        elif scope == "bundles":
+            scope_label = "Bundles"
+            results = [service.save_bundle(b) for b in Bundle.objects.all()]
+        else:
+            return _render_save_summary_partial(request, error_message=f"Invalid scope: {scope}")
+
+        # Compute summary
+        total_saved = sum(1 for r in results if r.success)
+        total_errors = sum(1 for r in results if not r.success)
+
+        summary = {
+            "scope": scope_label,
+            "saved": total_saved,
+            "errors": total_errors,
+            "total": len(results),
+        }
+
+        if request.headers.get("HX-Request"):
+            return _render_save_summary_partial(request, summary=summary)
+        else:
+            msg = f"Saved {total_saved} ACLs for {scope_label}"
+            return redirect(f"{reverse('storage:acl_admin_dashboard')}?message={msg}")
+
+    except Exception as e:
+        logger.exception("Error in acl_save_all: %s", e)
+        if request.headers.get("HX-Request"):
+            return _render_save_summary_partial(request, error_message=str(e))
+        else:
+            return redirect(f"{reverse('storage:acl_admin_dashboard')}?message=Save failed: {e}")
+
+
 @login_required
 @require_http_methods(["POST"])
 def acl_update_settings(request):

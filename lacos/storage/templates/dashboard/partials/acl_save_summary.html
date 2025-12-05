@@ -1,0 +1,9 @@
+{% if error_message %}
+<div class="alert alert-error alert-sm">
+  <span>{{ error_message }}</span>
+</div>
+{% elif save_summary %}
+<div class="alert alert-success alert-sm">
+  <span>Saved {{ save_summary.saved }}/{{ save_summary.total }} {{ save_summary.scope }}{% if save_summary.errors %} ({{ save_summary.errors }} errors){% endif %}</span>
+</div>
+{% endif %}
