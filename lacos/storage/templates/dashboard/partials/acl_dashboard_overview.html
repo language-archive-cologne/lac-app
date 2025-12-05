@@ -1,8 +1,4 @@
-<div class="grid gap-6 md:grid-cols-3">
-  <div id="acl-settings-card">
-    {% include "dashboard/partials/acl_settings_card.html" %}
-  </div>
-
+<div class="grid gap-6 md:grid-cols-2">
   <div class="card bg-base-100 shadow-sm h-full">
     <div class="card-body space-y-3">
       <h2 class="card-title text-lg">Load ACLs</h2>
@@ -57,11 +53,11 @@
       <h2 class="card-title text-lg">Summary</h2>
       <div class="stats stats-vertical shadow-sm">
         <div class="stat py-2">
-          <div class="stat-title text-xs">Synced</div>
+          <div class="stat-title text-xs">Loaded</div>
           <div class="stat-value text-lg text-primary">{{ overall_summary.synced_objects }}/{{ overall_summary.total_objects }}</div>
         </div>
         <div class="stat py-2">
-          <div class="stat-title text-xs">Unsynced</div>
+          <div class="stat-title text-xs">Not loaded</div>
           <div class="stat-value text-lg {% if overall_summary.unsynced_objects > 0 %}text-warning{% endif %}">{{ overall_summary.unsynced_objects }}</div>
         </div>
       </div>
