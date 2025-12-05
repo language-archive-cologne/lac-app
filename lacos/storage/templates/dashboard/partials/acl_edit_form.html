@@ -1,0 +1,106 @@
+<form
+  method="post"
+  action="{% url 'storage:acl_update_permission' %}"
+  hx-post="{% url 'storage:acl_update_permission' %}"
+  hx-target="#acl-records-table"
+  hx-swap="innerHTML"
+  class="space-y-4"
+>
+  {% csrf_token %}
+  <input type="hidden" name="object_type" value="{{ object_type }}">
+  <input type="hidden" name="object_id" value="{{ object_id }}">
+  {% if permission_id %}
+  <input type="hidden" name="permission_id" value="{{ permission_id }}">
+  {% endif %}
+  <input type="hidden" name="next" value="{{ next_url }}">
+  <input type="hidden" name="return_partial" value="true">
+
+  <div class="space-y-1">
+    <div class="font-medium">{{ identifier }}</div>
+    {% if name %}
+    <div class="text-sm text-base-content/60">{{ name }}</div>
+    {% endif %}
+  </div>
+
+  <div class="form-control">
+    <label class="label">
+      <span class="label-text font-medium">Access Level</span>
+    </label>
+    <select
+      name="access_level"
+      class="select select-bordered w-full"
+      required
+      onchange="toggleAgentFields(this.value)"
+    >
+      {% for value, label in access_level_choices %}
+      <option value="{{ value }}" {% if value == current_access_level %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <label class="label">
+      <span class="label-text-alt text-base-content/60">
+        Public: anyone, Protected: logged-in users, Private: specific users/groups
+      </span>
+    </label>
+  </div>
+
+  <div id="agent-fields" class="space-y-4 {% if current_access_level != 'private' %}hidden{% endif %}">
+    <div class="form-control">
+      <label class="label">
+        <span class="label-text font-medium">Users with access</span>
+      </label>
+      <select
+        name="user_ids"
+        class="select select-bordered w-full"
+        multiple
+        size="4"
+      >
+        {% for user in available_users %}
+        <option value="{{ user.id }}" {% if user.id in selected_user_ids %}selected{% endif %}>
+          {{ user.username }}{% if user.name %} ({{ user.name }}){% endif %}
+        </option>
+        {% empty %}
+        <option disabled>No users with ACL URIs configured</option>
+        {% endfor %}
+      </select>
+      <label class="label">
+        <span class="label-text-alt text-base-content/60">Hold Ctrl/Cmd to select multiple</span>
+      </label>
+    </div>
+
+    <div class="form-control">
+      <label class="label">
+        <span class="label-text font-medium">Groups with access</span>
+      </label>
+      <select
+        name="group_ids"
+        class="select select-bordered w-full"
+        multiple
+        size="3"
+      >
+        {% for group in available_groups %}
+        <option value="{{ group.id }}" {% if group.id in selected_group_ids %}selected{% endif %}>
+          {{ group.group.name }}
+        </option>
+        {% empty %}
+        <option disabled>No groups with ACL profiles configured</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <div class="modal-action">
+    <button type="button" class="btn" onclick="document.getElementById('acl-edit-modal').close()">Cancel</button>
+    <button type="submit" class="btn btn-primary" onclick="document.getElementById('acl-edit-modal').close()">Save</button>
+  </div>
+</form>
+
+<script>
+function toggleAgentFields(level) {
+  const fields = document.getElementById('agent-fields');
+  if (level === 'private') {
+    fields.classList.remove('hidden');
+  } else {
+    fields.classList.add('hidden');
+  }
+}
+</script>

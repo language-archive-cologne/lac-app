@@ -632,19 +632,134 @@ def acl_update_permission(request):
             },
         )
 
+    # Build permissions_data based on access level and selected users/groups
+    from lacos.users.models import User, GroupACL
+    from lacos.storage.constants import ACL_LEVEL_PUBLIC, ACL_LEVEL_PROTECTED, ACL_LEVEL_PRIVATE
+
+    permissions_data = []
+    read_agents = []
+
+    if access_level == ACL_LEVEL_PUBLIC:
+        permissions_data = [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}]
+        read_agents = ["foaf:Agent"]
+    elif access_level == ACL_LEVEL_PROTECTED:
+        permissions_data = [{"agentClass": "acl:AuthenticatedAgent", "mode": ["acl:Read"]}]
+        read_agents = ["acl:AuthenticatedAgent"]
+    elif access_level == ACL_LEVEL_PRIVATE:
+        user_ids = request.POST.getlist("user_ids")
+        group_ids = request.POST.getlist("group_ids")
+
+        for user_id in user_ids:
+            try:
+                user = User.objects.get(pk=user_id)
+                if user.acl_agent_uri:
+                    permissions_data.append({
+                        "agentClass": "foaf:Person",
+                        "agent": user.acl_agent_uri,
+                        "mode": ["acl:Read"]
+                    })
+                    read_agents.append(user.acl_agent_uri)
+            except User.DoesNotExist:
+                pass
+
+        for group_id in group_ids:
+            try:
+                group_acl = GroupACL.objects.get(pk=group_id)
+                if group_acl.acl_agent_uri:
+                    permissions_data.append({
+                        "agentClass": "foaf:Group",
+                        "agent": group_acl.acl_agent_uri,
+                        "mode": ["acl:Read"]
+                    })
+                    read_agents.append(group_acl.acl_agent_uri)
+            except GroupACL.DoesNotExist:
+                pass
+    # embargo = empty permissions
+
     # Update the record
     perm.access_level = access_level
+    perm.permissions_data = permissions_data if permissions_data else None
+    perm.read_agents = read_agents if read_agents else None
     perm.last_synced = timezone.now()
-    perm.save(update_fields=["access_level", "last_synced"])
+    perm.save(update_fields=["access_level", "permissions_data", "read_agents", "last_synced"])
 
     label = dict(ACLPermissions.ACCESS_LEVEL_CHOICES).get(access_level, access_level)
     identifier = object_id
     if obj is not None:
         identifier = getattr(obj, "identifier", str(obj.pk)) or str(obj.pk)
+    # Handle HTMX partial return
+    if request.POST.get("return_partial") == "true" and request.headers.get("HX-Request"):
+        return _render_acl_records_table(request, object_type)
+
     return _redirect_with_message(
         next_url,
         f"Updated {object_type} {identifier} to {label}.",
     )
+
+
+def _render_acl_records_table(request, scope):
+    """Helper to re-render the ACL records table after an update."""
+    from lacos.storage.views.dashboard.acl import _build_records_context
+    context = _build_records_context(request, scope)
+    return render(
+        request,
+        "dashboard/partials/acl_permissions_table.html",
+        context,
+    )
+
+
+@login_required
+def acl_edit_permission_form(request, object_type, object_id):
+    """Render the ACL edit form for a specific object."""
+    from lacos.users.models import User, GroupACL
+
+    if object_type not in {"collection", "bundle"}:
+        return HttpResponse("Invalid object type", status=400)
+
+    model = Collection if object_type == "collection" else Bundle
+
+    try:
+        obj = model.objects.get(pk=object_id)
+    except model.DoesNotExist:
+        return HttpResponse("Object not found", status=404)
+
+    ct = ContentType.objects.get_for_model(model)
+    perm = ACLPermissions.objects.filter(content_type=ct, object_id=object_id).first()
+
+    # Get current read agents from permissions_data
+    selected_user_ids = set()
+    selected_group_ids = set()
+    if perm and perm.permissions_data:
+        for rule in perm.permissions_data:
+            agent = rule.get("agent", "")
+            agent_class = rule.get("agentClass", "")
+            if agent_class == "foaf:Person" and agent:
+                # Find user with this URI
+                user = User.objects.filter(acl_agent_uri=agent).first()
+                if user:
+                    selected_user_ids.add(user.id)
+            elif agent_class == "foaf:Group" and agent:
+                # Find group with this URI
+                group_acl = GroupACL.objects.filter(acl_agent_uri=agent).first()
+                if group_acl:
+                    selected_group_ids.add(group_acl.id)
+
+    context = {
+        "object_type": object_type,
+        "object_id": object_id,
+        "permission_id": perm.pk if perm else None,
+        "identifier": getattr(obj, "identifier", str(obj.pk)),
+        "name": _resolve_acl_display_name(obj),
+        "current_access_level": perm.access_level if perm else "embargo",
+        "access_level_choices": ACLPermissions.ACCESS_LEVEL_CHOICES,
+        "available_users": User.objects.exclude(acl_agent_uri__isnull=True).exclude(acl_agent_uri="").order_by("username"),
+        "available_groups": GroupACL.objects.exclude(acl_agent_uri__isnull=True).exclude(acl_agent_uri="").select_related("group").order_by("group__name"),
+        "selected_user_ids": selected_user_ids,
+        "selected_group_ids": selected_group_ids,
+        "next_url": request.GET.get("next", reverse("storage:acl_records_table", args=[object_type])),
+    }
+
+    return render(request, "dashboard/partials/acl_edit_form.html", context)
 
 
 @login_required

@@ -21,6 +21,8 @@ from .dashboard.acl import (
     acl_sync_all,
     acl_update_settings,
     acl_sync_scope_fields,
+    acl_update_permission,
+    acl_edit_permission_form,
 )
 
 # HTMX bucket views
@@ -46,6 +48,8 @@ __all__ = [
     "acl_sync_all",
     "acl_update_settings",
     "acl_sync_scope_fields",
+    "acl_update_permission",
+    "acl_edit_permission_form",
     # HTMX
     "BucketContentHTMXView",
     "BucketSelectHTMXView",

@@ -4,6 +4,8 @@ ACL admin dashboard views.
 Handles ACL configuration, sync operations, and permission management.
 """
 import logging
+from urllib.parse import quote_plus
+
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.contenttypes.models import ContentType
@@ -11,14 +13,23 @@ from django.db import models
 from django.http import HttpResponse
 from django.shortcuts import render, redirect
 from django.template.loader import render_to_string
+from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.storage.models.acl_config import ACLConfig
 from lacos.storage.models.acl_permissions import ACLPermissions
+from lacos.storage.constants import ACL_LEVEL_PUBLIC, ACL_LEVEL_PROTECTED, ACL_LEVEL_PRIVATE
 
 logger = logging.getLogger(__name__)
+
+
+def _redirect_with_message(target_url: str | None, message: str):
+    destination = target_url or reverse("storage:acl_admin_dashboard")
+    separator = "&" if "?" in destination else "?"
+    return redirect(f"{destination}{separator}message={quote_plus(message)}")
 
 
 def _resolve_acl_display_name(obj):
@@ -313,3 +324,170 @@ def acl_sync_scope_fields(request):
     except Exception as e:
         logger.exception("Error in acl_sync_scope_fields: %s", e)
         return _render_sync_summary_partial(request, error_message=str(e))
+
+
+@login_required
+@require_http_methods(["POST"])
+def acl_update_permission(request):
+    """Allow administrators to manually adjust an object's recorded ACL level and agents."""
+    from lacos.users.models import User, GroupACL
+
+    access_level = request.POST.get("access_level")
+    object_type = request.POST.get("object_type")
+    object_id = request.POST.get("object_id")
+    permission_id = request.POST.get("permission_id")
+    next_url = request.POST.get("next")
+
+    valid_levels = {choice[0] for choice in ACLPermissions.ACCESS_LEVEL_CHOICES}
+    if not access_level or access_level not in valid_levels:
+        return _redirect_with_message(next_url, "Invalid access level selected.")
+
+    if object_type not in {"collection", "bundle"}:
+        return _redirect_with_message(next_url, "Unknown ACL object type.")
+
+    if not object_id:
+        return _redirect_with_message(next_url, "Missing object identifier.")
+
+    model = Collection if object_type == "collection" else Bundle
+
+    obj = None
+    try:
+        obj = model.objects.get(pk=object_id)
+    except model.DoesNotExist:
+        obj = None
+
+    expected_ct = ContentType.objects.get_for_model(model)
+
+    perm = None
+    if permission_id:
+        perm = ACLPermissions.objects.filter(pk=permission_id).first()
+        if perm is None:
+            return _redirect_with_message(next_url, "ACL record could not be found.")
+        if perm.content_type_id != expected_ct.id:
+            return _redirect_with_message(next_url, "ACL record does not match the selected object.")
+        if obj and str(perm.object_id) != str(obj.pk):
+            return _redirect_with_message(next_url, "ACL record does not match the selected object.")
+    else:
+        if obj is None:
+            return _redirect_with_message(next_url, "Cannot create ACL record for a missing object.")
+        perm, _ = ACLPermissions.objects.get_or_create(
+            content_type=expected_ct,
+            object_id=str(obj.pk),
+            defaults={
+                "ACL_file_bucket": getattr(obj, "import_bucket", None),
+                "ACL_file_key": getattr(obj, "import_object_key", None),
+            },
+        )
+
+    # Build permissions_data based on access level and selected users/groups
+    permissions_data = []
+    read_agents = []
+
+    if access_level == ACL_LEVEL_PUBLIC:
+        permissions_data = [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}]
+        read_agents = ["foaf:Agent"]
+    elif access_level == ACL_LEVEL_PROTECTED:
+        permissions_data = [{"agentClass": "acl:AuthenticatedAgent", "mode": ["acl:Read"]}]
+        read_agents = ["acl:AuthenticatedAgent"]
+    elif access_level == ACL_LEVEL_PRIVATE:
+        user_ids = request.POST.getlist("user_ids")
+        group_ids = request.POST.getlist("group_ids")
+
+        for user_id in user_ids:
+            try:
+                user = User.objects.get(pk=user_id)
+                if user.acl_agent_uri:
+                    permissions_data.append({
+                        "agentClass": "foaf:Person",
+                        "agent": user.acl_agent_uri,
+                        "mode": ["acl:Read"]
+                    })
+                    read_agents.append(user.acl_agent_uri)
+            except User.DoesNotExist:
+                pass
+
+        for group_id in group_ids:
+            try:
+                group_acl = GroupACL.objects.get(pk=group_id)
+                if group_acl.acl_agent_uri:
+                    permissions_data.append({
+                        "agentClass": "foaf:Group",
+                        "agent": group_acl.acl_agent_uri,
+                        "mode": ["acl:Read"]
+                    })
+                    read_agents.append(group_acl.acl_agent_uri)
+            except GroupACL.DoesNotExist:
+                pass
+
+    # Update the record
+    perm.access_level = access_level
+    perm.permissions_data = permissions_data if permissions_data else None
+    perm.read_agents = read_agents if read_agents else None
+    perm.last_synced = timezone.now()
+    perm.save(update_fields=["access_level", "permissions_data", "read_agents", "last_synced"])
+
+    label = dict(ACLPermissions.ACCESS_LEVEL_CHOICES).get(access_level, access_level)
+    identifier = object_id
+    if obj is not None:
+        identifier = getattr(obj, "identifier", str(obj.pk)) or str(obj.pk)
+
+    # Handle HTMX partial return
+    if request.POST.get("return_partial") == "true" and request.headers.get("HX-Request"):
+        return redirect(reverse("storage:acl_records_table", args=[object_type]))
+
+    return _redirect_with_message(
+        next_url,
+        f"Updated {object_type} {identifier} to {label}.",
+    )
+
+
+@login_required
+def acl_edit_permission_form(request, object_type, object_id):
+    """Render the ACL edit form for a specific object."""
+    from lacos.users.models import User, GroupACL
+
+    if object_type not in {"collection", "bundle"}:
+        return HttpResponse("Invalid object type", status=400)
+
+    model = Collection if object_type == "collection" else Bundle
+
+    try:
+        obj = model.objects.get(pk=object_id)
+    except model.DoesNotExist:
+        return HttpResponse("Object not found", status=404)
+
+    ct = ContentType.objects.get_for_model(model)
+    perm = ACLPermissions.objects.filter(content_type=ct, object_id=object_id).first()
+
+    # Get current read agents from permissions_data
+    selected_user_ids = set()
+    selected_group_ids = set()
+    if perm and perm.permissions_data:
+        for rule in perm.permissions_data:
+            agent = rule.get("agent", "")
+            agent_class = rule.get("agentClass", "")
+            if agent_class == "foaf:Person" and agent:
+                user = User.objects.filter(acl_agent_uri=agent).first()
+                if user:
+                    selected_user_ids.add(user.id)
+            elif agent_class == "foaf:Group" and agent:
+                group_acl = GroupACL.objects.filter(acl_agent_uri=agent).first()
+                if group_acl:
+                    selected_group_ids.add(group_acl.id)
+
+    context = {
+        "object_type": object_type,
+        "object_id": object_id,
+        "permission_id": perm.pk if perm else None,
+        "identifier": getattr(obj, "identifier", str(obj.pk)),
+        "name": _resolve_acl_display_name(obj),
+        "current_access_level": perm.access_level if perm else "embargo",
+        "access_level_choices": ACLPermissions.ACCESS_LEVEL_CHOICES,
+        "available_users": User.objects.exclude(acl_agent_uri__isnull=True).exclude(acl_agent_uri="").order_by("username"),
+        "available_groups": GroupACL.objects.exclude(acl_agent_uri__isnull=True).exclude(acl_agent_uri="").select_related("group").order_by("group__name"),
+        "selected_user_ids": selected_user_ids,
+        "selected_group_ids": selected_group_ids,
+        "next_url": request.GET.get("next", reverse("storage:acl_records_table", args=[object_type])),
+    }
+
+    return render(request, "dashboard/partials/acl_edit_form.html", context)

@@ -61,6 +61,7 @@
               </button>
             </th>
             <th>Read agents</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -83,31 +84,9 @@
               {% endif %}
             </td>
             <td>
-              <form method="post" action="{% url 'storage:acl_update_permission' %}" class="flex flex-wrap items-center gap-2 justify-end">
-                {% csrf_token %}
-                <input type="hidden" name="object_type" value="{{ scope }}">
-                <input type="hidden" name="object_id" value="{{ row.object_id }}">
-                {% if row.permission_id %}
-                <input type="hidden" name="permission_id" value="{{ row.permission_id }}">
-                {% endif %}
-                <input type="hidden" name="next" value="{{ next_url }}">
-                <select
-                  name="access_level"
-                  class="select select-bordered select-xs"
-                  {% if not row.object_exists %}disabled{% endif %}
-                  required
-                >
-                  {% if not row.access_level %}
-                  <option value="" disabled selected>Select…</option>
-                  {% endif %}
-                  {% for value, label in access_level_choices %}
-                    <option value="{{ value }}" {% if value == row.access_level %}selected{% endif %}>{{ label }}</option>
-                  {% endfor %}
-                </select>
-                <button type="submit" class="btn btn-xs btn-primary" {% if not row.object_exists %}disabled{% endif %}>
-                  Save
-                </button>
-              </form>
+              <span class="badge badge-sm {% if row.access_level == 'public' %}badge-success{% elif row.access_level == 'protected' %}badge-info{% elif row.access_level == 'private' %}badge-warning{% else %}badge-error{% endif %}">
+                {{ row.access_level|default:"embargo"|title }}
+              </span>
             </td>
             <td class="text-sm text-base-content/70">
               {{ row.last_synced|date:"Y-m-d H:i"|default:"—" }}
@@ -121,10 +100,26 @@
                 —
               {% endif %}
             </td>
+            <td>
+              <button
+                type="button"
+                class="btn btn-xs btn-ghost"
+                {% if row.object_exists %}
+                hx-get="{% url 'storage:acl_edit_permission_form' scope row.object_id %}"
+                hx-target="#acl-edit-modal-content"
+                hx-swap="innerHTML"
+                onclick="document.getElementById('acl-edit-modal').showModal()"
+                {% else %}
+                disabled
+                {% endif %}
+              >
+                Edit
+              </button>
+            </td>
           </tr>
           {% empty %}
           <tr>
-            <td colspan="4" class="py-6 text-center text-sm text-base-content/60">
+            <td colspan="5" class="py-6 text-center text-sm text-base-content/60">
               No {{ scope }}s to display.
             </td>
           </tr>

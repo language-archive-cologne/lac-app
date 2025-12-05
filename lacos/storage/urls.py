@@ -58,6 +58,7 @@ urlpatterns = [
     path("dashboard/acl/sync/scope/", views.acl_sync_scope_fields, name="acl_sync_scope"),
     path("dashboard/acl/settings/", views.acl_update_settings, name="acl_update_settings"),
     path("dashboard/acl/permissions/update/", views.acl_update_permission, name="acl_update_permission"),
+    path("dashboard/acl/permissions/edit/<str:object_type>/<str:object_id>/", views.acl_edit_permission_form, name="acl_edit_permission_form"),
     
     # File operations
     path("file-content/<str:bucket_type>/<path:file_path>/", views.file_content, name="file_content"),
