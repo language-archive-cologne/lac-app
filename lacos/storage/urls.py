@@ -78,6 +78,7 @@ urlpatterns = [
 
     # HTMX bucket operations
     path("htmx/bucket-content/<str:bucket_name>/", views.BucketContentHTMXView.as_view(), name="bucket_content_htmx"),
+    path("htmx/bucket-select/", views.BucketSelectHTMXView.as_view(), name="bucket_select_htmx"),
     path("htmx/create-bucket/", views.CreateBucketHTMXView.as_view(), name="create_bucket_htmx"),
     path("htmx/delete-bucket/<str:bucket_name>/", views.delete_bucket_htmx, name="delete_bucket_htmx"),
     path("htmx/rename-bucket/<str:bucket_name>/", views.RenameBucketHTMXView.as_view(), name="rename_bucket_htmx"),

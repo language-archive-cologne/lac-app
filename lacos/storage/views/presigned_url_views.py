@@ -73,16 +73,10 @@ def get_presigned_urls(request):
     logger.info(f"HTMX request detected: {is_htmx}")
     logger.info(f"Content type: {request.content_type}")
     
-    # Validate required parameters
+    # folder_name is optional - if empty, files go to bucket root
+    # If uploading a folder structure, the path is preserved from files_metadata
     if not folder_name:
-        error_message = "Folder name is required"
-        logger.warning(error_message)
-        messages.error(request, error_message)
-        if is_htmx:
-            return render(request, "upload/upload_status.html", {
-                "success": False, "message": error_message
-            })
-        return JsonResponse({"success": False, "error": error_message})
+        folder_name = ""  # Empty string means bucket root
     
     if not files_json:
         error_message = "No files metadata provided"

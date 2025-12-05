@@ -813,6 +813,8 @@ class BucketService(BaseStorageService):
             if enable_ocfl and bucket_name not in self.ocfl_buckets:
                 self.ocfl_buckets.append(bucket_name)
 
+            # Invalidate the bucket list cache so new bucket appears immediately
+            cache.delete("storage:bucket-names")
             logger.info(f"Successfully created bucket '{bucket_name}' and added to workspace")
 
             return {

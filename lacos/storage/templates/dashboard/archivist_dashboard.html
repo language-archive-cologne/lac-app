@@ -35,7 +35,8 @@
 
                 <!-- Action Buttons -->
                 <div class="flex flex-wrap gap-2 justify-end">
-                    <label for="upload-modal" class="btn btn-primary btn-sm">
+                    <label for="upload-modal" class="btn btn-primary btn-sm"
+                           onclick="htmx.trigger(document.body, 'refreshBucketSelect')">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                         </svg>
@@ -96,6 +97,8 @@
         <h3 class="font-bold text-lg mb-4">Create New Bucket</h3>
 
         <form hx-post="{% url 'storage:create_bucket_htmx' %}"
+              hx-target="#bucket-tabs"
+              hx-swap="outerHTML"
               hx-indicator="#indicator">
             {% csrf_token %}
             <!-- Track current active bucket -->
@@ -188,11 +191,12 @@
         <div class="grid grid-cols-2 gap-4 mb-6">
             <div class="form-control">
                 <label class="label"><span class="label-text">Target Bucket</span></label>
-                <select id="modal-bucket-select" class="select select-bordered">
-                    {% for bucket_name in workspace_buckets %}
-                    <option value="{{ bucket_name }}">{{ bucket_name }}</option>
-                    {% endfor %}
-                </select>
+                <div id="bucket-select-container"
+                     hx-get="{% url 'storage:bucket_select_htmx' %}"
+                     hx-trigger="refreshBucketSelect from:body"
+                     hx-swap="innerHTML">
+                    {% include "dashboard/partials/bucket_select.html" with workspace_buckets=workspace_buckets active_bucket=active_bucket oob=False %}
+                </div>
             </div>
             <div class="form-control">
                 <label class="label"><span class="label-text">Target Folder (optional)</span></label>
@@ -576,11 +580,19 @@ function formatFileSize(bytes) {
 
 async function startModalUpload() {
     const bucket = document.getElementById('modal-bucket-select').value;
-    const folder = document.getElementById('modal-folder-input').value;
+    let folder = document.getElementById('modal-folder-input').value.trim();
 
     if (modalSelectedFiles.length === 0) {
         showModalMessage('error', 'Please select files to upload');
         return;
+    }
+
+    // If no folder specified and uploading a folder, extract folder name from path
+    if (!folder && modalSelectedFiles.length > 0 && modalSelectedFiles[0].webkitRelativePath) {
+        const pathParts = modalSelectedFiles[0].webkitRelativePath.split('/');
+        if (pathParts.length > 1) {
+            folder = pathParts[0];
+        }
     }
 
     const uploadBtn = document.getElementById('modal-upload-btn');

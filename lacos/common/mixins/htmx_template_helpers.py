@@ -232,6 +232,25 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
             request=request
         )
 
+    def render_bucket_select_template(self, request, active_bucket=None, oob=False):
+        """Render the bucket select dropdown for upload modal."""
+        from lacos.storage.services.bucket_service import BucketService
+
+        bucket_service = BucketService(skip_bucket_check=True)
+        workspace_buckets = bucket_service.get_all_accessible_buckets()
+
+        context = {
+            'workspace_buckets': workspace_buckets,
+            'active_bucket': active_bucket,
+            'oob': oob,
+        }
+
+        return render_to_string(
+            'dashboard/partials/bucket_select.html',
+            context,
+            request=request
+        )
+
     def build_oob_response(self, main_html, oob_updates=None):
         """
         Build response with out-of-band updates.
@@ -367,6 +386,20 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
         )
 
         return f'{response_html}{active_bucket_snippet}'
+
+    def htmx_error_response(self, message, status=400):
+        """
+        Return an HTMX-compatible error response.
+
+        Args:
+            message (str): The error message to display
+            status (int): HTTP status code (default 400)
+
+        Returns:
+            HttpResponse: Error response with alert HTML
+        """
+        error_html = self.render_message_template(message, level="error")
+        return HttpResponse(error_html, status=status)
 
     def render_message_template(self, message, level="success"):
         """

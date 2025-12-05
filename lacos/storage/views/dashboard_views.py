@@ -936,6 +936,28 @@ def file_info_htmx(request, bucket_type, object_path):
 
 
 @method_decorator(login_required, name='dispatch')
+class BucketSelectHTMXView(HtmxTemplateHelperMixin, View):
+    """Return updated bucket select dropdown for upload modal."""
+
+    def get(self, request):
+        """Render bucket select dropdown."""
+        bucket_service = BucketService(skip_bucket_check=True)
+        workspace_buckets = bucket_service.get_all_accessible_buckets()
+        active_bucket = self.get_active_bucket(request)
+
+        html = render_to_string(
+            'dashboard/partials/bucket_select.html',
+            {
+                'workspace_buckets': workspace_buckets,
+                'active_bucket': active_bucket,
+                'oob': False,
+            },
+            request=request,
+        )
+        return HttpResponse(html)
+
+
+@method_decorator(login_required, name='dispatch')
 class CreateBucketHTMXView(HtmxTemplateHelperMixin, View):
     """
     Create a new bucket via HTMX form submission.
@@ -972,15 +994,15 @@ class CreateBucketHTMXView(HtmxTemplateHelperMixin, View):
             if not current_active_bucket:
                 current_active_bucket = bucket_name
 
-            # Use specialized method for bucket tabs OOB update
-            response_html = self.build_bucket_tabs_oob_response(
+            # Render bucket tabs directly (form targets #bucket-tabs with outerHTML swap)
+            tabs_html = self.render_bucket_tabs_template(
                 request=request,
                 active_bucket=current_active_bucket,
                 success_message=result["message"]
             )
 
             # Add trigger to close modal
-            return self.add_htmx_trigger(response_html, {'closeModal': 'create-bucket-modal'})
+            return self.add_htmx_trigger(tabs_html, {'closeModal': 'create-bucket-modal'})
 
         except Exception as e:
             logger.exception(f"Error creating bucket: {str(e)}")

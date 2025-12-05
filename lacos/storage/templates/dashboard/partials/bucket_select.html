@@ -1,0 +1,5 @@
+<select id="modal-bucket-select" class="select select-bordered" {% if oob %}hx-swap-oob="outerHTML"{% endif %}>
+    {% for bucket in workspace_buckets %}
+    <option value="{{ bucket }}" {% if bucket == active_bucket %}selected{% endif %}>{{ bucket }}</option>
+    {% endfor %}
+</select>

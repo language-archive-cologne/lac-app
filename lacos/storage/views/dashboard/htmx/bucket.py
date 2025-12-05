@@ -69,8 +69,8 @@ class CreateBucketHTMXView(HtmxTemplateHelperMixin, View):
 
     def post(self, request):
         """Create a new bucket."""
-        bucket_name = request.POST.get("bucket_name", "").strip()
-        enable_ocfl = request.POST.get("enable_ocfl") == "on"
+        bucket_name = request.POST.get("bucketName", "").strip()
+        enable_ocfl = request.POST.get("enableOCFL") == "on"
 
         if not bucket_name:
             return self.htmx_error_response("Bucket name is required")
@@ -81,12 +81,31 @@ class CreateBucketHTMXView(HtmxTemplateHelperMixin, View):
             result = bucket_service.create_bucket(bucket_name, enable_ocfl=enable_ocfl)
 
             if result.get("success"):
-                # Return updated bucket list
-                workspace_buckets = bucket_service.get_all_accessible_buckets()
-                return render(
-                    request,
-                    "dashboard/partials/bucket_list.html",
-                    {"workspace_buckets": workspace_buckets, "active_bucket": bucket_name},
+                # Set new bucket as active and build OOB response
+                self.set_active_bucket(request, bucket_name)
+
+                # Render bucket content for the new bucket
+                content_html = self.render_bucket_content_template(request, bucket_name)
+
+                # Build response with OOB bucket tabs update
+                response_html = self.build_bucket_tabs_oob_response(
+                    main_html=content_html,
+                    request=request,
+                    active_bucket=bucket_name,
+                    success_message=f"Bucket '{bucket_name}' created successfully",
+                )
+
+                # Add OOB update for upload modal bucket select
+                bucket_select_html = self.render_bucket_select_template(
+                    request, active_bucket=bucket_name, oob=True
+                )
+                logger.info(f"Bucket select OOB HTML: {bucket_select_html[:200]}...")
+                response_html = f"{response_html}{bucket_select_html}"
+
+                # Return response with trigger to close modal
+                return self.add_htmx_trigger(
+                    response_html,
+                    {"closeModal": "create-bucket-modal"},
                 )
             else:
                 return self.htmx_error_response(result.get("error", "Failed to create bucket"))
@@ -202,6 +221,18 @@ class RenameBucketHTMXView(HtmxTemplateHelperMixin, View):
         except Exception as e:
             logger.error(f"Error renaming bucket {bucket_name} to {new_name}: {str(e)}")
             return self.htmx_error_response(str(e))
+
+
+@method_decorator(login_required, name="dispatch")
+class BucketSelectHTMXView(HtmxTemplateHelperMixin, View):
+    """Return updated bucket select dropdown for upload modal."""
+
+    def get(self, request):
+        """Render bucket select dropdown."""
+        bucket_select_html = self.render_bucket_select_template(
+            request, active_bucket=self.get_active_bucket(request), oob=False
+        )
+        return HttpResponse(bucket_select_html)
 
 
 @login_required

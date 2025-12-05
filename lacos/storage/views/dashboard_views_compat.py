@@ -26,6 +26,7 @@ from .dashboard.acl import (
 # HTMX bucket views
 from .dashboard.htmx.bucket import (
     BucketContentHTMXView,
+    BucketSelectHTMXView,
     CreateBucketHTMXView,
     delete_bucket_htmx,
     RenameBucketModalHTMXView,
@@ -47,6 +48,7 @@ __all__ = [
     "acl_sync_scope_fields",
     # HTMX
     "BucketContentHTMXView",
+    "BucketSelectHTMXView",
     "CreateBucketHTMXView",
     "delete_bucket_htmx",
     "RenameBucketModalHTMXView",
