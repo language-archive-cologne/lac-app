@@ -79,7 +79,7 @@ class ACLService(BaseStorageService):
         for collection in Collection.objects.all():
             results.append(self.load_collection(collection))
 
-        for bundle in Bundle.objects.select_related("structural_info__is_member_of_collection"):
+        for bundle in Bundle.objects.all():
             results.append(self.load_bundle(bundle))
 
         return results
