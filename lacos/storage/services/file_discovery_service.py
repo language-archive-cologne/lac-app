@@ -367,13 +367,14 @@ class FileDiscoveryService(BaseStorageService):
                 if not prefix_obj: continue # Skip if None
                 current_prefix = prefix_obj.get('Prefix')
                 potential_id = current_prefix.rstrip('/').rsplit('/', 1)[-1]
-                logger.debug(f"Checking prefix {current_prefix} as potential collection '{potential_id}'")
+                logger.info(f"Checking prefix {current_prefix} as potential collection '{potential_id}'")
 
                 try:
                     collection_xml_key = self.form_collection_xml_path(potential_id)
+                    logger.info(f"Formed collection XML path: {collection_xml_key} for prefix {current_prefix}")
                     # Check if the formed key belongs to this prefix
                     if collection_xml_key.startswith(current_prefix):
-                        logger.debug(f"Checking for collection XML at: {collection_xml_key}")
+                        logger.info(f"Checking for collection XML at: {collection_xml_key}")
                         self.s3_client.head_object(Bucket=bucket, Key=collection_xml_key)
                         # Store potential collection info
                         potential_collection_xml_keys.append((potential_id, collection_xml_key, current_prefix))
@@ -382,7 +383,7 @@ class FileDiscoveryService(BaseStorageService):
                          logger.debug(f"Skipping collection check for {potential_id} as formed path {collection_xml_key} doesn't match prefix {current_prefix}")
                 except ClientError as coll_e:
                     if coll_e.response.get('Error', {}).get('Code', 'Unknown') == '404':
-                        logger.debug(f"Not a collection: Collection XML check failed (404) for {collection_xml_key}")
+                        logger.info(f"Not a collection: Collection XML check failed (404) for {collection_xml_key}")
                     else:
                          error_code = coll_e.response.get('Error', {}).get('Code', 'Unknown')
                          logger.warning(f"WARN: Collection XML check failed unexpectedly for {collection_xml_key}. Error: {error_code}")

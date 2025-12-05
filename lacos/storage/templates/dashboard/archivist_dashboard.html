@@ -587,12 +587,12 @@ async function startModalUpload() {
         return;
     }
 
-    // If no folder specified and uploading a folder, extract folder name from path
-    if (!folder && modalSelectedFiles.length > 0 && modalSelectedFiles[0].webkitRelativePath) {
-        const pathParts = modalSelectedFiles[0].webkitRelativePath.split('/');
-        if (pathParts.length > 1) {
-            folder = pathParts[0];
-        }
+    // When uploading a folder, webkitRelativePath already contains the full path
+    // (e.g., "myFolder/subfolder/file.txt"), so we don't need an additional folder prefix
+    const isUploadingFolder = modalSelectedFiles.length > 0 && modalSelectedFiles[0].webkitRelativePath;
+    if (isUploadingFolder && !folder) {
+        // Leave folder empty - the path in webkitRelativePath is the full path
+        folder = '';
     }
 
     const uploadBtn = document.getElementById('modal-upload-btn');
@@ -657,11 +657,18 @@ async function startModalUpload() {
         document.getElementById('modal-files-info').classList.add('hidden');
         document.getElementById('modal-folder-input').value = '';
 
-        // Refresh dashboard
+        // Refresh bucket content and close modal
         setTimeout(() => {
-            document.querySelector('[hx-get="/storage/dashboard/"]').click();
+            // Get current active bucket and refresh its content
+            const activeBucket = document.getElementById('current-active-bucket-input')?.value;
+            if (activeBucket) {
+                htmx.ajax('GET', `/storage/htmx/bucket-content/${activeBucket}/?force_fresh=true`, {
+                    target: '#bucket-content',
+                    swap: 'innerHTML'
+                });
+            }
             document.getElementById('upload-modal').checked = false;
-        }, 2000);
+        }, 1500);
 
     } catch (error) {
         showModalMessage('error', `Upload failed: ${error.message}`);

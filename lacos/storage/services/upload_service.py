@@ -223,12 +223,17 @@ class UploadService(BaseStorageService):
                 continue
             
             # Create effective path prefix by combining the overall prefix with file-specific path
+            # Note: webkitRelativePath includes the filename, so we need to strip it
             effective_path_prefix = path_prefix
             if file_path:
-                if effective_path_prefix:
-                    effective_path_prefix = f"{effective_path_prefix}/{file_path}"
-                else:
-                    effective_path_prefix = file_path
+                # Strip the filename from the path if it ends with the filename
+                if file_path.endswith(file_name):
+                    file_path = file_path[:-len(file_name)].rstrip('/')
+                if file_path:  # Only use if there's still a path after stripping
+                    if effective_path_prefix:
+                        effective_path_prefix = f"{effective_path_prefix}/{file_path}"
+                    else:
+                        effective_path_prefix = file_path
             
             # Generate the presigned post for this file
             effective_file_size = file_meta.get('file_size', file_size or 0)
