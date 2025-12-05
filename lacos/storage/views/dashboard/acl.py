@@ -335,6 +335,86 @@ def acl_save_all(request):
 
 @login_required
 @require_http_methods(["POST"])
+def acl_load_single(request, object_type, object_id):
+    """Load ACL from S3 for a single collection or bundle."""
+    from lacos.storage.services.acl_service import ACLService
+
+    if object_type not in {"collection", "bundle"}:
+        return HttpResponse("Invalid object type", status=400)
+
+    model = Collection if object_type == "collection" else Bundle
+    service = ACLService(skip_bucket_check=True)
+
+    try:
+        obj = model.objects.get(pk=object_id)
+    except model.DoesNotExist:
+        return HttpResponse("Object not found", status=404)
+
+    try:
+        if object_type == "collection":
+            result = service.load_collection(obj)
+        else:
+            result = service.load_bundle(obj)
+
+        if result.success:
+            message = f"Loaded ACL for {object_type}"
+        else:
+            message = f"Failed to load: {result.error}"
+
+        if request.headers.get("HX-Request"):
+            html = f'<span class="text-xs {'text-success' if result.success else 'text-error'}">{message}</span>'
+            return HttpResponse(html)
+        return redirect(f"{reverse('storage:acl_admin_dashboard')}?message={message}")
+
+    except Exception as e:
+        logger.exception("Error in acl_load_single: %s", e)
+        if request.headers.get("HX-Request"):
+            return HttpResponse(f'<span class="text-xs text-error">Error: {e}</span>')
+        return redirect(f"{reverse('storage:acl_admin_dashboard')}?message=Load failed: {e}")
+
+
+@login_required
+@require_http_methods(["POST"])
+def acl_save_single(request, object_type, object_id):
+    """Save ACL to S3 for a single collection or bundle."""
+    from lacos.storage.services.acl_service import ACLService
+
+    if object_type not in {"collection", "bundle"}:
+        return HttpResponse("Invalid object type", status=400)
+
+    model = Collection if object_type == "collection" else Bundle
+    service = ACLService(skip_bucket_check=True)
+
+    try:
+        obj = model.objects.get(pk=object_id)
+    except model.DoesNotExist:
+        return HttpResponse("Object not found", status=404)
+
+    try:
+        if object_type == "collection":
+            result = service.save_collection(obj)
+        else:
+            result = service.save_bundle(obj)
+
+        if result.success:
+            message = f"Saved ACL for {object_type}"
+        else:
+            message = f"Failed to save: {result.error}"
+
+        if request.headers.get("HX-Request"):
+            html = f'<span class="text-xs {'text-success' if result.success else 'text-error'}">{message}</span>'
+            return HttpResponse(html)
+        return redirect(f"{reverse('storage:acl_admin_dashboard')}?message={message}")
+
+    except Exception as e:
+        logger.exception("Error in acl_save_single: %s", e)
+        if request.headers.get("HX-Request"):
+            return HttpResponse(f'<span class="text-xs text-error">Error: {e}</span>')
+        return redirect(f"{reverse('storage:acl_admin_dashboard')}?message=Save failed: {e}")
+
+
+@login_required
+@require_http_methods(["POST"])
 def acl_update_settings(request):
     """Update ACL configuration settings."""
     try:

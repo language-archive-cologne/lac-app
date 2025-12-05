@@ -19,7 +19,9 @@ from .dashboard.archivist import (
 from .dashboard.acl import (
     acl_admin_dashboard,
     acl_load_all,
+    acl_load_single,
     acl_save_all,
+    acl_save_single,
     acl_update_settings,
     acl_update_permission,
     acl_edit_permission_form,
@@ -48,7 +50,9 @@ __all__ = [
     # ACL
     "acl_admin_dashboard",
     "acl_load_all",
+    "acl_load_single",
     "acl_save_all",
+    "acl_save_single",
     "acl_sync_all",  # backwards compat
     "acl_update_settings",
     "acl_update_permission",

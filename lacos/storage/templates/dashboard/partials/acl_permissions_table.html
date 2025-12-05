@@ -61,7 +61,7 @@
               </button>
             </th>
             <th>Read agents</th>
-            <th></th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -101,20 +101,49 @@
               {% endif %}
             </td>
             <td>
-              <button
-                type="button"
-                class="btn btn-xs btn-ghost"
-                {% if row.object_exists %}
-                hx-get="{% url 'storage:acl_edit_permission_form' scope row.object_id %}"
-                hx-target="#acl-edit-modal-content"
-                hx-swap="innerHTML"
-                onclick="document.getElementById('acl-edit-modal').showModal()"
-                {% else %}
-                disabled
-                {% endif %}
-              >
-                Edit
-              </button>
+              <div class="flex items-center gap-2">
+                <div class="join">
+                  <div class="tooltip" data-tip="Load from S3">
+                    <form
+                      method="post"
+                      action="{% url 'storage:acl_load_single' scope row.object_id %}"
+                      hx-post="{% url 'storage:acl_load_single' scope row.object_id %}"
+                      hx-target="#acl-action-status-{{ row.object_id }}"
+                      hx-swap="innerHTML"
+                      hx-confirm="Load ACL from S3? This will overwrite the database record."
+                    >
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-xs join-item" {% if not row.object_exists %}disabled{% endif %}>Load</button>
+                    </form>
+                  </div>
+                  <div class="tooltip" data-tip="Save to S3">
+                    <form
+                      method="post"
+                      action="{% url 'storage:acl_save_single' scope row.object_id %}"
+                      hx-post="{% url 'storage:acl_save_single' scope row.object_id %}"
+                      hx-target="#acl-action-status-{{ row.object_id }}"
+                      hx-swap="innerHTML"
+                      hx-confirm="Save ACL to S3? This will overwrite the S3 file."
+                    >
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-xs join-item" {% if not row.object_exists or not row.has_permission %}disabled{% endif %}>Save</button>
+                    </form>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn-xs join-item"
+                    {% if row.object_exists %}
+                    hx-get="{% url 'storage:acl_edit_permission_form' scope row.object_id %}"
+                    hx-target="#acl-edit-modal-content"
+                    hx-swap="innerHTML"
+                    onclick="document.getElementById('acl-edit-modal').showModal()"
+                    {% else %}
+                    disabled
+                    {% endif %}
+                  >Edit</button>
+                </div>
+                <span id="acl-action-status-{{ row.object_id }}"></span>
+              </div>
             </td>
           </tr>
           {% empty %}

@@ -55,7 +55,9 @@ urlpatterns = [
     path("dashboard/acl/records/", views.acl_records_panel, name="acl_records_panel"),
     path("dashboard/acl/records/<str:scope>/", views.acl_records_table, name="acl_records_table"),
     path("dashboard/acl/load/", views.acl_load_all, name="acl_load_all"),
+    path("dashboard/acl/load/<str:object_type>/<str:object_id>/", views.acl_load_single, name="acl_load_single"),
     path("dashboard/acl/save/", views.acl_save_all, name="acl_save_all"),
+    path("dashboard/acl/save/<str:object_type>/<str:object_id>/", views.acl_save_single, name="acl_save_single"),
     # Backwards compatibility
     path("dashboard/acl/sync/", views.acl_load_all, name="acl_sync_all"),
     path("dashboard/acl/settings/", views.acl_update_settings, name="acl_update_settings"),
