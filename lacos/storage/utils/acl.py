@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Iterable, Mapping, Sequence
 
+from lacos.utils.text import normalize_nfc
 from lacos.storage.constants import (
     ACL_LEVEL_EMBARGO,
     ACL_LEVEL_PRIVATE,
@@ -105,6 +106,7 @@ def normalize_agent_uri(uri: str | None) -> str | None:
     """
     Normalize an agent URI to our urn:lacos: format.
 
+    - Applies Unicode NFC normalization for consistent character representation
     - URIs with known prefixes (mailto:, https://, urn:, etc.) are preserved
     - URIs that look like eppn (contain @, no prefix) become urn:lacos:eppn:<uri>
     - Other plain strings become urn:lacos:agent:<uri>
@@ -114,7 +116,7 @@ def normalize_agent_uri(uri: str | None) -> str | None:
     if not uri:
         return None
 
-    uri = uri.strip()
+    uri = normalize_nfc(uri.strip())
     if not uri:
         return None
 

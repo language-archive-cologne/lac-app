@@ -113,6 +113,25 @@ class TestNormalizeAgentUri:
         assert normalize_agent_uri("müller@uni-köln.de") == "urn:lacos:eppn:müller@uni-köln.de"
         assert normalize_agent_uri("用户") == "urn:lacos:agent:用户"
 
+    def test_nfd_normalized_to_nfc(self):
+        """NFD unicode should be normalized to NFC."""
+        # NFD form: u + combining diaeresis
+        nfd_uri = "mu\u0308ller@uni-ko\u0308ln.de"
+        # NFC form: u-umlaut as single character
+        nfc_result = "urn:lacos:eppn:m\u00fcller@uni-k\u00f6ln.de"
+        assert normalize_agent_uri(nfd_uri) == nfc_result
+
+    def test_nfc_preserved(self):
+        """NFC unicode should remain unchanged."""
+        nfc_uri = "m\u00fcller@uni-k\u00f6ln.de"
+        assert normalize_agent_uri(nfc_uri) == f"urn:lacos:eppn:{nfc_uri}"
+
+    def test_nfd_plain_string_normalized(self):
+        """Plain string with NFD should be normalized to NFC."""
+        nfd = "mu\u0308ller"
+        nfc = "m\u00fcller"
+        assert normalize_agent_uri(nfd) == f"urn:lacos:agent:{nfc}"
+
     def test_special_characters_in_plain_string(self):
         """Special characters in plain strings are preserved."""
         assert normalize_agent_uri("user-name_123") == "urn:lacos:agent:user-name_123"

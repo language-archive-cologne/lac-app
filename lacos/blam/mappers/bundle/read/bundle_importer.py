@@ -3,6 +3,7 @@ from typing import Any, Optional, List, Tuple
 from django.db import transaction
 from django.core.exceptions import ValidationError
 import logging
+import unicodedata
 import uuid
 
 from lacos.blam.models.bundle.bundle_repository import Bundle
@@ -29,6 +30,9 @@ class BundleImporter:
         Validates XML against schema and parses into dataclass
         Returns parsed Cmd object if valid, raises ValidationError if invalid
         """
+        # Normalize to Unicode NFC for consistent character representation
+        xml_content = unicodedata.normalize("NFC", xml_content)
+
         try:
             # Using xsdata parser to parse XML into Cmd dataclass
             parser = XmlParser()

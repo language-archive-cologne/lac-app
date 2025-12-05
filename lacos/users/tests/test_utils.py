@@ -121,6 +121,22 @@ class TestEdgeCases:
         user = User(username="müller")
         assert generate_acl_agent_uri(user) == "urn:lacos:user:müller"
 
+    def test_nfd_username_normalized_to_nfc(self):
+        """NFD unicode username should be normalized to NFC."""
+        # NFD form: u + combining diaeresis
+        nfd_username = "mu\u0308ller"
+        # NFC form: u-umlaut as single character
+        nfc_username = "m\u00fcller"
+        user = User(username=nfd_username)
+        assert generate_acl_agent_uri(user) == f"urn:lacos:user:{nfc_username}"
+
+    def test_nfd_shibboleth_username_normalized(self):
+        """Shibboleth user with NFD username should be normalized to NFC."""
+        nfd_username = "mu\u0308ller@uni-ko\u0308ln.de"
+        nfc_username = "m\u00fcller@uni-k\u00f6ln.de"
+        user = User(username=nfd_username, saml_persistent_id="some-id")
+        assert generate_acl_agent_uri(user) == f"urn:lacos:eppn:{nfc_username}"
+
     def test_very_long_username(self):
         """Very long username is handled correctly."""
         long_name = "a" * 200

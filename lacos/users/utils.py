@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from lacos.utils.text import normalize_nfc
+
 if TYPE_CHECKING:
     from .models import User
 
@@ -16,6 +18,8 @@ def generate_acl_agent_uri(user: User) -> str | None:
 
     All URIs are prefixed with urn:lacos: to clearly identify them as
     LACOS-generated and avoid conflicts with external URIs.
+
+    Applies Unicode NFC normalization for consistent character representation.
 
     Shibboleth users (identified by saml_persistent_id):
         urn:lacos:eppn:<username>  (username is typically the eduPersonPrincipalName)
@@ -28,12 +32,14 @@ def generate_acl_agent_uri(user: User) -> str | None:
     if not user.username:
         return None
 
+    username = normalize_nfc(user.username)
+
     # Shibboleth users have saml_persistent_id set
     if user.saml_persistent_id:
-        return f"urn:lacos:eppn:{user.username}"
+        return f"urn:lacos:eppn:{username}"
 
     # Native Django users
-    return f"urn:lacos:user:{user.username}"
+    return f"urn:lacos:user:{username}"
 
 
 def ensure_acl_agent_uri(user: User, save: bool = False) -> bool:

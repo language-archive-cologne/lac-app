@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Any
 import io
 import logging
+import unicodedata
 import uuid
 import xml.etree.ElementTree as ET
 
@@ -72,6 +73,9 @@ class CollectionImporter:
     @staticmethod
     def validate_xml(xml_content: str) -> CollectionCmdAdapter:
         """Parse BLAM collection XML across supported schema versions."""
+        # Normalize to Unicode NFC for consistent character representation
+        xml_content = unicodedata.normalize("NFC", xml_content)
+
         version = CollectionImporter._detect_version(xml_content)
         logger.debug("Detected BLAM collection version %s", version)
         if version == BLAM_VERSION_1_0:
