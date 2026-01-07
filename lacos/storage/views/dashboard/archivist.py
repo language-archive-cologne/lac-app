@@ -81,16 +81,8 @@ def load_folder_contents(request, bucket_type, folder_path):
     ) as session:
         bucket_service = BucketService(skip_bucket_check=True)
 
-        # Get bucket name from session
-        bucket_state = BucketCoordinatorMixin()
-        bucket_name = bucket_state.get_active_bucket(request)
-
-        if not bucket_name:
-            return render(
-                request,
-                "dashboard/partials/folder_contents_error.html",
-                {"error": "No active bucket selected"},
-            )
+        # Use bucket_type from URL parameter directly
+        bucket_name = bucket_type
 
         session.metadata["bucket_name"] = bucket_name
 
@@ -103,9 +95,10 @@ def load_folder_contents(request, bucket_type, folder_path):
                 request,
                 "dashboard/folder_contents_partial.html",
                 {
-                    "items": contents,
+                    "listing": contents,
                     "folder_path": folder_path,
-                    "bucket_name": bucket_name,
+                    "folder_path_param": folder_path,
+                    "bucket_type": bucket_name,
                 },
             )
         except Exception as e:
