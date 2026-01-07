@@ -227,22 +227,26 @@ def ingest_metadata(request):
             process_s3_prefix(bucket=bucket, prefix=pipeline_prefix)
             task = None
         elif metadata_type == "collection":
-            # If s3_key is a folder path, form the proper OCFL XML path
-            actual_s3_key = s3_key
+            # If s3_key is a folder path, use pipeline to import collection AND its bundles
             if s3_key.endswith('/') or not s3_key.endswith('.xml'):
-                discovery_service = FileDiscoveryService()
                 # Extract collection ID from folder path (e.g., "algerien/" -> "algerien")
                 collection_id = s3_key.rstrip('/').split('/')[-1]
-                actual_s3_key = discovery_service.form_collection_xml_path(collection_id)
+                # Use the prefix to discover and import collection + all bundles
+                prefix = f"{collection_id}/"
                 logger.info(
-                    "Formed OCFL collection XML path from folder",
+                    "Launching collection+bundles pipeline from folder",
                     extra={
+                        "bucket": bucket,
                         "original_key": s3_key,
                         "collection_id": collection_id,
-                        "formed_xml_path": actual_s3_key,
+                        "prefix": prefix,
                     },
                 )
-            task = import_s3_collection(bucket=bucket, s3_key=actual_s3_key)
+                process_s3_prefix(bucket=bucket, prefix=prefix)
+                task = None
+            else:
+                # Direct XML file path provided - import just the collection
+                task = import_s3_collection(bucket=bucket, s3_key=s3_key)
         else:
             # If s3_key is a folder path for bundle, form the proper OCFL XML path
             actual_s3_key = s3_key
