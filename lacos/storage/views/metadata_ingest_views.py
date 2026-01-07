@@ -227,9 +227,43 @@ def ingest_metadata(request):
             process_s3_prefix(bucket=bucket, prefix=pipeline_prefix)
             task = None
         elif metadata_type == "collection":
-            task = import_s3_collection(bucket=bucket, s3_key=s3_key)
+            # If s3_key is a folder path, form the proper OCFL XML path
+            actual_s3_key = s3_key
+            if s3_key.endswith('/') or not s3_key.endswith('.xml'):
+                discovery_service = FileDiscoveryService()
+                # Extract collection ID from folder path (e.g., "algerien/" -> "algerien")
+                collection_id = s3_key.rstrip('/').split('/')[-1]
+                actual_s3_key = discovery_service.form_collection_xml_path(collection_id)
+                logger.info(
+                    "Formed OCFL collection XML path from folder",
+                    extra={
+                        "original_key": s3_key,
+                        "collection_id": collection_id,
+                        "formed_xml_path": actual_s3_key,
+                    },
+                )
+            task = import_s3_collection(bucket=bucket, s3_key=actual_s3_key)
         else:
-            task = import_s3_bundle(bucket=bucket, s3_key=s3_key)
+            # If s3_key is a folder path for bundle, form the proper OCFL XML path
+            actual_s3_key = s3_key
+            if s3_key.endswith('/') or not s3_key.endswith('.xml'):
+                discovery_service = FileDiscoveryService()
+                # Extract collection_id and bundle_id from path (e.g., "collection/bundle/" -> collection, bundle)
+                parts = s3_key.rstrip('/').split('/')
+                if len(parts) >= 2:
+                    collection_id = parts[-2]
+                    bundle_id = parts[-1]
+                    actual_s3_key = discovery_service.form_bundle_xml_path(collection_id, bundle_id)
+                    logger.info(
+                        "Formed OCFL bundle XML path from folder",
+                        extra={
+                            "original_key": s3_key,
+                            "collection_id": collection_id,
+                            "bundle_id": bundle_id,
+                            "formed_xml_path": actual_s3_key,
+                        },
+                    )
+            task = import_s3_bundle(bucket=bucket, s3_key=actual_s3_key)
 
         task_id = getattr(task, "id", None)
 
