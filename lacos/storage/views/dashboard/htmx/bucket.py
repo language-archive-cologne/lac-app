@@ -33,30 +33,42 @@ class BucketContentHTMXView(HtmxTemplateHelperMixin, View):
             request_id=request_id,
             metadata={"bucket_name": bucket_name},
         ) as session:
-            bucket_service = BucketService(skip_bucket_check=True)
-            bucket_state = BucketCoordinatorMixin()
-
-            # Set as active bucket
-            bucket_state.set_active_bucket(request, bucket_name)
-
-            force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
-
             try:
-                # Get root level items
-                root_data = bucket_service.get_root_level_items(bucket_name, force_fresh=force_fresh)
-                children = root_data.get("children", [])
+                force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
+                continuation_token = request.GET.get("continuation_token") or None
+                try:
+                    requested_max_keys = int(request.GET.get("max_keys", "") or 0)
+                except ValueError:
+                    requested_max_keys = 0
 
-                session.metadata["items_loaded"] = len(children)
+                # Determine prefetch behavior - default True for initial loads
+                # Only defer loading when explicitly paginating or requested
+                prefetch_root = True
+                prefetch_param = request.GET.get("prefetch_root")
+                if prefetch_param is not None:
+                    prefetch_root = prefetch_param.lower() == "true"
 
-                return render(
+                session.metadata.update({
+                    "force_fresh": force_fresh,
+                    "prefetch_root": prefetch_root,
+                })
+
+                # Use the mixin method which provides correct template context
+                content_html = self.render_bucket_content_template(
                     request,
-                    "dashboard/bucket_content_partial.html",
-                    {
-                        "bucket_name": bucket_name,
-                        "items": children,
-                        "force_fresh": force_fresh,
-                    },
+                    bucket_name,
+                    continuation_token=continuation_token,
+                    max_keys=requested_max_keys if requested_max_keys > 0 else None,
+                    force_fresh=force_fresh,
+                    prefetch_root=prefetch_root,
                 )
+                selector_html = self.build_bucket_tabs_oob_response(
+                    request=request,
+                    active_bucket=bucket_name
+                )
+                session.metadata["rendered"] = True
+
+                return HttpResponse(f'{content_html}{selector_html}')
             except Exception as e:
                 logger.error(f"Error loading bucket content for {bucket_name}: {str(e)}")
                 session.metadata["error"] = str(e)

@@ -197,7 +197,7 @@ def bucket_size_info(request, bucket_name):
 
         try:
             size_info = bucket_service.get_bucket_total_size(bucket_name, force_fresh=force_fresh)
-            session.metadata["total_size"] = size_info.get("total_size_bytes", 0)
+            session.metadata["total_size"] = size_info.get("total_size", 0)
             session.metadata["object_count"] = size_info.get("object_count", 0)
 
             return render(
@@ -205,7 +205,11 @@ def bucket_size_info(request, bucket_name):
                 "dashboard/partials/bucket_size_info.html",
                 {
                     "bucket_name": bucket_name,
-                    "size_info": size_info,
+                    "total_size": size_info.get("total_size", 0),
+                    "total_size_formatted": size_info.get("total_size_formatted", "0 B"),
+                    "object_count": size_info.get("object_count", 0),
+                    "success": size_info.get("success", False),
+                    "error": size_info.get("error"),
                 },
             )
         except Exception as e:
