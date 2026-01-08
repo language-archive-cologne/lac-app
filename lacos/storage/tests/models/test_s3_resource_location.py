@@ -33,7 +33,7 @@ def s3_resource_location(content_type, s3_file_object):
     resource.content_type = content_type
     resource.object_id = s3_file_object.id
     resource.content_object = s3_file_object
-    resource.content_type = "text/plain"
+    resource.mime_type = "text/plain"
     resource.size_bytes = 1024
     resource.__str__.return_value = f"{resource.resource_pid} -> {resource.s3_bucket}/{resource.s3_key}"
     return resource
@@ -44,7 +44,7 @@ class TestS3ResourceLocation:
         assert s3_resource_location.resource_pid == "https://example.org/handle/123456"
         assert s3_resource_location.s3_bucket == "test-bucket"
         assert s3_resource_location.s3_key == "uploads/test_folder/test_file.txt"
-        assert s3_resource_location.content_type == "text/plain"
+        assert s3_resource_location.mime_type == "text/plain"
         assert s3_resource_location.size_bytes == 1024
         assert s3_resource_location.object_id == 123
 

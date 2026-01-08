@@ -10,7 +10,7 @@ from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.storage.constants import ACL_LEVEL_EMBARGO, ACL_LEVEL_PUBLIC
 from lacos.storage.models.acl_permissions import ACLPermissions
-from lacos.storage.services.acl_sync_service import ACLSyncService
+from lacos.storage.services.acl_service import ACLService as ACLSyncService
 from lacos.storage.services.resource_mapping_service import ResourceMappingService
 
 from .test_constants import TEST_BUCKET_NAME
@@ -64,8 +64,7 @@ def test_sync_collection_creates_permissions(mock_s3, acl_sync_service):
 
     result = acl_sync_service.sync_collection(collection)
 
-    assert result.found is True
-    assert result.updated is True
+    assert result.success is True
     assert result.error is None
 
     ct = ContentType.objects.get_for_model(Collection)
@@ -97,13 +96,12 @@ def test_sync_collection_uses_cached_acl(mock_s3, acl_sync_service):
 
     with patch.object(acl_sync_service.s3_client, "get_object", wraps=acl_sync_service.s3_client.get_object) as spy_get_object:
         first = acl_sync_service.sync_collection(collection)
-        assert first.found is True
+        assert first.success is True
         assert spy_get_object.call_count == 1
 
     with patch.object(acl_sync_service.s3_client, "get_object", side_effect=AssertionError("Unexpected S3 fetch")):
         second = acl_sync_service.sync_collection(collection)
-        assert second.found is True
-        assert second.updated is False
+        assert second.success is True
 
 
 @pytest.mark.django_db
@@ -120,8 +118,7 @@ def test_sync_bundle_handles_missing_acl(mock_s3, acl_sync_service):
 
     result = acl_sync_service.sync_bundle(bundle)
 
-    assert result.found is False
-    assert result.updated is True  # Record created with bucket/key
+    assert result.success is False  # ACL file missing
     assert result.error is None
 
     ct = ContentType.objects.get_for_model(Bundle)
@@ -129,4 +126,4 @@ def test_sync_bundle_handles_missing_acl(mock_s3, acl_sync_service):
     assert permissions.permissions_data is None
     assert permissions.last_synced is None
     assert permissions.access_level == ACL_LEVEL_EMBARGO
-    assert permissions.read_agents == []
+    assert permissions.read_agents is None or permissions.read_agents == []

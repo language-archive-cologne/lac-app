@@ -33,9 +33,10 @@ def file_content(request, bucket_type, file_path):
 
         # Get file content and metadata
         result = bucket_service.get_file_content(bucket, file_path)
-        
-        if result.get("success", False):
-            content_type = result.get("content_type", "application/octet-stream")
+
+        if "error" not in result:
+            metadata = result.get("metadata", {})
+            content_type = metadata.get("content_type", "application/octet-stream")
             content = result.get("content")
             
             # Return the file content with the appropriate content type

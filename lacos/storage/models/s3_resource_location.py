@@ -31,11 +31,11 @@ class S3ResourceLocation(models.Model):
     )
     
     # Optional metadata
-    content_type = models.CharField(
+    mime_type = models.CharField(
         max_length=255,
         null=True,
         blank=True,
-        help_text="Content type of the resource"
+        help_text="MIME type of the resource (e.g., application/pdf)"
     )
     size_bytes = models.BigIntegerField(
         null=True,

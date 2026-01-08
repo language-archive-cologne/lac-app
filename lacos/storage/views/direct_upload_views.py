@@ -39,7 +39,6 @@ def direct_upload(request):
                     files_metadata=files_metadata,
                     path_prefix=folder_name,
                     expiration=3600,
-                    use_multipart=False  # Explicitly use single-part uploads
                 )
                 
                 # Clear the session data to prevent reuse
@@ -158,20 +157,19 @@ def direct_upload(request):
             files_metadata=files_metadata,
             path_prefix=folder_name,
             expiration=3600,
-            use_multipart=False  # Explicitly use single-part uploads
         )
-        
+
         if result["success"]:
             logger.info(f"Successfully generated {len(result['presigned_posts'])} presigned URLs")
             # Log the first URL for debugging
             if result["presigned_posts"]:
                 first_url = result["presigned_posts"][0].get("presigned_post", {}).get("url", "")
                 logger.info(f"Sample presigned URL: {first_url}")
-                
+
                 # Log the fields for the first presigned post
                 first_fields = result["presigned_posts"][0].get("presigned_post", {}).get("fields", {})
                 logger.info(f"Sample presigned fields: {json.dumps(first_fields)}")
-            
+
             # Transform the presigned_posts to a client-friendly format
             client_friendly_posts = []
             for post in result["presigned_posts"]:
@@ -179,7 +177,7 @@ def direct_upload(request):
                 if not post.get('presigned_post'):
                     logger.warning(f"Missing presigned_post in data for {post.get('file_name')}")
                     continue
-                
+
                 # Extract the presigned_post data and merge with the post properties
                 presigned_post = post['presigned_post']
                 client_post = {
@@ -190,11 +188,11 @@ def direct_upload(request):
                     'fields': presigned_post.get('fields', {}),
                 }
                 client_friendly_posts.append(client_post)
-            
+
             logger.info(f"Transformed {len(client_friendly_posts)} posts to client-friendly format")
             if client_friendly_posts:
                 logger.debug(f"Sample transformed post: {json.dumps(client_friendly_posts[0])}")
-            
+
             # Return the presigned URLs to the upload_stage.html template
             return render(request, "upload/upload_stage.html", {
                 "presigned_posts": client_friendly_posts,
@@ -204,10 +202,10 @@ def direct_upload(request):
             error_msg = result.get('error', 'Unknown error')
             logger.error(f"Failed to generate presigned URLs: {error_msg}")
             return render(request, "upload/upload_status.html", {
-                "success": False, 
+                "success": False,
                 "message": f"Failed to generate presigned URLs: {error_msg}"
             })
-            
+
     except json.JSONDecodeError:
         logger.exception("Invalid JSON format in file paths or names")
         return render(request, "upload/upload_status.html", {
@@ -297,20 +295,19 @@ def process_upload(request):
             files_metadata=files_metadata,
             path_prefix=folder_name,
             expiration=3600,
-            use_multipart=False  # Explicitly use single-part uploads
         )
-        
+
         if result["success"]:
             logger.info(f"Successfully generated {len(result['presigned_posts'])} presigned URLs")
             # Log the first URL for debugging
             if result["presigned_posts"]:
                 first_url = result["presigned_posts"][0].get("presigned_post", {}).get("url", "")
                 logger.info(f"Sample presigned URL: {first_url}")
-                
+
                 # Log the fields for the first presigned post
                 first_fields = result["presigned_posts"][0].get("presigned_post", {}).get("fields", {})
                 logger.info(f"Sample presigned fields: {json.dumps(first_fields)}")
-            
+
             # Transform the presigned_posts to a client-friendly format
             client_friendly_posts = []
             for post in result["presigned_posts"]:
@@ -318,7 +315,7 @@ def process_upload(request):
                 if not post.get('presigned_post'):
                     logger.warning(f"Missing presigned_post in data for {post.get('file_name')}")
                     continue
-                
+
                 # Extract the presigned_post data and merge with the post properties
                 presigned_post = post['presigned_post']
                 client_post = {
@@ -329,11 +326,11 @@ def process_upload(request):
                     'fields': presigned_post.get('fields', {}),
                 }
                 client_friendly_posts.append(client_post)
-            
+
             logger.info(f"Transformed {len(client_friendly_posts)} posts to client-friendly format")
             if client_friendly_posts:
                 logger.debug(f"Sample transformed post: {json.dumps(client_friendly_posts[0])}")
-            
+
             # Return the upload stage template directly
             return render(request, "upload/upload_stage.html", {
                 "presigned_posts": client_friendly_posts,
@@ -343,10 +340,10 @@ def process_upload(request):
             error_msg = result.get('error', 'Unknown error')
             logger.error(f"Failed to generate presigned URLs: {error_msg}")
             return render(request, "upload/upload_status.html", {
-                "success": False, 
+                "success": False,
                 "message": f"Failed to generate presigned URLs: {error_msg}"
             })
-            
+
     except Exception as e:
         # Handle errors
         logger.exception(f"Unexpected error in process_upload: {str(e)}")
@@ -417,28 +414,37 @@ def upload_complete(request):
         
         uploaded_files = json.loads(uploaded_files_json)
         logger.info(f"Processing {len(uploaded_files)} completed uploads")
-        
-        # Process the uploaded files
+
+        # Process the uploaded files by marking each as complete
         upload_service = UploadService()
         logger.info(f"Upload service configuration: is_minio={upload_service.is_minio}, endpoint_url={upload_service.endpoint_url}")
-        
-        result = upload_service.process_uploaded_files(
-            folder_name=folder_name,
-            uploaded_files=uploaded_files
-        )
-        
-        if result["success"]:
-            logger.info(f"Successfully processed {len(result.get('processed_files', []))} files")
-            if result.get("failed_files"):
-                logger.warning(f"Failed to process {len(result.get('failed_files', []))} files")
-        else:
-            logger.error(f"Failed to process uploaded files: {result.get('error', 'Unknown error')}")
-        
+
+        processed_files = []
+        failed_files = []
+
+        for file_info in uploaded_files:
+            s3_key = file_info.get('s3_key')
+            if not s3_key:
+                failed_files.append({'file': file_info, 'error': 'Missing s3_key'})
+                continue
+
+            result = upload_service.mark_upload_complete(s3_key)
+            if result.get("success", False):
+                processed_files.append(file_info)
+            else:
+                failed_files.append({'file': file_info, 'error': result.get('error', 'Unknown error')})
+
+        success = len(failed_files) == 0
+        if processed_files:
+            logger.info(f"Successfully processed {len(processed_files)} files")
+        if failed_files:
+            logger.warning(f"Failed to process {len(failed_files)} files")
+
         return render(request, "upload/upload_status.html", {
-            "success": result["success"],
-            "processed_files": result.get("processed_files", []),
-            "failed_files": result.get("failed_files", []),
-            "message": "Upload complete!"
+            "success": success,
+            "processed_files": processed_files,
+            "failed_files": failed_files,
+            "message": "Upload complete!" if success else "Some uploads failed"
         })
         
     except Exception as e:
@@ -469,7 +475,6 @@ def debug_presigned_url(request):
         file_name="test.txt",
         file_type="text/plain",
         path_prefix="debug",
-        use_multipart=False  # Explicitly use single-part uploads
     )
     
     # Log the result
