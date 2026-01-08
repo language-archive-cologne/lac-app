@@ -50,6 +50,7 @@ LOGGING = {
         "botocore": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
         "urllib3": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
         "lacos": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "lacos.security": {"handlers": ["console"], "level": "INFO", "propagate": False},
     },
 }
 

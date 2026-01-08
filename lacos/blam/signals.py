@@ -1,14 +1,15 @@
 import logging
-from django.db.models.signals import pre_delete
+from django.db.models.signals import pre_delete, post_delete
 from django.dispatch import receiver
 # Import the necessary models
-from .models.bundle.bundle_structural_info import BundleStructuralInfo, MediaResource, WrittenResource, OtherResource 
+from .models.bundle.bundle_structural_info import BundleStructuralInfo, MediaResource, WrittenResource, OtherResource
 from .models.bundle.bundle_repository import Bundle
 from .models.collection.collection_repository import Collection
 from lacos.storage.models import S3ResourceLocation
 from django.contrib.contenttypes.models import ContentType
 
 logger = logging.getLogger(__name__)
+security_logger = logging.getLogger("lacos.security")
 
 
 
@@ -179,3 +180,24 @@ def delete_s3_locations_for_other_resource(sender, instance, **kwargs):
             
     except Exception as e:
         logger.error(f"Error in pre_delete signal for OtherResource PK={instance.pk}: {e}", exc_info=True)
+
+
+# Security audit logging for critical model deletions
+@receiver(post_delete, sender=Collection)
+def log_collection_deletion(sender, instance, **kwargs):
+    """Log collection deletion for security audit."""
+    collection_name = getattr(instance, "name", "unknown")
+    collection_pid = getattr(instance, "pid", "unknown")
+    security_logger.warning(
+        f"COLLECTION_DELETED: name={collection_name} pid={collection_pid} pk={instance.pk}"
+    )
+
+
+@receiver(post_delete, sender=Bundle)
+def log_bundle_deletion(sender, instance, **kwargs):
+    """Log bundle deletion for security audit."""
+    bundle_name = getattr(instance, "name", "unknown")
+    bundle_pid = getattr(instance, "pid", "unknown")
+    security_logger.warning(
+        f"BUNDLE_DELETED: name={bundle_name} pid={bundle_pid} pk={instance.pk}"
+    )

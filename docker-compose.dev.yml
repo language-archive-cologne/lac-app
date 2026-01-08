@@ -15,6 +15,11 @@ services:
     image: lacos_dev_django
     container_name: lacos_dev_django
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       - postgres
       - redis
@@ -46,6 +51,11 @@ services:
     image: lacos_dev_postgres
     container_name: lacos_dev_postgres
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       - lacos_dev_postgres_data:/var/lib/postgresql/data
       - lacos_dev_postgres_data_backups:/backups
@@ -60,6 +70,11 @@ services:
     image: "redis:latest"
     container_name: lacos_dev_redis
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       - lacos_dev_redis_data:/data
     ports:
@@ -74,6 +89,11 @@ services:
     image: lacos_dev_huey
     container_name: lacos_dev_huey
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       - django
       - redis
