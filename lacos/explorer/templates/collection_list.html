@@ -55,7 +55,7 @@
                     {{ collection.identifier }}
                   {% endif %}
                 </a>
-                <span class="ml-2 text-xs text-base-content/50">({{ collection.bundles_count }} {% translate "bundles" %})</span>
+                <div class="text-xs text-base-content/50 mt-1">{{ collection.bundles_count }} {% translate "bundles" %}</div>
               </td>
               <td class="px-8 py-5">
                 {% if collection.get_general_info and collection.get_general_info.object_languages.all %}
