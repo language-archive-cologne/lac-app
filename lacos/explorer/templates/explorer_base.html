@@ -42,13 +42,37 @@
           return;
         }
 
+        let segmentEndTime = null;
+        let timeUpdateHandler = null;
+
+        const stopAtSegmentEnd = () => {
+          if (segmentEndTime !== null && audioElement.currentTime >= segmentEndTime) {
+            audioElement.pause();
+            segmentEndTime = null;
+          }
+        };
+
         viewerRoot.querySelectorAll('[data-annotation-start]').forEach((button) => {
           button.addEventListener('click', () => {
             const start = parseFloat(button.dataset.annotationStart || '');
+            const end = parseFloat(button.dataset.annotationEnd || '');
+
             if (Number.isNaN(start)) {
               return;
             }
+
             try {
+              if (timeUpdateHandler) {
+                audioElement.removeEventListener('timeupdate', timeUpdateHandler);
+              }
+
+              segmentEndTime = Number.isNaN(end) ? null : end;
+
+              if (segmentEndTime !== null) {
+                timeUpdateHandler = stopAtSegmentEnd;
+                audioElement.addEventListener('timeupdate', timeUpdateHandler);
+              }
+
               audioElement.currentTime = Math.max(start, 0);
               const playPromise = audioElement.play();
               if (playPromise && typeof playPromise.catch === 'function') {
@@ -58,6 +82,10 @@
               console.error('Unable to seek ELAN audio', error);
             }
           }, { once: false });
+        });
+
+        audioElement.addEventListener('ended', () => {
+          segmentEndTime = null;
         });
       };
 
