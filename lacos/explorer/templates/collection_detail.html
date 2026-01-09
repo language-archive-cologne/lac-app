@@ -73,10 +73,16 @@
                 <dd>
                   <div class="flex flex-wrap gap-1.5">
                     {% for language in collection.get_general_info.object_languages.all %}
-                      <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                        {{ language.name }}
-                        {% if language.iso_639_3_code %}<span class="ml-1 text-slate-500 text-xs">[{{ language.iso_639_3_code }}]</span>{% endif %}
-                      </span>
+                      {% if language.iso_639_3_code %}
+                        <a href="https://glottolog.org/resource/languoid/iso/{{ language.iso_639_3_code }}" target="_blank" rel="noopener" class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-primary hover:text-white transition-colors">
+                          {{ language.name }}
+                          <span class="ml-1 text-slate-500 text-xs">[{{ language.iso_639_3_code }}]</span>
+                        </a>
+                      {% else %}
+                        <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                          {{ language.name }}
+                        </span>
+                      {% endif %}
                     {% endfor %}
                   </div>
                 </dd>
