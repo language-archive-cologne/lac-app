@@ -726,12 +726,14 @@ class BundleDetailView(ACLPermissionMixin, DetailView):
         if hasattr(self.object, 'structural_info') and self.object.structural_info.first():
             context['collection'] = self.object.structural_info.first().is_member_of_collection
         
-        # Add formatted location
+        # Add formatted location and geo_location for map
         if self.object.get_general_info and self.object.get_general_info.location:
             location = self.object.get_general_info.location
             self.object.formatted_location = get_formatted_location(location)
+            self.object.geo_location = location.geo_location
         else:
             self.object.formatted_location = ""
+            self.object.geo_location = None
             
         # Get all resources
         context['media_resources'] = []
