@@ -2,7 +2,7 @@
 {% load explorer_extras %}
 {% if bundle_contexts %}
   {% if bundle_page_obj %}
-    <div class="flex items-center justify-between mb-3 text-sm text-slate-600">
+    <div class="flex items-center justify-between mb-3 text-sm text-base-content/70">
       <div>
         {% blocktrans with start=bundle_page_obj.start_index end=bundle_page_obj.end_index total=bundles_total %}
           Showing {{ start }}–{{ end }} of {{ total }} bundles
@@ -65,39 +65,39 @@
     </div>
   {% endif %}
 
-  <div class="bg-white shadow-sm border border-slate-200 rounded-xl overflow-hidden">
-    <table class="min-w-full divide-y divide-slate-200">
-      <thead class="bg-slate-50">
+  <div class="bg-base-100 shadow-sm border border-base-300 rounded-xl overflow-hidden">
+    <table class="min-w-full divide-y divide-base-300">
+      <thead class="bg-base-200">
         <tr>
-          <th scope="col" class="px-4 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide w-[6%]">{% translate "Access" %}</th>
-          <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide w-[24%]">{% translate "Bundle Name" %}</th>
-          <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide w-[40%]">{% translate "Description" %}</th>
-          <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide w-[30%]">{% translate "Files" %}</th>
+          <th scope="col" class="px-4 py-4 text-left text-xs font-semibold text-base-content/70 uppercase tracking-wide w-[6%]">{% translate "Access" %}</th>
+          <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-base-content/70 uppercase tracking-wide w-[24%]">{% translate "Bundle Name" %}</th>
+          <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-base-content/70 uppercase tracking-wide w-[40%]">{% translate "Description" %}</th>
+          <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-base-content/70 uppercase tracking-wide w-[30%]">{% translate "Files" %}</th>
         </tr>
       </thead>
-      <tbody class="bg-white divide-y divide-slate-100">
+      <tbody class="bg-base-100 divide-y divide-base-200">
         {% for bundle_info in bundle_contexts %}
           {% with bundle=bundle_info.bundle %}
-            <tr class="hover:bg-slate-50 transition-colors">
+            <tr class="hover:bg-base-200 transition-colors">
               <td class="px-4 py-5 align-top text-sm">
                 {% with level=bundle_info.access_level|default:bundle_info.acl_check_result.access_level %}
                   {% if level == 'public' %}
-                    <span class="flex items-center text-green-700" title="{% translate 'Public access' %}">
+                    <span class="flex items-center text-success" title="{% translate 'Public access' %}">
                       <span aria-hidden="true" class="mr-2">🌍</span>
                       <span>{% translate "Public" %}</span>
                     </span>
                   {% elif level == 'protected' %}
-                    <span class="flex items-center text-blue-700" title="{% translate 'Requires sign-in' %}">
+                    <span class="flex items-center text-info" title="{% translate 'Requires sign-in' %}">
                       <span aria-hidden="true" class="mr-2">🔒</span>
                       <span>{% translate "Protected" %}</span>
                     </span>
                   {% elif level == 'private' %}
-                    <span class="flex items-center text-yellow-700" title="{% translate 'Restricted to specific users' %}">
+                    <span class="flex items-center text-warning" title="{% translate 'Restricted to specific users' %}">
                       <span aria-hidden="true" class="mr-2">👤</span>
                       <span>{% translate "Private" %}</span>
                     </span>
                   {% else %}
-                    <span class="flex items-center text-red-700" title="{% translate 'No downloads allowed' %}">
+                    <span class="flex items-center text-error" title="{% translate 'No downloads allowed' %}">
                       <span aria-hidden="true" class="mr-2">⛔</span>
                       <span>{% translate "Embargo" %}</span>
                     </span>
@@ -105,7 +105,7 @@
                 {% endwith %}
               </td>
               <td class="px-6 py-5 align-top">
-                <div class="text-sm font-medium text-slate-700 hover:text-slate-900">
+                <div class="text-sm font-medium text-base-content hover:text-primary">
                   <a href="{% url 'explorer:bundle_detail' pk=bundle.pk %}">
                     {% if bundle.get_general_info.display_title %}
                       {{ bundle.get_general_info.display_title }}
@@ -119,14 +119,14 @@
                 {% if bundle_info.primary_resources %}
                   <div class="mt-2">
                     {% if bundle_info.can_read_bundle %}
-                      <a href="{% url 'explorer:bundle_resources' pk=bundle.pk %}" class="inline-flex items-center text-xs text-slate-500 hover:text-slate-700">
+                      <a href="{% url 'explorer:bundle_resources' pk=bundle.pk %}" class="inline-flex items-center text-xs text-base-content/60 hover:text-base-content">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                         </svg>
                         {% translate "Access files" %}
                       </a>
                     {% else %}
-                      <span class="inline-flex items-center text-xs text-red-600">
+                      <span class="inline-flex items-center text-xs text-error">
                         <span aria-hidden="true" class="mr-1">⛔</span>
                         {% translate "Restricted" %}
                       </span>
@@ -134,24 +134,24 @@
                   </div>
                 {% endif %}
               </td>
-              <td class="px-6 py-5 text-sm text-slate-600 align-top">
+              <td class="px-6 py-5 text-sm text-base-content/70 align-top">
                 {% if bundle.get_general_info.description %}
                   {{ bundle.get_general_info.description|urlize }}
                 {% endif %}
               </td>
-              <td class="px-6 py-5 text-sm text-slate-600">
+              <td class="px-6 py-5 text-sm text-base-content/70">
                 {% if bundle_info.primary_resources and bundle_info.can_read_bundle %}
                   <div class="space-y-3">
                     {% if bundle_info.media_resources %}
                       <div>
-                        <p class="text-xs font-semibold text-slate-600 mb-2">{% translate "Media Files" %}</p>
+                        <p class="text-xs font-semibold text-base-content/70 mb-2">{% translate "Media Files" %}</p>
                         <ul class="space-y-1.5">
                           {% for resource in bundle_info.media_resources %}
                             <li class="text-xs flex items-center">
-                              <span class="truncate max-w-[150px] mr-2 text-slate-700" title="{{ resource.file_name }}">{{ resource.file_name }}</span>
+                              <span class="truncate max-w-[150px] mr-2 text-base-content" title="{{ resource.file_name }}">{{ resource.file_name }}</span>
                               <div class="flex space-x-1">
                                 <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}"
-                                   class="inline-flex items-center px-2 py-1 text-xs rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200"
+                                   class="btn btn-xs btn-ghost"
                                    title="Download" target="_blank">
                                   <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -163,7 +163,7 @@
                                      hx-target="#resource-modal-content"
                                      hx-swap="innerHTML"
                                      hx-push-url="false"
-                                     class="inline-flex items-center px-2 py-1 text-xs rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200"
+                                     class="btn btn-xs btn-ghost text-success"
                                      title="Play">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
@@ -180,14 +180,14 @@
 
                     {% if bundle_info.written_resources %}
                       <div>
-                        <p class="text-xs font-semibold text-slate-600 mb-2">{% translate "Written Files" %}</p>
+                        <p class="text-xs font-semibold text-base-content/70 mb-2">{% translate "Written Files" %}</p>
                         <ul class="space-y-1.5">
                           {% for resource in bundle_info.written_resources %}
                             <li class="text-xs flex items-center">
-                              <span class="truncate max-w-[150px] mr-2 text-slate-700" title="{{ resource.file_name }}">{{ resource.file_name }}</span>
+                              <span class="truncate max-w-[150px] mr-2 text-base-content" title="{{ resource.file_name }}">{{ resource.file_name }}</span>
                               <div class="flex space-x-1">
                                 <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}"
-                                   class="inline-flex items-center px-2 py-1 text-xs rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200"
+                                   class="btn btn-xs btn-ghost"
                                    title="Download" target="_blank">
                                   <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -199,7 +199,7 @@
                                      hx-target="#resource-modal-content"
                                      hx-swap="innerHTML"
                                      hx-push-url="false"
-                                     class="inline-flex items-center px-2 py-1 text-xs rounded-md bg-violet-50 text-violet-700 hover:bg-violet-100 border border-violet-200"
+                                     class="btn btn-xs btn-ghost text-secondary"
                                      title="View">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="CurrentColor">
                                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -216,14 +216,14 @@
 
                     {% if bundle_info.other_resources %}
                       <div>
-                        <p class="text-xs font-semibold text-slate-600 mb-2">{% translate "Other Files" %}</p>
+                        <p class="text-xs font-semibold text-base-content/70 mb-2">{% translate "Other Files" %}</p>
                         <ul class="space-y-1.5">
                           {% for resource in bundle_info.other_resources %}
                             <li class="text-xs flex items-center">
-                              <span class="truncate max-w-[150px] mr-2 text-slate-700" title="{{ resource.file_name }}">{{ resource.file_name }}</span>
+                              <span class="truncate max-w-[150px] mr-2 text-base-content" title="{{ resource.file_name }}">{{ resource.file_name }}</span>
                               <div class="flex space-x-1">
                                 <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}"
-                                   class="inline-flex items-center px-2 py-1 text-xs rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200"
+                                   class="btn btn-xs btn-ghost"
                                    title="Download" target="_blank">
                                   <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -238,14 +238,14 @@
 
                     {% if bundle_info.metadata_files %}
                       <div>
-                        <p class="text-xs font-semibold text-slate-600 mb-2">{% translate "Metadata Files" %}</p>
+                        <p class="text-xs font-semibold text-base-content/70 mb-2">{% translate "Metadata Files" %}</p>
                         <ul class="space-y-1.5">
                           {% for resource in bundle_info.metadata_files %}
                             <li class="text-xs flex items-center">
-                              <span class="truncate max-w-[150px] mr-2 text-slate-700" title="{{ resource.file_name }}">{{ resource.file_name }}</span>
+                              <span class="truncate max-w-[150px] mr-2 text-base-content" title="{{ resource.file_name }}">{{ resource.file_name }}</span>
                               <div class="flex space-x-1">
                                 <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}"
-                                   class="inline-flex items-center px-2 py-1 text-xs rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200"
+                                   class="btn btn-xs btn-ghost"
                                    title="Download" target="_blank">
                                   <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -257,7 +257,7 @@
                                      hx-target="#resource-modal-content"
                                      hx-swap="innerHTML"
                                      hx-push-url="false"
-                                     class="inline-flex items-center px-2 py-1 text-xs rounded-md bg-violet-50 text-violet-700 hover:bg-violet-100 border border-violet-200"
+                                     class="btn btn-xs btn-ghost text-secondary"
                                      title="View">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -273,7 +273,7 @@
                     {% endif %}
                   </div>
                 {% elif bundle_info.primary_resources %}
-                  <div class="text-xs text-red-600 flex items-center">
+                  <div class="text-xs text-error flex items-center">
                     <span aria-hidden="true" class="mr-1">⛔</span>
                     {% translate "Files are hidden due to access restrictions." %}
                   </div>
@@ -288,5 +288,5 @@
     </table>
   </div>
 {% else %}
-  <p class="text-slate-500">{% translate "No bundles available for this collection." %}</p>
+  <p class="text-base-content/60">{% translate "No bundles available for this collection." %}</p>
 {% endif %}
