@@ -7,16 +7,52 @@ from lacos.storage.services import ResourceMappingService
 class Command(BaseCommand):
     help = "Update CORS configuration on all S3 buckets to enable video streaming with range requests"
 
-    def handle(self, *args, **options):
-        self.stdout.write("Updating CORS configuration on all buckets...")
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--list',
+            action='store_true',
+            help='List all available buckets without updating CORS',
+        )
+        parser.add_argument(
+            '--bucket',
+            type=str,
+            help='Update CORS for a specific bucket only',
+        )
 
+    def handle(self, *args, **options):
         service = ResourceMappingService(skip_bucket_check=True)
 
-        # Get all workspace buckets
-        buckets = service.workspace_buckets
-        self.stdout.write(f"Found {len(buckets)} workspace buckets: {buckets}")
+        # List mode - just show available buckets
+        if options['list']:
+            self.stdout.write("Listing all available buckets...")
+            try:
+                response = service.s3_client.list_buckets()
+                buckets = [b['Name'] for b in response.get('Buckets', [])]
+                self.stdout.write(f"Found {len(buckets)} buckets:")
+                for bucket in buckets:
+                    self.stdout.write(f"  - {bucket}")
+            except Exception as e:
+                self.stdout.write(self.style.ERROR(f"Failed to list buckets: {e}"))
+            return
 
-        for bucket_name in buckets:
+        # Single bucket mode
+        if options['bucket']:
+            buckets_to_update = [options['bucket']]
+        else:
+            # Get all available buckets from S3
+            self.stdout.write("Discovering available buckets...")
+            try:
+                response = service.s3_client.list_buckets()
+                buckets_to_update = [b['Name'] for b in response.get('Buckets', [])]
+                self.stdout.write(f"Found {len(buckets_to_update)} buckets: {buckets_to_update}")
+            except Exception as e:
+                self.stdout.write(self.style.ERROR(f"Failed to list buckets: {e}"))
+                self.stdout.write("Falling back to configured workspace buckets...")
+                buckets_to_update = service.workspace_buckets
+
+        self.stdout.write("\nUpdating CORS configuration...")
+
+        for bucket_name in buckets_to_update:
             self.stdout.write(f"\nUpdating CORS for bucket: {bucket_name}")
             result = service.ensure_cors_enabled(bucket_name)
 
@@ -27,17 +63,5 @@ class Command(BaseCommand):
                     self.stdout.write(self.style.SUCCESS(f"  CORS already configured for {bucket_name}"))
             else:
                 self.stdout.write(self.style.ERROR(f"  Failed to update CORS for {bucket_name}: {result.get('error')}"))
-
-        # Also update production bucket if it exists
-        if service.production_bucket:
-            self.stdout.write(f"\nUpdating CORS for production bucket: {service.production_bucket}")
-            result = service.ensure_cors_enabled(service.production_bucket)
-            if result["success"]:
-                if result.get("updated", False):
-                    self.stdout.write(self.style.SUCCESS(f"  CORS updated for {service.production_bucket}"))
-                else:
-                    self.stdout.write(self.style.SUCCESS(f"  CORS already configured for {service.production_bucket}"))
-            else:
-                self.stdout.write(self.style.ERROR(f"  Failed: {result.get('error')}"))
 
         self.stdout.write(self.style.SUCCESS("\nDone!"))
