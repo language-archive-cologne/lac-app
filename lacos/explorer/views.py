@@ -652,13 +652,15 @@ class CollectionDetailView(DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Add formatted location to the collection
+        # Add formatted location and geo_location for map
         if self.object.get_general_info and self.object.get_general_info.location:
             location = self.object.get_general_info.location
             self.object.formatted_location = get_formatted_location(location)
+            self.object.geo_location = location.geo_location
         else:
             self.object.formatted_location = ""
-            
+            self.object.geo_location = None
+
         page_number = self.request.GET.get('bundle_page')
         page_obj, bundle_contexts = _paginate_bundle_contexts(self.object, page_number)
 

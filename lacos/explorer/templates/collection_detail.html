@@ -1,5 +1,6 @@
 {% extends "explorer_base.html" %}
 {% load i18n %}
+{% load static %}
 {% load explorer_extras %}
 
 {% block title %}
@@ -85,7 +86,21 @@
             {% if collection.formatted_location %}
               <div>
                 <dt class="text-sm font-semibold text-slate-600 mb-1.5">{% translate "Location" %}</dt>
-                <dd class="text-sm text-slate-700">{{ collection.formatted_location }}</dd>
+                <dd class="text-sm text-slate-700">
+                  {% if collection.geo_location %}
+                    <span
+                      class="cursor-pointer hover:text-primary hover:underline"
+                      hx-get="{% url 'explorer:map_popup' %}?geo={{ collection.geo_location }}&title={{ collection.formatted_location|urlencode }}"
+                      hx-target="#map-modal-content"
+                      hx-swap="innerHTML"
+                      hx-on::before-request="document.getElementById('map-modal-content').innerHTML = '';"
+                      hx-on::after-request="document.getElementById('map-modal').classList.remove('hidden'); document.body.classList.add('overflow-hidden');"
+                      title="{% translate 'Show on map' %}"
+                    >{{ collection.formatted_location }}</span>
+                  {% else %}
+                    {{ collection.formatted_location }}
+                  {% endif %}
+                </dd>
               </div>
             {% endif %}
 
@@ -145,4 +160,28 @@
     </div>
   </div>
 
+  <!-- Preload MapLibre for map popups -->
+  <link rel="stylesheet" href="{% static 'vendor/js/maplibre-gl/maplibre-gl.css' %}" />
+  <script src="{% static 'vendor/js/maplibre-gl/maplibre-gl.js' %}"></script>
+
+  <!-- Map Modal -->
+  <div id="map-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div
+      class="absolute inset-0 bg-neutral/60"
+      onclick="document.getElementById('map-modal').classList.add('hidden'); document.body.classList.remove('overflow-hidden');"
+    ></div>
+    <div id="map-modal-content" class="relative w-full max-w-lg bg-base-100 rounded-xl shadow-xl">
+      <!-- Content loaded via HTMX -->
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('keydown', function(e) {
+      const modal = document.getElementById('map-modal');
+      if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+        modal.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+      }
+    });
+  </script>
 {% endblock explorer_content %}
