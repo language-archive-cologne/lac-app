@@ -86,8 +86,8 @@ def _build_content_disposition(file_name: Optional[str]) -> str:
     return disposition
 
 
-def _bundle_queryset_for_collection(collection):
-    return (
+def _bundle_queryset_for_collection(collection, search_query=None):
+    queryset = (
         BundleStructuralInfo.objects.filter(is_member_of_collection=collection)
         .select_related("bundle", "is_member_of_collection")
         .prefetch_related(
@@ -104,8 +104,17 @@ def _bundle_queryset_for_collection(collection):
             "bundle__general_info",
             "bundle__general_info__object_languages",
         )
-        .order_by("bundle__identifier")
     )
+
+    if search_query:
+        from django.db.models import Q
+        queryset = queryset.filter(
+            Q(bundle__identifier__icontains=search_query) |
+            Q(bundle__general_info__display_title__icontains=search_query) |
+            Q(bundle__general_info__description__icontains=search_query)
+        ).distinct()
+
+    return queryset.order_by("bundle__identifier")
 
 
 def _build_bundle_context(struct_info):
@@ -129,8 +138,8 @@ def _build_bundle_context(struct_info):
     }
 
 
-def _paginate_bundle_contexts(collection, page_number, per_page=BUNDLES_PER_PAGE):
-    queryset = _bundle_queryset_for_collection(collection)
+def _paginate_bundle_contexts(collection, page_number, per_page=BUNDLES_PER_PAGE, search_query=None):
+    queryset = _bundle_queryset_for_collection(collection, search_query=search_query)
     paginator = Paginator(queryset, per_page)
 
     if paginator.count == 0:
@@ -698,7 +707,11 @@ class CollectionDetailView(DetailView):
             self.object.geo_location = None
 
         page_number = self.request.GET.get('bundle_page')
-        page_obj, bundle_contexts = _paginate_bundle_contexts(self.object, page_number)
+        bundle_search = self.request.GET.get('bundle_search', '').strip()
+        context['bundle_search'] = bundle_search
+        page_obj, bundle_contexts = _paginate_bundle_contexts(
+            self.object, page_number, search_query=bundle_search or None
+        )
 
         query_params = self.request.GET.copy()
         if 'bundle_page' in query_params:
@@ -734,12 +747,13 @@ class CollectionDetailView(DetailView):
         return context
 
     def render_to_response(self, context, **response_kwargs):
-        if self.request.headers.get('HX-Request') and 'bundle_page' in self.request.GET:
-            return render(
-                self.request,
-                'explorer/partials/collection_bundles_table.html',
-                context,
-            )
+        if self.request.headers.get('HX-Request'):
+            if 'bundle_page' in self.request.GET or 'bundle_search' in self.request.GET:
+                return render(
+                    self.request,
+                    'explorer/partials/collection_bundles_table.html',
+                    context,
+                )
         return super().render_to_response(context, **response_kwargs)
 
 

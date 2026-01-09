@@ -159,7 +159,26 @@
   
   <!-- Bundles Section -->
   <div class="mb-6">
-    <h2 class="text-2xl font-light text-slate-800 mb-6 tracking-tight">{% translate "Bundles in this Collection" %}</h2>
+    <div class="flex items-center justify-between mb-6">
+      <h2 class="text-2xl font-light text-slate-800 tracking-tight">{% translate "Bundles in this Collection" %}</h2>
+      <div class="flex items-center gap-2">
+        <input
+          type="search"
+          name="bundle_search"
+          value="{{ bundle_search }}"
+          placeholder="{% translate 'Filter bundles...' %}"
+          class="input input-bordered input-sm w-64"
+          hx-get="{{ request.path }}"
+          hx-target="#collection-bundles-table"
+          hx-swap="innerHTML"
+          hx-trigger="keyup changed delay:300ms, search"
+          hx-include="[name='bundle_search']"
+        >
+        {% if bundle_search %}
+          <a href="{{ request.path }}" class="btn btn-ghost btn-sm">{% translate "Clear" %}</a>
+        {% endif %}
+      </div>
+    </div>
 
     <div id="collection-bundles-table" hx-target="this" hx-swap="innerHTML">
       {% include "explorer/partials/collection_bundles_table.html" %}
