@@ -24,6 +24,8 @@ from .utils import (
     build_content_disposition,
     find_resource_in_bundle,
     get_formatted_location,
+    get_object_by_pk_or_handle,
+    HandleLookupMixin,
     parse_elan_document,
     pick_elan_audio_resource,
     prepare_resource_lists,
@@ -35,7 +37,9 @@ from .utils import (
 logger = logging.getLogger(__name__)
 
 
-class BundleDetailView(ACLPermissionMixin, DetailView):
+class BundleDetailView(HandleLookupMixin, ACLPermissionMixin, DetailView):
+    """Detail view for a bundle, accessible by UUID or handle."""
+
     model = Bundle
     template_name = "bundle_detail.html"
     context_object_name = "bundle"
@@ -90,8 +94,8 @@ class BundleResourcesView(View):
 
     permission_denied_message = _("You do not have permission to access this bundle.")
 
-    def get(self, request, pk, resource_id=None):
-        bundle = get_object_or_404(Bundle, pk=pk)
+    def get(self, request, pk=None, handle=None, resource_id=None):
+        bundle = get_object_by_pk_or_handle(Bundle, pk=pk, handle=handle)
         acl_service = ACLEvaluationService()
         acl_result = acl_service.evaluate(request.user, bundle, mode="acl:Read")
         if acl_service.enforcement_enabled and not acl_result.allowed:

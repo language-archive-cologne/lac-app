@@ -12,7 +12,7 @@ from lacos.explorer.map_utils import get_collection_map_markers
 from lacos.explorer.search import search_archives
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
 
-from .utils import get_formatted_location, paginate_bundle_contexts
+from .utils import get_formatted_location, paginate_bundle_contexts, HandleLookupMixin
 
 
 logger = logging.getLogger(__name__)
@@ -103,7 +103,9 @@ class CollectionListView(ListView):
         return super().render_to_response(context, **response_kwargs)
 
 
-class CollectionDetailView(DetailView):
+class CollectionDetailView(HandleLookupMixin, DetailView):
+    """Detail view for a collection, accessible by UUID or handle."""
+
     model = Collection
     template_name = "collection_detail.html"
     context_object_name = "collection"

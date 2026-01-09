@@ -27,6 +27,10 @@ from .storage import (
     resolve_existing_object,
     resolve_resource_to_presigned,
 )
+from .lookup import (
+    get_object_by_pk_or_handle,
+    HandleLookupMixin,
+)
 
 
 __all__ = [
@@ -52,4 +56,7 @@ __all__ = [
     "build_content_disposition",
     "resolve_existing_object",
     "resolve_resource_to_presigned",
+    # Lookup utilities
+    "get_object_by_pk_or_handle",
+    "HandleLookupMixin",
 ]
