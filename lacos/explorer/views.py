@@ -589,11 +589,25 @@ class CollectionListView(ListView):
 
     def get_queryset(self):
         """Explicitly return all collections and log the count."""
-        from django.db.models import Count
+        from django.db.models import Count, Min
         logger.info("Fetching collections in CollectionListView...")
         queryset = Collection.objects.annotate(
-            bundles_count=Count('bundle_collection')
+            bundles_count=Count('bundle_collection'),
+            first_language=Min('general_info__object_languages__name'),
         )
+
+        # Handle sorting
+        sort = self.request.GET.get('sort', 'name')
+        order = self.request.GET.get('order', 'asc')
+        prefix = '-' if order == 'desc' else ''
+
+        if sort == 'language':
+            queryset = queryset.order_by(f'{prefix}first_language', 'general_info__display_title')
+        elif sort == 'bundles':
+            queryset = queryset.order_by(f'{prefix}bundles_count', 'general_info__display_title')
+        else:  # default: name
+            queryset = queryset.order_by(f'{prefix}general_info__display_title')
+
         collection_count = queryset.count()
         logger.info(f"Found {collection_count} collections.")
         return queryset
@@ -633,15 +647,26 @@ class CollectionListView(ListView):
             'languages_count': CollectionObjectLanguage.objects.values('name').distinct().count(),
         }
 
+        # Add current sort state
+        context['current_sort'] = self.request.GET.get('sort', 'name')
+        context['current_order'] = self.request.GET.get('order', 'asc')
+
         return context
 
     def render_to_response(self, context, **response_kwargs):
-        if self.request.headers.get('HX-Request') and 'q' in self.request.GET:
-            return render(
-                self.request,
-                'explorer/partials/collection_search_results_content.html',
-                context,
-            )
+        if self.request.headers.get('HX-Request'):
+            if 'q' in self.request.GET:
+                return render(
+                    self.request,
+                    'explorer/partials/collection_search_results_content.html',
+                    context,
+                )
+            if 'sort' in self.request.GET:
+                return render(
+                    self.request,
+                    'explorer/partials/collections_table.html',
+                    context,
+                )
         return super().render_to_response(context, **response_kwargs)
 
 
