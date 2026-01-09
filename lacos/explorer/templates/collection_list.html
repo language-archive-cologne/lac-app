@@ -16,7 +16,7 @@
     {% if collection_list %}
       <!-- Collections Map -->
       <div class="mb-8 rounded-xl shadow-sm border border-base-300 overflow-hidden">
-        <div id="collections-map" style="height: 400px;"></div>
+        <div id="collections-map" style="height: 500px;"></div>
       </div>
       <div class="overflow-x-auto rounded-xl shadow-sm border border-base-300">
         <table class="min-w-full divide-y divide-base-300">
@@ -146,8 +146,9 @@
       const map = new maplibregl.Map({
         container: 'collections-map',
         style: 'https://tiles.openfreemap.org/styles/bright',
-        center: [0, 20],
-        zoom: 1.5
+        center: [20, 20],
+        zoom: 0.7,
+        renderWorldCopies: false
       });
 
       map.addControl(new maplibregl.NavigationControl());
