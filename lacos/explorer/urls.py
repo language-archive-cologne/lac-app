@@ -11,6 +11,11 @@ urlpatterns = [
         name="collection_list",
     ),
     path(
+        "map-popup/",
+        view=views.map_popup_view,
+        name="map_popup",
+    ),
+    path(
         "collections/<uuid:pk>/",
         view=views.CollectionDetailView.as_view(),
         name="collection_detail",

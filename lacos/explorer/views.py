@@ -557,6 +557,28 @@ def get_location_from_coordinates(coordinates):
         return coordinates
 
 
+def map_popup_view(request):
+    """HTMX view to render a map popup with the given coordinates."""
+    geo = request.GET.get('geo', '')
+    title = request.GET.get('title', 'Location')
+
+    if not geo or ',' not in geo:
+        return HttpResponse('<p class="text-error">Invalid coordinates</p>', status=400)
+
+    try:
+        lat, lng = geo.split(',')
+        lat = float(lat.strip())
+        lng = float(lng.strip())
+    except ValueError:
+        return HttpResponse('<p class="text-error">Invalid coordinates format</p>', status=400)
+
+    return render(request, 'explorer/partials/map_popup.html', {
+        'lat': lat,
+        'lng': lng,
+        'title': title,
+    })
+
+
 class CollectionListView(ListView):
     model = Collection
     # The template name is deduced by default as: 'blam/collection_list.html'
@@ -593,8 +615,10 @@ class CollectionListView(ListView):
             if collection.get_general_info and collection.get_general_info.location:
                 location = collection.get_general_info.location
                 collection.formatted_location = get_formatted_location(location)
+                collection.geo_location = location.geo_location
             else:
                 collection.formatted_location = ""
+                collection.geo_location = None
             collections_with_locations.append(collection)
         
         context['collection_list'] = collections_with_locations

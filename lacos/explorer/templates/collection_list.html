@@ -1,5 +1,6 @@
 {% extends "explorer_base.html" %}
 {% load i18n %}
+{% load static %}
 {% load explorer_extras %}
 
 {% block title %}{% translate "Collections" %} - {{ block.super }}{% endblock title %}
@@ -78,7 +79,22 @@
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
                     </svg>
-                    {{ collection.formatted_location }}
+                    <span>{{ collection.formatted_location }}</span>
+                    {% if collection.geo_location %}
+                      <button
+                        type="button"
+                        class="p-1 rounded hover:bg-base-200 text-primary"
+                        hx-get="{% url 'explorer:map_popup' %}?geo={{ collection.geo_location }}&title={{ collection.formatted_location|urlencode }}"
+                        hx-target="#map-modal-content"
+                        hx-swap="innerHTML"
+                        hx-on::after-request="document.getElementById('map-modal').classList.remove('hidden'); document.getElementById('map-modal').classList.add('flex'); document.body.classList.add('overflow-hidden');"
+                        title="{% translate 'Show on map' %}"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
+                        </svg>
+                      </button>
+                    {% endif %}
                   </div>
                 {% endif %}
               </td>
@@ -131,4 +147,25 @@
     {% endif %}
   {% endif %}
 
+  <!-- Map Modal -->
+  <div id="map-modal" class="hidden fixed inset-0 z-50 items-center justify-center p-4">
+    <div
+      class="absolute inset-0 bg-neutral/60"
+      onclick="document.getElementById('map-modal').classList.add('hidden'); document.getElementById('map-modal').classList.remove('flex'); document.body.classList.remove('overflow-hidden');"
+    ></div>
+    <div id="map-modal-content" class="relative w-full max-w-3xl bg-base-100 rounded-xl shadow-xl">
+      <!-- Content loaded via HTMX -->
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('keydown', function(e) {
+      const modal = document.getElementById('map-modal');
+      if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        document.body.classList.remove('overflow-hidden');
+      }
+    });
+  </script>
 {% endblock explorer_content %}
