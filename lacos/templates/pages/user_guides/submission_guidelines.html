@@ -1,0 +1,62 @@
+{% extends "pages/user_guides/base_guide.html" %}
+
+{% block guide_title %}Submission Guidelines{% endblock %}
+{% block guide_heading %}Submission Guidelines{% endblock %}
+
+{% block guide_content %}
+<p class="mb-4">
+  The Language Archive Cologne provides technical guidance for depositors preparing data submissions.
+</p>
+
+<h2 class="text-xl font-semibold text-gray-700 mt-6 mb-3">Ethical and Legal Requirements</h2>
+<p class="mb-4">
+  The archive expects researchers to respect cultural norms and reserves the right to depublish
+  or remove data if ethical or legal concerns arise. Depositors must ensure clear, unambiguous
+  and informed consent was collected from the speakers represented in the collection.
+</p>
+
+<h2 class="text-xl font-semibold text-gray-700 mt-6 mb-3">File Naming Recommendations</h2>
+<p class="mb-4">
+  We suggest consistent naming schemes using components like:
+</p>
+<ul class="list-disc list-inside mb-4 space-y-2">
+  <li>Language name, glottocode, or ISO 639-3 code</li>
+  <li>Recording date (YYYYMMDD or YYYY-MM-DD format)</li>
+  <li>Running numbers with leading zeros</li>
+</ul>
+<p class="mb-4">
+  Example patterns: <code class="bg-gray-100 px-1 rounded">kuvi-0006.wav</code> or
+  <code class="bg-gray-100 px-1 rounded">samre-20090304-0023.wav</code>.
+  Files within a bundle should share identical names except for extensions.
+</p>
+
+<h2 class="text-xl font-semibold text-gray-700 mt-6 mb-3">Metadata Standards</h2>
+<p class="mb-4">
+  Metadata should be provided in BLAM CMDI format (producible via Arbil or CMDI Maker)
+  or as an Excel sheet template.
+</p>
+
+<h2 class="text-xl font-semibold text-gray-700 mt-6 mb-3">Format Recommendations</h2>
+
+<h3 class="text-lg font-medium text-gray-700 mt-4 mb-2">Audio</h3>
+<p class="mb-4">
+  WAV files with LPCM encoding at 48 kHz and 16-bit depth are standard.
+  Stereo is preferred; mono acceptable for single speakers.
+</p>
+
+<h3 class="text-lg font-medium text-gray-700 mt-4 mb-2">Video</h3>
+<p class="mb-4">
+  MOV or MP4 containers with h.264 encoding at 1080p, 30fps.
+  MOV files support uncompressed LPCM audio; MP4 files use AAC encoding.
+</p>
+
+<h3 class="text-lg font-medium text-gray-700 mt-4 mb-2">Annotations</h3>
+<p class="mb-4">
+  ELAN format is recommended, with support for Praat TextGrid, Exmaralda, TEI, and FLeX XML.
+</p>
+
+<h3 class="text-lg font-medium text-gray-700 mt-4 mb-2">Other Formats</h3>
+<p class="mb-4">
+  PDF/A for text, TIFF/JPEG2000/PNG for images, and CSV for structured data are acceptable.
+</p>
+{% endblock %}

@@ -24,6 +24,71 @@ urlpatterns = [
         name="about",
     ),
     path(
+        "user-guides/",
+        TemplateView.as_view(template_name="pages/user_guides/index.html"),
+        name="user-guides",
+    ),
+    path(
+        "user-guides/mission-statement/",
+        TemplateView.as_view(template_name="pages/user_guides/mission_statement.html"),
+        name="user-guide-mission",
+    ),
+    path(
+        "user-guides/privacy-policy/",
+        TemplateView.as_view(template_name="pages/user_guides/privacy_policy.html"),
+        name="user-guide-privacy",
+    ),
+    path(
+        "user-guides/terms-of-use/",
+        TemplateView.as_view(template_name="pages/user_guides/terms_of_use.html"),
+        name="user-guide-terms",
+    ),
+    path(
+        "user-guides/data-user-agreement/",
+        TemplateView.as_view(template_name="pages/user_guides/data_user_agreement.html"),
+        name="user-guide-dua",
+    ),
+    path(
+        "user-guides/depositing-policy/",
+        TemplateView.as_view(template_name="pages/user_guides/depositing_policy.html"),
+        name="user-guide-depositing",
+    ),
+    path(
+        "user-guides/depositor-guidelines/",
+        TemplateView.as_view(template_name="pages/user_guides/depositor_guidelines.html"),
+        name="user-guide-depositor",
+    ),
+    path(
+        "user-guides/depositor-agreement/",
+        TemplateView.as_view(template_name="pages/user_guides/depositor_agreement.html"),
+        name="user-guide-agreement",
+    ),
+    path(
+        "user-guides/submission-guidelines/",
+        TemplateView.as_view(template_name="pages/user_guides/submission_guidelines.html"),
+        name="user-guide-submission",
+    ),
+    path(
+        "user-guides/metadata-template/",
+        TemplateView.as_view(template_name="pages/user_guides/metadata_template.html"),
+        name="user-guide-metadata",
+    ),
+    path(
+        "user-guides/format-whitelist/",
+        TemplateView.as_view(template_name="pages/user_guides/format_whitelist.html"),
+        name="user-guide-formats",
+    ),
+    path(
+        "user-guides/archive-setup/",
+        TemplateView.as_view(template_name="pages/user_guides/archive_setup.html"),
+        name="user-guide-archive",
+    ),
+    path(
+        "user-guides/preservation-plan/",
+        TemplateView.as_view(template_name="pages/user_guides/preservation_plan.html"),
+        name="user-guide-preservation",
+    ),
+    path(
         "oai-pmh/",
         OAIPMHOverviewView.as_view(),
         name="oai-pmh",
