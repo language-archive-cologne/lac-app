@@ -47,29 +47,19 @@
               </td>
               <td class="px-8 py-5">
                 {% if collection.get_general_info and collection.get_general_info.object_languages.all %}
-                  <div class="flex items-center gap-2">
-                    <svg class="w-4 h-4 text-base-content/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"></path>
-                    </svg>
-                    <div class="flex flex-wrap gap-1.5">
-                      {% for language in collection.get_general_info.object_languages.all %}
-                        <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-base-200 text-base-content border border-base-300">
-                          {{ language.name }}
-                          {% if language.iso_639_3_code %}<span class="ml-1 text-base-content/60 text-xs">[{{ language.iso_639_3_code }}]</span>{% endif %}
-                        </span>
-                      {% endfor %}
-                    </div>
+                  <div class="flex flex-wrap gap-1.5">
+                    {% for language in collection.get_general_info.object_languages.all %}
+                      <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-base-200 text-base-content border border-base-300">
+                        {{ language.name }}
+                        {% if language.iso_639_3_code %}<span class="ml-1 text-base-content/60 text-xs">[{{ language.iso_639_3_code }}]</span>{% endif %}
+                      </span>
+                    {% endfor %}
                   </div>
                 {% endif %}
               </td>
               <td class="px-8 py-5 text-sm text-base-content/70">
                 {% if collection.get_general_info and collection.get_general_info.description %}
-                  <div class="flex items-start gap-2 cursor-help" title="{{ collection.get_general_info.description }}">
-                    <svg class="w-4 h-4 text-base-content/50 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                    </svg>
-                    <span>{{ collection.get_general_info.description|truncatewords:10|urlize_text }}</span>
-                  </div>
+                  <span class="cursor-help" title="{{ collection.get_general_info.description }}">{{ collection.get_general_info.description|truncatewords:10|urlize_text }}</span>
                 {% endif %}
               </td>
               <td class="px-8 py-5 text-sm text-base-content/70">
@@ -97,38 +87,14 @@
               </td>
               <td class="px-8 py-5 text-sm text-base-content/70">
                 {% if collection.publication_info.first and collection.publication_info.first.publication_year %}
-                  <div class="flex items-center gap-2">
-                    <svg class="w-4 h-4 text-base-content/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                    </svg>
-                    {{ collection.publication_info.first.publication_year }}
-                  </div>
+                  {{ collection.publication_info.first.publication_year }}
                 {% elif collection.get_general_info and collection.get_general_info.recording_date %}
-                  <div class="flex items-center gap-2">
-                    <svg class="w-4 h-4 text-base-content/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                    </svg>
-                    {{ collection.get_general_info.recording_date|date:"M Y" }}
-                  </div>
+                  {{ collection.get_general_info.recording_date|date:"M Y" }}
                 {% endif %}
               </td>
               <td class="px-8 py-5 text-sm text-base-content/70">
                 {% if collection.publication_info.first and collection.publication_info.first.creators.all %}
-                  <div class="flex items-start gap-2">
-                    <svg class="w-4 h-4 text-base-content/50 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                    </svg>
-                    <div class="flex flex-wrap gap-2">
-                      {% for creator in collection.publication_info.first.creators.all %}
-                        <span
-                          class="inline-flex items-center px-2.5 py-1 rounded-md bg-base-200 text-base-content border border-base-300"
-                          {% if creator.affiliation %}title="{{ creator.affiliation }}"{% endif %}
-                        >
-                          {{ creator.given_name }} {{ creator.family_name }}
-                        </span>
-                      {% endfor %}
-                    </div>
-                  </div>
+                  {% for creator in collection.publication_info.first.creators.all %}{% if not forloop.first %}, {% endif %}{{ creator.given_name }} {{ creator.family_name }}{% endfor %}
                 {% endif %}
               </td>
               <td class="px-8 py-5 text-sm font-mono text-base-content/60">
