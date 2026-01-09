@@ -2,8 +2,10 @@
 @plugin "daisyui";
 
 /* Content sources for class detection */
-@source "../../**/templates/**/*.html";
-@source "./js/**/*.js";
+@source "../../../lacos/templates/**/*.html";
+@source "../../../lacos/blam/templates/**/*.html";
+@source "../../../lacos/explorer/templates/**/*.html";
+@source "../../../lacos/storage/templates/**/*.html";
 
 /* daisyUI theme configuration */
 @plugin "daisyui" {
