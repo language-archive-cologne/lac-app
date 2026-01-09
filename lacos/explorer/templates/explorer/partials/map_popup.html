@@ -1,11 +1,10 @@
-{% load static %}
 {% load i18n %}
 
 <div class="flex items-center justify-between p-4 border-b border-base-300">
   <h3 class="text-lg font-semibold text-base-content">{{ title }}</h3>
   <button
     type="button"
-    onclick="document.getElementById('map-modal').classList.add('hidden'); document.getElementById('map-modal').classList.remove('flex'); document.body.classList.remove('overflow-hidden');"
+    onclick="document.getElementById('map-modal').classList.add('hidden'); document.body.classList.remove('overflow-hidden');"
     class="p-1 rounded hover:bg-base-200 text-base-content/60 hover:text-base-content"
   >
     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -17,8 +16,6 @@
   <div id="map-container" style="height: 400px; border-radius: 0.5rem;"></div>
 </div>
 
-<link rel="stylesheet" href="{% static 'vendor/js/maplibre-gl/maplibre-gl.css' %}" />
-<script src="{% static 'vendor/js/maplibre-gl/maplibre-gl.js' %}"></script>
 <script>
   (function() {
     const lat = {{ lat }};
@@ -29,10 +26,23 @@
       container: container,
       style: 'https://tiles.openfreemap.org/styles/bright',
       center: [lng, lat],
-      zoom: 10
+      zoom: 12,
+      pitch: 45,
+      bearing: -17.6,
+      antialias: true
     });
 
     map.addControl(new maplibregl.NavigationControl());
+
+    // Add terrain for 3D effect
+    map.on('load', function() {
+      map.addSource('terrain', {
+        type: 'raster-dem',
+        url: 'https://demotiles.maplibre.org/terrain-tiles/tiles.json',
+        tileSize: 256
+      });
+      map.setTerrain({ source: 'terrain', exaggeration: 1.5 });
+    });
 
     new maplibregl.Marker()
       .setLngLat([lng, lat])

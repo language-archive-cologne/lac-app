@@ -87,7 +87,7 @@
                         hx-get="{% url 'explorer:map_popup' %}?geo={{ collection.geo_location }}&title={{ collection.formatted_location|urlencode }}"
                         hx-target="#map-modal-content"
                         hx-swap="innerHTML"
-                        hx-on::after-request="document.getElementById('map-modal').classList.remove('hidden'); document.getElementById('map-modal').classList.add('flex'); document.body.classList.add('overflow-hidden');"
+                        hx-on::after-request="document.getElementById('map-modal').classList.remove('hidden'); document.body.classList.add('overflow-hidden');"
                         title="{% translate 'Show on map' %}"
                       >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -147,13 +147,17 @@
     {% endif %}
   {% endif %}
 
+  <!-- Preload MapLibre for map popups -->
+  <link rel="stylesheet" href="{% static 'vendor/js/maplibre-gl/maplibre-gl.css' %}" />
+  <script src="{% static 'vendor/js/maplibre-gl/maplibre-gl.js' %}"></script>
+
   <!-- Map Modal -->
-  <div id="map-modal" class="hidden fixed inset-0 z-50 items-center justify-center p-4">
+  <div id="map-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
     <div
       class="absolute inset-0 bg-neutral/60"
-      onclick="document.getElementById('map-modal').classList.add('hidden'); document.getElementById('map-modal').classList.remove('flex'); document.body.classList.remove('overflow-hidden');"
+      onclick="document.getElementById('map-modal').classList.add('hidden'); document.body.classList.remove('overflow-hidden');"
     ></div>
-    <div id="map-modal-content" class="relative w-full max-w-3xl bg-base-100 rounded-xl shadow-xl">
+    <div id="map-modal-content" class="relative w-full max-w-lg bg-base-100 rounded-xl shadow-xl">
       <!-- Content loaded via HTMX -->
     </div>
   </div>
@@ -163,7 +167,6 @@
       const modal = document.getElementById('map-modal');
       if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
         modal.classList.add('hidden');
-        modal.classList.remove('flex');
         document.body.classList.remove('overflow-hidden');
       }
     });
