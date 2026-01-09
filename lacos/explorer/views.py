@@ -610,7 +610,8 @@ class CollectionListView(ListView):
                 result for result in search_results if result.kind == "bundle"
             ]
         # Process locations for each collection
-        collections_with_locations = []
+        from lacos.explorer.map_utils import get_collection_map_markers
+
         for collection in context['collection_list']:
             if collection.get_general_info and collection.get_general_info.location:
                 location = collection.get_general_info.location
@@ -619,9 +620,8 @@ class CollectionListView(ListView):
             else:
                 collection.formatted_location = ""
                 collection.geo_location = None
-            collections_with_locations.append(collection)
-        
-        context['collection_list'] = collections_with_locations
+
+        context['map_markers_json'] = get_collection_map_markers(context['collection_list'])
         return context
 
     def render_to_response(self, context, **response_kwargs):
