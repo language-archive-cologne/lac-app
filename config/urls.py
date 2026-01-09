@@ -24,6 +24,16 @@ urlpatterns = [
         name="about",
     ),
     path(
+        "privacy-policy/",
+        TemplateView.as_view(template_name="pages/privacy_policy.html"),
+        name="privacy-policy",
+    ),
+    path(
+        "imprint/",
+        TemplateView.as_view(template_name="pages/imprint.html"),
+        name="imprint",
+    ),
+    path(
         "user-guides/",
         TemplateView.as_view(template_name="pages/user_guides/index.html"),
         name="user-guides",
