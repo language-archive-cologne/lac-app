@@ -1,0 +1,29 @@
+# Language Archive Cologne (LAC)
+# https://lacos.uni-koeln.de
+
+> The Language Archive Cologne is a digital archive of language resources containing collections of primary language data, including audio and video recordings, as well as linguistic analyses such as transcriptions, translations and annotations.
+
+## Usage Policy
+
+This archive contains copyrighted and culturally sensitive language documentation materials. The content is NOT available for:
+
+- AI/ML model training
+- Large language model training
+- Text/data mining for commercial purposes
+- Automated scraping or bulk downloading
+
+## Access
+
+- Public metadata may be indexed by search engines
+- Media files and annotations require authorization
+- Some content is protected or embargoed
+
+## Contact
+
+For licensing inquiries or research collaboration:
+- Email: lac-helpdesk@uni-koeln.de
+- Website: https://lacos.uni-koeln.de/about/
+
+## Legal
+
+All content is protected under applicable copyright laws. Unauthorized use for AI training purposes is prohibited.
