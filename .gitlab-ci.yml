@@ -9,10 +9,11 @@ deploy_dev:
   before_script:
     - apk add --no-cache openssh-client
     - eval $(ssh-agent -s)
-    - chmod 600 "$SSH_PRIVATE_KEY"
-    - ssh-add "$SSH_PRIVATE_KEY"
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
+    - echo "$SSH_PRIVATE_KEY_B64" | base64 -d > ~/.ssh/deploy_key
+    - chmod 600 ~/.ssh/deploy_key
+    - ssh-add ~/.ssh/deploy_key
   script:
     - ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd /opt/lacos/lac-app && git pull && docker compose -f docker-compose.dev.yml exec -T django python manage.py collectstatic --noinput && docker compose -f docker-compose.dev.yml restart django"
   environment:
