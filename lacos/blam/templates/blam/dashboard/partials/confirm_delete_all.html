@@ -1,5 +1,5 @@
-<div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full" aria-modal="true" role="dialog">
-    <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+<div class="fixed inset-0 bg-neutral/60 overflow-y-auto h-full w-full" aria-modal="true" role="dialog">
+    <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-base-100">
         <div class="mt-3">
             <div class="flex justify-between items-center pb-3 border-b bg-red-600 -m-5 p-5 rounded-t-md">
                 <h3 class="text-xl font-medium text-white">Confirm Database Reset</h3>
@@ -29,8 +29,8 @@
                       hx-on::after-request="document.getElementById('confirm-modal-wrapper').classList.add('hidden');">
                     {% csrf_token %}
                     <div class="flex items-center mb-4">
-                        <input id="confirmDeleteCheck" name="confirm" type="checkbox" required class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
-                        <label for="confirmDeleteCheck" class="ml-2 text-sm font-medium text-gray-900">
+                        <input id="confirmDeleteCheck" name="confirm" type="checkbox" required class="w-4 h-4 text-blue-600 bg-base-200 border-base-300 rounded focus:ring-blue-500">
+                        <label for="confirmDeleteCheck" class="ml-2 text-sm font-medium text-base-content">
                             I understand that this action will permanently delete all BLAM data
                         </label>
                     </div>

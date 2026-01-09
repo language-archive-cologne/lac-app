@@ -48,9 +48,21 @@
 
       <!-- User Menu -->
       <div class="flex items-center space-x-4">
+        <!-- Theme Toggle -->
+        <button id="theme-toggle" class="text-gray-300 hover:text-white p-2 rounded-md hover:bg-slate-600 transition-colors" title="Toggle theme">
+          <!-- Sun icon (shown in dark mode) -->
+          <svg id="theme-icon-light" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+          </svg>
+          <!-- Moon icon (shown in light mode) -->
+          <svg id="theme-icon-dark" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+          </svg>
+        </button>
+
         {% if request.user.is_authenticated %}
-        <div class="relative" x-data="{ open: false }">
-          <button @click="open = !open" class="flex items-center space-x-2 text-gray-300 hover:text-white focus:outline-none">
+        <div class="relative">
+          <button id="user-menu-button" class="flex items-center space-x-2 text-gray-300 hover:text-white focus:outline-none">
             <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold text-sm">
               {{ request.user.username|slice:":1"|upper }}
             </div>
@@ -59,17 +71,17 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
             </svg>
           </button>
-          <div x-show="open" @click.away="open = false" x-transition class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
-            <a href="{% url 'users:detail' request.user.username %}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+          <div id="user-menu-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-base-100 rounded-md shadow-lg py-1 z-50 border border-base-300">
+            <a href="{% url 'users:detail' request.user.username %}" class="block px-4 py-2 text-sm text-base-content hover:bg-base-200">
               {% translate "My Profile" %}
             </a>
-            <a href="{% url 'account_logout' %}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+            <a href="{% url 'account_logout' %}" class="block px-4 py-2 text-sm text-base-content hover:bg-base-200">
               {% translate "Sign Out" %}
             </a>
           </div>
         </div>
         {% else %}
-        <a href="{% url 'account_login' %}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
+        <a href="{% url 'account_login' %}" class="btn btn-primary btn-sm">
           {% translate "Sign In" %}
         </a>
         {% endif %}
@@ -120,3 +132,51 @@
     </div>
   </div>
 </nav>
+
+<script>
+  // Theme toggle functionality
+  (function() {
+    const toggle = document.getElementById('theme-toggle');
+    const iconLight = document.getElementById('theme-icon-light');
+    const iconDark = document.getElementById('theme-icon-dark');
+
+    function updateIcon() {
+      const current = document.documentElement.getAttribute('data-theme');
+      if (current === 'dark') {
+        iconLight.classList.remove('hidden');
+        iconDark.classList.add('hidden');
+      } else {
+        iconLight.classList.add('hidden');
+        iconDark.classList.remove('hidden');
+      }
+    }
+
+    updateIcon();
+
+    toggle.addEventListener('click', function() {
+      const current = document.documentElement.getAttribute('data-theme');
+      const next = current === 'dark' ? 'corporate' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('theme', next);
+      updateIcon();
+    });
+  })();
+
+  // User menu dropdown
+  (function() {
+    const button = document.getElementById('user-menu-button');
+    const dropdown = document.getElementById('user-menu-dropdown');
+    if (!button || !dropdown) return;
+
+    button.addEventListener('click', function(e) {
+      e.stopPropagation();
+      dropdown.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', function(e) {
+      if (!dropdown.contains(e.target) && !button.contains(e.target)) {
+        dropdown.classList.add('hidden');
+      }
+    });
+  })();
+</script>
