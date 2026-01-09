@@ -110,8 +110,12 @@
             {% for creator in collection.publication_info.first.creators.all %}{% if not forloop.first %}, {% endif %}{{ creator.given_name }} {{ creator.family_name }}{% endfor %}
           {% endif %}
         </td>
-        <td class="px-8 py-5 text-sm font-mono text-base-content/60">
-          {{ collection.identifier }}
+        <td class="px-8 py-5 text-sm font-mono">
+          <a href="{% url 'explorer:collection_detail_by_handle' handle=collection.identifier %}"
+             class="text-base-content/60 hover:text-primary hover:underline"
+             title="{% translate 'Open collection by handle' %}">
+            {{ collection.identifier }}
+          </a>
         </td>
       </tr>
     {% endfor %}
