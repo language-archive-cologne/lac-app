@@ -589,8 +589,11 @@ class CollectionListView(ListView):
 
     def get_queryset(self):
         """Explicitly return all collections and log the count."""
+        from django.db.models import Count
         logger.info("Fetching collections in CollectionListView...")
-        queryset = Collection.objects.all()
+        queryset = Collection.objects.annotate(
+            bundles_count=Count('bundle_collection')
+        )
         collection_count = queryset.count()
         logger.info(f"Found {collection_count} collections.")
         return queryset
@@ -611,6 +614,7 @@ class CollectionListView(ListView):
             ]
         # Process locations for each collection
         from lacos.explorer.map_utils import get_collection_map_markers
+        from lacos.blam.models.collection.collection_general_info import CollectionObjectLanguage
 
         for collection in context['collection_list']:
             if collection.get_general_info and collection.get_general_info.location:
@@ -622,6 +626,13 @@ class CollectionListView(ListView):
                 collection.geo_location = None
 
         context['map_markers_json'] = get_collection_map_markers(context['collection_list'])
+
+        # Add archive statistics
+        context['stats'] = {
+            'collections_count': context['collection_list'].count() if hasattr(context['collection_list'], 'count') else len(context['collection_list']),
+            'languages_count': CollectionObjectLanguage.objects.values('name').distinct().count(),
+        }
+
         return context
 
     def render_to_response(self, context, **response_kwargs):

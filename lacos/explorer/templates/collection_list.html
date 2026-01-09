@@ -15,9 +15,16 @@
   {% else %}
     {% if collection_list %}
       <!-- Collections Map -->
-      <div class="mb-8 rounded-xl shadow-sm border border-base-300 overflow-hidden">
+      <div class="mb-4 rounded-xl shadow-sm border border-base-300 overflow-hidden">
         <div id="collections-map" style="height: 500px;"></div>
       </div>
+
+      <!-- Archive Statistics -->
+      <p class="text-sm text-base-content/60 mb-6">
+        {% blocktrans with collections=stats.collections_count languages=stats.languages_count %}
+          Browsing <strong class="text-base-content">{{ collections }}</strong> collections across <strong class="text-base-content">{{ languages }}</strong> languages
+        {% endblocktrans %}
+      </p>
       <div class="overflow-x-auto rounded-xl shadow-sm border border-base-300">
         <table class="min-w-full divide-y divide-base-300">
         <thead class="bg-base-200">
@@ -48,6 +55,7 @@
                     {{ collection.identifier }}
                   {% endif %}
                 </a>
+                <span class="ml-2 text-xs text-base-content/50">({{ collection.bundles_count }} {% translate "bundles" %})</span>
               </td>
               <td class="px-8 py-5">
                 {% if collection.get_general_info and collection.get_general_info.object_languages.all %}
