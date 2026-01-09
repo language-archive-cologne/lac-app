@@ -76,8 +76,8 @@ class BaseStorageService:
             # Ensure all workspace buckets exist
             for bucket_name in self.workspace_buckets:
                 bucket_exists = self.ensure_bucket_exists(bucket_name)
-                if bucket_exists and bucket_name == self.ingest_bucket:
-                    # Ensure CORS is configured for ingest bucket (needed for direct uploads)
+                if bucket_exists:
+                    # Ensure CORS is configured for all buckets (needed for direct uploads and video streaming)
                     logger.info(f"Ensuring CORS is configured for {bucket_name}...")
                     cors_result = self.ensure_cors_enabled(bucket_name)
                     if cors_result["success"]:
@@ -525,12 +525,12 @@ class BaseStorageService:
         logger.info(f"Checking CORS configuration for bucket: {bucket_name}")
         
         try:
-            # Define the required CORS rule - using the exact minimal configuration provided
+            # Define the required CORS rule for uploads and video streaming with range requests
             required_rule = {
                 'AllowedHeaders': ['*'],
-                'AllowedMethods': ['POST'],
+                'AllowedMethods': ['GET', 'HEAD', 'POST'],
                 'AllowedOrigins': ['*'],
-                'ExposeHeaders': []
+                'ExposeHeaders': ['Content-Range', 'Accept-Ranges', 'Content-Length', 'ETag']
             }
             
             # Check if CORS is already configured
@@ -545,7 +545,8 @@ class BaseStorageService:
                     # Check if all required keys are in the existing rule
                     if (set(rule.get('AllowedHeaders', [])) >= set(required_rule['AllowedHeaders']) and
                         set(rule.get('AllowedMethods', [])) >= set(required_rule['AllowedMethods']) and
-                        set(rule.get('AllowedOrigins', [])) >= set(required_rule['AllowedOrigins'])):
+                        set(rule.get('AllowedOrigins', [])) >= set(required_rule['AllowedOrigins']) and
+                        set(rule.get('ExposeHeaders', [])) >= set(required_rule['ExposeHeaders'])):
                         rule_exists = True
                         logger.info("✅ Required CORS rule already exists")
                         break
