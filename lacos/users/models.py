@@ -26,12 +26,12 @@ class User(AbstractUser):
             "Immutable identifier supplied by the Identity Provider for returning SAML users.",
         ),
     )
-    acl_agent_uri = models.URLField(
+    acl_agent_uri = models.CharField(
         _("ACL agent URI"),
         blank=True,
         null=True,
         max_length=1024,
-        help_text=_("URI used when matching foaf:Person ACL rules."),
+        help_text=_("URI used when matching foaf:Person ACL rules (e.g., urn:lacos:user:username)."),
     )
 
     def get_absolute_url(self) -> str:
@@ -56,12 +56,12 @@ class GroupACL(models.Model):
         on_delete=models.CASCADE,
         related_name="acl_profile",
     )
-    acl_agent_uri = models.URLField(
+    acl_agent_uri = models.CharField(
         _("ACL agent URI"),
         blank=True,
         null=True,
         max_length=1024,
-        help_text=_("URI used when matching foaf:Group ACL rules."),
+        help_text=_("URI used when matching foaf:Group ACL rules (e.g., urn:lacos:group:groupname)."),
     )
 
     class Meta:
