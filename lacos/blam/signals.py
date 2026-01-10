@@ -1,15 +1,25 @@
 import logging
-from django.db.models.signals import pre_delete, post_delete
+from django.db.models.signals import pre_delete, post_delete, post_save
 from django.dispatch import receiver
 # Import the necessary models
 from .models.bundle.bundle_structural_info import BundleStructuralInfo, MediaResource, WrittenResource, OtherResource
 from .models.bundle.bundle_repository import Bundle
 from .models.collection.collection_repository import Collection
+from .models.collection.collection_general_info import CollectionGeneralInfo, CollectionLocation
 from lacos.storage.models import S3ResourceLocation
 from django.contrib.contenttypes.models import ContentType
 
 logger = logging.getLogger(__name__)
 security_logger = logging.getLogger("lacos.security")
+
+
+def _invalidate_explorer_caches():
+    """Invalidate explorer caches when collection data changes."""
+    from lacos.explorer.map_utils import invalidate_map_markers_cache
+    from django.core.cache import cache
+    invalidate_map_markers_cache()
+    cache.delete("explorer:language_count")
+    logger.debug("Explorer caches invalidated")
 
 
 
@@ -191,6 +201,26 @@ def log_collection_deletion(sender, instance, **kwargs):
     security_logger.warning(
         f"COLLECTION_DELETED: name={collection_name} pid={collection_pid} pk={instance.pk}"
     )
+    _invalidate_explorer_caches()
+
+
+@receiver(post_save, sender=Collection)
+def invalidate_cache_on_collection_save(sender, instance, **kwargs):
+    """Invalidate explorer caches when a collection is created or updated."""
+    _invalidate_explorer_caches()
+
+
+@receiver(post_save, sender=CollectionGeneralInfo)
+def invalidate_cache_on_general_info_save(sender, instance, **kwargs):
+    """Invalidate explorer caches when collection general info changes."""
+    _invalidate_explorer_caches()
+
+
+@receiver(post_save, sender=CollectionLocation)
+@receiver(post_delete, sender=CollectionLocation)
+def invalidate_cache_on_location_change(sender, instance, **kwargs):
+    """Invalidate explorer caches when collection location changes."""
+    _invalidate_explorer_caches()
 
 
 @receiver(post_delete, sender=Bundle)

@@ -2,12 +2,16 @@
 
 import logging
 
-from django.db.models import Count, Min
+from django.core.cache import cache
+from django.db.models import Count, Min, Prefetch
 from django.shortcuts import render
 from django.views.generic import DetailView, ListView
 
 from lacos.blam.models import Collection
-from lacos.blam.models.collection.collection_general_info import CollectionObjectLanguage
+from lacos.blam.models.collection.collection_general_info import (
+    CollectionGeneralInfo,
+    CollectionObjectLanguage,
+)
 from lacos.explorer.map_utils import get_collection_map_markers
 from lacos.explorer.search import search_archives
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
@@ -16,6 +20,9 @@ from .utils import get_formatted_location, paginate_bundle_contexts, HandleLooku
 
 
 logger = logging.getLogger(__name__)
+
+LANGUAGE_COUNT_CACHE_KEY = "explorer:language_count"
+LANGUAGE_COUNT_CACHE_TIMEOUT = 86400  # 24 hours (invalidated on collection changes)
 
 
 class CollectionListView(ListView):
@@ -26,7 +33,16 @@ class CollectionListView(ListView):
     def get_queryset(self):
         """Explicitly return all collections and log the count."""
         logger.info("Fetching collections in CollectionListView...")
-        queryset = Collection.objects.annotate(
+        queryset = Collection.objects.prefetch_related(
+            Prefetch(
+                'general_info',
+                queryset=CollectionGeneralInfo.objects.select_related('location'),
+                to_attr='prefetched_general_info',
+            ),
+            'general_info__object_languages',
+            'publication_info',
+            'publication_info__creators',
+        ).annotate(
             bundles_count=Count('bundle_collection'),
             first_language=Min('general_info__object_languages__name'),
         )
@@ -62,8 +78,11 @@ class CollectionListView(ListView):
             ]
 
         for collection in context['collection_list']:
-            if collection.get_general_info and collection.get_general_info.location:
-                location = collection.get_general_info.location
+            # Use prefetched data to avoid N+1 queries
+            general_info_list = getattr(collection, 'prefetched_general_info', None)
+            general_info = general_info_list[0] if general_info_list else None
+            if general_info and general_info.location:
+                location = general_info.location
                 collection.formatted_location = get_formatted_location(location)
                 collection.geo_location = location.geo_location
             else:
@@ -72,13 +91,19 @@ class CollectionListView(ListView):
 
         context['map_markers_json'] = get_collection_map_markers(context['collection_list'])
 
+        # Cache language count as it rarely changes
+        languages_count = cache.get(LANGUAGE_COUNT_CACHE_KEY)
+        if languages_count is None:
+            languages_count = CollectionObjectLanguage.objects.values('name').distinct().count()
+            cache.set(LANGUAGE_COUNT_CACHE_KEY, languages_count, LANGUAGE_COUNT_CACHE_TIMEOUT)
+
         context['stats'] = {
             'collections_count': (
                 context['collection_list'].count()
                 if hasattr(context['collection_list'], 'count')
                 else len(context['collection_list'])
             ),
-            'languages_count': CollectionObjectLanguage.objects.values('name').distinct().count(),
+            'languages_count': languages_count,
         }
 
         context['current_sort'] = self.request.GET.get('sort', 'name')
