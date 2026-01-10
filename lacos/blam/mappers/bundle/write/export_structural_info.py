@@ -2,7 +2,8 @@ from typing import Dict, Any, List, Optional
 from django.db.models import QuerySet
 from lacos.blam.models.bundle.bundle_structural_info import (
     BundleStructuralInfo,
-    BundleAdditionalMetadataFile
+    BundleAdditionalMetadataFile,
+    BundleResources
 )
 from blam_schemas.bundle.blam_bundle_repository_v1_0 import (
     Cmd,
@@ -29,9 +30,11 @@ def export_structural_info(structural_info: BundleStructuralInfo, cmd_data: Cmd)
     # Create the bundle structural info structure
     bundle_info = BundleStructuralInfoType()
     
-    # Set collection membership if present
-    if hasattr(structural_info, 'collection_id') and structural_info.collection_id:
-        bundle_info.bundle_is_member_of_collection = create_collection_membership(structural_info)
+    collection = structural_info.is_member_of_collection
+    if collection:
+        collection_info = collection.get_general_info
+        if collection_info:
+            bundle_info.bundle_is_member_of_collection = create_collection_membership(collection_info)
     
     # Export additional metadata files if present
     if structural_info.additional_metadata_files.exists():
@@ -47,19 +50,19 @@ def export_structural_info(structural_info: BundleStructuralInfo, cmd_data: Cmd)
     cmd_data.components.blam_bundle_repository_v1_0.bundle_structural_info = bundle_info
 
 
-def create_collection_membership(structural_info: BundleStructuralInfo) -> Any:
+def create_collection_membership(collection_info: Any) -> Any:
     """
     Create a collection membership object from the model.
     
     Args:
-        structural_info: The BundleStructuralInfo instance
+        collection_info: The CollectionGeneralInfo instance
         
     Returns:
         A collection membership object for the schema
     """
     membership = Cmd.Components.BlamBundleRepositoryV10.BundleStructuralInfo.BundleIsMemberOfCollection()
-    membership.value = structural_info.collection_id
-    membership.identifier_type = map_to_collection_identifier_type(structural_info.collection_id_type)
+    membership.value = collection_info.id_value
+    membership.identifier_type = map_to_collection_identifier_type(collection_info.id_type)
     return membership
 
 
@@ -113,25 +116,26 @@ def export_bundle_resources(structural_info: BundleStructuralInfo) -> BundleReso
         A bundle resources container for the schema
     """
     resources_data = BundleResourcesType()
-    
-    # Export media resources
-    if hasattr(structural_info, 'media_resources') and structural_info.media_resources.exists():
+
+    bundle_resources = BundleResources.objects.filter(bundle=structural_info.bundle).first()
+    if not bundle_resources:
+        return resources_data
+
+    if bundle_resources.bundle_media_resources.exists():
         resources_data.media_resource = [
-            export_media_resource(resource) for resource in structural_info.media_resources.all()
+            export_media_resource(resource) for resource in bundle_resources.bundle_media_resources.all()
         ]
-    
-    # Export written resources
-    if hasattr(structural_info, 'written_resources') and structural_info.written_resources.exists():
+
+    if bundle_resources.bundle_written_resources.exists():
         resources_data.written_resource = [
-            export_written_resource(resource) for resource in structural_info.written_resources.all()
+            export_written_resource(resource) for resource in bundle_resources.bundle_written_resources.all()
         ]
-    
-    # Export other resources
-    if hasattr(structural_info, 'other_resources') and structural_info.other_resources.exists():
+
+    if bundle_resources.bundle_other_resources.exists():
         resources_data.other_resource = [
-            export_other_resource(resource) for resource in structural_info.other_resources.all()
+            export_other_resource(resource) for resource in bundle_resources.bundle_other_resources.all()
         ]
-    
+
     return resources_data
 
 

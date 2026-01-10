@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% load blam_extras %}
+
+{% block content %}
+<div id="reference-content">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-semibold">{{ title }}</h1>
+    <a class="btn btn-outline" href="{% url 'blam:collection_metadata_list' %}">Back to metadata</a>
+  </div>
+
+  <div class="grid gap-6 lg:grid-cols-[2fr_1fr]">
+    <div class="card bg-base-100 shadow">
+      <div class="card-body">
+        {% if objects %}
+          <div class="overflow-x-auto">
+            <table class="table table-zebra">
+              <thead>
+                <tr>
+                  {% for field_name in fields %}
+                    <th>{{ field_name|capfirst }}</th>
+                  {% endfor %}
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for obj in objects %}
+                  <tr>
+                    {% for field_name in fields %}
+                      <td>{{ obj|attr:field_name }}</td>
+                    {% endfor %}
+                    <td>
+                      <a class="btn btn-xs"
+                         href="{% url 'blam:metadata_reference_edit' reference_slug=reference_slug object_id=obj.pk %}"
+                         hx-get="{% url 'blam:metadata_reference_edit' reference_slug=reference_slug object_id=obj.pk %}"
+                         hx-target="#reference-content"
+                         hx-select="#reference-content"
+                         hx-swap="outerHTML"
+                         hx-push-url="true">Edit</a>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="text-sm text-base-content/70">No entries yet.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card bg-base-100 shadow">
+      <div class="card-body">
+        <h2 class="text-lg font-semibold mb-2">Create new</h2>
+        <form method="post"
+              hx-boost="true"
+              hx-target="#reference-content"
+              hx-select="#reference-content"
+              hx-swap="outerHTML"
+              class="space-y-4">
+          {% csrf_token %}
+          {% include "blam/metadata/partials/form_fields.html" with form=form %}
+          <button class="btn btn-primary" type="submit">Add</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -22,10 +22,13 @@
         <a href="{% url 'storage:archivist_dashboard' %}" class="text-gray-300 hover:bg-slate-600 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
           Storage
         </a>
-        <a href="{% url 'blam_archivist_dashboard' %}" class="text-gray-300 hover:bg-slate-600 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
+        <a href="{% url 'blam:blam_archivist_dashboard' %}" class="text-gray-300 hover:bg-slate-600 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
           BLAM
         </a>
         {% if request.user.is_superuser %}
+        <a href="{% url 'blam:collection_metadata_list' %}" class="text-gray-300 hover:bg-slate-600 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
+          Metadata Editor
+        </a>
         <a href="{% url 'storage:acl_admin_dashboard' %}" class="text-gray-300 hover:bg-slate-600 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
           ACL
         </a>
@@ -107,10 +110,13 @@
       <a href="{% url 'storage:archivist_dashboard' %}" class="text-gray-300 hover:bg-slate-700 hover:text-white block px-3 py-2 rounded-md text-base font-medium">
         Storage
       </a>
-      <a href="{% url 'blam_archivist_dashboard' %}" class="text-gray-300 hover:bg-slate-700 hover:text-white block px-3 py-2 rounded-md text-base font-medium">
+      <a href="{% url 'blam:blam_archivist_dashboard' %}" class="text-gray-300 hover:bg-slate-700 hover:text-white block px-3 py-2 rounded-md text-base font-medium">
         BLAM
       </a>
       {% if request.user.is_superuser %}
+      <a href="{% url 'blam:collection_metadata_list' %}" class="text-gray-300 hover:bg-slate-700 hover:text-white block px-3 py-2 rounded-md text-base font-medium">
+        Metadata Editor
+      </a>
       <a href="{% url 'storage:acl_admin_dashboard' %}" class="text-gray-300 hover:bg-slate-700 hover:text-white block px-3 py-2 rounded-md text-base font-medium">
         ACL
       </a>

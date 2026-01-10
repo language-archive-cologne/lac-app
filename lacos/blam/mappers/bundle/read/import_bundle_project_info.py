@@ -135,11 +135,11 @@ def process_funder_identifiers(funder: FunderInfo, identifiers: List[Any]) -> No
         funder: The FunderInfo instance to associate identifiers with
         identifiers: List of funder identifier data objects from the schema
     """
-    # Note: FunderIdentifier is not directly related to FunderInfo in the model
-    # This would require a relationship to be added to the model
-    
+    funder.funder_identifiers.clear()
+
     for identifier_data in identifiers:
-        create_funder_identifier(identifier_data)
+        identifier = create_funder_identifier(identifier_data)
+        funder.funder_identifiers.add(identifier)
 
 
 def create_funder_identifier(identifier_data: Any) -> FunderIdentifier:

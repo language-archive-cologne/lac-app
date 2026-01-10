@@ -21,6 +21,12 @@ class Bundle(Repository):
         blank=True,
         help_text="Original S3 object key used for the bundle import",
     )
+    projects = models.ManyToManyField(
+        'blam.ProjectInfo',
+        blank=True,
+        related_name='bundles',
+        help_text="Projects associated with this bundle",
+    )
     @property
     def base_header(self):
         """Get the bundle header"""
@@ -49,4 +55,3 @@ class Bundle(Repository):
     class Meta:
         verbose_name = "Bundle"
         verbose_name_plural = "Bundles"
-

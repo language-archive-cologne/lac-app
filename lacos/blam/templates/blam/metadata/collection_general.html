@@ -1,0 +1,29 @@
+{% extends "blam/metadata/base_editor.html" %}
+
+{% block editor_content %}
+<h1 class="text-xl font-semibold mb-4">Collection general info</h1>
+<form method="post"
+      hx-boost="true"
+      hx-target="#metadata-editor"
+      hx-select="#metadata-editor"
+      hx-swap="outerHTML"
+      class="space-y-6">
+  {% csrf_token %}
+  <div class="space-y-4">
+    <h2 class="text-lg font-semibold">General</h2>
+    {% include "blam/metadata/partials/form_fields.html" with form=form %}
+    <p class="text-sm text-base-content/70">
+      Manage references:
+      <a class="link" href="{% url 'blam:metadata_reference_list' reference_slug='collection-keywords' %}">keywords</a>,
+      <a class="link" href="{% url 'blam:metadata_reference_list' reference_slug='collection-languages' %}">languages</a>.
+    </p>
+  </div>
+
+  <div class="space-y-4">
+    <h2 class="text-lg font-semibold">Location</h2>
+    {% include "blam/metadata/partials/form_fields.html" with form=location_form %}
+  </div>
+
+  <button class="btn btn-primary" type="submit">Save</button>
+</form>
+{% endblock %}

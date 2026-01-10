@@ -24,6 +24,12 @@ class Collection(Repository):
         blank=True,
         help_text="Original S3 object key used for the collection import",
     )
+    project_infos = models.ManyToManyField(
+        'blam.ProjectInfo',
+        blank=True,
+        related_name='collections',
+        help_text="Projects associated with this collection",
+    )
     @property
     def base_header(self):
         """Get the collection header"""
@@ -52,7 +58,7 @@ class Collection(Repository):
     @property
     def get_project_info(self):
         """Get the collection project info"""
-        return self.project_info.first()
+        return self.project_infos.first()
 
     class Meta:
         verbose_name = "Collection"

@@ -1,0 +1,19 @@
+{% extends "blam/metadata/base_editor.html" %}
+
+{% block editor_content %}
+<h1 class="text-xl font-semibold mb-4">Collection structural info</h1>
+<form method="post"
+      hx-boost="true"
+      hx-target="#metadata-editor"
+      hx-select="#metadata-editor"
+      hx-swap="outerHTML"
+      class="space-y-4">
+  {% csrf_token %}
+  {% include "blam/metadata/partials/form_fields.html" with form=form %}
+  <p class="text-sm text-base-content/70">
+    Manage references:
+    <a class="link" href="{% url 'blam:metadata_reference_list' reference_slug='collection-additional-metadata-files' %}">additional metadata files</a>.
+  </p>
+  <button class="btn btn-primary" type="submit">Save</button>
+</form>
+{% endblock %}

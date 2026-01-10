@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-semibold">Collections</h1>
+  <a class="btn btn-primary" href="{% url 'blam:collection_metadata_create' %}">New collection</a>
+</div>
+
+<div class="card bg-base-100 shadow">
+  <div class="card-body">
+    {% if collections %}
+      <div class="overflow-x-auto">
+        <table class="table table-zebra">
+          <thead>
+            <tr>
+              <th>Identifier</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for collection in collections %}
+              <tr>
+                <td>{{ collection.identifier }}</td>
+                <td>
+                  <a class="btn btn-sm" href="{% url 'blam:collection_metadata_overview' collection.pk %}">Edit</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-sm text-base-content/70">No collections found.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="text-2xl font-semibold mb-4">Create collection</h1>
+<div class="card bg-base-100 shadow">
+  <div class="card-body">
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+      {% include "blam/metadata/partials/form_fields.html" with form=form %}
+      <div class="flex gap-2">
+        <button class="btn btn-primary" type="submit">Create</button>
+        <a class="btn btn-ghost" href="{% url 'blam:collection_metadata_list' %}">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

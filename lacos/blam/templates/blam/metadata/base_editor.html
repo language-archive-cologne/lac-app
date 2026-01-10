@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div id="metadata-editor" class="flex flex-col gap-6 lg:flex-row">
+  <aside class="lg:w-1/4">
+    <div class="card bg-base-100 shadow">
+      <div class="card-body">
+        <h2 class="card-title text-lg">
+          {% if collection %}Collection{% else %}Bundle{% endif %}
+        </h2>
+        {% if collection %}
+          <p class="text-sm text-base-content/70">Identifier: {{ collection.identifier }}</p>
+        {% elif bundle %}
+          <p class="text-sm text-base-content/70">Identifier: {{ bundle.identifier }}</p>
+        {% endif %}
+        <ul class="menu mt-4 rounded-box">
+          {% for item in nav_items %}
+            <li>
+              <a href="{{ item.url }}"
+                 hx-get="{{ item.url }}"
+                 hx-target="#metadata-editor"
+                 hx-select="#metadata-editor"
+                 hx-swap="outerHTML"
+                 hx-push-url="true"
+                 class="{% if item.slug == active_section %}active{% endif %}">
+                {{ item.label }}
+              </a>
+            </li>
+          {% endfor %}
+        </ul>
+        <div class="mt-4">
+          <a href="{% url 'blam:collection_metadata_list' %}" class="btn btn-sm btn-outline w-full">Collections</a>
+          <a href="{% url 'blam:bundle_metadata_list' %}" class="btn btn-sm btn-outline w-full mt-2">Bundles</a>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <section class="flex-1">
+    <div class="card bg-base-100 shadow">
+      <div class="card-body">
+        <div id="metadata-section">
+          {% block editor_content %}{% endblock %}
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}

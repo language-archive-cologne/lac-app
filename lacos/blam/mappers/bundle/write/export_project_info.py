@@ -98,12 +98,8 @@ def export_funder_info(funder: FunderInfo) -> Any:
     if funder.grant_uri:
         funder_data.grant_uri = funder.grant_uri
     
-    # Export funder identifiers if available
-    # Note: This assumes there's a way to get identifiers related to this funder
-    # You may need to adjust this based on your actual model relationships
-    identifiers = FunderIdentifier.objects.filter(funder_info=funder)
-    if identifiers.exists():
-        for identifier in identifiers:
+    if funder.funder_identifiers.exists():
+        for identifier in funder.funder_identifiers.all():
             funder_data.funder_identifier.append(export_funder_identifier(identifier))
     
     return funder_data

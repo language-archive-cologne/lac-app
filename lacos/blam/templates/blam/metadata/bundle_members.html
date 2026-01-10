@@ -1,0 +1,33 @@
+{% extends "blam/metadata/base_editor.html" %}
+
+{% block editor_content %}
+<h1 class="text-xl font-semibold mb-4">Bundle members</h1>
+<form method="post"
+      hx-boost="true"
+      hx-target="#metadata-editor"
+      hx-select="#metadata-editor"
+      hx-swap="outerHTML"
+      class="space-y-4">
+  {% csrf_token %}
+  {{ formset.management_form }}
+  {% if formset.non_form_errors %}
+    <div class="alert alert-error">
+      {{ formset.non_form_errors }}
+    </div>
+  {% endif %}
+  {% for form in formset %}
+    <div class="rounded-lg border border-base-200 p-4 space-y-4">
+      {% include "blam/metadata/partials/form_fields.html" with form=form %}
+      {% if form.instance.pk %}
+        <div class="form-control">
+          <label class="label cursor-pointer">
+            <span class="label-text">Delete</span>
+            {{ form.DELETE }}
+          </label>
+        </div>
+      {% endif %}
+    </div>
+  {% endfor %}
+  <button class="btn btn-primary" type="submit">Save</button>
+</form>
+{% endblock %}
