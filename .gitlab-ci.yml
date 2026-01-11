@@ -14,7 +14,7 @@ deploy_dev:
     - cp "$SSH_PRIVATE_KEY" ~/.ssh/deploy_key
     - chmod 600 ~/.ssh/deploy_key
     - ssh-add ~/.ssh/deploy_key
-    - echo "Runner public IP: $(curl -s --connect-timeout 2 --max-time 5 https://ifconfig.me || true)"
+    - 'echo "Runner public IP: $(curl -s --connect-timeout 2 --max-time 5 https://ifconfig.me || true)"'
     - nslookup $DEPLOY_HOST || true
     - nc -vz -w 5 $DEPLOY_HOST 22 || true
   script:
