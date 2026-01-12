@@ -1,16 +1,15 @@
-import uuid
-
 from django.db import models
 
+from lacos.blam.models.base_model import UUIDTimestampModel
 
-class BackgroundTask(models.Model):
+
+class BackgroundTask(UUIDTimestampModel):
     class Status(models.TextChoices):
         QUEUED = "queued", "Queued"
         RUNNING = "running", "Running"
         SUCCESS = "success", "Success"
         FAILED = "failed", "Failed"
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     task_name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     huey_task_id = models.CharField(max_length=255, blank=True)
@@ -19,8 +18,6 @@ class BackgroundTask(models.Model):
     metadata = models.JSONField(default=dict, blank=True)
     result = models.JSONField(null=True, blank=True)
     error = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-created_at"]

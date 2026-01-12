@@ -1,19 +1,18 @@
 from django.db import models
-import uuid
 from django.utils import timezone
+
+from lacos.blam.models.base_model import UUIDTimestampModel
 from .upload_sessions import UploadSession
 
-class S3FileObject(models.Model):
+
+class S3FileObject(UUIDTimestampModel):
     """Represents a file in S3"""
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     session = models.ForeignKey(UploadSession, related_name='files', on_delete=models.CASCADE)
     file_name = models.CharField(max_length=255)
     original_path = models.CharField(max_length=1024, blank=True)
     s3_key = models.CharField(max_length=1024)
     file_size_bytes = models.BigIntegerField(default=0)
     content_type = models.CharField(max_length=255, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
     upload_completed_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(
         max_length=20,

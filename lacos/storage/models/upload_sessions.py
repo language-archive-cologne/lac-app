@@ -1,17 +1,17 @@
 from django.db import models
 from django.conf import settings
-import uuid
 from django.utils import timezone
 
-class UploadSession(models.Model):
+from lacos.blam.models.base_model import UUIDTimestampModel
+
+
+class UploadSession(UUIDTimestampModel):
     """Represents a batch upload session"""
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,  # Use this instead of User directly
         on_delete=models.CASCADE
     )
     folder_name = models.CharField(max_length=255)
-    created_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(
         max_length=20,
