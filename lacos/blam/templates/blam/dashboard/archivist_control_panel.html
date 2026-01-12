@@ -145,7 +145,7 @@
                 <div class="p-4">
                     <p class="mb-4">Clean up and fix issues in the database models.</p>
                     <button 
-                        hx-post="{% url 'database_cleanup' %}"
+                        hx-post="{% url 'blam:database_cleanup' %}"
                         hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
                         hx-target="#results-container"
                         hx-swap="innerHTML"
@@ -184,7 +184,7 @@
                             <h6 class="font-medium mb-1">Delete Collections Only</h6>
                             <p class="text-sm text-base-content/60 mb-2">This will delete all collections but keep bundles. Bundles will be orphaned.</p>
                             <button 
-                                hx-post="{% url 'database_delete_collections' %}"
+                                hx-post="{% url 'blam:database_delete_collections' %}"
                                 hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
                                 hx-target="#confirm-modal"
                                 hx-swap="innerHTML"
@@ -200,7 +200,7 @@
                             <h6 class="font-medium mb-1">Delete Bundles Only</h6>
                             <p class="text-sm text-base-content/60 mb-2">This will delete all bundles and their resources but keep collections.</p>
                             <button 
-                                hx-post="{% url 'database_delete_bundles' %}"
+                                hx-post="{% url 'blam:database_delete_bundles' %}"
                                 hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
                                 hx-target="#confirm-modal"
                                 hx-swap="innerHTML"
@@ -216,7 +216,7 @@
                             <h6 class="font-medium mb-1">Delete All Data</h6>
                             <p class="text-sm text-base-content/60 mb-2">This will delete all collections, bundles, and resources from the database.</p>
                             <button 
-                                hx-post="{% url 'database_delete_all' %}"
+                                hx-post="{% url 'blam:database_delete_all' %}"
                                 hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
                                 hx-target="#confirm-modal"
                                 hx-swap="innerHTML"
