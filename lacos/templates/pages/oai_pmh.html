@@ -22,6 +22,13 @@
     </div>
   </div>
 
+  <div class="flex flex-wrap items-center gap-2">
+    <span class="text-xs font-semibold uppercase text-base-content/60">{% translate "Formats" %}</span>
+    {% for format in metadata_formats %}
+    <span class="badge badge-sm badge-outline">{{ format.metadata_prefix }}</span>
+    {% endfor %}
+  </div>
+
   <section class="space-y-6">
     <div>
       <h2 class="text-2xl font-semibold text-base-content">{% translate "Core verbs" %}</h2>
@@ -128,34 +135,5 @@
     </div>
   </section>
 
-  <div class="divider"></div>
-
-  <section class="space-y-6">
-    <div>
-      <h2 class="text-2xl font-semibold text-base-content">{% translate "Metadata formats" %}</h2>
-      <p class="text-sm text-base-content/70 mt-2">{% translate "These formats can be requested via ListRecords or ListIdentifiers." %}</p>
-    </div>
-    <div class="grid gap-5 md:grid-cols-2 mt-3">
-      {% for format in metadata_formats %}
-      <div class="card bg-base-100 shadow-md border border-base-200">
-        <div class="card-body">
-          <h3 class="card-title text-lg">{{ format.metadata_prefix }}</h3>
-          <div class="space-y-3 text-sm text-base-content/70">
-            <div>
-              <span class="font-semibold text-base-content/80">{% translate "Schema" %}</span>
-              <p class="break-all">
-                <a href="{{ format.schema }}" target="_blank" rel="noopener noreferrer" class="link link-primary">{{ format.schema }}</a>
-              </p>
-            </div>
-            <div>
-              <span class="font-semibold text-base-content/80">{% translate "Namespace" %}</span>
-              <p class="break-all">{{ format.namespace }}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-  </section>
 </div>
 {% endblock content %}
