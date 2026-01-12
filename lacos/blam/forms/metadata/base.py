@@ -1,5 +1,7 @@
 from django import forms
 
+from lacos.utils.text import normalize_nfc
+
 
 class DaisyFormMixin:
     def __init__(self, *args, **kwargs):
@@ -20,3 +22,11 @@ class DaisyFormMixin:
 
             existing = widget.attrs.get("class", "")
             widget.attrs["class"] = f"{existing} {css_class}".strip()
+
+    def clean(self):
+        """Normalize all string fields to NFC Unicode form."""
+        cleaned_data = super().clean()
+        for field_name, value in cleaned_data.items():
+            if isinstance(value, str):
+                cleaned_data[field_name] = normalize_nfc(value)
+        return cleaned_data
