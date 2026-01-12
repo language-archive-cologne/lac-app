@@ -10,11 +10,24 @@
       class="space-y-4">
   {% csrf_token %}
   {% include "blam/metadata/partials/form_fields.html" with form=form %}
-  <p class="text-sm text-base-content/70">
-    Manage references:
-    <a class="link" href="{% url 'blam:metadata_reference_list' reference_slug='bundle-additional-metadata-files' %}">additional metadata files</a>,
-    <a class="link" href="{% url 'blam:metadata_reference_list' reference_slug='bundle-topics' %}">topics</a>.
-  </p>
   <button class="btn btn-primary" type="submit">Save</button>
 </form>
+
+<div class="mt-8 space-y-6">
+  <div id="bundle-structural-additional-metadata-files-panel"
+       hx-get="{% url 'blam:bundle_structural_reference_panel' bundle_id=bundle.pk reference_slug='additional-metadata-files' %}"
+       hx-trigger="load"
+       hx-target="this"
+       hx-swap="outerHTML">
+    <div class="p-4 text-sm text-base-content/70">Loading additional metadata files...</div>
+  </div>
+
+  <div id="bundle-structural-bundle-topics-panel"
+       hx-get="{% url 'blam:bundle_structural_reference_panel' bundle_id=bundle.pk reference_slug='bundle-topics' %}"
+       hx-trigger="load"
+       hx-target="this"
+       hx-swap="outerHTML">
+    <div class="p-4 text-sm text-base-content/70">Loading bundle topics...</div>
+  </div>
+</div>
 {% endblock %}

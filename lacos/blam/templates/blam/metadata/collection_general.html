@@ -12,11 +12,6 @@
   <div class="space-y-4">
     <h2 class="text-lg font-semibold">General</h2>
     {% include "blam/metadata/partials/form_fields.html" with form=form %}
-    <p class="text-sm text-base-content/70">
-      Manage references:
-      <a class="link" href="{% url 'blam:metadata_reference_list' reference_slug='collection-keywords' %}">keywords</a>,
-      <a class="link" href="{% url 'blam:metadata_reference_list' reference_slug='collection-languages' %}">languages</a>.
-    </p>
   </div>
 
   <div class="space-y-4">
@@ -26,4 +21,22 @@
 
   <button class="btn btn-primary" type="submit">Save</button>
 </form>
+
+<div class="mt-8 space-y-6">
+  <div id="collection-keywords-panel"
+       hx-get="{% url 'blam:collection_general_reference_panel' collection_id=collection.pk reference_slug='keywords' %}"
+       hx-trigger="load"
+       hx-target="this"
+       hx-swap="outerHTML">
+    <div class="p-4 text-sm text-base-content/70">Loading keywords...</div>
+  </div>
+
+  <div id="collection-object-languages-panel"
+       hx-get="{% url 'blam:collection_general_reference_panel' collection_id=collection.pk reference_slug='object-languages' %}"
+       hx-trigger="load"
+       hx-target="this"
+       hx-swap="outerHTML">
+    <div class="p-4 text-sm text-base-content/70">Loading object languages...</div>
+  </div>
+</div>
 {% endblock %}

@@ -46,8 +46,6 @@ class CollectionGeneralInfoForm(DaisyFormMixin, forms.ModelForm):
             "description",
             "recording_date",
             "version",
-            "keywords",
-            "object_languages",
         ]
         widgets = {
             "recording_date": forms.DateInput(attrs={"type": "date"}),
@@ -75,8 +73,6 @@ class CollectionPublicationInfoForm(DaisyFormMixin, forms.ModelForm):
         fields = [
             "publication_year",
             "data_provider",
-            "creators",
-            "contributors",
         ]
 
 
@@ -88,9 +84,6 @@ class CollectionAdministrativeInfoForm(DaisyFormMixin, forms.ModelForm):
             "availability_date",
             "is_derivation_of",
             "authorized_users",
-            "is_identical_to",
-            "licenses",
-            "rights_holders",
         ]
         widgets = {
             "availability_date": forms.DateInput(attrs={"type": "date"}),
@@ -119,11 +112,10 @@ class CollectionStructuralInfoForm(DaisyFormMixin, forms.ModelForm):
     class Meta:
         model = CollectionStructuralInfo
         fields = [
-            "additional_metadata_files",
         ]
 
 
 class CollectionProjectInfoForm(DaisyFormMixin, forms.ModelForm):
     class Meta:
         model = Collection
-        fields = ["project_infos"]
+        fields = []

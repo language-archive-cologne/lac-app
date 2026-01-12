@@ -43,4 +43,6 @@ class AdditionalMetadataFile(BaseModel):
     class Meta:
         abstract = True
 
+    def __str__(self) -> str:
+        return f"{self.file_name} ({self.is_metadata_for})"
 

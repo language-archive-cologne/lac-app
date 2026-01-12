@@ -69,6 +69,9 @@ class Keyword(BaseModel):
     class Meta:
         abstract = True
 
+    def __str__(self) -> str:
+        return self.value
+
 
 class ObjectLanguage(BaseModel):
     """
@@ -93,6 +96,9 @@ class ObjectLanguage(BaseModel):
     class Meta:
         abstract = True
         unique_together = [('name', 'iso_639_3_code', 'glottolog_code')]
+
+    def __str__(self) -> str:
+        return f"{self.display_name} ({self.iso_639_3_code})"
     
     def clean(self):
         """
@@ -121,6 +127,9 @@ class ObjectLanguageAlternativeName(BaseModel):
     class Meta:
         abstract = True
 
+    def __str__(self) -> str:
+        return self.value
+
 
 class ObjectLanguageLanguageFamily(BaseModel):
     """
@@ -133,6 +142,9 @@ class ObjectLanguageLanguageFamily(BaseModel):
     
     class Meta:
         abstract = True
+
+    def __str__(self) -> str:
+        return self.value
 
 class ObjectLanguageTaxonomy(BaseModel):
     """

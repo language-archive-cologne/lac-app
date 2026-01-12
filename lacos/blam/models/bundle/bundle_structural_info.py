@@ -175,6 +175,9 @@ class MediaResource(BaseModel):
         verbose_name = "Media Resource"
         verbose_name_plural = "Media Resources"
 
+    def __str__(self) -> str:
+        return self.file_name
+
 
 class WrittenResource(BaseModel):
     """
@@ -205,6 +208,9 @@ class WrittenResource(BaseModel):
     class Meta:
         verbose_name = "Written Resource"
         verbose_name_plural = "Written Resources"
+
+    def __str__(self) -> str:
+        return self.file_name
 
 
 class WrittenResourceAnnotation(BaseModel):
@@ -257,3 +263,6 @@ class OtherResource(BaseModel):
     class Meta:
         verbose_name = "Other Resource"
         verbose_name_plural = "Other Resources"
+
+    def __str__(self) -> str:
+        return self.file_name

@@ -10,11 +10,24 @@
       class="space-y-4">
   {% csrf_token %}
   {% include "blam/metadata/partials/form_fields.html" with form=form %}
-  <p class="text-sm text-base-content/70">
-    Manage references:
-    <a class="link" href="{% url 'blam:metadata_reference_list' reference_slug='collection-creators' %}">creators</a>,
-    <a class="link" href="{% url 'blam:metadata_reference_list' reference_slug='collection-contributors' %}">contributors</a>.
-  </p>
   <button class="btn btn-primary" type="submit">Save</button>
 </form>
+
+<div class="mt-8 space-y-6">
+  <div id="collection-creators-panel"
+       hx-get="{% url 'blam:collection_publication_reference_panel' collection_id=collection.pk reference_slug='creators' %}"
+       hx-trigger="load"
+       hx-target="this"
+       hx-swap="outerHTML">
+    <div class="p-4 text-sm text-base-content/70">Loading creators...</div>
+  </div>
+
+  <div id="collection-contributors-panel"
+       hx-get="{% url 'blam:collection_publication_reference_panel' collection_id=collection.pk reference_slug='contributors' %}"
+       hx-trigger="load"
+       hx-target="this"
+       hx-swap="outerHTML">
+    <div class="p-4 text-sm text-base-content/70">Loading contributors...</div>
+  </div>
+</div>
 {% endblock %}

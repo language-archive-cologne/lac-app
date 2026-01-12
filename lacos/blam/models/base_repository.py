@@ -9,3 +9,6 @@ class Repository(BaseModel):
 
     class Meta:
         abstract = True
+
+    def __str__(self) -> str:
+        return self.identifier

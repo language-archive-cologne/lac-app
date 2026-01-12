@@ -26,6 +26,9 @@ class ProjectInfo(BaseModel):
 
     funder_infos = models.ManyToManyField('FunderInfo', related_name='projects')
 
+    def __str__(self) -> str:
+        return self.project_display_name
+
 
 class FunderIdentifier(BaseModel):
     """
@@ -42,6 +45,9 @@ class FunderIdentifier(BaseModel):
         null=False,
         help_text="The identifier type used"
     )
+
+    def __str__(self) -> str:
+        return f"{self.identifier_type}: {self.value}"
 
 
 class FunderInfo(BaseModel):
@@ -71,3 +77,5 @@ class FunderInfo(BaseModel):
         help_text="Identifiers for the funding organization"
     )
 
+    def __str__(self) -> str:
+        return self.funder_name

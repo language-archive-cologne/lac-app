@@ -50,8 +50,6 @@ class BundleGeneralInfoForm(DaisyFormMixin, forms.ModelForm):
             "description",
             "recording_date",
             "version",
-            "keywords",
-            "object_languages",
         ]
         widgets = {
             "recording_date": forms.DateInput(attrs={"type": "date"}),
@@ -82,8 +80,6 @@ class BundlePublicationInfoForm(DaisyFormMixin, forms.ModelForm):
             "data_provider",
             "identifier",
             "identifier_type",
-            "creators",
-            "contributors",
         ]
 
     def __init__(self, *args, **kwargs):
@@ -98,9 +94,6 @@ class BundleAdministrativeInfoForm(DaisyFormMixin, forms.ModelForm):
             "availability_date",
             "is_derivation_of",
             "authorized_users",
-            "is_identical_to",
-            "licenses",
-            "rights_holders",
         ]
         widgets = {
             "availability_date": forms.DateInput(attrs={"type": "date"}),
@@ -130,25 +123,19 @@ class BundleStructuralInfoForm(DaisyFormMixin, forms.ModelForm):
         model = BundleStructuralInfo
         fields = [
             "is_member_of_collection",
-            "additional_metadata_files",
-            "bundle_topics",
         ]
 
 
 class BundleResourcesForm(DaisyFormMixin, forms.ModelForm):
     class Meta:
         model = BundleResources
-        fields = [
-            "bundle_media_resources",
-            "bundle_written_resources",
-            "bundle_other_resources",
-        ]
+        fields = []
 
 
 class BundleProjectsForm(DaisyFormMixin, forms.ModelForm):
     class Meta:
         model = Bundle
-        fields = ["projects"]
+        fields = []
 
 
 class BundleMemberEntryForm(DaisyFormMixin, forms.ModelForm):

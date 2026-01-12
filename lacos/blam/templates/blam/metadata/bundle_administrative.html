@@ -10,13 +10,32 @@
       class="space-y-4">
   {% csrf_token %}
   {% include "blam/metadata/partials/form_fields.html" with form=form %}
-  <p class="text-sm text-base-content/70">
-    Manage references:
-    <a class="link" href="{% url 'blam:metadata_reference_list' reference_slug='bundle-licenses' %}">licenses</a>,
-    <a class="link" href="{% url 'blam:metadata_reference_list' reference_slug='bundle-rights-holders' %}">rights holders</a>,
-    <a class="link" href="{% url 'blam:metadata_reference_list' reference_slug='bundle-rights-holder-identifiers' %}">rights holder identifiers</a>,
-    <a class="link" href="{% url 'blam:metadata_reference_list' reference_slug='bundle-identical-resources' %}">identical resources</a>.
-  </p>
   <button class="btn btn-primary" type="submit">Save</button>
 </form>
+
+<div class="mt-8 space-y-6">
+  <div id="bundle-admin-licenses-panel"
+       hx-get="{% url 'blam:bundle_administrative_reference_panel' bundle_id=bundle.pk reference_slug='licenses' %}"
+       hx-trigger="load"
+       hx-target="this"
+       hx-swap="outerHTML">
+    <div class="p-4 text-sm text-base-content/70">Loading licenses...</div>
+  </div>
+
+  <div id="bundle-admin-rights-holders-panel"
+       hx-get="{% url 'blam:bundle_administrative_reference_panel' bundle_id=bundle.pk reference_slug='rights-holders' %}"
+       hx-trigger="load"
+       hx-target="this"
+       hx-swap="outerHTML">
+    <div class="p-4 text-sm text-base-content/70">Loading rights holders...</div>
+  </div>
+
+  <div id="bundle-admin-identical-resources-panel"
+       hx-get="{% url 'blam:bundle_administrative_reference_panel' bundle_id=bundle.pk reference_slug='identical-resources' %}"
+       hx-trigger="load"
+       hx-target="this"
+       hx-swap="outerHTML">
+    <div class="p-4 text-sm text-base-content/70">Loading identical resources...</div>
+  </div>
+</div>
 {% endblock %}

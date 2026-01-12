@@ -23,3 +23,75 @@ from .bundle import (
     BundleProjectsView,
 )
 from .reference import ReferenceListView, ReferenceEditView, ReferenceDeleteView
+from .publication_reference import (
+    CollectionPublicationReferencePanelView,
+    CollectionPublicationReferenceEditView,
+    CollectionPublicationReferenceRemoveView,
+    BundlePublicationReferencePanelView,
+    BundlePublicationReferenceEditView,
+    BundlePublicationReferenceRemoveView,
+)
+from .general_reference import (
+    CollectionGeneralReferencePanelView,
+    CollectionGeneralReferenceEditView,
+    CollectionGeneralReferenceRemoveView,
+    BundleGeneralReferencePanelView,
+    BundleGeneralReferenceEditView,
+    BundleGeneralReferenceRemoveView,
+    CollectionObjectLanguageAltNamePanelView,
+    CollectionObjectLanguageAltNameEditView,
+    CollectionObjectLanguageAltNameRemoveView,
+    CollectionObjectLanguageFamilyPanelView,
+    CollectionObjectLanguageFamilyEditView,
+    CollectionObjectLanguageFamilyRemoveView,
+    BundleObjectLanguageAltNamePanelView,
+    BundleObjectLanguageAltNameEditView,
+    BundleObjectLanguageAltNameRemoveView,
+    BundleObjectLanguageFamilyPanelView,
+    BundleObjectLanguageFamilyEditView,
+    BundleObjectLanguageFamilyRemoveView,
+)
+from .administrative_reference import (
+    CollectionAdministrativeReferencePanelView,
+    CollectionAdministrativeReferenceEditView,
+    CollectionAdministrativeReferenceRemoveView,
+    BundleAdministrativeReferencePanelView,
+    BundleAdministrativeReferenceEditView,
+    BundleAdministrativeReferenceRemoveView,
+    CollectionRightsHolderIdentifierPanelView,
+    CollectionRightsHolderIdentifierEditView,
+    CollectionRightsHolderIdentifierRemoveView,
+    BundleRightsHolderIdentifierPanelView,
+    BundleRightsHolderIdentifierEditView,
+    BundleRightsHolderIdentifierRemoveView,
+)
+from .structural_reference import (
+    CollectionStructuralReferencePanelView,
+    CollectionStructuralReferenceEditView,
+    CollectionStructuralReferenceRemoveView,
+    BundleStructuralReferencePanelView,
+    BundleStructuralReferenceEditView,
+    BundleStructuralReferenceRemoveView,
+)
+from .resources_reference import (
+    BundleResourcesReferencePanelView,
+    BundleResourcesReferenceEditView,
+    BundleResourcesReferenceRemoveView,
+    WrittenResourceAnnotationPanelView,
+    WrittenResourceAnnotationEditView,
+    WrittenResourceAnnotationRemoveView,
+)
+from .project_reference import (
+    CollectionProjectReferencePanelView,
+    CollectionProjectReferenceEditView,
+    CollectionProjectReferenceRemoveView,
+    BundleProjectReferencePanelView,
+    BundleProjectReferenceEditView,
+    BundleProjectReferenceRemoveView,
+    ProjectFunderReferencePanelView,
+    ProjectFunderReferenceEditView,
+    ProjectFunderReferenceRemoveView,
+    FunderIdentifierPanelView,
+    FunderIdentifierEditView,
+    FunderIdentifierRemoveView,
+)

@@ -40,6 +40,11 @@ class Creator(BaseModel):
     class Meta:
         abstract = True
 
+    def __str__(self) -> str:
+        if self.given_name:
+            return f"{self.family_name}, {self.given_name}"
+        return self.family_name
+
 
 class Contributor(BaseModel):
     """
@@ -64,3 +69,8 @@ class Contributor(BaseModel):
     
     class Meta:
         abstract = True
+
+    def __str__(self) -> str:
+        if self.given_name:
+            return f"{self.family_name}, {self.given_name}"
+        return self.family_name

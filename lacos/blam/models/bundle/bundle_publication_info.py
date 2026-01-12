@@ -61,3 +61,6 @@ class BundleContributorName(models.Model):
     class Meta:
         verbose_name = "Bundle Contributor Name"
         verbose_name_plural = "Bundle Contributor Names"
+
+    def __str__(self) -> str:
+        return f"{self.contributor_family_name}, {self.contributor_given_name}"

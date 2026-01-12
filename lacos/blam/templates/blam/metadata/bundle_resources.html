@@ -10,13 +10,32 @@
       class="space-y-4">
   {% csrf_token %}
   {% include "blam/metadata/partials/form_fields.html" with form=form %}
-  <p class="text-sm text-base-content/70">
-    Manage references:
-    <a class="link" href="{% url 'blam:metadata_reference_list' reference_slug='media-resources' %}">media resources</a>,
-    <a class="link" href="{% url 'blam:metadata_reference_list' reference_slug='written-resources' %}">written resources</a>,
-    <a class="link" href="{% url 'blam:metadata_reference_list' reference_slug='written-resource-annotations' %}">written annotations</a>,
-    <a class="link" href="{% url 'blam:metadata_reference_list' reference_slug='other-resources' %}">other resources</a>.
-  </p>
   <button class="btn btn-primary" type="submit">Save</button>
 </form>
+
+<div class="mt-8 space-y-6">
+  <div id="bundle-resources-media-resources-panel"
+       hx-get="{% url 'blam:bundle_resources_reference_panel' bundle_id=bundle.pk reference_slug='media-resources' %}"
+       hx-trigger="load"
+       hx-target="this"
+       hx-swap="outerHTML">
+    <div class="p-4 text-sm text-base-content/70">Loading media resources...</div>
+  </div>
+
+  <div id="bundle-resources-written-resources-panel"
+       hx-get="{% url 'blam:bundle_resources_reference_panel' bundle_id=bundle.pk reference_slug='written-resources' %}"
+       hx-trigger="load"
+       hx-target="this"
+       hx-swap="outerHTML">
+    <div class="p-4 text-sm text-base-content/70">Loading written resources...</div>
+  </div>
+
+  <div id="bundle-resources-other-resources-panel"
+       hx-get="{% url 'blam:bundle_resources_reference_panel' bundle_id=bundle.pk reference_slug='other-resources' %}"
+       hx-trigger="load"
+       hx-target="this"
+       hx-swap="outerHTML">
+    <div class="p-4 text-sm text-base-content/70">Loading other resources...</div>
+  </div>
+</div>
 {% endblock %}

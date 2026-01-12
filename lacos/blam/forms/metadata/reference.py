@@ -6,14 +6,12 @@ from lacos.blam.models.bundle.bundle_general_info import (
     BundleObjectLanguage,
     BundleObjectLanguageAlternativeName,
     BundleObjectLanguageLanguageFamily,
-    BundleObjectLanguageTaxonomy,
 )
 from lacos.blam.models.collection.collection_general_info import (
     CollectionKeyword,
     CollectionObjectLanguage,
     CollectionObjectLanguageAlternativeName,
     CollectionObjectLanguageLanguageFamily,
-    CollectionObjectLanguageTaxonomy,
 )
 from lacos.blam.models.bundle.bundle_publication_info import (
     BundleCreator,
@@ -133,11 +131,11 @@ BundleRightsHolderIdentifierForm = build_reference_form(
 
 CollectionRightsHolderForm = build_reference_form(
     CollectionRightsHolder,
-    ["rights_holder_name", "rights_holder_identifiers"],
+    ["rights_holder_name"],
 )
 BundleRightsHolderForm = build_reference_form(
     BundleRightsHolder,
-    ["rights_holder_name", "rights_holder_identifiers"],
+    ["rights_holder_name"],
 )
 
 CollectionIdenticalResourceForm = build_reference_form(CollectionIdenticalResource, ["uri"])
@@ -170,14 +168,18 @@ WrittenResourceAnnotationForm = build_reference_form(
     WrittenResourceAnnotation,
     ["written_resource", "is_annotation_of"],
 )
+WrittenResourceAnnotationInlineForm = build_reference_form(
+    WrittenResourceAnnotation,
+    ["is_annotation_of"],
+)
 
 ProjectInfoForm = build_reference_form(
     ProjectInfo,
-    ["project_display_name", "project_description", "funder_infos"],
+    ["project_display_name", "project_description"],
 )
 FunderInfoForm = build_reference_form(
     FunderInfo,
-    ["funder_name", "grant_identifier", "grant_uri", "funder_identifiers"],
+    ["funder_name", "grant_identifier", "grant_uri"],
 )
 FunderIdentifierForm = build_reference_form(
     FunderIdentifier,
@@ -186,11 +188,6 @@ FunderIdentifierForm = build_reference_form(
 
 
 class CollectionObjectLanguageForm(DaisyFormMixin, forms.ModelForm):
-    language_families = forms.ModelMultipleChoiceField(
-        queryset=CollectionObjectLanguageLanguageFamily.objects.all(),
-        required=False,
-    )
-
     class Meta:
         model = CollectionObjectLanguage
         fields = [
@@ -198,40 +195,10 @@ class CollectionObjectLanguageForm(DaisyFormMixin, forms.ModelForm):
             "name",
             "iso_639_3_code",
             "glottolog_code",
-            "alternative_names",
         ]
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        taxonomy = None
-        if self.instance.pk:
-            taxonomy = CollectionObjectLanguageTaxonomy.objects.filter(
-                object_language=self.instance
-            ).first()
-        if taxonomy:
-            self.fields["language_families"].initial = taxonomy.language_family.all()
-
-    def save(self, commit=True):
-        self._language_families = self.cleaned_data.get("language_families")
-        return super().save(commit=commit)
-
-    def save_m2m(self):
-        super().save_m2m()
-        families = getattr(self, "_language_families", None)
-        if families is None:
-            return
-        taxonomy, _created = CollectionObjectLanguageTaxonomy.objects.get_or_create(
-            object_language=self.instance
-        )
-        taxonomy.language_family.set(families)
 
 
 class BundleObjectLanguageForm(DaisyFormMixin, forms.ModelForm):
-    language_families = forms.ModelMultipleChoiceField(
-        queryset=BundleObjectLanguageLanguageFamily.objects.all(),
-        required=False,
-    )
-
     class Meta:
         model = BundleObjectLanguage
         fields = [
@@ -239,29 +206,4 @@ class BundleObjectLanguageForm(DaisyFormMixin, forms.ModelForm):
             "name",
             "iso_639_3_code",
             "glottolog_code",
-            "alternative_names",
         ]
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        taxonomy = None
-        if self.instance.pk:
-            taxonomy = BundleObjectLanguageTaxonomy.objects.filter(
-                object_language=self.instance
-            ).first()
-        if taxonomy:
-            self.fields["language_families"].initial = taxonomy.language_family.all()
-
-    def save(self, commit=True):
-        self._language_families = self.cleaned_data.get("language_families")
-        return super().save(commit=commit)
-
-    def save_m2m(self):
-        super().save_m2m()
-        families = getattr(self, "_language_families", None)
-        if families is None:
-            return
-        taxonomy, _created = BundleObjectLanguageTaxonomy.objects.get_or_create(
-            object_language=self.instance
-        )
-        taxonomy.language_family.set(families)
