@@ -140,7 +140,11 @@ def import_funder_infos(project_info: ProjectInfo, funder_infos_schema) -> None:
         
         if hasattr(funder_info_schema, 'funder_identifier') and funder_info_schema.funder_identifier:
             funder_info.funder_identifiers.clear()
-            for identifier_schema in funder_info_schema.funder_identifier:
+            # Handle both single object and list cases
+            identifiers = funder_info_schema.funder_identifier
+            if not isinstance(identifiers, (list, tuple)):
+                identifiers = [identifiers]
+            for identifier_schema in identifiers:
                 id_type_mapping = {
                     FunderIdentifierIdentifierType.CROSSREF_FUNDER: "crossref_funder",
                     FunderIdentifierIdentifierType.ISNI: "isni",
