@@ -302,5 +302,9 @@ yarn-error.log*
 .s3_sandbox_config
 
 
+# Local dev overrides
+docker-compose.dev.local.yml
+idptest.rrz.uni-koeln.de.xml
 
-idptest.rrz.uni-koeln.de.xmldocker-compose.dev.local.yml
+# Generated Tailwind CSS (rebuild with: npm run build)
+theme/static/css/output.css
