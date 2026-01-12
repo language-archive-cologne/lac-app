@@ -6,12 +6,13 @@ from .production import *  # noqa
 # ------------------------------------------------------------------------------
 DEBUG = True
 
-# Allow local access by default while keeping any production hosts
-_base_allowed_hosts = env.list(
-    "DJANGO_ALLOWED_HOSTS",
-    default=ALLOWED_HOSTS,  # noqa: F405 - provided by production import
-)
-ALLOWED_HOSTS = list({*_base_allowed_hosts, "localhost", "127.0.0.1", "0.0.0.0"})
+# Add dev server to allowed hosts
+ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["lacos.uni-koeln.de"]) + [
+    "dev.lacos.uni-koeln.de",
+    "localhost",
+    "127.0.0.1",
+    "0.0.0.0",
+]
 
 # Relax HTTPS-only redirects for local development unless explicitly enabled
 SECURE_SSL_REDIRECT = env.bool("DJANGO_SECURE_SSL_REDIRECT", default=False)
