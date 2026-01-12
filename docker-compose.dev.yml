@@ -33,7 +33,7 @@ services:
     environment:
       SAML_LOGIN_ENABLED: "true"
     ports:
-      - '8102:8000'
+      - '127.0.0.1:8102:8000'
     command: /start
     networks:
       - lacos_dev_network
@@ -62,7 +62,7 @@ services:
     env_file:
       - ./.envs/.dev/.postgres
     ports:
-      - '5433:5432'
+      - '127.0.0.1:5433:5432'
     networks:
       - lacos_dev_network
 
@@ -78,7 +78,7 @@ services:
     volumes:
       - lacos_dev_redis_data:/data
     ports:
-      - '6370:6379'
+      - '127.0.0.1:6370:6379'
     networks:
       - lacos_dev_network
 
