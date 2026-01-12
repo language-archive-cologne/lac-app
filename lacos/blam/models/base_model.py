@@ -1,6 +1,12 @@
-from uuid_utils import uuid7
+import uuid
+from uuid_utils import uuid7 as _uuid7
 from django.db import models
 from django.conf import settings
+
+
+def uuid7():
+    """Generate a UUID7 and convert to standard library UUID for Django compatibility."""
+    return uuid.UUID(bytes=_uuid7().bytes)
 
 
 class UUIDTimestampModel(models.Model):
