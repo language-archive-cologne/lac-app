@@ -138,16 +138,32 @@ def map_identifier_type(id_type: Optional[BundleIdIdentifierType]) -> str:
 def parse_recording_date(date_str: str) -> Optional[str]:
     """
     Parse recording date from schema format to Django model format.
-    
+
+    Handles partial dates by defaulting missing month/day to 01:
+    - "2023" -> "2023-01-01"
+    - "2023-05" -> "2023-05-01"
+    - "2023-05-15" -> "2023-05-15"
+
     Args:
         date_str: The date string from the schema
-        
+
     Returns:
-        The parsed date or None if "Unknown"
+        The parsed date in YYYY-MM-DD format, or None if "Unknown"
     """
-    if date_str == "Unknown":
+    if date_str == "Unknown" or not date_str:
         return None
-    return date_str
+
+    # Handle partial dates
+    parts = date_str.split('-')
+    if len(parts) == 1:
+        # Year only: "2023" -> "2023-01-01"
+        return f"{parts[0]}-01-01"
+    elif len(parts) == 2:
+        # Year and month: "2023-05" -> "2023-05-01"
+        return f"{parts[0]}-{parts[1]}-01"
+    else:
+        # Full date or unexpected format - return as-is
+        return date_str
 
 
 def create_bundle_location(location_data: Any) -> BundleLocation:
