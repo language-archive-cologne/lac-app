@@ -92,12 +92,24 @@ def render_bundle_section(request, bundle: Bundle, section_slug: str, template_n
 
 class BundleListView(View):
     def get(self, request):
+        from django.db.models import Q
+
+        search_query = request.GET.get("q", "").strip()
         bundles = Bundle.objects.all().order_by("identifier")
-        return render(
-            request,
-            "blam/metadata/bundle_list.html",
-            {"bundles": bundles},
-        )
+
+        if search_query:
+            bundles = bundles.filter(
+                Q(identifier__icontains=search_query) |
+                Q(general_info__title__icontains=search_query) |
+                Q(general_info__display_title__icontains=search_query)
+            ).distinct()
+
+        context = {"bundles": bundles, "search_query": search_query}
+
+        if request.headers.get("HX-Request"):
+            return render(request, "blam/metadata/partials/bundle_table.html", context)
+
+        return render(request, "blam/metadata/bundle_list.html", context)
 
 
 class BundleCreateView(View):

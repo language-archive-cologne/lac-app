@@ -74,12 +74,24 @@ def render_collection_section(request, collection: Collection, section_slug: str
 
 class CollectionListView(View):
     def get(self, request):
+        from django.db.models import Q
+
+        search_query = request.GET.get("q", "").strip()
         collections = Collection.objects.all().order_by("identifier")
-        return render(
-            request,
-            "blam/metadata/collection_list.html",
-            {"collections": collections},
-        )
+
+        if search_query:
+            collections = collections.filter(
+                Q(identifier__icontains=search_query) |
+                Q(general_info__title__icontains=search_query) |
+                Q(general_info__display_title__icontains=search_query)
+            ).distinct()
+
+        context = {"collections": collections, "search_query": search_query}
+
+        if request.headers.get("HX-Request"):
+            return render(request, "blam/metadata/partials/collection_table.html", context)
+
+        return render(request, "blam/metadata/collection_list.html", context)
 
 
 class CollectionCreateView(View):

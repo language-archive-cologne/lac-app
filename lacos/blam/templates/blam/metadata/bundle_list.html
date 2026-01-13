@@ -8,30 +8,22 @@
 
 <div class="card bg-base-100 shadow">
   <div class="card-body">
-    {% if bundles %}
-      <div class="overflow-x-auto">
-        <table class="table table-zebra">
-          <thead>
-            <tr>
-              <th>Identifier</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for bundle in bundles %}
-              <tr>
-                <td>{{ bundle.identifier }}</td>
-                <td>
-                  <a class="btn btn-sm" href="{% url 'blam:bundle_metadata_overview' bundle.pk %}">Edit</a>
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    {% else %}
-      <p class="text-sm text-base-content/70">No bundles found.</p>
-    {% endif %}
+    <div class="mb-4">
+      <input
+        type="search"
+        name="q"
+        value="{{ search_query }}"
+        placeholder="Search by title or handle..."
+        class="input input-bordered w-full max-w-md"
+        hx-get="{% url 'blam:bundle_metadata_list' %}"
+        hx-target="#bundle-table-container"
+        hx-swap="innerHTML"
+        hx-trigger="keyup changed delay:300ms, search"
+      >
+    </div>
+    <div id="bundle-table-container" class="overflow-x-auto">
+      {% include "blam/metadata/partials/bundle_table.html" %}
+    </div>
   </div>
 </div>
 {% endblock %}

@@ -8,30 +8,22 @@
 
 <div class="card bg-base-100 shadow">
   <div class="card-body">
-    {% if collections %}
-      <div class="overflow-x-auto">
-        <table class="table table-zebra">
-          <thead>
-            <tr>
-              <th>Identifier</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for collection in collections %}
-              <tr>
-                <td>{{ collection.identifier }}</td>
-                <td>
-                  <a class="btn btn-sm" href="{% url 'blam:collection_metadata_overview' collection.pk %}">Edit</a>
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    {% else %}
-      <p class="text-sm text-base-content/70">No collections found.</p>
-    {% endif %}
+    <div class="mb-4">
+      <input
+        type="search"
+        name="q"
+        value="{{ search_query }}"
+        placeholder="Search by title or handle..."
+        class="input input-bordered w-full max-w-md"
+        hx-get="{% url 'blam:collection_metadata_list' %}"
+        hx-target="#collection-table-container"
+        hx-swap="innerHTML"
+        hx-trigger="keyup changed delay:300ms, search"
+      >
+    </div>
+    <div id="collection-table-container" class="overflow-x-auto">
+      {% include "blam/metadata/partials/collection_table.html" %}
+    </div>
   </div>
 </div>
 {% endblock %}
