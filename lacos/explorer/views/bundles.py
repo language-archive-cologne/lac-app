@@ -246,6 +246,8 @@ class ResourceAccessView(View):
         if hasattr(bundle, 'structural_info') and bundle.structural_info.first():
             collection_for_path = bundle.structural_info.first().is_member_of_collection
         action = request.GET.get('action', 'download')
+        if action == 'analyze':
+            action = 'play'
 
         try:
             resource = find_resource_in_bundle(bundle, resource_id=resource_id)
@@ -304,11 +306,10 @@ class ResourceAccessView(View):
 
             is_htmx = request.headers.get('HX-Request') == 'true'
 
-            if is_htmx and action in {'play', 'view', 'analyze'}:
+            if is_htmx and action in {'play', 'view'}:
                 return self._render_htmx_modal(
                     request, resource, mime_type, detected_media_type, source_mime_type,
-                    presigned_url, download_url, elan_context, is_elan,
-                    player_mode='analyze' if action == 'analyze' else 'simple'
+                    presigned_url, download_url, elan_context, is_elan
                 )
 
             if action == 'download':
@@ -382,9 +383,9 @@ class ResourceAccessView(View):
 
     def _render_htmx_modal(
         self, request, resource, mime_type, detected_media_type, source_mime_type,
-        presigned_url, download_url, elan_context, is_elan, player_mode='simple'
+        presigned_url, download_url, elan_context, is_elan
     ):
-        """Render the HTMX modal response for play/view/analyze actions."""
+        """Render the HTMX modal response for play/view actions."""
         media_type = 'elan' if is_elan else detected_media_type
 
         modal_context = {
@@ -397,7 +398,6 @@ class ResourceAccessView(View):
             'preview_url': presigned_url,
             'download_url': download_url,
             'elan_context': elan_context,
-            'player_mode': player_mode,
         }
 
         response = render(

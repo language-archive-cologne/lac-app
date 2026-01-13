@@ -51,18 +51,14 @@
         const audioUrl = playerContainer.dataset.audioUrl;
         if (!audioUrl) return;
 
-        const playerMode = playerContainer.dataset.playerMode || 'simple';
-        const isAnalyzeMode = playerMode === 'analyze';
-
         const waveformEl = playerContainer.querySelector('#waveform');
-        const spectrogramEl = playerContainer.querySelector('#spectrogram');
         const timelineEl = playerContainer.querySelector('#timeline');
         const loadingEl = playerContainer.querySelector('#player-loading');
 
         // Make container relative for loading overlay
         playerContainer.style.position = 'relative';
 
-        // Build plugins array based on mode
+        // Build plugins array
         const plugins = [];
 
         // Timeline plugin for both modes
@@ -76,16 +72,6 @@
           );
         }
 
-        // EMU Spectrogram plugin - only in analyze mode
-        let spectrogramPlugin = null;
-        if (isAnalyzeMode && spectrogramEl && typeof WaveSurfer.Spectrogram_emu !== 'undefined') {
-          spectrogramPlugin = WaveSurfer.Spectrogram_emu.create({
-            container: spectrogramEl,
-            height: 200
-          });
-          plugins.push(spectrogramPlugin);
-        }
-
         // Regions plugin for segment selection
         let regionsPlugin = null;
         if (typeof WaveSurfer.Regions !== 'undefined') {
@@ -94,21 +80,20 @@
         }
 
         // Create WaveSurfer instance
-        const containerEl = waveformEl || spectrogramEl;
-        if (!containerEl) return;
+        if (!waveformEl) return;
 
         currentWavesurfer = WaveSurfer.create({
-          container: containerEl,
-          waveColor: isAnalyzeMode ? 'transparent' : '#64748b',
-          progressColor: isAnalyzeMode ? 'transparent' : '#3b82f6',
+          container: waveformEl,
+          waveColor: '#64748b',
+          progressColor: '#3b82f6',
           cursorColor: '#ef4444',
           cursorWidth: 2,
-          height: isAnalyzeMode ? 200 : 128,
-          barWidth: isAnalyzeMode ? 0 : 2,
+          height: 128,
+          barWidth: 2,
           barGap: 1,
           barRadius: 2,
           normalize: true,
-          minPxPerSec: isAnalyzeMode ? 500 : 20,
+          minPxPerSec: 20,
           hideScrollbar: false,
           autoCenter: true,
           autoScroll: true,
@@ -208,19 +193,19 @@
           currentWavesurfer.stop();
         });
 
-        // Zoom controls - EMU spectrogram handles redraw automatically via requestAnimationFrame
+        // Zoom controls
         zoomSlider.addEventListener('input', (e) => {
           currentWavesurfer.zoom(Number(e.target.value));
         });
 
         zoomInBtn.addEventListener('click', () => {
-          const val = Math.min(2000, Number(zoomSlider.value) + 200);
+          const val = Math.min(500, Number(zoomSlider.value) + 25);
           zoomSlider.value = val;
           currentWavesurfer.zoom(val);
         });
 
         zoomOutBtn.addEventListener('click', () => {
-          const val = Math.max(100, Number(zoomSlider.value) - 200);
+          const val = Math.max(10, Number(zoomSlider.value) - 25);
           zoomSlider.value = val;
           currentWavesurfer.zoom(val);
         });
