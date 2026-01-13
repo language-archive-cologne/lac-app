@@ -16,8 +16,16 @@
 
   <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
     {% if media_type == 'audio' %}
-      <!-- Audio Player -->
-      <div id="linguist-audio-player" data-audio-url="{{ stream_url }}">
+      <!-- Native audio element (fast stream) -->
+      <div class="bg-base-100 border border-base-300 rounded-lg p-3">
+        <audio controls preload="metadata" class="w-full">
+          <source src="{{ stream_url }}" type="{{ source_mime_type }}">
+          <p>{% translate "Your browser does not support the audio element." %}</p>
+        </audio>
+      </div>
+
+      <!-- WaveSurfer player (disabled for now) -->
+      <div id="linguist-audio-player" data-audio-url="{{ stream_url }}" data-player-enabled="false" class="hidden" aria-hidden="true">
         <!-- Controls bar -->
         <div class="bg-base-200 rounded-t-lg p-3 flex items-center gap-3 flex-wrap">
           <div class="flex items-center gap-2">
@@ -102,13 +110,6 @@
         </div>
       </div>
 
-      <!-- Fallback for browsers without JS -->
-      <noscript>
-        <audio controls preload="metadata" class="w-full">
-          <source src="{{ stream_url }}" type="{{ source_mime_type }}">
-          <p>{% translate "Your browser does not support the audio element." %}</p>
-        </audio>
-      </noscript>
     {% elif media_type == 'video' %}
       <video controls preload="metadata" class="w-full rounded-lg" style="max-height: 70vh">
         <source src="{{ stream_url }}" type="{{ source_mime_type }}">

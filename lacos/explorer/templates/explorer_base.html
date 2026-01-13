@@ -48,6 +48,9 @@
         const playerContainer = modalContent.querySelector('#linguist-audio-player');
         if (!playerContainer) return;
 
+        const playerEnabled = playerContainer.dataset.playerEnabled !== 'false';
+        if (!playerEnabled) return;
+
         const audioUrl = playerContainer.dataset.audioUrl;
         if (!audioUrl) return;
 
