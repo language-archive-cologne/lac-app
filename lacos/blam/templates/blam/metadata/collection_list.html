@@ -8,19 +8,19 @@
 
 <div class="card bg-base-100 shadow">
   <div class="card-body">
-    <div class="mb-4">
+    <form method="get" class="mb-4">
       <input
         type="search"
         name="q"
         value="{{ search_query }}"
-        placeholder="Search by title or handle..."
+        placeholder="Search by title, handle or description..."
         class="input input-bordered w-full max-w-md"
         hx-get="{% url 'blam:collection_metadata_list' %}"
         hx-target="#collection-table-container"
         hx-swap="innerHTML"
-        hx-trigger="keyup changed delay:300ms, search"
+        hx-trigger="change, keyup delay:400ms"
       >
-    </div>
+    </form>
     <div id="collection-table-container" class="overflow-x-auto">
       {% include "blam/metadata/partials/collection_table.html" %}
     </div>

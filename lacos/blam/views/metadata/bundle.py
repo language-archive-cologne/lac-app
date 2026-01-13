@@ -100,13 +100,13 @@ class BundleListView(View):
         if search_query:
             bundles = bundles.filter(
                 Q(identifier__icontains=search_query) |
-                Q(general_info__title__icontains=search_query) |
-                Q(general_info__display_title__icontains=search_query)
+                Q(general_info__display_title__icontains=search_query) |
+                Q(general_info__description__icontains=search_query)
             ).distinct()
 
         context = {"bundles": bundles, "search_query": search_query}
 
-        if request.headers.get("HX-Request"):
+        if request.headers.get("HX-Request") and "q" in request.GET:
             return render(request, "blam/metadata/partials/bundle_table.html", context)
 
         return render(request, "blam/metadata/bundle_list.html", context)
