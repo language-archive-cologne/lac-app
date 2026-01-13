@@ -68,6 +68,22 @@
             </select>
           </div>
 
+          <div class="divider divider-horizontal mx-1 hidden sm:flex"></div>
+
+          <!-- Selection controls -->
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-base-content/60 hidden sm:inline">{% translate 'Selection' %}:</span>
+            <button type="button" class="btn btn-xs btn-ghost" id="select-toggle-btn" aria-pressed="false" title="{% translate 'Select segment' %}">
+              {% translate 'Select' %}
+            </button>
+            <button type="button" class="btn btn-xs btn-ghost" id="play-selection-btn" title="{% translate 'Play selection' %}" disabled>
+              {% translate 'Play' %}
+            </button>
+            <button type="button" class="btn btn-xs btn-ghost" id="clear-selection-btn" title="{% translate 'Clear selection' %}" disabled>
+              {% translate 'Clear' %}
+            </button>
+          </div>
+
           {% if player_mode == 'analyze' %}
           <!-- Analyze mode indicator -->
           <div class="divider divider-horizontal mx-1 hidden lg:flex"></div>

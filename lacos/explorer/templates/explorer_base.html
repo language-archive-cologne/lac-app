@@ -86,6 +86,13 @@
           plugins.push(spectrogramPlugin);
         }
 
+        // Regions plugin for segment selection
+        let regionsPlugin = null;
+        if (typeof WaveSurfer.Regions !== 'undefined') {
+          regionsPlugin = WaveSurfer.Regions.create();
+          plugins.push(regionsPlugin);
+        }
+
         // Create WaveSurfer instance
         const containerEl = waveformEl || spectrogramEl;
         if (!containerEl) return;
@@ -119,6 +126,35 @@
         const zoomInBtn = playerContainer.querySelector('#zoom-in-btn');
         const zoomOutBtn = playerContainer.querySelector('#zoom-out-btn');
         const speedSelect = playerContainer.querySelector('#speed-select');
+        const selectToggleBtn = playerContainer.querySelector('#select-toggle-btn');
+        const playSelectionBtn = playerContainer.querySelector('#play-selection-btn');
+        const clearSelectionBtn = playerContainer.querySelector('#clear-selection-btn');
+
+        let activeRegion = null;
+        let selectionMode = false;
+        let disableDragSelection = null;
+        let selectionEndTime = null;
+        let selectionPlaybackActive = false;
+
+        const updateSelectionUi = () => {
+          if (!selectToggleBtn || !playSelectionBtn || !clearSelectionBtn) return;
+          const hasRegion = Boolean(activeRegion);
+          playSelectionBtn.disabled = !hasRegion;
+          clearSelectionBtn.disabled = !hasRegion;
+          selectToggleBtn.classList.toggle('btn-active', selectionMode);
+          selectToggleBtn.setAttribute('aria-pressed', selectionMode ? 'true' : 'false');
+        };
+
+        const playSelection = (region) => {
+          if (!region) return;
+          const start = Math.min(region.start, region.end);
+          const end = Math.max(region.start, region.end);
+          if (end <= start) return;
+          selectionEndTime = end;
+          selectionPlaybackActive = true;
+          currentWavesurfer.setTime(start);
+          currentWavesurfer.play();
+        };
 
         // Event handlers
         currentWavesurfer.on('ready', () => {
@@ -128,6 +164,11 @@
 
         currentWavesurfer.on('timeupdate', (time) => {
           currentTimeEl.textContent = formatTime(time);
+          if (selectionPlaybackActive && selectionEndTime !== null && time >= selectionEndTime) {
+            selectionPlaybackActive = false;
+            selectionEndTime = null;
+            currentWavesurfer.pause();
+          }
         });
 
         currentWavesurfer.on('play', () => {
@@ -143,6 +184,8 @@
         currentWavesurfer.on('finish', () => {
           playIcon.classList.remove('hidden');
           pauseIcon.classList.add('hidden');
+          selectionPlaybackActive = false;
+          selectionEndTime = null;
         });
 
         currentWavesurfer.on('error', (err) => {
@@ -153,8 +196,17 @@
         });
 
         // Control handlers
-        playPauseBtn.addEventListener('click', () => currentWavesurfer.playPause());
-        stopBtn.addEventListener('click', () => currentWavesurfer.stop());
+        playPauseBtn.addEventListener('click', () => {
+          if (!selectionPlaybackActive) {
+            selectionEndTime = null;
+          }
+          currentWavesurfer.playPause();
+        });
+        stopBtn.addEventListener('click', () => {
+          selectionPlaybackActive = false;
+          selectionEndTime = null;
+          currentWavesurfer.stop();
+        });
 
         // Zoom controls - EMU spectrogram handles redraw automatically via requestAnimationFrame
         zoomSlider.addEventListener('input', (e) => {
@@ -176,6 +228,82 @@
         speedSelect.addEventListener('change', (e) => {
           currentWavesurfer.setPlaybackRate(Number(e.target.value));
         });
+
+        if (!regionsPlugin) {
+          if (selectToggleBtn) selectToggleBtn.disabled = true;
+          if (playSelectionBtn) playSelectionBtn.disabled = true;
+          if (clearSelectionBtn) clearSelectionBtn.disabled = true;
+        } else {
+          regionsPlugin.on('region-created', (region) => {
+            if (activeRegion && activeRegion !== region) {
+              activeRegion.remove();
+            }
+            activeRegion = region;
+            updateSelectionUi();
+          });
+
+          regionsPlugin.on('region-updated', (region) => {
+            activeRegion = region;
+            updateSelectionUi();
+          });
+
+          regionsPlugin.on('region-removed', (region) => {
+            if (activeRegion === region) {
+              activeRegion = null;
+              selectionPlaybackActive = false;
+              selectionEndTime = null;
+            }
+            updateSelectionUi();
+          });
+
+          regionsPlugin.on('region-clicked', (region, event) => {
+            event.stopPropagation();
+            activeRegion = region;
+            updateSelectionUi();
+          });
+
+          regionsPlugin.on('region-double-clicked', (region, event) => {
+            event.stopPropagation();
+            activeRegion = region;
+            updateSelectionUi();
+            playSelection(region);
+          });
+
+          if (selectToggleBtn) {
+            selectToggleBtn.addEventListener('click', () => {
+              selectionMode = !selectionMode;
+              if (selectionMode && !disableDragSelection) {
+                disableDragSelection = regionsPlugin.enableDragSelection({
+                  color: 'rgba(59, 130, 246, 0.2)'
+                });
+              } else if (!selectionMode && disableDragSelection) {
+                disableDragSelection();
+                disableDragSelection = null;
+              }
+              updateSelectionUi();
+            });
+          }
+
+          if (playSelectionBtn) {
+            playSelectionBtn.addEventListener('click', () => {
+              playSelection(activeRegion);
+            });
+          }
+
+          if (clearSelectionBtn) {
+            clearSelectionBtn.addEventListener('click', () => {
+              if (activeRegion) {
+                activeRegion.remove();
+                activeRegion = null;
+              }
+              selectionPlaybackActive = false;
+              selectionEndTime = null;
+              updateSelectionUi();
+            });
+          }
+        }
+
+        updateSelectionUi();
 
         // Load audio
         currentWavesurfer.load(audioUrl);
