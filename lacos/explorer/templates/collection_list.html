@@ -15,8 +15,15 @@
   {% else %}
     {% if collection_list %}
       <!-- Collections Map -->
-      <div class="mb-4 rounded-xl shadow-sm border border-base-300 overflow-hidden">
+      <div class="mb-4 rounded-xl shadow-sm border border-base-300 overflow-hidden relative">
         <div id="collections-map" style="height: 500px;"></div>
+        <button id="recenter-btn"
+                class="absolute top-2 right-12 z-10 bg-base-100 hover:bg-base-200 border border-base-300 rounded-md p-1.5 shadow-sm transition-colors"
+                title="{% translate 'Fit all markers' %}">
+          <svg class="w-5 h-5 text-base-content/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>
+          </svg>
+        </button>
       </div>
 
       <!-- Archive Statistics -->
@@ -78,6 +85,11 @@
           .setLngLat([m.lng, m.lat])
           .setPopup(popup)
           .addTo(map);
+      });
+
+      // Recenter button - return to original position
+      document.getElementById('recenter-btn').addEventListener('click', function() {
+        map.flyTo({ center: [20, 20], zoom: 0.7 });
       });
     })();
   </script>
