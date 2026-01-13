@@ -24,12 +24,172 @@
 {% block inline_javascript %}
   {{ block.super }}
   <script>
-    (function () {
+    document.addEventListener('DOMContentLoaded', function() {
       const modal = document.getElementById('resource-modal');
       const modalContent = document.getElementById('resource-modal-content');
       if (!modal || !modalContent) {
         return;
       }
+
+      let currentWavesurfer = null;
+
+      // Format time as m:ss.mmm
+      const formatTime = (seconds) => {
+        if (isNaN(seconds) || seconds === Infinity) return '0:00.000';
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        const wholeSecs = Math.floor(secs);
+        const ms = Math.floor((secs - wholeSecs) * 1000);
+        return `${mins}:${wholeSecs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+      };
+
+      // Initialize WaveSurfer audio player
+      const initializeWaveSurferPlayer = () => {
+        const playerContainer = modalContent.querySelector('#linguist-audio-player');
+        if (!playerContainer) return;
+
+        const audioUrl = playerContainer.dataset.audioUrl;
+        if (!audioUrl) return;
+
+        const playerMode = playerContainer.dataset.playerMode || 'simple';
+        const isAnalyzeMode = playerMode === 'analyze';
+
+        const waveformEl = playerContainer.querySelector('#waveform');
+        const spectrogramEl = playerContainer.querySelector('#spectrogram');
+        const timelineEl = playerContainer.querySelector('#timeline');
+        const loadingEl = playerContainer.querySelector('#player-loading');
+
+        // Make container relative for loading overlay
+        playerContainer.style.position = 'relative';
+
+        // Build plugins array based on mode
+        const plugins = [];
+
+        // Timeline plugin for both modes
+        if (typeof WaveSurfer.Timeline !== 'undefined') {
+          plugins.push(
+            WaveSurfer.Timeline.create({
+              container: timelineEl,
+              primaryLabelInterval: 10,
+              secondaryLabelInterval: 5
+            })
+          );
+        }
+
+        // EMU Spectrogram plugin - only in analyze mode
+        let spectrogramPlugin = null;
+        if (isAnalyzeMode && typeof WaveSurfer.Spectrogram_emu !== 'undefined') {
+          spectrogramPlugin = WaveSurfer.Spectrogram_emu.create({
+            height: 200
+          });
+          plugins.push(spectrogramPlugin);
+        }
+
+        // Create WaveSurfer instance
+        const containerEl = isAnalyzeMode ? spectrogramEl : waveformEl;
+
+        currentWavesurfer = WaveSurfer.create({
+          container: containerEl,
+          waveColor: isAnalyzeMode ? 'transparent' : '#64748b',
+          progressColor: isAnalyzeMode ? 'transparent' : '#3b82f6',
+          cursorColor: '#ef4444',
+          cursorWidth: 2,
+          height: isAnalyzeMode ? 1 : 128,
+          barWidth: isAnalyzeMode ? 0 : 2,
+          barGap: 1,
+          barRadius: 2,
+          normalize: true,
+          minPxPerSec: isAnalyzeMode ? 50 : 20,
+          hideScrollbar: false,
+          autoCenter: true,
+          autoScroll: true,
+          plugins: plugins
+        });
+
+        // UI elements
+        const playPauseBtn = playerContainer.querySelector('#play-pause-btn');
+        const stopBtn = playerContainer.querySelector('#stop-btn');
+        const playIcon = playPauseBtn.querySelector('.play-icon');
+        const pauseIcon = playPauseBtn.querySelector('.pause-icon');
+        const currentTimeEl = playerContainer.querySelector('#current-time');
+        const durationEl = playerContainer.querySelector('#duration');
+        const zoomSlider = playerContainer.querySelector('#zoom-slider');
+        const zoomInBtn = playerContainer.querySelector('#zoom-in-btn');
+        const zoomOutBtn = playerContainer.querySelector('#zoom-out-btn');
+        const speedSelect = playerContainer.querySelector('#speed-select');
+
+        // Event handlers
+        currentWavesurfer.on('ready', () => {
+          if (loadingEl) loadingEl.classList.add('hidden');
+          durationEl.textContent = formatTime(currentWavesurfer.getDuration());
+        });
+
+        currentWavesurfer.on('timeupdate', (time) => {
+          currentTimeEl.textContent = formatTime(time);
+        });
+
+        currentWavesurfer.on('play', () => {
+          playIcon.classList.add('hidden');
+          pauseIcon.classList.remove('hidden');
+        });
+
+        currentWavesurfer.on('pause', () => {
+          playIcon.classList.remove('hidden');
+          pauseIcon.classList.add('hidden');
+        });
+
+        currentWavesurfer.on('finish', () => {
+          playIcon.classList.remove('hidden');
+          pauseIcon.classList.add('hidden');
+        });
+
+        currentWavesurfer.on('error', (err) => {
+          console.error('WaveSurfer error:', err);
+          if (loadingEl) {
+            loadingEl.innerHTML = '<span class="text-error">Error loading audio</span>';
+          }
+        });
+
+        // Control handlers
+        playPauseBtn.addEventListener('click', () => currentWavesurfer.playPause());
+        stopBtn.addEventListener('click', () => currentWavesurfer.stop());
+
+        // Debounced spectrogram re-render (only in analyze mode)
+        let zoomDebounceTimer = null;
+        const debouncedSpectrogramRender = () => {
+          if (!isAnalyzeMode || !spectrogramPlugin) return;
+          if (zoomDebounceTimer) clearTimeout(zoomDebounceTimer);
+          zoomDebounceTimer = setTimeout(() => {
+            spectrogramPlugin.render();
+          }, 300);
+        };
+
+        zoomSlider.addEventListener('input', (e) => {
+          currentWavesurfer.zoom(Number(e.target.value));
+          debouncedSpectrogramRender();
+        });
+
+        zoomInBtn.addEventListener('click', () => {
+          const val = Math.min(500, Number(zoomSlider.value) + 25);
+          zoomSlider.value = val;
+          currentWavesurfer.zoom(val);
+          debouncedSpectrogramRender();
+        });
+
+        zoomOutBtn.addEventListener('click', () => {
+          const val = Math.max(10, Number(zoomSlider.value) - 25);
+          zoomSlider.value = val;
+          currentWavesurfer.zoom(val);
+          debouncedSpectrogramRender();
+        });
+
+        speedSelect.addEventListener('change', (e) => {
+          currentWavesurfer.setPlaybackRate(Number(e.target.value));
+        });
+
+        // Load audio
+        currentWavesurfer.load(audioUrl);
+      };
 
       const initializeElanControls = () => {
         const viewerRoot = modalContent.querySelector('[data-viewer-type]');
@@ -94,10 +254,23 @@
         modal.classList.add('flex');
         document.body.classList.add('overflow-hidden');
         modal.setAttribute('aria-hidden', 'false');
-        initializeElanControls();
+
+        // Initialize appropriate player based on content
+        const viewerType = modalContent.querySelector('[data-viewer-type]')?.dataset?.viewerType;
+        if (viewerType === 'audio') {
+          initializeWaveSurferPlayer();
+        } else if (viewerType === 'elan') {
+          initializeElanControls();
+        }
       };
 
       const closeModal = () => {
+        // Destroy WaveSurfer instance to free resources
+        if (currentWavesurfer) {
+          currentWavesurfer.destroy();
+          currentWavesurfer = null;
+        }
+
         modal.classList.remove('flex');
         modal.classList.add('hidden');
         modal.setAttribute('aria-hidden', 'true');
@@ -124,6 +297,29 @@
           closeModal();
         }
       });
-    })();
+
+      // Keyboard shortcuts for audio player
+      document.addEventListener('keydown', (event) => {
+        if (!currentWavesurfer) return;
+        if (document.activeElement.tagName === 'INPUT' ||
+            document.activeElement.tagName === 'TEXTAREA' ||
+            document.activeElement.tagName === 'SELECT') return;
+
+        switch (event.code) {
+          case 'Space':
+            event.preventDefault();
+            currentWavesurfer.playPause();
+            break;
+          case 'ArrowLeft':
+            event.preventDefault();
+            currentWavesurfer.skip(-1);
+            break;
+          case 'ArrowRight':
+            event.preventDefault();
+            currentWavesurfer.skip(1);
+            break;
+        }
+      });
+    });
   </script>
 {% endblock inline_javascript %}

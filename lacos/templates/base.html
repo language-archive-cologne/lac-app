@@ -39,8 +39,11 @@
     <script defer src="{% static 'vendor/js/htmx.min.js' %}"></script>
     <!-- Prism.js for syntax highlighting -->
     <script defer src="{% static 'vendor/js/prism.js' %}"></script>
-    <!-- WaveSurfer for audio waveforms (loaded from CDN to avoid bundling) -->
-    <script defer src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
+    <!-- WaveSurfer for audio waveforms -->
+    <script defer src="{% static 'vendor/js/wavesurfer.min.js' %}"></script>
+    <script defer src="{% static 'vendor/js/wavesurfer.spectrogram-emu.min.js' %}"></script>
+    <script defer src="{% static 'vendor/js/wavesurfer.timeline.min.js' %}"></script>
+    <script defer src="{% static 'vendor/js/wavesurfer.regions.min.js' %}"></script>
     <!-- Project-specific JavaScript -->
     <script defer src="{% static 'js/src/project.js' %}"></script>
   {% endblock javascript %}
