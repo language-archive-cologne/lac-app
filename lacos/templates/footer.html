@@ -1,6 +1,6 @@
 {% load static %}
 <!-- Footer -->
-<footer class="bg-gradient-to-r from-slate-800 to-slate-700 text-gray-300 mt-auto">
+<footer class="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-slate-300 mt-auto border-t border-slate-700/70">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Partner Logos -->
         <div class="flex flex-wrap items-center justify-center gap-12 lg:gap-16 mb-6">
@@ -23,7 +23,7 @@
         </div>
 
         <!-- Divider -->
-        <div class="border-t border-slate-600 my-6"></div>
+        <div class="border-t border-slate-700/70 my-6"></div>
 
         <!-- Copyright and Links -->
         <div class="flex flex-col sm:flex-row justify-between items-center gap-4 text-sm">
@@ -32,10 +32,10 @@
                     <li><a href="{% url 'privacy-policy' %}" class="hover:text-white transition-colors">Datenschutz</a></li>
                     <li><a href="{% url 'imprint' %}" class="hover:text-white transition-colors">Impressum</a></li>
                     <li><a href="mailto:lac-helpdesk@uni-koeln.de" class="hover:text-white transition-colors">Kontakt</a></li>
-                    <li class="text-gray-400">© University of Cologne</li>
+                    <li class="text-slate-400">© University of Cologne</li>
                 </ul>
             </nav>
-            {% if VERSION_COMMIT %}<span class="text-gray-500 text-xs font-mono">v:{{ VERSION_COMMIT }}</span>{% endif %}
+            {% if VERSION_COMMIT %}<span class="text-slate-500 text-xs font-mono">v:{{ VERSION_COMMIT }}</span>{% endif %}
         </div>
     </div>
 </footer>
