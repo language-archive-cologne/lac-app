@@ -5,54 +5,64 @@
 
 {% block content %}
 <div class="max-w-6xl mx-auto px-4 lg:px-0 py-12 space-y-16">
-  <div class="hero bg-base-200 rounded-2xl">
-    <div class="hero-content flex-col lg:flex-row lg:items-center lg:justify-between w-full gap-8">
-      <div class="space-y-4">
-        <h1 class="text-4xl font-bold text-base-content">{% translate "OAI-PMH tools" %}</h1>
-        <p class="text-base-content/70 text-lg max-w-2xl">
+  <section class="relative overflow-hidden rounded-2xl border border-slate-700/70 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow-xl">
+    <div class="absolute inset-0 opacity-40"
+         style="background-image: radial-gradient(circle at top left, rgba(59, 130, 246, 0.25), transparent 55%), radial-gradient(circle at bottom right, rgba(14, 116, 144, 0.25), transparent 45%), linear-gradient(120deg, rgba(148, 163, 184, 0.15), transparent 40%);"></div>
+    <div class="relative grid gap-8 lg:grid-cols-2 p-8">
+      <div class="space-y-5">
+        <span class="text-xs uppercase tracking-widest text-slate-300">{% translate "Repository interface" %}</span>
+        <h1 class="text-4xl font-semibold text-white">{% translate "OAI-PMH tools" %}</h1>
+        <p class="text-lg text-slate-300 max-w-2xl">
           {% blocktrans %}Use the shortcuts below to explore the OAI-PMH endpoint. Each action opens the live endpoint in a new tab so you can inspect the XML responses directly.{% endblocktrans %}
         </p>
+        <div class="flex flex-wrap items-center gap-2 text-xs uppercase tracking-wide text-slate-300">
+          <span class="text-slate-400">{% translate "Formats" %}</span>
+          {% for format in metadata_formats %}
+          <span class="rounded-full border border-slate-700 px-2 py-1">{{ format.metadata_prefix }}</span>
+          {% endfor %}
+        </div>
       </div>
-      <div class="card bg-base-100 shadow-md border border-base-200 w-full lg:w-auto">
-        <div class="card-body gap-2">
-          <span class="text-xs font-semibold uppercase text-base-content/60">{% translate "Endpoint" %}</span>
-          <code class="text-sm break-all px-3 py-2 rounded bg-base-200 text-base-content">{{ endpoint_url }}</code>
+      <div class="bg-slate-800/80 border border-slate-700/70 rounded-xl p-6 shadow-md space-y-4">
+        <span class="text-xs uppercase tracking-widest text-slate-400">{% translate "Endpoint" %}</span>
+        <code class="block text-sm break-all rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-white">{{ endpoint_url }}</code>
+        <div class="flex flex-wrap items-center gap-3 text-sm text-slate-300">
+          <a href="{{ endpoint_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">
+            {% translate "Open endpoint" %}
+          </a>
+          <span>{% translate "Opens in a new tab" %}</span>
         </div>
       </div>
     </div>
-  </div>
-
-  <div class="flex flex-wrap items-center gap-2">
-    <span class="text-xs font-semibold uppercase text-base-content/60">{% translate "Formats" %}</span>
-    {% for format in metadata_formats %}
-    <span class="badge badge-sm badge-outline">{{ format.metadata_prefix }}</span>
-    {% endfor %}
-  </div>
+  </section>
 
   <section class="space-y-6">
-    <div>
-      <h2 class="text-2xl font-semibold text-base-content">{% translate "Core verbs" %}</h2>
-      <p class="text-sm text-base-content/70 mt-2">{% translate "Quick links to the repository discovery verbs." %}</p>
-    </div>
-    <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 mt-3">
-      {% for verb in core_verbs %}
-      <div class="card bg-base-100 shadow-md border border-base-200 transition hover:-translate-y-0.5 hover:shadow-lg">
-        <div class="card-body">
-          <div class="flex items-center justify-between">
-            <h3 class="card-title text-lg">{{ verb.verb }}</h3>
-            <span class="badge badge-outline badge-primary">OAI</span>
-          </div>
-          <p class="text-sm text-base-content/70">{{ verb.description }}</p>
-          <div class="card-actions justify-end">
-            <a href="{{ verb.href }}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">
-              {% translate "Open verb" %}
-              <svg class="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
-              </svg>
-            </a>
-          </div>
-        </div>
+    <div class="flex flex-wrap items-end justify-between gap-4">
+      <div class="space-y-2">
+        <span class="text-xs uppercase tracking-widest text-base-content/60">{% translate "Core verbs" %}</span>
+        <h2 class="text-2xl font-semibold text-base-content">{% translate "Repository discovery" %}</h2>
       </div>
+      <p class="text-sm text-base-content/70 max-w-xl">{% translate "Quick links to the repository discovery verbs." %}</p>
+    </div>
+    <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+      {% for verb in core_verbs %}
+      <article class="rounded-xl border border-base-200 bg-base-100 p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+        <div class="flex items-start justify-between gap-3">
+          <div class="space-y-1">
+            <p class="text-xs uppercase tracking-widest text-base-content/60">{% translate "Verb" %}</p>
+            <h3 class="text-lg font-semibold text-base-content">{{ verb.verb }}</h3>
+          </div>
+          <span class="rounded-full border border-primary/20 px-2 py-1 text-xs font-semibold uppercase text-primary">OAI</span>
+        </div>
+        <p class="text-sm text-base-content/70 mt-3">{{ verb.description }}</p>
+        <div class="mt-4">
+          <a href="{{ verb.href }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
+            {% translate "Open verb" %}
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+            </svg>
+          </a>
+        </div>
+      </article>
       {% endfor %}
     </div>
   </section>
@@ -60,32 +70,34 @@
   <div class="divider"></div>
 
   <section class="space-y-6">
-    <div>
-      <h2 class="text-2xl font-semibold text-base-content">{% translate "ListIdentifiers" %}</h2>
-      <p class="text-sm text-base-content/70 mt-2">{% translate "Choose a metadata format and optional set to retrieve header records." %}</p>
+    <div class="flex flex-wrap items-end justify-between gap-4">
+      <div class="space-y-2">
+        <span class="text-xs uppercase tracking-widest text-base-content/60">ListIdentifiers</span>
+        <h2 class="text-2xl font-semibold text-base-content">{% translate "Header-only retrieval" %}</h2>
+      </div>
+      <p class="text-sm text-base-content/70 max-w-xl">{% translate "Choose a metadata format and optional set to retrieve header records." %}</p>
     </div>
     <div class="space-y-5">
       {% for format in list_identifiers_links %}
-      <div class="card bg-base-100 shadow-md border border-base-200">
-        <div class="card-body gap-4">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <div class="avatar placeholder">
-                <div class="w-10 rounded-full bg-primary/10 text-primary">
-                  <span class="text-sm font-bold">{{ format.metadata_prefix|upper|slice:":2" }}</span>
-                </div>
+      <div class="rounded-xl border border-base-200 bg-base-100 shadow-sm">
+        <div class="p-6 space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-4">
+              <div class="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm">
+                {{ format.metadata_prefix|upper|slice:":2" }}
               </div>
               <div>
                 <h3 class="text-lg font-semibold text-base-content">{{ format.metadata_prefix }}</h3>
-                <p class="text-xs uppercase tracking-wide text-base-content/60">{% translate "metadataPrefix" %}</p>
+                <p class="text-xs uppercase tracking-widest text-base-content/60">{% translate "metadataPrefix" %}</p>
               </div>
             </div>
-            <span class="badge badge-outline">{% translate "ListIdentifiers" %}</span>
+            <span class="rounded-full border border-base-200 px-3 py-1 text-xs uppercase tracking-widest text-base-content/60">
+              {% translate "ListIdentifiers" %}
+            </span>
           </div>
           <div class="flex flex-wrap gap-3">
             {% for link in format.links %}
-            <a href="{{ link.href }}" target="_blank" rel="noopener noreferrer"
-               class="btn btn-sm btn-outline">
+            <a href="{{ link.href }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline">
               {{ link.label }}
             </a>
             {% endfor %}
@@ -99,32 +111,34 @@
   <div class="divider"></div>
 
   <section class="space-y-6">
-    <div>
-      <h2 class="text-2xl font-semibold text-base-content">{% translate "ListRecords" %}</h2>
-      <p class="text-sm text-base-content/70 mt-2">{% translate "Retrieve full metadata records. These responses can be large when not filtered." %}</p>
+    <div class="flex flex-wrap items-end justify-between gap-4">
+      <div class="space-y-2">
+        <span class="text-xs uppercase tracking-widest text-base-content/60">ListRecords</span>
+        <h2 class="text-2xl font-semibold text-base-content">{% translate "Full record retrieval" %}</h2>
+      </div>
+      <p class="text-sm text-base-content/70 max-w-xl">{% translate "Retrieve full metadata records. These responses can be large when not filtered." %}</p>
     </div>
     <div class="space-y-5">
       {% for format in list_records_links %}
-      <div class="card bg-base-100 shadow-md border border-base-200">
-        <div class="card-body gap-4">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <div class="avatar placeholder">
-                <div class="w-10 rounded-full bg-secondary/10 text-secondary">
-                  <span class="text-sm font-bold">{{ format.metadata_prefix|upper|slice:":2" }}</span>
-                </div>
+      <div class="rounded-xl border border-base-200 bg-base-100 shadow-sm">
+        <div class="p-6 space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-4">
+              <div class="w-10 h-10 rounded-full bg-secondary/10 text-secondary flex items-center justify-center font-bold text-sm">
+                {{ format.metadata_prefix|upper|slice:":2" }}
               </div>
               <div>
                 <h3 class="text-lg font-semibold text-base-content">{{ format.metadata_prefix }}</h3>
-                <p class="text-xs uppercase tracking-wide text-base-content/60">{% translate "metadataPrefix" %}</p>
+                <p class="text-xs uppercase tracking-widest text-base-content/60">{% translate "metadataPrefix" %}</p>
               </div>
             </div>
-            <span class="badge badge-outline badge-secondary">{% translate "ListRecords" %}</span>
+            <span class="rounded-full border border-base-200 px-3 py-1 text-xs uppercase tracking-widest text-base-content/60">
+              {% translate "ListRecords" %}
+            </span>
           </div>
           <div class="flex flex-wrap gap-3">
             {% for link in format.links %}
-            <a href="{{ link.href }}" target="_blank" rel="noopener noreferrer"
-               class="btn btn-sm btn-secondary btn-outline">
+            <a href="{{ link.href }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-secondary btn-outline">
               {{ link.label }}
             </a>
             {% endfor %}
