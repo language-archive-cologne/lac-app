@@ -32,9 +32,10 @@
                     <li><a href="{% url 'privacy-policy' %}" class="hover:text-white transition-colors">Datenschutz</a></li>
                     <li><a href="{% url 'imprint' %}" class="hover:text-white transition-colors">Impressum</a></li>
                     <li><a href="mailto:lac-helpdesk@uni-koeln.de" class="hover:text-white transition-colors">Kontakt</a></li>
+                    <li class="text-gray-400">© University of Cologne</li>
                 </ul>
             </nav>
-            <div class="text-gray-400">© University of Cologne</div>
+            {% if VERSION_COMMIT %}<span class="text-gray-500 text-xs font-mono">v:{{ VERSION_COMMIT }}</span>{% endif %}
         </div>
     </div>
 </footer>

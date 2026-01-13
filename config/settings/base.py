@@ -219,6 +219,7 @@ TEMPLATES = [
                 "django.template.context_processors.tz",
                 "django.contrib.messages.context_processors.messages",
                 "lacos.users.context_processors.allauth_settings",
+                "lacos.users.context_processors.version_info",
                 "lacos.storage.context_processors.upload_client_config",
             ],
         },
