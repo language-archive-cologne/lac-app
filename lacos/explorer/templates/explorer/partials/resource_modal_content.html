@@ -48,7 +48,7 @@
           <div class="flex items-center gap-2">
             <span class="text-xs text-base-content/60 hidden sm:inline">{% translate 'Zoom' %}:</span>
             <button type="button" class="btn btn-xs btn-ghost" id="zoom-out-btn">−</button>
-            <input type="range" id="zoom-slider" class="range range-xs range-primary w-16 sm:w-20" min="10" max="500" value="50">
+            <input type="range" id="zoom-slider" class="range range-xs range-primary w-16 sm:w-20" min="100" max="2000" value="500">
             <button type="button" class="btn btn-xs btn-ghost" id="zoom-in-btn">+</button>
           </div>
 
@@ -76,9 +76,10 @@
         </div>
 
         {% if player_mode == 'analyze' %}
-        <!-- Spectrogram only (EMU plugin - analyze mode) -->
-        <div id="spectrogram-wrapper" class="bg-base-100 border-x border-base-300">
-          <div id="spectrogram" style="min-height: 200px;"></div>
+        <!-- Spectrogram with cursor overlay (EMU plugin - analyze mode) -->
+        <div id="spectrogram-wrapper" class="bg-base-100 border-x border-base-300" style="position: relative; height: 200px; min-height: 200px;">
+          <div id="spectrogram" style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 1; pointer-events: none;"></div>
+          <div id="waveform" style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 2;"></div>
         </div>
         {% else %}
         <!-- Waveform only (simple play mode) -->

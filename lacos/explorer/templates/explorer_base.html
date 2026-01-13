@@ -78,15 +78,17 @@
 
         // EMU Spectrogram plugin - only in analyze mode
         let spectrogramPlugin = null;
-        if (isAnalyzeMode && typeof WaveSurfer.Spectrogram_emu !== 'undefined') {
+        if (isAnalyzeMode && spectrogramEl && typeof WaveSurfer.Spectrogram_emu !== 'undefined') {
           spectrogramPlugin = WaveSurfer.Spectrogram_emu.create({
+            container: spectrogramEl,
             height: 200
           });
           plugins.push(spectrogramPlugin);
         }
 
         // Create WaveSurfer instance
-        const containerEl = isAnalyzeMode ? spectrogramEl : waveformEl;
+        const containerEl = waveformEl || spectrogramEl;
+        if (!containerEl) return;
 
         currentWavesurfer = WaveSurfer.create({
           container: containerEl,
@@ -94,12 +96,12 @@
           progressColor: isAnalyzeMode ? 'transparent' : '#3b82f6',
           cursorColor: '#ef4444',
           cursorWidth: 2,
-          height: isAnalyzeMode ? 1 : 128,
+          height: isAnalyzeMode ? 200 : 128,
           barWidth: isAnalyzeMode ? 0 : 2,
           barGap: 1,
           barRadius: 2,
           normalize: true,
-          minPxPerSec: isAnalyzeMode ? 50 : 20,
+          minPxPerSec: isAnalyzeMode ? 500 : 20,
           hideScrollbar: false,
           autoCenter: true,
           autoScroll: true,
@@ -154,33 +156,21 @@
         playPauseBtn.addEventListener('click', () => currentWavesurfer.playPause());
         stopBtn.addEventListener('click', () => currentWavesurfer.stop());
 
-        // Debounced spectrogram re-render (only in analyze mode)
-        let zoomDebounceTimer = null;
-        const debouncedSpectrogramRender = () => {
-          if (!isAnalyzeMode || !spectrogramPlugin) return;
-          if (zoomDebounceTimer) clearTimeout(zoomDebounceTimer);
-          zoomDebounceTimer = setTimeout(() => {
-            spectrogramPlugin.render();
-          }, 300);
-        };
-
+        // Zoom controls - EMU spectrogram handles redraw automatically via requestAnimationFrame
         zoomSlider.addEventListener('input', (e) => {
           currentWavesurfer.zoom(Number(e.target.value));
-          debouncedSpectrogramRender();
         });
 
         zoomInBtn.addEventListener('click', () => {
-          const val = Math.min(500, Number(zoomSlider.value) + 25);
+          const val = Math.min(2000, Number(zoomSlider.value) + 200);
           zoomSlider.value = val;
           currentWavesurfer.zoom(val);
-          debouncedSpectrogramRender();
         });
 
         zoomOutBtn.addEventListener('click', () => {
-          const val = Math.max(10, Number(zoomSlider.value) - 25);
+          const val = Math.max(100, Number(zoomSlider.value) - 200);
           zoomSlider.value = val;
           currentWavesurfer.zoom(val);
-          debouncedSpectrogramRender();
         });
 
         speedSelect.addEventListener('change', (e) => {
