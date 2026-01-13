@@ -30,7 +30,6 @@
       <th scope="col" class="px-8 py-4 text-left text-xs font-semibold text-base-content/70 uppercase tracking-wide">{% translate "Location" %}</th>
       <th scope="col" class="px-8 py-4 text-left text-xs font-semibold text-base-content/70 uppercase tracking-wide">{% translate "Date" %}</th>
       <th scope="col" class="px-8 py-4 text-left text-xs font-semibold text-base-content/70 uppercase tracking-wide">{% translate "Researcher" %}</th>
-      <th scope="col" class="px-8 py-4 text-left text-xs font-semibold text-base-content/70 uppercase tracking-wide">{% translate "ID" %}</th>
     </tr>
   </thead>
   <tbody class="bg-base-100 divide-y divide-base-200">
@@ -49,6 +48,11 @@
             {% else %}
               {{ collection.identifier }}
             {% endif %}
+          </a>
+          <a href="{% url 'explorer:collection_detail_by_handle' handle=collection.identifier %}"
+             class="text-xs font-mono text-base-content/50 hover:text-primary hover:underline block mt-1"
+             title="{% translate 'Open collection by handle' %}">
+            {{ collection.identifier }}
           </a>
           <div class="text-xs text-base-content/50 mt-1">{{ collection.bundles_count }} {% translate "bundles" %}</div>
         </td>
@@ -109,13 +113,6 @@
           {% if collection.publication_info.first and collection.publication_info.first.creators.all %}
             {% for creator in collection.publication_info.first.creators.all %}{% if not forloop.first %}, {% endif %}{{ creator.given_name }} {{ creator.family_name }}{% endfor %}
           {% endif %}
-        </td>
-        <td class="px-8 py-5 text-sm font-mono">
-          <a href="{% url 'explorer:collection_detail_by_handle' handle=collection.identifier %}"
-             class="text-base-content/60 hover:text-primary hover:underline"
-             title="{% translate 'Open collection by handle' %}">
-            {{ collection.identifier }}
-          </a>
         </td>
       </tr>
     {% endfor %}
