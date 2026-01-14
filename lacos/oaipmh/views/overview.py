@@ -33,21 +33,15 @@ class OAIPMHOverviewView(TemplateView):
             for format_entry in metadata_formats:
                 format_links = [
                     {
-                        "label": "All records",
-                        "href": f"{endpoint_path}?verb={verb}&metadataPrefix={format_entry['metadata_prefix']}",
+                        "label": set_entry["name"],
+                        "href": (
+                            f"{endpoint_path}?verb={verb}"
+                            f"&metadataPrefix={format_entry['metadata_prefix']}"
+                            f"&set={set_entry['spec']}"
+                        ),
                     }
+                    for set_entry in sets
                 ]
-                for set_entry in sets:
-                    format_links.append(
-                        {
-                            "label": set_entry["name"],
-                            "href": (
-                                f"{endpoint_path}?verb={verb}"
-                                f"&metadataPrefix={format_entry['metadata_prefix']}"
-                                f"&set={set_entry['spec']}"
-                            ),
-                        }
-                    )
                 links.append(
                     {
                         "metadata_prefix": format_entry["metadata_prefix"],
