@@ -59,15 +59,15 @@
            {% if current_view == 'oai-pmh' %}aria-current="page"{% endif %}>
           OAI-PMH
         </a>
-        <a href="{% url 'about' %}"
-           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if current_view == 'about' %}bg-slate-700/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-slate-700/70{% endif %}"
-           {% if current_view == 'about' %}aria-current="page"{% endif %}>
-          About
-        </a>
         <a href="{% url 'user-guides' %}"
            class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if current_view == 'user-guides' %}bg-slate-700/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-slate-700/70{% endif %}"
            {% if current_view == 'user-guides' %}aria-current="page"{% endif %}>
           User Guides
+        </a>
+        <a href="{% url 'about' %}"
+           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if current_view == 'about' %}bg-slate-700/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-slate-700/70{% endif %}"
+           {% if current_view == 'about' %}aria-current="page"{% endif %}>
+          About
         </a>
         </div>
       </div>
@@ -168,15 +168,15 @@
          {% if current_view == 'oai-pmh' %}aria-current="page"{% endif %}>
         OAI-PMH
       </a>
-      <a href="{% url 'about' %}"
-         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if current_view == 'about' %}bg-slate-800 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}"
-         {% if current_view == 'about' %}aria-current="page"{% endif %}>
-        About
-      </a>
       <a href="{% url 'user-guides' %}"
          class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if current_view == 'user-guides' %}bg-slate-800 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}"
          {% if current_view == 'user-guides' %}aria-current="page"{% endif %}>
         User Guides
+      </a>
+      <a href="{% url 'about' %}"
+         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if current_view == 'about' %}bg-slate-800 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}"
+         {% if current_view == 'about' %}aria-current="page"{% endif %}>
+        About
       </a>
     </div>
   </div>
