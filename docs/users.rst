@@ -26,7 +26,7 @@ Key settings
   user is always looked up by the persistent NameID.
 * ``SAML_IDP_METADATA_LOCAL`` / ``SAML_IDP_METADATA_REMOTE`` – IdP metadata
   sources. The repository ships a local fallback
-  ``idptest.rrz.uni-koeln.de.xml`` for development.
+  ``shibboleth.xml`` for development.
 
 Operations runbook
 ----------------------------------------------------------------------

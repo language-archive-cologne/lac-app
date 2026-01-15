@@ -304,7 +304,6 @@ yarn-error.log*
 
 # Local dev overrides
 docker-compose.dev.local.yml
-idptest.rrz.uni-koeln.de.xml
 
 # Generated Tailwind CSS (rebuild with: npm run build)
 theme/static/css/output.css

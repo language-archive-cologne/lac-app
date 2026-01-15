@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<EntitiesDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:mdattr="urn:oasis:names:tc:SAML:metadata:attribute" xmlns:mdrpi="urn:oasis:names:tc:SAML:metadata:rpi" xmlns:mdui="urn:oasis:names:tc:SAML:metadata:ui" xmlns:remd="http://refeds.org/metadata" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" xmlns:saml1md="urn:mace:shibboleth:metadata:1.0">
+<EntityDescriptor entityID="https://idp.rrz.uni-koeln.de/idp/shibboleth">
+    <Extensions>
+        <mdrpi:RegistrationInfo registrationAuthority="https://www.aai.dfn.de" registrationInstant="2011-01-14T13:33:15Z">
+            <mdrpi:RegistrationPolicy xml:lang="de">https://www.aai.dfn.de/teilnahme/</mdrpi:RegistrationPolicy>
+            <mdrpi:RegistrationPolicy xml:lang="en">https://www.aai.dfn.de/en/join/</mdrpi:RegistrationPolicy>
+        </mdrpi:RegistrationInfo>
+        <mdattr:EntityAttributes>
+            <saml:Attribute Name="http://macedir.org/entity-category" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:uri">
+                <saml:AttributeValue>http://aai.dfn.de/category/highmeducation-member</saml:AttributeValue>
+            </saml:Attribute>
+            <saml:Attribute Name="http://macedir.org/entity-category-support" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:uri">
+                <saml:AttributeValue>http://www.geant.net/uri/dataprotection-code-of-conduct/v1</saml:AttributeValue>
+            </saml:Attribute>
+        </mdattr:EntityAttributes>
+    </Extensions>
+    <IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+        <Extensions>
+            <saml1md:Scope regexp="false">uni-koeln.de</saml1md:Scope>
+            <mdui:UIInfo>
+                <mdui:DisplayName xml:lang="de">Universität zu Köln</mdui:DisplayName>
+                <mdui:DisplayName xml:lang="en">Universität zu Köln</mdui:DisplayName>
+                <mdui:Description xml:lang="de">Identity Provider der Universität zu Köln</mdui:Description>
+                <mdui:Description xml:lang="en">Identity Provider der Universität zu Köln</mdui:Description>
+                <mdui:InformationURL xml:lang="de">http://www.uni-koeln.de</mdui:InformationURL>
+                <mdui:Logo height="100" width="100">https://idp.rrz.uni-koeln.de/idp/images/siegel.gif</mdui:Logo>
+                <mdui:InformationURL xml:lang="en">http://www.uni-koeln.de</mdui:InformationURL>
+                <mdui:Logo height="16" width="16">https://idp.rrz.uni-koeln.de/idp/images/UzK-favicon.png</mdui:Logo>
+            </mdui:UIInfo>
+        </Extensions>
+        <KeyDescriptor>
+            <ds:KeyInfo>
+                <ds:KeyName>idp.rrz.uni-koeln.de</ds:KeyName>
+                <ds:X509Data>
+                    <ds:X509SubjectName>CN=idp.rrz.uni-koeln.de,O=Universitaet zu Koeln,ST=Nordrhein-Westfalen,C=DE</ds:X509SubjectName>
+                    <ds:X509Certificate>MIIIYDCCBkigAwIBAgIQZxnD+LT3Kh1k66YG5+nAszANBgkqhkiG9w0BAQwFADBE
+MQswCQYDVQQGEwJOTDEZMBcGA1UEChMQR0VBTlQgVmVyZW5pZ2luZzEaMBgGA1UE
+AxMRR0VBTlQgT1YgUlNBIENBIDQwHhcNMjQwNjIxMDAwMDAwWhcNMjUwNjIxMjM1
+OTU5WjBqMQswCQYDVQQGEwJERTEcMBoGA1UECBMTTm9yZHJoZWluLVdlc3RmYWxl
+bjEeMBwGA1UEChMVVW5pdmVyc2l0YWV0IHp1IEtvZWxuMR0wGwYDVQQDExRpZHAu
+cnJ6LnVuaS1rb2Vsbi5kZTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIB
+AK6TLsxMcUc4l2Lkf7mzH6xqxCYPJzmRUtLNF1e24iMbq87jbjdBCqivLOB92GQq
+FY2LO+Wpd2Wk4EHlTj1r2AVx6ANrw4PWbep3sTGWiVYQwV+P4VifDlqwFSg33tcw
+soL2+ufXkJJo8fXATUsLXEm3oT5IKMFDreTrp6ZEuDHyoMPa9MFc4XMXw3/LywfF
+nvsZihyBjg73e7RLSVvyySPuHiEtTVefnOIEOv7A0GG+8oUgveMlsGEvwzgvLFrq
+jHfcIbCbdCQrORnL1QCPaaJziuhX6bwlFV5kw6OukOfC5/kUdjQulSKQkonvcFI+
+UpTde+LHe9o2kGUCiamQezhu5Gw5xQymGaWYANJilN1VAnR1suHA5wkMr/GGpeMS
+jnAxQQ1DVFwck+SxcaqsDW94baSLnDRIZchGVR55iiE+rBxM3SluMe2U9XAd1XaK
+texH0Z0ZWdr2FajE17LHp+ybhyqZLDd2P8qTdIYTW/cVGDtzouTqCW/HdgIqkz2S
+bJO8jz+HmHa5Ek+N/ICVwxnnpbxvtKQO0EunneMjyzpKwD8UAAl1BZOldAKlRxKt
+khxcpWcFGaJ7Bj36mAdPP6uLVWpAM/IzzTnYpcBtMuYHVPH8e5yNA9RnbQ9Edqc/
+hBQSKnJq8uXEzuGdTfLy8Nfpo1X+LQf1PvJPqrJcSQtnAgMBAAGjggMmMIIDIjAf
+BgNVHSMEGDAWgBRvHTVJEGwy+lmgnryK6B+VvnF6DDAdBgNVHQ4EFgQU8xOQaOCf
+hjTt3Bnw6qHO/FPnDmcwDgYDVR0PAQH/BAQDAgWgMAwGA1UdEwEB/wQCMAAwHQYD
+VR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMCMEkGA1UdIARCMEAwNAYLKwYBBAGy
+MQECAk8wJTAjBggrBgEFBQcCARYXaHR0cHM6Ly9zZWN0aWdvLmNvbS9DUFMwCAYG
+Z4EMAQICMD8GA1UdHwQ4MDYwNKAyoDCGLmh0dHA6Ly9HRUFOVC5jcmwuc2VjdGln
+by5jb20vR0VBTlRPVlJTQUNBNC5jcmwwdQYIKwYBBQUHAQEEaTBnMDoGCCsGAQUF
+BzAChi5odHRwOi8vR0VBTlQuY3J0LnNlY3RpZ28uY29tL0dFQU5UT1ZSU0FDQTQu
+Y3J0MCkGCCsGAQUFBzABhh1odHRwOi8vR0VBTlQub2NzcC5zZWN0aWdvLmNvbTCC
+AX0GCisGAQQB1nkCBAIEggFtBIIBaQFnAHYAzxFW7tUufK/zh1vZaS6b6RpxZ0qw
+F+ysAdJbd87MOwgAAAGQOs74TgAABAMARzBFAiBX9VggH7zeeInmoLmyiIPxv1wr
+GWpb+CxRH4L+6HSTogIhAKDvv7QxCwMCTZYdTke8XJr3KdVbsUb5SyCcUNTC8bJf
+AHYAouMK5EXvva2bfjjtR2d3U9eCW4SU1yteGyzEuVCkR+cAAAGQOs739AAABAMA
+RzBFAiEAoRMYf/WPuERyU6VqDdFXJQlbJuXZUc7++PO/ES80GaUCIBQhgyRptu+j
+xhiButSvz1KxZVsWPyA13mNLZzrKGTWgAHUATnWjJ1yaEMM4W2zU3z9S6x3w4I4b
+jWnAsfpksWKaOd8AAAGQOs73ygAABAMARjBEAiBmCpnyajU0UOOlbnTorgH+9E4V
+ymts9rX4wqYIcdcHMwIgKuVYLzxKUS7+Jhg5phO6zZ8dW473s/KJRe7QxvBsa+Ew
+HwYDVR0RBBgwFoIUaWRwLnJyei51bmkta29lbG4uZGUwDQYJKoZIhvcNAQEMBQAD
+ggIBAD8HcAuPfQERR4RvVyoV28bkOP2BPhzJPPBHhYzBRPt9Fos4++qxRXGlA0Xn
+W8TfKTSbCPnz+7t4IWwKtKjKMfybV5GciGfoIRfdkA6APBPROBsHAfoz3KMG/kcg
+Av09t0ybaXnVYp9SQGL5BDgoE+APj7uuGvDsLmTvflPUJitPs7X+6L1CbV8KbIZd
+1MfRGoZMaAQtSfa2aMWFDYkx22vA0OEgft9TN3eRA9bMswhWYWiFahNH0LNIJ5F1
+iq71DERIEZpSav0FydUeMuELNYAM4gx9zP1/yn7ZIjo0gVpZInEeFAtALzWqW6ml
+PN+fp5W4V87CvmZ90htuU0FR9bIuxwpywcCfmkMR10wJdDEXPEFxT3hlthwmtpyI
+2exNDNg/p68q8JHJhmAg4onpJChGTDXe/xMhDCrKAXEIWxniouY5ZT2Vng4x47H+
+MSCTEMKehgn+ug/QKgQT6AggFWKHjCp++cju7MEyT13q48fnC6pYVpmdqPMvUADs
+jnaTso/K3GRkVHeG5W1nmIBMK4ZGy+Fta8OqBuJgrZVDL1Zo9eIaXJ5gdan2ReZo
+j7qaCYOAMkuZ1gsAGSI8T/bkovtPLggWEWYeRMR6py6YP0NqDBbU6jTAH36BllE4
+8x7qy5jq+SycTeCVQN8TAbRTdG+k/KFkxGV54YqxuM18l5gn</ds:X509Certificate>
+                </ds:X509Data>
+            </ds:KeyInfo>
+        </KeyDescriptor>
+        <ArtifactResolutionService Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP" Location="https://idp.rrz.uni-koeln.de:8443/idp/profile/SAML2/SOAP/ArtifactResolution" index="2"/>
+        <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://idp.rrz.uni-koeln.de/idp/profile/SAML2/POST/SLO"/>
+        <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST-SimpleSign" Location="https://idp.rrz.uni-koeln.de/idp/profile/SAML2/POST-SimpleSign/SLO"/>
+        <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.rrz.uni-koeln.de/idp/profile/SAML2/Redirect/SLO"/>
+        <SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP" Location="https://idp.rrz.uni-koeln.de:8443/idp/profile/SAML2/SOAP/SLO"/>
+        <NameIDFormat>urn:oasis:names:tc:SAML:2.0:nameid-format:transient</NameIDFormat>
+        <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://idp.rrz.uni-koeln.de/idp/profile/SAML2/POST/SSO"/>
+        <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST-SimpleSign" Location="https://idp.rrz.uni-koeln.de/idp/profile/SAML2/POST-SimpleSign/SSO"/>
+        <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.rrz.uni-koeln.de/idp/profile/SAML2/Redirect/SSO"/>
+    </IDPSSODescriptor>
+    <AttributeAuthorityDescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+        <Extensions>
+            <saml1md:Scope regexp="false">uni-koeln.de</saml1md:Scope>
+            <mdui:UIInfo>
+                <mdui:DisplayName xml:lang="de">Universität zu Köln</mdui:DisplayName>
+                <mdui:DisplayName xml:lang="en">Universität zu Köln</mdui:DisplayName>
+                <mdui:Description xml:lang="de">Identity Provider der Universität zu Köln</mdui:Description>
+                <mdui:Description xml:lang="en">Identity Provider der Universität zu Köln</mdui:Description>
+                <mdui:InformationURL xml:lang="de">http://www.uni-koeln.de</mdui:InformationURL>
+                <mdui:Logo height="100" width="100">https://idp.rrz.uni-koeln.de/idp/images/siegel.gif</mdui:Logo>
+                <mdui:InformationURL xml:lang="en">http://www.uni-koeln.de</mdui:InformationURL>
+                <mdui:Logo height="16" width="16">https://idp.rrz.uni-koeln.de/idp/images/UzK-favicon.png</mdui:Logo>
+            </mdui:UIInfo>
+        </Extensions>
+        <KeyDescriptor>
+            <ds:KeyInfo>
+                <ds:KeyName>idp.rrz.uni-koeln.de</ds:KeyName>
+                <ds:X509Data>
+                    <ds:X509SubjectName>CN=idp.rrz.uni-koeln.de,O=Universitaet zu Koeln,ST=Nordrhein-Westfalen,C=DE</ds:X509SubjectName>
+                    <ds:X509Certificate>MIIIYDCCBkigAwIBAgIQZxnD+LT3Kh1k66YG5+nAszANBgkqhkiG9w0BAQwFADBE
+MQswCQYDVQQGEwJOTDEZMBcGA1UEChMQR0VBTlQgVmVyZW5pZ2luZzEaMBgGA1UE
+AxMRR0VBTlQgT1YgUlNBIENBIDQwHhcNMjQwNjIxMDAwMDAwWhcNMjUwNjIxMjM1
+OTU5WjBqMQswCQYDVQQGEwJERTEcMBoGA1UECBMTTm9yZHJoZWluLVdlc3RmYWxl
+bjEeMBwGA1UEChMVVW5pdmVyc2l0YWV0IHp1IEtvZWxuMR0wGwYDVQQDExRpZHAu
+cnJ6LnVuaS1rb2Vsbi5kZTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIB
+AK6TLsxMcUc4l2Lkf7mzH6xqxCYPJzmRUtLNF1e24iMbq87jbjdBCqivLOB92GQq
+FY2LO+Wpd2Wk4EHlTj1r2AVx6ANrw4PWbep3sTGWiVYQwV+P4VifDlqwFSg33tcw
+soL2+ufXkJJo8fXATUsLXEm3oT5IKMFDreTrp6ZEuDHyoMPa9MFc4XMXw3/LywfF
+nvsZihyBjg73e7RLSVvyySPuHiEtTVefnOIEOv7A0GG+8oUgveMlsGEvwzgvLFrq
+jHfcIbCbdCQrORnL1QCPaaJziuhX6bwlFV5kw6OukOfC5/kUdjQulSKQkonvcFI+
+UpTde+LHe9o2kGUCiamQezhu5Gw5xQymGaWYANJilN1VAnR1suHA5wkMr/GGpeMS
+jnAxQQ1DVFwck+SxcaqsDW94baSLnDRIZchGVR55iiE+rBxM3SluMe2U9XAd1XaK
+texH0Z0ZWdr2FajE17LHp+ybhyqZLDd2P8qTdIYTW/cVGDtzouTqCW/HdgIqkz2S
+bJO8jz+HmHa5Ek+N/ICVwxnnpbxvtKQO0EunneMjyzpKwD8UAAl1BZOldAKlRxKt
+khxcpWcFGaJ7Bj36mAdPP6uLVWpAM/IzzTnYpcBtMuYHVPH8e5yNA9RnbQ9Edqc/
+hBQSKnJq8uXEzuGdTfLy8Nfpo1X+LQf1PvJPqrJcSQtnAgMBAAGjggMmMIIDIjAf
+BgNVHSMEGDAWgBRvHTVJEGwy+lmgnryK6B+VvnF6DDAdBgNVHQ4EFgQU8xOQaOCf
+hjTt3Bnw6qHO/FPnDmcwDgYDVR0PAQH/BAQDAgWgMAwGA1UdEwEB/wQCMAAwHQYD
+VR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMCMEkGA1UdIARCMEAwNAYLKwYBBAGy
+MQECAk8wJTAjBggrBgEFBQcCARYXaHR0cHM6Ly9zZWN0aWdvLmNvbS9DUFMwCAYG
+Z4EMAQICMD8GA1UdHwQ4MDYwNKAyoDCGLmh0dHA6Ly9HRUFOVC5jcmwuc2VjdGln
+by5jb20vR0VBTlRPVlJTQUNBNC5jcmwwdQYIKwYBBQUHAQEEaTBnMDoGCCsGAQUF
+BzAChi5odHRwOi8vR0VBTlQuY3J0LnNlY3RpZ28uY29tL0dFQU5UT1ZSU0FDQTQu
+Y3J0MCkGCCsGAQUFBzABhh1odHRwOi8vR0VBTlQub2NzcC5zZWN0aWdvLmNvbTCC
+AX0GCisGAQQB1nkCBAIEggFtBIIBaQFnAHYAzxFW7tUufK/zh1vZaS6b6RpxZ0qw
+F+ysAdJbd87MOwgAAAGQOs74TgAABAMARzBFAiBX9VggH7zeeInmoLmyiIPxv1wr
+GWpb+CxRH4L+6HSTogIhAKDvv7QxCwMCTZYdTke8XJr3KdVbsUb5SyCcUNTC8bJf
+AHYAouMK5EXvva2bfjjtR2d3U9eCW4SU1yteGyzEuVCkR+cAAAGQOs739AAABAMA
+RzBFAiEAoRMYf/WPuERyU6VqDdFXJQlbJuXZUc7++PO/ES80GaUCIBQhgyRptu+j
+xhiButSvz1KxZVsWPyA13mNLZzrKGTWgAHUATnWjJ1yaEMM4W2zU3z9S6x3w4I4b
+jWnAsfpksWKaOd8AAAGQOs73ygAABAMARjBEAiBmCpnyajU0UOOlbnTorgH+9E4V
+ymts9rX4wqYIcdcHMwIgKuVYLzxKUS7+Jhg5phO6zZ8dW473s/KJRe7QxvBsa+Ew
+HwYDVR0RBBgwFoIUaWRwLnJyei51bmkta29lbG4uZGUwDQYJKoZIhvcNAQEMBQAD
+ggIBAD8HcAuPfQERR4RvVyoV28bkOP2BPhzJPPBHhYzBRPt9Fos4++qxRXGlA0Xn
+W8TfKTSbCPnz+7t4IWwKtKjKMfybV5GciGfoIRfdkA6APBPROBsHAfoz3KMG/kcg
+Av09t0ybaXnVYp9SQGL5BDgoE+APj7uuGvDsLmTvflPUJitPs7X+6L1CbV8KbIZd
+1MfRGoZMaAQtSfa2aMWFDYkx22vA0OEgft9TN3eRA9bMswhWYWiFahNH0LNIJ5F1
+iq71DERIEZpSav0FydUeMuELNYAM4gx9zP1/yn7ZIjo0gVpZInEeFAtALzWqW6ml
+PN+fp5W4V87CvmZ90htuU0FR9bIuxwpywcCfmkMR10wJdDEXPEFxT3hlthwmtpyI
+2exNDNg/p68q8JHJhmAg4onpJChGTDXe/xMhDCrKAXEIWxniouY5ZT2Vng4x47H+
+MSCTEMKehgn+ug/QKgQT6AggFWKHjCp++cju7MEyT13q48fnC6pYVpmdqPMvUADs
+jnaTso/K3GRkVHeG5W1nmIBMK4ZGy+Fta8OqBuJgrZVDL1Zo9eIaXJ5gdan2ReZo
+j7qaCYOAMkuZ1gsAGSI8T/bkovtPLggWEWYeRMR6py6YP0NqDBbU6jTAH36BllE4
+8x7qy5jq+SycTeCVQN8TAbRTdG+k/KFkxGV54YqxuM18l5gn</ds:X509Certificate>
+                </ds:X509Data>
+            </ds:KeyInfo>
+        </KeyDescriptor>
+        <AttributeService Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP" Location="https://idp.rrz.uni-koeln.de:8443/idp/profile/SAML2/SOAP/AttributeQuery"/>
+        <NameIDFormat>urn:oasis:names:tc:SAML:2.0:nameid-format:transient</NameIDFormat>
+    </AttributeAuthorityDescriptor>
+    <Organization>
+        <OrganizationName xml:lang="de">e36</OrganizationName>
+        <OrganizationName xml:lang="en">e36</OrganizationName>
+        <OrganizationDisplayName xml:lang="de">Universität zu Köln</OrganizationDisplayName>
+        <OrganizationDisplayName xml:lang="en">University of Cologne</OrganizationDisplayName>
+        <OrganizationURL xml:lang="de">http://www.uni-koeln.de</OrganizationURL>
+        <OrganizationURL xml:lang="en">http://www.uni-koeln.de</OrganizationURL>
+    </Organization>
+    <ContactPerson contactType="administrative">
+        <GivenName>Identity Management ITCC</GivenName>
+        <EmailAddress>mailto:rrzk-unikim@uni-koeln.de</EmailAddress>
+    </ContactPerson>
+    <ContactPerson contactType="other" remd:contactType="http://refeds.org/metadata/contactType/security">
+        <GivenName>Identity Management ITCC</GivenName>
+        <EmailAddress>mailto:rrzk-unikim@uni-koeln.de</EmailAddress>
+    </ContactPerson>
+    <ContactPerson contactType="support">
+        <GivenName>Identity Management ITCC</GivenName>
+        <EmailAddress>mailto:rrzk-unikim@uni-koeln.de</EmailAddress>
+    </ContactPerson>
+    <ContactPerson contactType="technical">
+        <GivenName>Identity Management ITCC</GivenName>
+        <EmailAddress>mailto:rrzk-unikim@uni-koeln.de</EmailAddress>
+    </ContactPerson>
+</EntityDescriptor>
+</EntitiesDescriptor>

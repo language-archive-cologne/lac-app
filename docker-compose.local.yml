@@ -27,7 +27,7 @@ services:
     environment:
       SAML_LOGIN_ENABLED: "true"
       SAML_SP_BASE_URL: "http://localhost:8101"
-      SAML_IDP_METADATA_LOCAL: "/app/idptest.rrz.uni-koeln.de.xml"
+      SAML_IDP_METADATA_LOCAL: "/app/shibboleth.xml"
     ports:
       - '127.0.0.1:8101:8000'
     command: /start
@@ -104,7 +104,7 @@ services:
     environment:
       SAML_LOGIN_ENABLED: "true"
       SAML_SP_BASE_URL: "http://localhost:8101"
-      SAML_IDP_METADATA_LOCAL: "/app/idptest.rrz.uni-koeln.de.xml"
+      SAML_IDP_METADATA_LOCAL: "/app/shibboleth.xml"
     command: /bin/sh -c "python manage.py run_huey"
     networks:
       - lacos_network_ws

@@ -455,7 +455,7 @@ if SAML_LOGIN_ENABLED:
     )
     SAML_METADATA_LOCAL = env.list(
         "SAML_IDP_METADATA_LOCAL",
-        default=[str(BASE_DIR / "idptest.rrz.uni-koeln.de.xml")],
+        default=[str(BASE_DIR / "shibboleth.xml")],
     )
     SAML_METADATA_REMOTE = [
         {"url": url}
@@ -464,14 +464,6 @@ if SAML_LOGIN_ENABLED:
     SAML_ATTRIBUTE_MAPPING = {
         "eduPersonPrincipalName": ("username",),
         "urn:oid:1.3.6.1.4.1.5923.1.1.1.6": ("username",),
-        "uid": ("username",),
-        "urn:oid:0.9.2342.19200300.100.1.1": ("username",),
-        "mail": ("email",),
-        "urn:oid:0.9.2342.19200300.100.1.3": ("email",),
-        "email": ("email",),
-        "displayName": ("name",),
-        "cn": ("name",),
-        "urn:oid:2.16.840.1.113730.3.1.241": ("name",),
     }
     _saml_metadata: dict[str, list] = {}
     if SAML_METADATA_LOCAL:
@@ -479,7 +471,7 @@ if SAML_LOGIN_ENABLED:
     if SAML_METADATA_REMOTE:
         _saml_metadata["remote"] = SAML_METADATA_REMOTE
     if not _saml_metadata:
-        _saml_metadata["local"] = [str(BASE_DIR / "idptest.rrz.uni-koeln.de.xml")]
+        _saml_metadata["local"] = [str(BASE_DIR / "shibboleth.xml")]
     SAML_CONFIG = {
         "debug": DEBUG,
         "entityid": SAML_ENTITY_ID,
