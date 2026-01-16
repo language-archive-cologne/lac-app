@@ -37,6 +37,10 @@ def import_general_info(cmd_data: Cmd, bundle: 'Bundle') -> BundleGeneralInfo:
     # Create the main general info record
     general_info = create_bundle_general_info(bundle_info, location, bundle)
     
+    # Reset related objects to keep updates idempotent
+    general_info.keywords.clear()
+    general_info.object_languages.clear()
+
     # Import keywords if present
     if bundle_info.bundle_keywords:
         import_keywords(general_info, bundle_info.bundle_keywords.bundle_keyword)
@@ -75,6 +79,13 @@ def create_bundle_general_info(bundle_info: Any, location: BundleLocation, bundl
             'bundle': bundle
         }
     )
+    if not created:
+        general_info.display_title = bundle_info.bundle_display_title
+        general_info.description = bundle_info.bundle_description
+        general_info.version = bundle_info.bundle_version
+        general_info.recording_date = parse_recording_date(bundle_info.bundle_recording_date.value)
+        general_info.location = location
+        general_info.save()
     return general_info
 
 

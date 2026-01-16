@@ -44,6 +44,10 @@ def import_general_info(cmd_data: Any, collection: Collection) -> CollectionGene
     # Create base general info with reference to collection
     general_info = create_base_general_info(general_info_schema, location, collection)
     
+    # Reset related objects to keep updates idempotent
+    general_info.keywords.clear()
+    general_info.object_languages.clear()
+
     # Import related objects
     import_keywords(general_info, general_info_schema.collection_keywords)
     import_object_languages(general_info, general_info_schema.collection_object_languages)

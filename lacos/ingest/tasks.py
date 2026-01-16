@@ -50,7 +50,9 @@ def find_s3_import_candidates(bucket: str = None, prefix: str = '') -> Dict[str,
 
 # Revert to db_task and use transaction.atomic
 @db_task()
-def import_s3_collection(bucket: str, s3_key: str) -> Optional[UUID]:
+def import_s3_collection(
+    bucket: str, s3_key: str, update_existing: bool = False
+) -> Optional[UUID]:
     """
     Import a single collection from an XML file stored in S3.
     Uses transaction.atomic to ensure commit before returning.
@@ -76,7 +78,10 @@ def import_s3_collection(bucket: str, s3_key: str) -> Optional[UUID]:
 
             xml_content = xml_content_bytes.decode('utf-8')
             # Use CollectionImporter to handle parsing and saving
-            collection = CollectionImporter.import_from_xml(xml_content)
+            collection = CollectionImporter.import_from_xml(
+                xml_content,
+                update_existing=update_existing,
+            )
 
             fields_to_update: List[str] = []
             if getattr(collection, 'import_bucket', None) != bucket:
@@ -102,7 +107,9 @@ def import_s3_collection(bucket: str, s3_key: str) -> Optional[UUID]:
 
 # --- Refactored Bundle Import Task ---
 @db_task()
-def import_s3_bundle(bucket: str, s3_key: str) -> Optional[Tuple[UUID, UUID]]:
+def import_s3_bundle(
+    bucket: str, s3_key: str, update_existing: bool = False
+) -> Optional[Tuple[UUID, UUID]]:
     """
     Import a single bundle from S3.
     Assumes BundleImporter.import_from_xml is modified to return (Bundle, bundle_resources_id).
@@ -126,7 +133,10 @@ def import_s3_bundle(bucket: str, s3_key: str) -> Optional[Tuple[UUID, UUID]]:
 
         xml_content = xml_content_bytes.decode('utf-8')
         
-        importer_result = BundleImporter.import_from_xml(xml_content)
+        importer_result = BundleImporter.import_from_xml(
+            xml_content,
+            update_existing=update_existing,
+        )
 
         if not importer_result or not isinstance(importer_result, tuple) or len(importer_result) != 2:
             logger.error(f"{task_id}: FAILED - BundleImporter did not return expected (bundle, bundle_resources_id) tuple.")
@@ -161,7 +171,12 @@ def import_s3_bundle(bucket: str, s3_key: str) -> Optional[Tuple[UUID, UUID]]:
 
 # --- Refactored Bundle Group Import Task ---
 @db_task()
-def import_s3_bundles_for_collection(collection_id: Optional[UUID], bundle_keys: List[str], bucket: str) -> Tuple[Optional[UUID], List[Tuple[UUID, UUID]]]:
+def import_s3_bundles_for_collection(
+    collection_id: Optional[UUID],
+    bundle_keys: List[str],
+    bucket: str,
+    update_existing: bool = False,
+) -> Tuple[Optional[UUID], List[Tuple[UUID, UUID]]]:
     """
     Task to import a list of bundles for a collection ID.
     Collects (bundle_id, bundle_resources_id) pairs for successful imports.
@@ -207,7 +222,11 @@ def import_s3_bundles_for_collection(collection_id: Optional[UUID], bundle_keys:
         logger.info(f"{bundle_task_id}: Processing bundle {index+1}/{len(bundle_keys)} | S3 key: {bundle_key}")
         try:
             # Call single bundle import locally
-            bundle_result = import_s3_bundle.call_local(bucket=bucket, s3_key=bundle_key)
+            bundle_result = import_s3_bundle.call_local(
+                bucket=bucket,
+                s3_key=bundle_key,
+                update_existing=update_existing,
+            )
             
             if bundle_result and isinstance(bundle_result, tuple) and len(bundle_result) == 2:
                 bundle_id, bundle_resources_id = bundle_result
@@ -338,7 +357,7 @@ def map_collection_resources(collection_id: Optional[UUID], list_of_pairs: List[
 
 
 # --- Refactored Orchestration Function ---
-def process_s3_prefix(bucket: str = None, prefix: str = ''):
+def process_s3_prefix(bucket: str = None, prefix: str = '', update_existing: bool = False):
     """
     Finds S3 candidates locally and enqueues processing pipelines.
     Passes data explicitly between tasks.
@@ -396,13 +415,31 @@ def process_s3_prefix(bucket: str = None, prefix: str = ''):
 
             # --- Define Pipeline ---
             # Task 1: Import Collection -> returns collection_id
-            p = import_s3_collection.s(actual_bucket, coll_key)
+            if update_existing:
+                p = import_s3_collection.s(
+                    actual_bucket,
+                    coll_key,
+                    update_existing=True,
+                )
+            else:
+                p = import_s3_collection.s(actual_bucket, coll_key)
 
             # Task 2: Import Bundles -> takes (collection_id, bundle_keys, bucket), returns (collection_id, list_of_pairs)
-            p = p.then(import_s3_bundles_for_collection.s(
-                bundle_keys=associated_bundle_keys, 
-                bucket=actual_bucket
-            ))
+            if update_existing:
+                p = p.then(
+                    import_s3_bundles_for_collection.s(
+                        bundle_keys=associated_bundle_keys,
+                        bucket=actual_bucket,
+                        update_existing=True,
+                    )
+                )
+            else:
+                p = p.then(
+                    import_s3_bundles_for_collection.s(
+                        bundle_keys=associated_bundle_keys,
+                        bucket=actual_bucket,
+                    )
+                )
 
             # Task 3: Resolve Links -> Now accepts (collection_id, list_of_pairs), returns same
             p = p.then(resolve_collection_bundle_links_task.s())

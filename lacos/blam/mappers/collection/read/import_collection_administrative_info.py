@@ -36,6 +36,11 @@ def import_administrative_info(cmd_data: Any, collection: Collection) -> Collect
     # Create and populate the administrative info model with reference to collection
     admin_info = create_base_administrative_info(admin_info_schema, collection)
     
+    # Reset related objects to keep updates idempotent
+    admin_info.is_identical_to.clear()
+    admin_info.rights_holders.clear()
+    admin_info.licenses.clear()
+
     # Import related objects
     import_identical_resources(admin_info, admin_info_schema)
     import_licenses(admin_info, admin_info_schema)

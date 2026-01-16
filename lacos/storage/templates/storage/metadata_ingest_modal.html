@@ -6,8 +6,8 @@
 </div>
 {% endif %}
 
-    <p class="text-sm text-gray-600 mb-4">
-        Queue a background task that reads the metadata XML and stores it in the database.
+    <p class="text-sm text-base-content/70 mb-4">
+        Select a metadata XML to ingest. Enable reindex if you need to update existing records.
     </p>
 
 <form id="metadata-ingest-form"
@@ -47,23 +47,36 @@
                required />
         <label class="label">
             <span class="label-text-alt text-base-content/60">
-                Provide the path inside the selected bucket{% if object_type == 'folder' and initial_key %}, starting from folder <code>{{ initial_key|escape }}</code>{% endif %}.
+                Enter the S3 key inside the selected bucket.
+                {% if object_type == 'folder' and initial_key %}
+                <br />
+                Start from <code>{{ initial_key|escape }}</code>.
+                {% endif %}
+            </span>
+        </label>
+    </div>
+
+    <div class="form-control">
+        <label class="label cursor-pointer justify-start gap-3">
+            <input type="checkbox" name="update_existing" value="true" class="checkbox checkbox-sm" />
+            <span class="label-text">Reindex existing records</span>
+        </label>
+        <label class="label">
+            <span class="label-text-alt text-base-content/60">
+                Refresh metadata for records that already exist.
             </span>
         </label>
     </div>
 
     <input type="hidden" name="object_type" value="{{ object_type }}" />
 
-    <p class="text-xs text-base-content/60">
-        Source: {{ object_type|title }}{% if initial_key %} <code>{{ initial_key|escape }}</code>{% endif %}.
-    </p>
-
-    <p class="text-xs text-base-content/60">
-        Use preview to inspect which BLAM XML files will be imported before running the task.
-    </p>
+    <div class="text-xs text-base-content/60 flex flex-wrap gap-2">
+        <span>Source: {{ object_type|title }}{% if initial_key %} <code>{{ initial_key|escape }}</code>{% endif %}.</span>
+        <span>Preview shows the XMLs that will be imported.</span>
+    </div>
 
     <div id="metadata-ingest-preview" class="rounded-lg border border-dashed border-base-300 bg-base-200/30 p-3 text-sm text-base-content/70">
-        <p class="text-xs">Preview results will appear here.</p>
+        <p class="text-xs">Preview will appear here.</p>
     </div>
 
     <div class="modal-action">

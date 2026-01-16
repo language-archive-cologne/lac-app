@@ -88,18 +88,29 @@ def import_publication_info(cmd_data: Cmd, bundle: 'Bundle') -> Optional[BundleP
                 id_type_enum = getattr(identifier, 'identifier_type', None)
                 primary_identifier_type = _map_person_identifier_type(id_type_enum)
 
-    # Always create a new record for each bundle import
+    bundle_pub_info = BundlePublicationInfo.objects.filter(bundle=bundle).first()
     try:
-        bundle_pub_info = BundlePublicationInfo.objects.create(
-            publication_year=pub_year,
-            data_provider=data_provider,
-            identifier=primary_identifier, # Use extracted or empty string
-            identifier_type=primary_identifier_type, # Use extracted or empty/default string
-            bundle=bundle  # Set the bundle directly
-        )
+        if bundle_pub_info:
+            bundle_pub_info.publication_year = pub_year
+            bundle_pub_info.data_provider = data_provider
+            bundle_pub_info.identifier = primary_identifier
+            bundle_pub_info.identifier_type = primary_identifier_type
+            bundle_pub_info.save()
+        else:
+            bundle_pub_info = BundlePublicationInfo.objects.create(
+                publication_year=pub_year,
+                data_provider=data_provider,
+                identifier=primary_identifier,  # Use extracted or empty string
+                identifier_type=primary_identifier_type,  # Use extracted or empty/default string
+                bundle=bundle,  # Set the bundle directly
+            )
     except Exception as e:
-        logger.error(f"Failed to create BundlePublicationInfo: {e}", exc_info=True)
+        logger.error(f"Failed to create or update BundlePublicationInfo: {e}", exc_info=True)
         return None # Or re-raise error
+
+    # Reset related objects to keep updates idempotent
+    bundle_pub_info.creators.clear()
+    bundle_pub_info.contributors.clear()
 
     # Import creators (linking to the new bundle_pub_info)
     if hasattr(pub_info, 'bundle_creators') and pub_info.bundle_creators:

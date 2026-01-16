@@ -197,6 +197,7 @@ def ingest_metadata(request):
     pipeline_prefix = (payload.get('pipeline_prefix') or '').strip()
     preview_collection_count = int((payload.get('preview_collection_count') or '0').strip() or 0)
     preview_bundle_count = int((payload.get('preview_bundle_count') or '0').strip() or 0)
+    update_existing = _parse_bool(payload.get('update_existing'))
 
     if metadata_type not in {"collection", "bundle"}:
         error_message = "metadata_type must be 'collection' or 'bundle'"
@@ -224,7 +225,11 @@ def ingest_metadata(request):
                     "preview_bundle_count": preview_bundle_count,
                 },
             )
-            process_s3_prefix(bucket=bucket, prefix=pipeline_prefix)
+            process_s3_prefix(
+                bucket=bucket,
+                prefix=pipeline_prefix,
+                update_existing=update_existing,
+            )
             task = None
         elif metadata_type == "collection":
             # If s3_key is a folder path, use pipeline to import collection AND its bundles
@@ -242,11 +247,19 @@ def ingest_metadata(request):
                         "prefix": prefix,
                     },
                 )
-                process_s3_prefix(bucket=bucket, prefix=prefix)
+                process_s3_prefix(
+                    bucket=bucket,
+                    prefix=prefix,
+                    update_existing=update_existing,
+                )
                 task = None
             else:
                 # Direct XML file path provided - import just the collection
-                task = import_s3_collection(bucket=bucket, s3_key=s3_key)
+                task = import_s3_collection(
+                    bucket=bucket,
+                    s3_key=s3_key,
+                    update_existing=update_existing,
+                )
         else:
             # If s3_key is a folder path for bundle, form the proper OCFL XML path
             actual_s3_key = s3_key
@@ -267,7 +280,11 @@ def ingest_metadata(request):
                             "formed_xml_path": actual_s3_key,
                         },
                     )
-            task = import_s3_bundle(bucket=bucket, s3_key=actual_s3_key)
+            task = import_s3_bundle(
+                bucket=bucket,
+                s3_key=actual_s3_key,
+                update_existing=update_existing,
+            )
 
         task_id = getattr(task, "id", None)
 
@@ -280,6 +297,7 @@ def ingest_metadata(request):
                 "task_id": task_id,
                 "use_pipeline": use_pipeline,
                 "pipeline_prefix": pipeline_prefix if use_pipeline else None,
+                "update_existing": update_existing,
             },
         )
 
@@ -296,12 +314,15 @@ def ingest_metadata(request):
                     'pipeline_prefix': pipeline_prefix,
                     'preview_collection_count': preview_collection_count,
                     'preview_bundle_count': preview_bundle_count,
+                    'update_existing': update_existing,
                 },
             )
             if use_pipeline:
-                message = f"Collection ingest pipeline queued for prefix {pipeline_prefix or s3_key} in {bucket}."
+                verb = "reindex" if update_existing else "ingest"
+                message = f"Collection {verb} pipeline queued for prefix {pipeline_prefix or s3_key} in {bucket}."
             else:
-                message = f"Metadata ingest queued for {s3_key} (bucket {bucket})."
+                verb = "reindex" if update_existing else "ingest"
+                message = f"Metadata {verb} queued for {s3_key} (bucket {bucket})."
 
             response['HX-Trigger'] = json.dumps({
                 'showMessage': {
@@ -316,6 +337,7 @@ def ingest_metadata(request):
             "task_id": task_id,
             "used_pipeline": use_pipeline,
             "pipeline_prefix": pipeline_prefix,
+            "update_existing": update_existing,
         })
 
     except Exception as exc:
@@ -486,6 +508,12 @@ def _infer_pipeline_prefix(object_type: str, s3_key: str) -> str:
     return f"{parts[0]}/"
 
 
+def _parse_bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"true", "1", "yes", "on"}
+
+
 @login_required
 def preview_metadata_ingest(request):
     """Return a preview of the metadata ingest that would be enqueued."""
@@ -494,6 +522,7 @@ def preview_metadata_ingest(request):
     s3_key = (request.GET.get('s3_key') or '').strip()
     object_type = (request.GET.get('object_type') or 'file').strip().lower()
     metadata_type = (request.GET.get('metadata_type') or '').strip().lower()
+    update_existing = _parse_bool(request.GET.get('update_existing'))
 
     logger.info(
         "Preview metadata ingest requested",
@@ -502,6 +531,7 @@ def preview_metadata_ingest(request):
             "s3_key": s3_key,
             "object_type": object_type,
             "metadata_type": metadata_type,
+            "update_existing": update_existing,
         },
     )
 
@@ -510,6 +540,7 @@ def preview_metadata_ingest(request):
         's3_key': s3_key,
         'metadata_type': metadata_type,
         'object_type': object_type,
+        'update_existing': update_existing,
     }
 
     if not bucket or not s3_key:

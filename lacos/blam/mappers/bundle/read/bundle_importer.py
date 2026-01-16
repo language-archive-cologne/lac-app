@@ -43,7 +43,9 @@ class BundleImporter:
     
     @classmethod
     @transaction.atomic
-    def import_from_xml(cls, xml_content: str) -> Optional[Tuple[Bundle, Optional[uuid.UUID]]]:
+    def import_from_xml(
+        cls, xml_content: str, update_existing: bool = False
+    ) -> Optional[Tuple[Bundle, Optional[uuid.UUID]]]:
         """
         Imports XML content into Django models
         
@@ -64,22 +66,20 @@ class BundleImporter:
             # If we have an md_self_link, check if a bundle already exists
             existing_bundle = Bundle.objects.filter(identifier=md_self_link).first()
             if existing_bundle:
-                logger.info(f"Found existing bundle with identifier {md_self_link}, checking for BundleResources...")
-                # If bundle exists, try to find its BundleResources ID
-                existing_bundle_resources_id = None
-                try:
-                    # Assuming the reverse relation is 'resources' and it's a ForeignKey
-                    # Fetch the first related BundleResources and get its ID
-                    related_resources = existing_bundle.resources.first()
-                    if related_resources:
-                        existing_bundle_resources_id = related_resources.id
-                        logger.info(f"Found existing BundleResources ID {existing_bundle_resources_id} for bundle {md_self_link}")
-                    else:
-                         logger.warning(f"Existing bundle {md_self_link} found, but no associated BundleResources object found.")
-                except Exception as e:
-                    logger.error(f"Error fetching BundleResources for existing bundle {md_self_link}: {e}")
-                # Return existing bundle and potentially found resources ID
-                return (existing_bundle, existing_bundle_resources_id)
+                logger.info(
+                    "Found existing bundle with identifier %s",
+                    md_self_link,
+                )
+                existing_bundle_resources_id = cls._get_bundle_resources_id(existing_bundle)
+                if not update_existing:
+                    logger.info("Update mode disabled; returning without changes.")
+                    return (existing_bundle, existing_bundle_resources_id)
+                return cls._update_existing_bundle(
+                    existing_bundle,
+                    cmd_data,
+                    md_self_link,
+                    existing_bundle_resources_id,
+                )
         
         # No existing bundle found, create a new one
         bundle, bundle_resources_id = cls._import_cmd_to_models(cmd_data)
@@ -90,6 +90,67 @@ class BundleImporter:
             bundle.save(update_fields=['identifier'])
         
         return (bundle, bundle_resources_id)
+
+    @classmethod
+    def _get_bundle_resources_id(cls, bundle: Bundle) -> Optional[uuid.UUID]:
+        """Return the BundleResources ID if one exists for this bundle."""
+        try:
+            related_resources = bundle.resources.first()
+            if related_resources:
+                logger.info(
+                    "Found existing BundleResources ID %s for bundle %s",
+                    related_resources.id,
+                    bundle.identifier,
+                )
+                return related_resources.id
+            logger.warning(
+                "Existing bundle %s found, but no associated BundleResources object found.",
+                bundle.identifier,
+            )
+        except Exception as exc:
+            logger.error(
+                "Error fetching BundleResources for existing bundle %s: %s",
+                bundle.identifier,
+                exc,
+            )
+        return None
+
+    @classmethod
+    def _update_existing_bundle(
+        cls,
+        bundle: Bundle,
+        cmd_data: Cmd,
+        md_self_link: Optional[str],
+        existing_bundle_resources_id: Optional[uuid.UUID],
+    ) -> Tuple[Bundle, Optional[uuid.UUID]]:
+        """Update an existing bundle in place."""
+        try:
+            header = import_bundle_header(cmd_data, bundle)
+            if not header:
+                logger.error("Bundle update failed: Could not import BundleHeader.")
+                raise ValidationError("Bundle update failed due to missing header information.")
+
+            cls._import_general_info(cmd_data, bundle)
+            cls._import_publication_info(cmd_data, bundle)
+            cls._import_administrative_info(cmd_data, bundle)
+
+            bundle_struct_info = cls._import_structural_info(cmd_data, bundle)
+            bundle_resources_id = existing_bundle_resources_id
+            if bundle_struct_info and hasattr(bundle_struct_info, "bundle") and bundle_struct_info.bundle:
+                bundle_resources_id = cls._get_bundle_resources_id(bundle_struct_info.bundle)
+
+            if md_self_link and bundle.identifier != md_self_link:
+                bundle.identifier = md_self_link
+                bundle.save(update_fields=["identifier"])
+
+            logger.info(
+                "Bundle update completed for '%s'.",
+                md_self_link or bundle.identifier,
+            )
+            return (bundle, bundle_resources_id)
+        except Exception as exc:
+            logger.error("Error during bundle update: %s", exc, exc_info=True)
+            raise
     
     @classmethod
     def _create_bundle(cls, cmd_data: Cmd) -> Bundle:

@@ -37,6 +37,10 @@ def import_publication_info(cmd_data: Any, collection: Collection) -> Collection
     # Create and populate the publication info model
     publication_info = create_base_publication_info(publication_info_schema, collection)
     
+    # Reset related objects to keep updates idempotent
+    publication_info.creators.clear()
+    publication_info.contributors.clear()
+
     # Import creators
     import_creators(publication_info, publication_info_schema)
     

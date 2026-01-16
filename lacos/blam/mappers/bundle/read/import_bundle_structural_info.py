@@ -60,6 +60,9 @@ def import_structural_info(cmd_data: Cmd, collection_identifier: str, identifier
         is_member_of_collection=collection,
         bundle=bundle
     )
+
+    # Reset related objects to keep updates idempotent
+    bundle_struct_info.additional_metadata_files.clear()
     
     # Import optional components only if they exist
     if struct_info.bundle_additional_metadata_file:
@@ -146,6 +149,11 @@ def import_bundle_resources(
         # Create a new BundleResources if there was an error
         logger.debug(f"Attempting to create new BundleResources after error for bundle {bundle_struct_info.bundle.id}")
         bundle_resources = BundleResources.objects.create(bundle=bundle_struct_info.bundle)
+
+    # Reset related objects to keep updates idempotent
+    bundle_resources.bundle_media_resources.clear()
+    bundle_resources.bundle_written_resources.clear()
+    bundle_resources.bundle_other_resources.clear()
 
     # Ensure resources_data is not None before accessing attributes
     if not resources_data:

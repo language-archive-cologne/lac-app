@@ -7,6 +7,11 @@
 <input type="hidden" name="preview_collection_count" value="0">
 <input type="hidden" name="preview_bundle_count" value="0">
 {% else %}
+    {% if update_existing %}
+    <div class="alert alert-info mb-3">
+        <span>Update mode enabled: existing records will be refreshed.</span>
+    </div>
+    {% endif %}
     {% if should_use_pipeline %}
     <div class="alert alert-info mb-3">
         <span>

@@ -1,5 +1,11 @@
 {% if used_pipeline %}
-<h3 class="font-bold text-lg mb-2">Collection ingest pipeline queued</h3>
+<h3 class="font-bold text-lg mb-2">
+    {% if update_existing %}
+    Collection reindex pipeline queued
+    {% else %}
+    Collection ingest pipeline queued
+    {% endif %}
+</h3>
 
 <div class="alert alert-success mb-4">
     <span>
@@ -12,8 +18,19 @@
 <p class="text-sm text-gray-600 mb-4">
     Huey will import each XML and map related resources. Monitor the activity log for completion details.
 </p>
+{% if update_existing %}
+<p class="text-xs text-base-content/60 mb-4">
+    Update mode enabled: existing records will be refreshed.
+</p>
+{% endif %}
 {% else %}
-<h3 class="font-bold text-lg mb-2">Metadata ingest queued</h3>
+<h3 class="font-bold text-lg mb-2">
+    {% if update_existing %}
+    Metadata reindex queued
+    {% else %}
+    Metadata ingest queued
+    {% endif %}
+</h3>
 
 <div class="alert alert-success mb-4">
     <span>
@@ -25,6 +42,11 @@
 <p class="text-sm text-gray-600 mb-4">
     You will be notified in the activity log when the Huey task finishes processing this XML.
 </p>
+{% if update_existing %}
+<p class="text-xs text-base-content/60 mb-4">
+    Update mode enabled: existing records will be refreshed.
+</p>
+{% endif %}
 {% endif %}
 
 <div class="modal-action">

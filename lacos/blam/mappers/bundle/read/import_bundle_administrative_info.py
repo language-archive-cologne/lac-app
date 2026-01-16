@@ -39,24 +39,29 @@ def import_administrative_info(bundle_schema: Cmd, bundle: 'Bundle') -> BundleAd
     date_str = None
     if admin_info_schema.availability_date:
         date_str = f"{admin_info_schema.availability_date.year}-{admin_info_schema.availability_date.month:02d}-{admin_info_schema.availability_date.day:02d}"
-    
-    # Try to find an existing record with the same date and bundle
-    existing_records = BundleAdministrativeInfo.objects.filter(
-        availability_date=date_str,
-        bundle=bundle
-    )
-    
-    if existing_records.exists():
-        admin_info = existing_records.first()
+
+    admin_info = BundleAdministrativeInfo.objects.filter(bundle=bundle).first()
+
+    if admin_info:
+        if date_str:
+            admin_info.availability_date = date_str
+        if admin_info_schema.bundle_is_derivation_of:
+            admin_info.is_derivation_of = admin_info_schema.bundle_is_derivation_of
+        admin_info.save()
     else:
         # Create and populate the administrative info model
         admin_info = create_base_administrative_info(admin_info_schema, bundle)
-        
-        # Import related objects
-        import_identical_resources(admin_info, admin_info_schema)
-        import_licenses(admin_info, admin_info_schema)
-        import_rights_holders(admin_info, admin_info_schema)
-    
+
+    # Reset related objects to keep updates idempotent
+    admin_info.is_identical_to.clear()
+    admin_info.licenses.clear()
+    admin_info.rights_holders.clear()
+
+    # Import related objects
+    import_identical_resources(admin_info, admin_info_schema)
+    import_licenses(admin_info, admin_info_schema)
+    import_rights_holders(admin_info, admin_info_schema)
+
     return admin_info
 
 

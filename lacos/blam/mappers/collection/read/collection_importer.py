@@ -86,7 +86,7 @@ class CollectionImporter:
 
     @classmethod
     @transaction.atomic
-    def import_from_xml(cls, xml_content: str) -> Collection:
+    def import_from_xml(cls, xml_content: str, update_existing: bool = False) -> Collection:
         """Import a collection from XML content."""
         cmd_data = cls.validate_xml(xml_content)
 
@@ -97,13 +97,16 @@ class CollectionImporter:
             existing_collection = Collection.objects.filter(identifier=md_self_link).first()
             if existing_collection:
                 logger.info(
-                    "Found existing collection with identifier %s, returning without changes",
+                    "Found existing collection with identifier %s",
                     md_self_link,
                 )
                 if existing_collection.source_version != cmd_data.version:
                     existing_collection.source_version = cmd_data.version
                     existing_collection.save(update_fields=["source_version"])
-                return existing_collection
+                if not update_existing:
+                    logger.info("Update mode disabled; returning without changes.")
+                    return existing_collection
+                return cls._update_existing_collection(existing_collection, cmd_data)
 
         collection = cls._import_cmd_to_models(cmd_data)
 
@@ -120,6 +123,49 @@ class CollectionImporter:
             cmd_data.version,
         )
         return collection
+
+    @classmethod
+    def _update_existing_collection(
+        cls, collection: Collection, cmd_data: CollectionCmdAdapter
+    ) -> Collection:
+        """Update an existing collection in place."""
+        try:
+            cls._import_header(cmd_data, collection)
+            cls._import_general_info(cmd_data, collection)
+            cls._import_publication_info(cmd_data, collection)
+            cls._import_administrative_info(cmd_data, collection)
+            cls._import_structural_info(cmd_data, collection)
+            cls._import_license(cmd_data, collection)
+
+            repository = getattr(cmd_data.components, "blam_collection_repository_v1_0", None)
+            if repository and getattr(repository, "project_info", None):
+                cls._import_project_info(cmd_data, collection)
+                logger.info("Project info found and imported for update")
+            else:
+                logger.info("No project info found in XML - this is optional")
+
+            update_fields = []
+            md_self_link = None
+            if cmd_data.header and getattr(cmd_data.header, "md_self_link", None):
+                md_self_link = cmd_data.header.md_self_link.value
+            if md_self_link and collection.identifier != md_self_link:
+                collection.identifier = md_self_link
+                update_fields.append("identifier")
+            if collection.source_version != cmd_data.version:
+                collection.source_version = cmd_data.version
+                update_fields.append("source_version")
+            if update_fields:
+                collection.save(update_fields=update_fields)
+
+            logger.info(
+                "Collection update completed for '%s' (version %s).",
+                md_self_link or collection.identifier,
+                cmd_data.version,
+            )
+            return collection
+        except Exception as exc:  # pragma: no cover - re-raise for transaction rollback
+            logger.error("Error during collection update: %s", exc, exc_info=True)
+            raise
 
     @classmethod
     def _import_cmd_to_models(cls, cmd_data: CollectionCmdAdapter) -> Collection:
