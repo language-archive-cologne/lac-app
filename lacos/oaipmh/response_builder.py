@@ -25,6 +25,10 @@ DEFAULT_SCHEMA_LOCATION = (
     " http://www.openarchives.org/OAI/2.0/OAI-PMH.xsd"
 )
 
+# Register namespace prefixes for ElementTree serialization
+ET.register_namespace("", OAI_NS)
+ET.register_namespace("xsi", XSI_NS)
+
 
 def _now_utc() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -114,9 +118,17 @@ def render_list_records(
     records: Iterable[dict],
     resumption_token: Optional[str] = None,
 ) -> HttpResponse:
+    # Check if any metadata is a string (needs string-based response building)
+    records_list = list(records)
+    has_string_metadata = any(isinstance(r.get("metadata"), str) for r in records_list)
+
+    if has_string_metadata:
+        return _render_list_records_with_string_metadata(request, records_list, resumption_token)
+
+    # Standard ElementTree-based approach for Element metadata
     envelope = _build_envelope(request, "ListRecords")
     container = ET.SubElement(envelope, "ListRecords")
-    for record in records:
+    for record in records_list:
         record_el = ET.SubElement(container, "record")
         header_el = ET.SubElement(record_el, "header")
         ET.SubElement(header_el, "identifier").text = record["identifier"]
@@ -129,6 +141,56 @@ def render_list_records(
         token_el = ET.SubElement(container, "resumptionToken")
         token_el.text = resumption_token
     return _as_http_response(envelope)
+
+
+def _render_list_records_with_string_metadata(
+    request: HttpRequest,
+    records: list[dict],
+    resumption_token: Optional[str] = None,
+) -> HttpResponse:
+    """Build ListRecords response preserving metadata XML namespace declarations."""
+    base_uri = request.build_absolute_uri(REPO_BASE_ENDPOINT)
+    response_date = _now_utc()
+
+    records_xml = []
+    for record in records:
+        set_specs = "".join(f"<setSpec>{s}</setSpec>" for s in record.get("sets", []))
+        metadata = record["metadata"]
+        if isinstance(metadata, ET.Element):
+            metadata = ET.tostring(metadata, encoding="unicode")
+
+        records_xml.append(
+            f'<record><header>'
+            f'<identifier>{_escape_xml(record["identifier"])}</identifier>'
+            f'<datestamp>{record["datestamp"]}</datestamp>'
+            f'{set_specs}'
+            f'</header><metadata>{metadata}</metadata></record>'
+        )
+
+    token_xml = ""
+    if resumption_token:
+        token_xml = f"<resumptionToken>{_escape_xml(resumption_token)}</resumptionToken>"
+
+    xml = (
+        f'<?xml version="1.0" encoding="UTF-8"?>'
+        f'<OAI-PMH xmlns="{OAI_NS}" xmlns:xsi="{XSI_NS}" '
+        f'xsi:schemaLocation="{DEFAULT_SCHEMA_LOCATION}">'
+        f'<responseDate>{response_date}</responseDate>'
+        f'<request verb="ListRecords">{_escape_xml(base_uri)}</request>'
+        f'<ListRecords>{"".join(records_xml)}{token_xml}</ListRecords>'
+        f'</OAI-PMH>'
+    )
+    return HttpResponse(xml.encode("utf-8"), content_type="text/xml; charset=utf-8")
+
+
+def _escape_xml(text: str) -> str:
+    """Escape XML special characters."""
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
 
 
 def render_list_sets(request: HttpRequest, sets: Iterable[dict[str, str]]) -> HttpResponse:

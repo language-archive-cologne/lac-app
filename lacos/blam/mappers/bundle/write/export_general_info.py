@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, Optional
+from typing import Optional
 from django.db.models import QuerySet
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
 from blam_schemas.bundle.blam_bundle_repository_v1_0 import (
@@ -18,6 +18,7 @@ from lacos.blam.models.bundle.bundle_general_info import (
 
 # Type aliases for nested classes from the schema
 BundleGeneralInfoType = Cmd.Components.BlamBundleRepositoryV10.BundleGeneralInfo
+BundleIdType = Cmd.Components.BlamBundleRepositoryV10.BundleGeneralInfo.BundleId
 BundleLocationType = Cmd.Components.BlamBundleRepositoryV10.BundleGeneralInfo.BundleLocation
 BundleKeywordsType = Cmd.Components.BlamBundleRepositoryV10.BundleGeneralInfo.BundleKeywords
 BundleObjectLanguagesType = Cmd.Components.BlamBundleRepositoryV10.BundleGeneralInfo.BundleObjectLanguages
@@ -27,52 +28,37 @@ ObjectLanguageTaxonomyType = Cmd.Components.BlamBundleRepositoryV10.BundleGenera
 
 
 def export_general_info(general_info: BundleGeneralInfo, cmd_data: Cmd) -> None:
-    """
-    Export bundle general information from Django models to BLAM schema.
-    
-    Args:
-        general_info: The BundleGeneralInfo instance to export
-        cmd_data: The BLAM bundle repository schema data to populate
-    """
-    # Create the bundle general info structure
+    """Export bundle general information from Django models to BLAM schema."""
     bundle_info = BundleGeneralInfoType()
-    
+
     # Set basic fields
     bundle_info.bundle_display_title = general_info.display_title
     bundle_info.bundle_description = general_info.description
     bundle_info.bundle_version = general_info.version
-    
+
     # Set bundle ID
     bundle_info.bundle_id = [create_bundle_id(general_info)]
-    
+
     # Set recording date
-    bundle_info.bundle_recording_date = create_recording_date(general_info.bundle_recording_date)
-    
+    bundle_info.bundle_recording_date = create_recording_date(general_info.recording_date)
+
     # Set location
-    bundle_info.bundle_location = export_bundle_location(general_info.bundle_location)
-    
+    bundle_info.bundle_location = export_bundle_location(general_info.location)
+
     # Set keywords if present
-    if general_info.bundle_keywords.exists():
-        bundle_info.bundle_keywords = export_keywords(general_info.bundle_keywords.all())
-    
+    if general_info.keywords.exists():
+        bundle_info.bundle_keywords = export_keywords(general_info.keywords.all())
+
     # Set object languages
-    bundle_info.bundle_object_languages = export_object_languages(general_info.bundleobjectlanguage_set.all())
-    
+    bundle_info.bundle_object_languages = export_object_languages(general_info.object_languages.all())
+
     # Assign to cmd_data
     cmd_data.components.blam_bundle_repository_v1_0.bundle_general_info = bundle_info
 
 
-def create_bundle_id(general_info: BundleGeneralInfo) -> Any:
-    """
-    Create a bundle ID object from the model.
-    
-    Args:
-        general_info: The BundleGeneralInfo instance
-        
-    Returns:
-        A bundle ID object for the schema
-    """
-    bundle_id = Any()  # This would be the appropriate schema class in practice
+def create_bundle_id(general_info: BundleGeneralInfo) -> BundleIdType:
+    """Create a bundle ID object from the model."""
+    bundle_id = BundleIdType()
     bundle_id.value = general_info.id_value
     bundle_id.identifier_type = map_to_schema_identifier_type(general_info.id_type)
     return bundle_id
@@ -97,18 +83,14 @@ def map_to_schema_identifier_type(id_type: str) -> BundleIdIdentifierType:
     return mapping.get(id_type, BundleIdIdentifierType.DOI)
 
 
-def create_recording_date(date_str: Optional[str]) -> BundleRecordingDateType:
-    """
-    Create a recording date object for the schema.
-    
-    Args:
-        date_str: The date string from the model or None
-        
-    Returns:
-        A recording date object for the schema
-    """
+def create_recording_date(date_value) -> BundleRecordingDateType:
+    """Create a recording date object for the schema."""
     recording_date = BundleRecordingDateType()
-    recording_date.value = "Unknown" if date_str is None else date_str
+    if date_value is None:
+        recording_date.value = "Unknown"
+    else:
+        # Convert date object to ISO format string
+        recording_date.value = date_value.isoformat() if hasattr(date_value, 'isoformat') else str(date_value)
     return recording_date
 
 
@@ -214,7 +196,7 @@ def export_object_language(language: BundleObjectLanguage) -> BundleObjectLangua
     
     # Add taxonomy if present
     try:
-        taxonomy = language.taxonomy
+        taxonomy = language.bundle_object_language_taxonomy
         lang_data.object_language_taxonomy = export_language_taxonomy(taxonomy)
     except BundleObjectLanguageTaxonomy.DoesNotExist:
         pass

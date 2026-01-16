@@ -89,33 +89,19 @@ def create_access_type(administrative_info: BundleAdministrativeInfo) -> AccessT
 
 
 def map_to_schema_access_type(access_type: str) -> str:
-    """
-    Map model access type to schema access type.
-    
-    Args:
-        access_type: The access type from the model
-        
-    Returns:
-        The corresponding schema access type value
-    """
+    """Map model access type to schema access type."""
     mapping = {
         AccessTypeChoices.OPEN.value: "open",
-        AccessTypeChoices.RESTRICTED.value: "restricted",
-        AccessTypeChoices.CLOSED.value: "closed",
+        AccessTypeChoices.REGISTRATION_REQUIRED.value: "registration-required",
+        AccessTypeChoices.REQUEST_REQUIRED.value: "request-required",
     }
     return mapping.get(access_type, "open")
 
 
-def create_availability_date(availability_date: date) -> XmlDate:
-    """
-    Create an availability date object for the schema.
-    
-    Args:
-        availability_date: The date from the model
-        
-    Returns:
-        An XmlDate object for the schema
-    """
+def create_availability_date(availability_date: Optional[date]) -> Optional[XmlDate]:
+    """Create an availability date object for the schema."""
+    if availability_date is None:
+        return None
     return XmlDate.from_date(availability_date)
 
 
@@ -159,39 +145,36 @@ def export_rights_holder(rights_holder: BundleRightsHolder) -> RightsHolderType:
 
 
 def export_rights_holder_identifier(identifier: BundleRightsHolderIdentifier) -> RightsHolderIdentifierType:
-    """
-    Export a rights holder identifier to schema format.
-    
-    Args:
-        identifier: The BundleRightsHolderIdentifier instance
-        
-    Returns:
-        A rights holder identifier object for the schema
-    """
+    """Export a rights holder identifier to schema format."""
     identifier_data = RightsHolderIdentifierType()
-    identifier_data.value = identifier.value
-    
-    # Determine identifier type based on the URL
-    identifier_data.identifier_type = determine_identifier_type(identifier.value)
-    
+    identifier_data.value = identifier.identifier
+
+    # Use identifier_type from model if present, otherwise determine from value
+    if identifier.identifier_type:
+        identifier_data.identifier_type = _map_rights_holder_identifier_type(identifier.identifier_type)
+    else:
+        identifier_data.identifier_type = determine_identifier_type(identifier.identifier)
+
     return identifier_data
 
 
-def determine_identifier_type(url: str) -> RightsHolderIdentifierIdentifierType:
-    """
-    Determine the identifier type based on the URL.
-    
-    Args:
-        url: The identifier URL
-        
-    Returns:
-        The corresponding identifier type enum value
-    """
-    if "orcid.org" in url.lower():
+def _map_rights_holder_identifier_type(id_type: str) -> RightsHolderIdentifierIdentifierType:
+    """Map model identifier type to schema enum."""
+    mapping = {
+        'ORCID': RightsHolderIdentifierIdentifierType.ORCID,
+        'ISNI': RightsHolderIdentifierIdentifierType.ISNI,
+        'EMAIL': RightsHolderIdentifierIdentifierType.EMAIL,
+        'OTHER': RightsHolderIdentifierIdentifierType.OTHER,
+    }
+    return mapping.get(id_type, RightsHolderIdentifierIdentifierType.OTHER)
+
+
+def determine_identifier_type(value: str) -> RightsHolderIdentifierIdentifierType:
+    """Determine the identifier type based on the identifier value."""
+    if "orcid.org" in value.lower():
         return RightsHolderIdentifierIdentifierType.ORCID
-    elif "isni.org" in url.lower():
+    elif "isni.org" in value.lower():
         return RightsHolderIdentifierIdentifierType.ISNI
-    elif "@" in url:
+    elif "@" in value:
         return RightsHolderIdentifierIdentifierType.EMAIL
-    else:
-        return RightsHolderIdentifierIdentifierType.OTHER
+    return RightsHolderIdentifierIdentifierType.OTHER

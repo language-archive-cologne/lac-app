@@ -15,6 +15,11 @@ REPO_BASE_ENDPOINT = "/oai/"
 # Actual field mappings are supplied by lacos.oaipmh.mappings.
 SUPPORTED_METADATA_FORMATS = (
     {
+        "metadata_prefix": "blam",
+        "schema": "https://infra.clarin.eu/CMDI/1.x/xsd/cmd-component.xsd",
+        "namespace": "http://www.clarin.eu/cmd/",
+    },
+    {
         "metadata_prefix": "oai_dc",
         "schema": "http://www.openarchives.org/OAI/2.0/oai_dc.xsd",
         "namespace": "http://www.openarchives.org/OAI/2.0/oai_dc/",
@@ -36,4 +41,4 @@ SUPPORTED_SETS = {
     "bundles": "Bundles",
 }
 
-DEFAULT_PAGE_SIZE = 100
+DEFAULT_PAGE_SIZE = 10

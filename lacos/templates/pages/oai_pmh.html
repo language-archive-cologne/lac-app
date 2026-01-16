@@ -66,17 +66,25 @@
       <p class="text-sm text-base-content/70 mb-6">{% translate "Retrieve header records by metadata format." %}</p>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
+          <thead>
+            <tr class="text-base-content/60">
+              <th class="py-2 text-left font-medium">{% translate "Format" %}</th>
+              <th class="py-2 text-right font-medium">{% translate "Collections" %}</th>
+              <th class="py-2 text-right font-medium">{% translate "Bundles" %}</th>
+            </tr>
+          </thead>
           <tbody class="divide-y divide-base-300">
             {% for format in list_identifiers_links %}
             <tr>
-              <td class="py-3 pr-6 font-mono font-medium text-base-content">{{ format.metadata_prefix }}</td>
-              <td class="py-3">
-                <div class="flex gap-4">
-                  {% for link in format.links %}
-                  <a href="{{ link.href }}" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">{{ link.label }}</a>
-                  {% endfor %}
-                </div>
+              <td class="py-3 font-mono font-medium text-base-content">{{ format.metadata_prefix }}</td>
+              {% for link in format.links %}
+              <td class="py-3 text-right">
+                <a href="{{ link.href }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-primary hover:underline">
+                  {% translate "View" %}
+                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                </a>
               </td>
+              {% endfor %}
             </tr>
             {% endfor %}
           </tbody>
@@ -86,20 +94,28 @@
 
     <!-- ListRecords Content -->
     <div class="hidden group-has-[#tab-records:checked]:block p-6">
-      <p class="text-sm text-base-content/70 mb-6">{% translate "Retrieve full metadata records. Responses can be large." %}</p>
+      <p class="text-sm text-base-content/70 mb-6">{% translate "Retrieve full metadata records. Paginated to 10 records per request." %}</p>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
+          <thead>
+            <tr class="text-base-content/60">
+              <th class="py-2 text-left font-medium">{% translate "Format" %}</th>
+              <th class="py-2 text-right font-medium">{% translate "Collections" %}</th>
+              <th class="py-2 text-right font-medium">{% translate "Bundles" %}</th>
+            </tr>
+          </thead>
           <tbody class="divide-y divide-base-300">
             {% for format in list_records_links %}
             <tr>
-              <td class="py-3 pr-6 font-mono font-medium text-base-content">{{ format.metadata_prefix }}</td>
-              <td class="py-3">
-                <div class="flex gap-4">
-                  {% for link in format.links %}
-                  <a href="{{ link.href }}" target="_blank" rel="noopener noreferrer" class="text-secondary hover:underline">{{ link.label }}</a>
-                  {% endfor %}
-                </div>
+              <td class="py-3 font-mono font-medium text-base-content">{{ format.metadata_prefix }}</td>
+              {% for link in format.links %}
+              <td class="py-3 text-right">
+                <a href="{{ link.href }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-secondary hover:underline">
+                  {% translate "View" %}
+                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                </a>
               </td>
+              {% endfor %}
             </tr>
             {% endfor %}
           </tbody>

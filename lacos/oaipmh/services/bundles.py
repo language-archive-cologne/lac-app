@@ -143,7 +143,9 @@ def _build_metadata(bundle: Bundle) -> BundleRecord:
     data.setdefault("LicenseIdentifier", [])
     data.setdefault("RightsHolder", [])
 
+    # Use CollectionID for DC compatibility, BundleID for BLAM detection
     data["CollectionID"] = bundle.identifier
+    data["BundleID"] = bundle.identifier
 
     return BundleRecord(data)
 
