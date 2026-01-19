@@ -81,11 +81,10 @@ else:
 # ------------------------------------------------------------------------------
 if SAML_LOGIN_ENABLED:
     SAML_CONFIG = dict(SAML_CONFIG)
-    SAML_CONFIG["key_file"] = env(
-        "SAML_SP_KEY_FILE",
-        default="/etc/shibboleth/sp-key.pem",
-    )
-    SAML_CONFIG["cert_file"] = env(
-        "SAML_SP_CERT_FILE",
-        default="/etc/shibboleth/sp-cert.pem",
-    )
+    _saml_key_file = env("SAML_SP_KEY_FILE", default="/etc/shibboleth/sp-key.pem")
+    _saml_cert_file = env("SAML_SP_CERT_FILE", default="/etc/shibboleth/sp-cert.pem")
+    SAML_CONFIG["key_file"] = _saml_key_file
+    SAML_CONFIG["cert_file"] = _saml_cert_file
+    SAML_CONFIG["encryption_keypairs"] = [
+        {"key_file": _saml_key_file, "cert_file": _saml_cert_file}
+    ]
