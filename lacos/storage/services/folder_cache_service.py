@@ -144,3 +144,7 @@ class FolderStructureCacheService:
                 hit=True,
                 metadata={"batch": True},
             )
+
+    def delete(self, bucket_name: str, folder_path: Optional[str] = None) -> None:
+        """Alias for invalidate() for backwards compatibility."""
+        self.invalidate(bucket_name, folder_path)
