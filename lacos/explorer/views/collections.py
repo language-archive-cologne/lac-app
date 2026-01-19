@@ -147,7 +147,7 @@ class CollectionListView(ListView):
             language_spotlight = list(languages_qs.order_by(
                 '-collections_count',
                 'name',
-            )[:12])
+            ))
             language_index = list(languages_qs.order_by('name'))
             for language in language_spotlight + language_index:
                 entry = lookup_glottolog_entry(

@@ -17,6 +17,28 @@
       <!-- Collections Map -->
       <div class="mb-4 rounded-xl shadow-sm border border-base-300 overflow-hidden relative">
         <div id="collections-map" style="height: 500px;"></div>
+        <style>
+          #collections-map .collection-marker {
+            width: 24px;
+            height: 36px;
+            color: #1d4ed8;
+            filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+            transition: color 150ms ease, opacity 150ms ease;
+          }
+          #collections-map .collection-marker--match {
+            color: #f97316;
+            opacity: 1;
+          }
+          #collections-map .collection-marker--dim {
+            color: #1d4ed8;
+            opacity: 0.35;
+          }
+          #collections-map .collection-marker svg {
+            display: block;
+            width: 100%;
+            height: 100%;
+          }
+        </style>
         <script id="collections-markers" type="application/json">{{ map_markers_json|safe }}</script>
         <button id="recenter-btn"
                 class="absolute top-2 right-12 z-10 bg-base-100 hover:bg-base-200 border border-base-300 rounded-md p-1.5 shadow-sm transition-colors"
@@ -84,7 +106,11 @@
         const popup = new maplibregl.Popup({ offset: 25 })
           .setHTML('<a href="' + m.url + '" class="font-medium hover:underline">' + m.title + '</a>');
 
-        const marker = new maplibregl.Marker()
+        const element = document.createElement('div');
+        element.className = 'collection-marker';
+        element.innerHTML = '<svg viewBox="0 0 24 36" aria-hidden="true" role="presentation" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C6.477 0 2 4.477 2 10c0 7.466 10 26 10 26s10-18.534 10-26C22 4.477 17.523 0 12 0zm0 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10z" fill="currentColor"/></svg>';
+
+        const marker = new maplibregl.Marker({ element: element, anchor: 'bottom' })
           .setLngLat([m.lng, m.lat])
           .setPopup(popup)
           .addTo(map);
@@ -121,13 +147,8 @@
         const element = marker.getElement();
         const isMatch = activeKey && keys.includes(activeKey);
 
-        if (activeKey) {
-          element.style.color = isMatch ? '#f97316' : '#1d4ed8';
-          element.style.opacity = isMatch ? '1' : '0.35';
-        } else {
-          element.style.color = '#1d4ed8';
-          element.style.opacity = '1';
-        }
+        element.classList.toggle('collection-marker--match', Boolean(activeKey && isMatch));
+        element.classList.toggle('collection-marker--dim', Boolean(activeKey && !isMatch));
 
         bounds.extend([data.lng, data.lat]);
         if (isMatch) {
@@ -145,10 +166,21 @@
 
     window.initCollectionsMap();
 
-    document.body.addEventListener('htmx:afterSwap', function(event) {
-      if (event.target && event.target.id === 'collection-language-shell') {
+    function refreshCollectionsMap() {
+      if (typeof window.updateCollectionsMap === 'function') {
         window.updateCollectionsMap();
       }
+    }
+
+    document.body.addEventListener('htmx:afterSwap', function(event) {
+      const target = event.detail && event.detail.target ? event.detail.target : event.target;
+      if (target && target.id === 'collection-language-shell') {
+        refreshCollectionsMap();
+      }
+    });
+
+    document.body.addEventListener('htmx:historyRestore', function() {
+      refreshCollectionsMap();
     });
   </script>
 {% endblock explorer_content %}
