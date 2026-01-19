@@ -184,37 +184,83 @@
           </svg>
           {% translate "Additional Metadata" %}
         </h2>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div class="space-y-3">
           {% for file in additional_metadata_files %}
-            <a href="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=file.file_pid %}"
-               class="group flex items-center gap-3 p-4 rounded-xl bg-gradient-to-br from-base-200/50 to-base-200 border border-base-300 hover:border-primary/50 hover:shadow-md transition-all duration-200">
-              <div class="flex-shrink-0 p-2 rounded-lg bg-base-100 group-hover:bg-primary/10 transition-colors">
-                {% if file.detected_media_type == 'pdf' %}
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+            <div class="flex items-center justify-between p-4 rounded-xl bg-gradient-to-br from-base-200/50 to-base-200 border border-base-300 hover:border-primary/30 transition-all duration-200">
+              <div class="flex items-center gap-3 flex-1 min-w-0">
+                <div class="flex-shrink-0 p-2 rounded-lg bg-base-100">
+                  {% if file.detected_media_type == 'audio' %}
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                    </svg>
+                  {% elif file.detected_media_type == 'video' %}
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  {% elif file.detected_media_type == 'pdf' %}
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                  {% elif file.detected_media_type == 'image' %}
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-info" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  {% else %}
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-base-content/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  {% endif %}
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-medium text-base-content truncate">{{ file.file_name }}</p>
+                  <p class="text-xs text-base-content/60">{{ file.mime_type }}</p>
+                  {% if file.file_description %}
+                    <p class="text-xs text-base-content/70 mt-1 line-clamp-2">{{ file.file_description }}</p>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="flex items-center gap-2 flex-shrink-0 ml-4">
+                <!-- Download button -->
+                <a href="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=file.file_pid %}?action=download"
+                   class="btn btn-primary btn-sm"
+                   target="_blank">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
-                {% elif file.detected_media_type == 'image' %}
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                {% else %}
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-info" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
+                  <span class="hidden sm:inline ml-1">{% translate "Download" %}</span>
+                </a>
+
+                <!-- Play button for audio/video -->
+                {% if file|is_media_type:"audio" or file|is_media_type:"video" %}
+                  <a href="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=file.file_pid %}?action=play"
+                     hx-get="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=file.file_pid %}?action=play"
+                     hx-target="#resource-modal-content"
+                     hx-swap="innerHTML"
+                     hx-push-url="false"
+                     class="btn btn-success btn-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span class="hidden sm:inline ml-1">{% translate "Play" %}</span>
+                  </a>
+                {% elif file|is_media_type:"image" or file|is_media_type:"pdf" %}
+                  <!-- View button for images and PDFs -->
+                  <a href="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=file.file_pid %}?action=view"
+                     hx-get="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=file.file_pid %}?action=view"
+                     hx-target="#resource-modal-content"
+                     hx-swap="innerHTML"
+                     hx-push-url="false"
+                     class="btn btn-secondary btn-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    <span class="hidden sm:inline ml-1">{% translate "View" %}</span>
+                  </a>
                 {% endif %}
               </div>
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium text-base-content truncate group-hover:text-primary transition-colors">{{ file.file_name }}</p>
-                {% if file.file_description %}
-                  <p class="text-xs text-base-content/60 truncate mt-0.5">{{ file.file_description }}</p>
-                {% endif %}
-              </div>
-              <div class="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-              </div>
-            </a>
+            </div>
           {% endfor %}
         </div>
       </div>
