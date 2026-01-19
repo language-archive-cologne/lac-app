@@ -25,6 +25,7 @@ services:
       - redis
     volumes:
       - .:/app:z
+      - /etc/shibboleth:/etc/shibboleth:ro
     env_file:
       - ./.envs/.dev/.django
       - ./.envs/.dev/.postgres
@@ -99,6 +100,7 @@ services:
       - redis
     volumes:
       - .:/app:z
+      - /etc/shibboleth:/etc/shibboleth:ro
     env_file:
       - ./.envs/.dev/.django
       - ./.envs/.dev/.postgres
