@@ -76,3 +76,16 @@ else:
     }
     MEDIA_URL = "/media/"
     STATIC_URL = "/static/"
+
+# SAML defaults for dev
+# ------------------------------------------------------------------------------
+if SAML_LOGIN_ENABLED:
+    SAML_CONFIG = dict(SAML_CONFIG)
+    SAML_CONFIG["key_file"] = env(
+        "SAML_SP_KEY_FILE",
+        default="/etc/shibboleth/sp-key.pem",
+    )
+    SAML_CONFIG["cert_file"] = env(
+        "SAML_SP_CERT_FILE",
+        default="/etc/shibboleth/sp-cert.pem",
+    )
