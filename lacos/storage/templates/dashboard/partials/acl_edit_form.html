@@ -3,7 +3,7 @@
   action="{% url 'storage:acl_update_permission' %}"
   hx-post="{% url 'storage:acl_update_permission' %}"
   hx-target="#acl-records-table"
-  hx-swap="innerHTML"
+  hx-swap="outerHTML"
   class="space-y-4"
 >
   {% csrf_token %}

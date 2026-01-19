@@ -5,13 +5,23 @@
     <div class="space-y-1">
       <span class="text-xs font-semibold uppercase tracking-widest text-base-content/60">{% translate "Collections" %}</span>
       <p class="text-sm text-base-content/70">{% translate "Browse archive metadata and access collection details." %}</p>
+      <p class="text-xs text-base-content/60">
+        {% blocktrans with collections=stats.collections_count languages=stats.languages_count %}
+          Browsing <strong class="text-base-content">{{ collections }}</strong> collections across <strong class="text-base-content">{{ languages }}</strong> languages
+        {% endblocktrans %}
+      </p>
       {% if language_filter %}
         <div class="flex items-center gap-2 text-xs text-base-content/60">
           <span class="rounded-full border border-base-300 bg-base-100 px-2 py-0.5 font-semibold uppercase tracking-widest">
             {% translate "Language" %}
           </span>
-          <span class="text-base-content/70">{{ language_filter }}</span>
-          <a href="{% url 'explorer:collection_list' %}" class="text-primary hover:underline">{% translate "Clear" %}</a>
+          <span class="text-base-content/70">
+            {% if selected_language %}
+              {{ selected_language.name }}{% if selected_language.iso_639_3_code %} [{{ selected_language.iso_639_3_code }}]{% endif %}
+            {% else %}
+              {{ language_filter }}
+            {% endif %}
+          </span>
         </div>
       {% endif %}
     </div>

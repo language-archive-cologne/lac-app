@@ -1,11 +1,10 @@
 {% load i18n %}
 <div class="rounded-2xl border border-base-300 bg-base-100 shadow-sm">
-  <div class="px-6 py-5 border-b border-base-200 flex items-center justify-between gap-3">
+  <div class="px-6 py-5 border-b border-base-200">
     <div class="space-y-1">
       <span class="text-xs font-semibold uppercase tracking-widest text-base-content/60">{% translate "Language Spotlight" %}</span>
       <p class="text-sm text-base-content/70">{% translate "Explore collections by language focus." %}</p>
     </div>
-    <span class="text-xs text-base-content/50">{% translate "Glottolog" %}</span>
   </div>
   <div class="px-6 py-5 space-y-4">
     <div class="flex flex-wrap gap-2">
@@ -61,7 +60,7 @@
            hx-target="#collection-language-shell"
            hx-swap="outerHTML"
            hx-push-url="true"
-           class="text-primary hover:underline">{% translate "Clear language filter" %}</a>
+           class="btn btn-ghost btn-xs">{% translate "Clear language filter" %}</a>
       </div>
     {% endif %}
     <details class="collapse collapse-arrow border border-base-200 bg-base-200/40">

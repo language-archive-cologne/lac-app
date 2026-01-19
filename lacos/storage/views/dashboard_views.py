@@ -158,9 +158,11 @@ def _build_acl_table_context(request, scope: str) -> dict[str, object]:
     perms = ACLPermissions.objects.filter(content_type=content_type).select_related("content_type")
 
     rows = _build_acl_table_rows(model, perms, scope)
+    total_count = len(rows)
     orphan_count = sum(1 for row in rows if not row["object_exists"])
     missing_acl_count = sum(1 for row in rows if row["object_exists"] and not row["has_permission"])
     missing_object_count = sum(1 for row in rows if not row["object_exists"])
+    has_acl_count = sum(1 for row in rows if row["has_permission"])
 
     search_term = (request.GET.get("q") or "").strip()
     status_filter = request.GET.get("status") or "all"
@@ -207,6 +209,7 @@ def _build_acl_table_context(request, scope: str) -> dict[str, object]:
 
     rows.sort(key=sort_key, reverse=(direction == "desc"))
 
+    filtered_count = len(rows)
     page_size = getattr(settings, "STORAGE_ACL_TABLE_PAGE_SIZE", 25)
     paginator = Paginator(rows, page_size)
     page_number = request.GET.get("page") or 1
@@ -241,6 +244,9 @@ def _build_acl_table_context(request, scope: str) -> dict[str, object]:
         "orphan_count": orphan_count,
         "missing_acl_count": missing_acl_count,
         "missing_object_count": missing_object_count,
+        "has_acl_count": has_acl_count,
+        "total_count": total_count,
+        "filtered_count": filtered_count,
         "search_term": search_term,
         "status_filter": status_filter,
         "access_filter": access_filter,

@@ -1,26 +1,7 @@
 {% load i18n %}
-<div id="collection-language-shell" class="space-y-8">
+<div id="collection-language-shell" class="space-y-6">
   <div id="language-filter-state" class="hidden" data-language-filter="{{ language_filter|default:''|escapejs }}"></div>
   {% include "explorer/partials/language_focus.html" %}
-
-  <div class="space-y-2">
-    <p class="text-sm text-base-content/60">
-      {% blocktrans with collections=stats.collections_count languages=stats.languages_count %}
-        Browsing <strong class="text-base-content">{{ collections }}</strong> collections across <strong class="text-base-content">{{ languages }}</strong> languages
-      {% endblocktrans %}
-    </p>
-    {% if language_filter %}
-      <p class="text-sm text-base-content/60">
-        {% translate "Language focus:" %} <span class="text-base-content font-semibold">
-          {% if selected_language %}
-            {{ selected_language.name }}{% if selected_language.iso_639_3_code %} [{{ selected_language.iso_639_3_code }}]{% endif %}
-          {% else %}
-            {{ language_filter }}
-          {% endif %}
-        </span>
-      </p>
-    {% endif %}
-  </div>
 
   {% include "explorer/partials/collections_table.html" %}
 </div>
