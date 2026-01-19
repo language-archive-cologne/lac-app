@@ -2,7 +2,7 @@ import ast
 import json
 import logging
 from datetime import datetime
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlencode
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -159,6 +159,31 @@ def _build_acl_table_context(request, scope: str) -> dict[str, object]:
 
     rows = _build_acl_table_rows(model, perms, scope)
     orphan_count = sum(1 for row in rows if not row["object_exists"])
+    missing_acl_count = sum(1 for row in rows if row["object_exists"] and not row["has_permission"])
+    missing_object_count = sum(1 for row in rows if not row["object_exists"])
+
+    search_term = (request.GET.get("q") or "").strip()
+    status_filter = request.GET.get("status") or "all"
+    access_filter = request.GET.get("access") or "all"
+
+    if search_term:
+        search_lower = search_term.lower()
+        rows = [
+            row for row in rows
+            if search_lower in (row["identifier"] or "").lower()
+            or search_lower in (row.get("name") or "").lower()
+            or search_lower in (row.get("object_id") or "").lower()
+        ]
+
+    if status_filter == "missing_acl":
+        rows = [row for row in rows if row["object_exists"] and not row["has_permission"]]
+    elif status_filter == "missing_object":
+        rows = [row for row in rows if not row["object_exists"]]
+    elif status_filter == "has_acl":
+        rows = [row for row in rows if row["has_permission"]]
+
+    if access_filter != "all":
+        rows = [row for row in rows if row.get("access_level") == access_filter]
 
     sort = request.GET.get("sort", "identifier")
     direction = request.GET.get("dir", "asc")
@@ -188,8 +213,19 @@ def _build_acl_table_context(request, scope: str) -> dict[str, object]:
     page_obj = paginator.get_page(page_number)
 
     base_url = reverse("storage:acl_admin_dashboard")
+    filter_params = {}
+    if search_term:
+        filter_params["q"] = search_term
+    if status_filter and status_filter != "all":
+        filter_params["status"] = status_filter
+    if access_filter and access_filter != "all":
+        filter_params["access"] = access_filter
+
+    filter_query = urlencode(filter_params)
+    filter_suffix = f"&{filter_query}" if filter_query else ""
+
     next_url = (
-        f"{base_url}?tab=records&scope={scope}&sort={sort}&dir={direction}&page={page_obj.number}"
+        f"{base_url}?tab=records&scope={scope}&sort={sort}&dir={direction}&page={page_obj.number}{filter_suffix}"
     )
 
     sort_toggles = {}
@@ -203,6 +239,12 @@ def _build_acl_table_context(request, scope: str) -> dict[str, object]:
         "scope": scope,
         "page_obj": page_obj,
         "orphan_count": orphan_count,
+        "missing_acl_count": missing_acl_count,
+        "missing_object_count": missing_object_count,
+        "search_term": search_term,
+        "status_filter": status_filter,
+        "access_filter": access_filter,
+        "filter_query": filter_query,
         "sort": sort,
         "direction": direction,
         "available_sorts": [

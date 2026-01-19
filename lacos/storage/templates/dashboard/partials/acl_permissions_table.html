@@ -29,10 +29,10 @@
         {% if orphan_count %}
         <form
           method="post"
-          action="{% url 'storage:acl_delete_orphans' scope %}?sort={{ sort }}&dir={{ direction }}&page={{ page_obj.number }}"
-          hx-post="{% url 'storage:acl_delete_orphans' scope %}?sort={{ sort }}&dir={{ direction }}&page={{ page_obj.number }}"
+          action="{% url 'storage:acl_delete_orphans' scope %}?sort={{ sort }}&dir={{ direction }}&page={{ page_obj.number }}{% if filter_query %}&{{ filter_query }}{% endif %}"
+          hx-post="{% url 'storage:acl_delete_orphans' scope %}?sort={{ sort }}&dir={{ direction }}&page={{ page_obj.number }}{% if filter_query %}&{{ filter_query }}{% endif %}"
           hx-target="#acl-records-table"
-          hx-swap="innerHTML"
+          hx-swap="outerHTML"
           hx-confirm="Delete {{ orphan_count }} orphaned ACL record(s)?"
         >
           {% csrf_token %}
@@ -45,6 +45,61 @@
       </div>
     </div>
     <div id="acl-records-status"></div>
+    <form
+      id="acl-records-filters-{{ scope }}"
+      class="flex flex-wrap items-end gap-3"
+      hx-get="{{ endpoint }}"
+      hx-target="#acl-records-table"
+      hx-swap="outerHTML"
+      hx-push-url="false"
+      hx-trigger="change, keyup delay:400ms from:#acl-records-search-{{ scope }}"
+    >
+      <input type="hidden" name="sort" value="{{ sort }}">
+      <input type="hidden" name="dir" value="{{ direction }}">
+      <input type="hidden" name="page" value="1">
+      <label class="form-control">
+        <span class="label-text text-xs text-base-content/70">Search</span>
+        <input
+          id="acl-records-search-{{ scope }}"
+          name="q"
+          value="{{ search_term }}"
+          class="input input-bordered input-sm w-64"
+          placeholder="Identifier or name"
+        >
+      </label>
+      <label class="form-control">
+        <span class="label-text text-xs text-base-content/70">Status</span>
+        <select name="status" class="select select-bordered select-sm w-44">
+          <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All</option>
+          <option value="missing_acl" {% if status_filter == 'missing_acl' %}selected{% endif %}>
+            Missing ACL ({{ missing_acl_count }})
+          </option>
+          <option value="missing_object" {% if status_filter == 'missing_object' %}selected{% endif %}>
+            Orphaned ACL ({{ missing_object_count }})
+          </option>
+          <option value="has_acl" {% if status_filter == 'has_acl' %}selected{% endif %}>Has ACL</option>
+        </select>
+      </label>
+      <label class="form-control">
+        <span class="label-text text-xs text-base-content/70">Access</span>
+        <select name="access" class="select select-bordered select-sm w-44">
+          <option value="all" {% if access_filter == 'all' %}selected{% endif %}>All</option>
+          {% for value, label in access_level_choices %}
+          <option value="{{ value }}" {% if access_filter == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm"
+        hx-get="{{ endpoint }}?sort={{ sort }}&dir={{ direction }}&page=1"
+        hx-target="#acl-records-table"
+        hx-swap="outerHTML"
+        hx-push-url="false"
+      >
+        Clear
+      </button>
+    </form>
 
     <div id="acl-records-selection" class="overflow-x-auto rounded-lg border border-base-300" data-acl-scope="{{ scope }}">
       <table class="table table-sm">
@@ -63,9 +118,9 @@
               <button
                 type="button"
                 class="flex items-center gap-1 font-medium text-left"
-                hx-get="{{ endpoint }}?sort=identifier&dir={{ sort_toggles.identifier }}&page=1"
+                hx-get="{{ endpoint }}?sort=identifier&dir={{ sort_toggles.identifier }}&page=1{% if filter_query %}&{{ filter_query }}{% endif %}"
                 hx-target="#acl-records-table"
-                hx-swap="innerHTML"
+                hx-swap="outerHTML"
                 hx-push-url="false"
               >
                 Identifier / Name
@@ -78,9 +133,9 @@
               <button
                 type="button"
                 class="flex items-center gap-1 font-medium text-left"
-                hx-get="{{ endpoint }}?sort=access_level&dir={{ sort_toggles.access_level }}&page=1"
+                hx-get="{{ endpoint }}?sort=access_level&dir={{ sort_toggles.access_level }}&page=1{% if filter_query %}&{{ filter_query }}{% endif %}"
                 hx-target="#acl-records-table"
-                hx-swap="innerHTML"
+                hx-swap="outerHTML"
                 hx-push-url="false"
               >
                 Access level
@@ -93,9 +148,9 @@
               <button
                 type="button"
                 class="flex items-center gap-1 font-medium text-left"
-                hx-get="{{ endpoint }}?sort=last_synced&dir={{ sort_toggles.last_synced }}&page=1"
+                hx-get="{{ endpoint }}?sort=last_synced&dir={{ sort_toggles.last_synced }}&page=1{% if filter_query %}&{{ filter_query }}{% endif %}"
                 hx-target="#acl-records-table"
-                hx-swap="innerHTML"
+                hx-swap="outerHTML"
                 hx-push-url="false"
               >
                 Last synced
@@ -219,9 +274,9 @@
           type="button"
           class="join-item btn btn-xs {% if not page_obj.has_previous %}btn-disabled{% else %}btn-outline{% endif %}"
           {% if page_obj.has_previous %}
-          hx-get="{{ endpoint }}?page={{ page_obj.previous_page_number }}&sort={{ sort }}&dir={{ direction }}"
+          hx-get="{{ endpoint }}?page={{ page_obj.previous_page_number }}&sort={{ sort }}&dir={{ direction }}{% if filter_query %}&{{ filter_query }}{% endif %}"
           hx-target="#acl-records-table"
-          hx-swap="innerHTML"
+          hx-swap="outerHTML"
           hx-push-url="false"
           {% endif %}
         >
@@ -231,9 +286,9 @@
           type="button"
           class="join-item btn btn-xs {% if not page_obj.has_next %}btn-disabled{% else %}btn-outline{% endif %}"
           {% if page_obj.has_next %}
-          hx-get="{{ endpoint }}?page={{ page_obj.next_page_number }}&sort={{ sort }}&dir={{ direction }}"
+          hx-get="{{ endpoint }}?page={{ page_obj.next_page_number }}&sort={{ sort }}&dir={{ direction }}{% if filter_query %}&{{ filter_query }}{% endif %}"
           hx-target="#acl-records-table"
-          hx-swap="innerHTML"
+          hx-swap="outerHTML"
           hx-push-url="false"
           {% endif %}
         >

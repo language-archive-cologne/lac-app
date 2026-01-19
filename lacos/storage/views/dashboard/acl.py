@@ -198,11 +198,19 @@ def acl_admin_dashboard(request):
     collection_options = _get_acl_options(Collection)
     bundle_options = _get_acl_options(Bundle)
 
-    active_tab = request.GET.get("tab", "dashboard")
+    active_tab = request.GET.get("tab", "records")
     if active_tab not in {"dashboard", "records"}:
         active_tab = "dashboard"
 
     records_scope = request.GET.get("scope", "collection")
+    records_context = None
+    if active_tab == "records":
+        try:
+            from lacos.storage.views.dashboard_views import _build_acl_table_context
+            records_context = _build_acl_table_context(request, records_scope)
+        except ValueError:
+            records_scope = "collection"
+            records_context = _build_acl_table_context(request, records_scope)
 
     return render(
         request,
@@ -220,7 +228,7 @@ def acl_admin_dashboard(request):
             "bundle_options": bundle_options,
             "active_tab": active_tab,
             "records_scope": records_scope,
-            "records_context": None,
+            "records_context": records_context,
             "message": request.GET.get("message"),
         },
     )
