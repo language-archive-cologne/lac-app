@@ -36,11 +36,6 @@
         </a>
         {% endif %}
         {% if request.user.is_superuser %}
-        <a href="{% url 'blam:collection_metadata_list' %}"
-           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if current_view == 'blam:collection_metadata_list' %}bg-slate-700/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-slate-700/70{% endif %}"
-           {% if current_view == 'blam:collection_metadata_list' %}aria-current="page"{% endif %}>
-          Metadata Editor
-        </a>
         <a href="{% url 'storage:acl_admin_dashboard' %}"
            class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if current_view == 'storage:acl_admin_dashboard' %}bg-slate-700/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-slate-700/70{% endif %}"
            {% if current_view == 'storage:acl_admin_dashboard' %}aria-current="page"{% endif %}>
@@ -145,11 +140,6 @@
       </a>
       {% endif %}
       {% if request.user.is_superuser %}
-      <a href="{% url 'blam:collection_metadata_list' %}"
-         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if current_view == 'blam:collection_metadata_list' %}bg-slate-800 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}"
-         {% if current_view == 'blam:collection_metadata_list' %}aria-current="page"{% endif %}>
-        Metadata Editor
-      </a>
       <a href="{% url 'storage:acl_admin_dashboard' %}"
          class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if current_view == 'storage:acl_admin_dashboard' %}bg-slate-800 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}"
          {% if current_view == 'storage:acl_admin_dashboard' %}aria-current="page"{% endif %}>
