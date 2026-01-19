@@ -1,126 +1,197 @@
-<div class="grid gap-6 md:grid-cols-3">
+<div class="grid gap-6 md:grid-cols-2">
   <div class="card bg-base-100 shadow-sm h-full">
     <div class="card-body space-y-3">
-      <h2 class="card-title text-lg">Load ACLs</h2>
-      <p class="text-sm text-base-content/60">Import ACL rules from S3. This will overwrite any existing rules in the database.</p>
-      <div id="acl-load-summary"></div>
-      <div class="space-y-2">
-        <form
-          method="post"
-          action="{% url 'storage:acl_load_all' %}"
-          hx-post="{% url 'storage:acl_load_all' %}"
-          hx-target="#acl-load-summary"
-          hx-swap="innerHTML"
-          hx-confirm="This will overwrite all ACL rules in the database with data from S3. Continue?"
-          class="w-full"
-        >
-          {% csrf_token %}
-          <input type="hidden" name="scope" value="all">
-          <button type="submit" class="btn btn-primary w-full">
-            <span class="loading loading-spinner loading-xs htmx-indicator"></span>
-            Load all
-          </button>
-        </form>
-        <div class="grid gap-2 grid-cols-2">
-          <form
-            method="post"
-            action="{% url 'storage:acl_load_all' %}"
-            hx-post="{% url 'storage:acl_load_all' %}"
-            hx-target="#acl-load-summary"
-            hx-swap="innerHTML"
-            hx-confirm="This will overwrite collection ACL rules in the database. Continue?"
-          >
-            {% csrf_token %}
-            <input type="hidden" name="scope" value="collections">
-            <button type="submit" class="btn btn-outline btn-sm w-full">Collections</button>
-          </form>
-          <form
-            method="post"
-            action="{% url 'storage:acl_load_all' %}"
-            hx-post="{% url 'storage:acl_load_all' %}"
-            hx-target="#acl-load-summary"
-            hx-swap="innerHTML"
-            hx-confirm="This will overwrite bundle ACL rules in the database. Continue?"
-          >
-            {% csrf_token %}
-            <input type="hidden" name="scope" value="bundles">
-            <button type="submit" class="btn btn-outline btn-sm w-full">Bundles</button>
-          </form>
-        </div>
+      <div class="flex items-center justify-between">
+        <h2 class="card-title text-lg">ACL Actions</h2>
+        <span class="text-xs text-base-content/60">Load / Save</span>
+      </div>
+      <div class="space-y-1 text-xs text-base-content/70">
+        <div id="acl-load-summary"></div>
+        <div id="acl-save-summary"></div>
+      </div>
+      <div class="overflow-x-auto rounded-lg border border-base-200">
+        <table class="table table-xs">
+          <thead>
+            <tr class="text-[11px] uppercase text-base-content/50">
+              <th>Action</th>
+              <th>Scope</th>
+              <th class="text-right">Run</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="font-medium">Load from S3</td>
+              <td>All</td>
+              <td class="text-right">
+                <form
+                  method="post"
+                  action="{% url 'storage:acl_load_all' %}"
+                  hx-post="{% url 'storage:acl_load_all' %}"
+                  hx-target="#acl-load-summary"
+                  hx-swap="innerHTML"
+                  hx-confirm="This will overwrite all ACL rules in the database with data from S3. Continue?"
+                >
+                  {% csrf_token %}
+                  <input type="hidden" name="scope" value="all">
+                  <button type="submit" class="btn btn-xs btn-primary">
+                    <span class="loading loading-spinner loading-xs htmx-indicator"></span>
+                    Load all
+                  </button>
+                </form>
+              </td>
+            </tr>
+            <tr>
+              <td class="font-medium">Load from S3</td>
+              <td>Collections</td>
+              <td class="text-right">
+                <form
+                  method="post"
+                  action="{% url 'storage:acl_load_all' %}"
+                  hx-post="{% url 'storage:acl_load_all' %}"
+                  hx-target="#acl-load-summary"
+                  hx-swap="innerHTML"
+                  hx-confirm="This will overwrite collection ACL rules in the database. Continue?"
+                >
+                  {% csrf_token %}
+                  <input type="hidden" name="scope" value="collections">
+                  <button type="submit" class="btn btn-xs btn-outline">Load</button>
+                </form>
+              </td>
+            </tr>
+            <tr>
+              <td class="font-medium">Load from S3</td>
+              <td>Bundles</td>
+              <td class="text-right">
+                <form
+                  method="post"
+                  action="{% url 'storage:acl_load_all' %}"
+                  hx-post="{% url 'storage:acl_load_all' %}"
+                  hx-target="#acl-load-summary"
+                  hx-swap="innerHTML"
+                  hx-confirm="This will overwrite bundle ACL rules in the database. Continue?"
+                >
+                  {% csrf_token %}
+                  <input type="hidden" name="scope" value="bundles">
+                  <button type="submit" class="btn btn-xs btn-outline">Load</button>
+                </form>
+              </td>
+            </tr>
+            <tr class="border-t border-base-200/60">
+              <td class="font-medium">Save to S3</td>
+              <td>All</td>
+              <td class="text-right">
+                <form
+                  method="post"
+                  action="{% url 'storage:acl_save_all' %}"
+                  hx-post="{% url 'storage:acl_save_all' %}"
+                  hx-target="#acl-save-summary"
+                  hx-swap="innerHTML"
+                  hx-confirm="This will overwrite all ACL files in S3 with data from the database. Continue?"
+                >
+                  {% csrf_token %}
+                  <input type="hidden" name="scope" value="all">
+                  <button type="submit" class="btn btn-xs btn-secondary">
+                    <span class="loading loading-spinner loading-xs htmx-indicator"></span>
+                    Save all
+                  </button>
+                </form>
+              </td>
+            </tr>
+            <tr>
+              <td class="font-medium">Save to S3</td>
+              <td>Collections</td>
+              <td class="text-right">
+                <form
+                  method="post"
+                  action="{% url 'storage:acl_save_all' %}"
+                  hx-post="{% url 'storage:acl_save_all' %}"
+                  hx-target="#acl-save-summary"
+                  hx-swap="innerHTML"
+                  hx-confirm="This will overwrite collection ACL files in S3. Continue?"
+                >
+                  {% csrf_token %}
+                  <input type="hidden" name="scope" value="collections">
+                  <button type="submit" class="btn btn-xs btn-outline">Save</button>
+                </form>
+              </td>
+            </tr>
+            <tr>
+              <td class="font-medium">Save to S3</td>
+              <td>Bundles</td>
+              <td class="text-right">
+                <form
+                  method="post"
+                  action="{% url 'storage:acl_save_all' %}"
+                  hx-post="{% url 'storage:acl_save_all' %}"
+                  hx-target="#acl-save-summary"
+                  hx-swap="innerHTML"
+                  hx-confirm="This will overwrite bundle ACL files in S3. Continue?"
+                >
+                  {% csrf_token %}
+                  <input type="hidden" name="scope" value="bundles">
+                  <button type="submit" class="btn btn-xs btn-outline">Save</button>
+                </form>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
 
   <div class="card bg-base-100 shadow-sm h-full">
     <div class="card-body space-y-3">
-      <h2 class="card-title text-lg">Save ACLs</h2>
-      <p class="text-sm text-base-content/60">Export ACL rules from database to S3.</p>
-      <div id="acl-save-summary"></div>
-      <div class="space-y-2">
-        <form
-          method="post"
-          action="{% url 'storage:acl_save_all' %}"
-          hx-post="{% url 'storage:acl_save_all' %}"
-          hx-target="#acl-save-summary"
-          hx-swap="innerHTML"
-          hx-confirm="This will overwrite all ACL files in S3 with data from the database. Continue?"
-          class="w-full"
-        >
-          {% csrf_token %}
-          <input type="hidden" name="scope" value="all">
-          <button type="submit" class="btn btn-secondary w-full">
-            <span class="loading loading-spinner loading-xs htmx-indicator"></span>
-            Save all
-          </button>
-        </form>
-        <div class="grid gap-2 grid-cols-2">
-          <form
-            method="post"
-            action="{% url 'storage:acl_save_all' %}"
-            hx-post="{% url 'storage:acl_save_all' %}"
-            hx-target="#acl-save-summary"
-            hx-swap="innerHTML"
-            hx-confirm="This will overwrite collection ACL files in S3. Continue?"
-          >
-            {% csrf_token %}
-            <input type="hidden" name="scope" value="collections">
-            <button type="submit" class="btn btn-outline btn-sm w-full">Collections</button>
-          </form>
-          <form
-            method="post"
-            action="{% url 'storage:acl_save_all' %}"
-            hx-post="{% url 'storage:acl_save_all' %}"
-            hx-target="#acl-save-summary"
-            hx-swap="innerHTML"
-            hx-confirm="This will overwrite bundle ACL files in S3. Continue?"
-          >
-            {% csrf_token %}
-            <input type="hidden" name="scope" value="bundles">
-            <button type="submit" class="btn btn-outline btn-sm w-full">Bundles</button>
-          </form>
+      <div class="flex items-center justify-between">
+        <h2 class="card-title text-lg">Sync Summary</h2>
+        <span class="text-xs text-base-content/60">Collections + Bundles</span>
+      </div>
+      <div class="grid gap-2 md:grid-cols-2">
+        <div class="flex items-center justify-between rounded-md border border-base-200 bg-base-200/40 px-3 py-2">
+          <span class="text-xs text-base-content/60">ACL records (all types)</span>
+          <span class="text-sm font-semibold text-primary">{{ overall_summary.synced_objects }}</span>
         </div>
+        <div class="flex items-center justify-between rounded-md border border-base-200 bg-base-200/40 px-3 py-2">
+          <span class="text-xs text-base-content/60">Objects missing ACL</span>
+          <span class="text-sm font-semibold {% if overall_summary.unsynced_objects > 0 %}text-warning{% endif %}">{{ overall_summary.unsynced_objects }}</span>
+        </div>
+      </div>
+      {% if overall_summary.synced_objects > overall_summary.total_objects %}
+      <p class="text-[11px] text-base-content/50">Includes orphaned ACL records that no longer map to collections/bundles.</p>
+      {% endif %}
+      <div class="overflow-x-auto rounded-lg border border-base-200">
+        <table class="table table-xs">
+          <thead>
+            <tr class="text-[11px] uppercase text-base-content/50">
+              <th>Type</th>
+              <th>ACL / Objects</th>
+              <th>Missing ACL</th>
+              <th>Last sync</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="font-medium">Collections</td>
+              <td>{{ collection_summary.synced_objects }}/{{ collection_summary.total_objects }}</td>
+              <td class="{% if collection_summary.unsynced_objects > 0 %}text-warning{% endif %}">
+                {{ collection_summary.unsynced_objects }}
+              </td>
+              <td class="text-xs text-base-content/60">
+                {{ collection_summary.last_synced_at|date:"Y-m-d H:i"|default:"—" }}
+              </td>
+            </tr>
+            <tr>
+              <td class="font-medium">Bundles</td>
+              <td>{{ bundle_summary.synced_objects }}/{{ bundle_summary.total_objects }}</td>
+              <td class="{% if bundle_summary.unsynced_objects > 0 %}text-warning{% endif %}">
+                {{ bundle_summary.unsynced_objects }}
+              </td>
+              <td class="text-xs text-base-content/60">
+                {{ bundle_summary.last_synced_at|date:"Y-m-d H:i"|default:"—" }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
-
-  <div class="card bg-base-100 shadow-sm h-full">
-    <div class="card-body space-y-4">
-      <h2 class="card-title text-lg">Summary</h2>
-      <div class="stats stats-vertical shadow-sm">
-        <div class="stat py-2">
-          <div class="stat-title text-xs">Loaded</div>
-          <div class="stat-value text-lg text-primary">{{ overall_summary.synced_objects }}/{{ overall_summary.total_objects }}</div>
-        </div>
-        <div class="stat py-2">
-          <div class="stat-title text-xs">Not loaded</div>
-          <div class="stat-value text-lg {% if overall_summary.unsynced_objects > 0 %}text-warning{% endif %}">{{ overall_summary.unsynced_objects }}</div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="grid gap-6 lg:grid-cols-2 mt-6">
-  {% include "dashboard/partials/acl_entity_summary.html" with title="Collections" summary=collection_summary %}
-  {% include "dashboard/partials/acl_entity_summary.html" with title="Bundles" summary=bundle_summary %}
 </div>
