@@ -253,6 +253,107 @@ def import_s3_bundles_for_collection(
     logger.info(f"{task_id}: Returning collection ID={collection_id} and {len(successful_pairs)} successful pairs.")
     return (collection_id, successful_pairs)
 
+# --- Orphan Bundle Cleanup Task ---
+@db_task()
+def cleanup_orphan_bundles(
+    collection_id: Optional[UUID],
+    list_of_pairs: List[Tuple[UUID, UUID]],
+    s3_bundle_keys: List[str],
+) -> Tuple[Optional[UUID], List[Tuple[UUID, UUID]]]:
+    """
+    Remove bundles from the database that no longer exist in S3.
+
+    This task compares bundles linked to a collection in the database with
+    bundle identifiers found in S3. Bundles that exist in DB but not in S3
+    are considered orphans and are deleted.
+
+    Args:
+        collection_id: The ID of the collection.
+        list_of_pairs: The list of (bundle_id, bundle_resources_id) from import.
+        s3_bundle_keys: List of S3 keys for bundles found in S3.
+
+    Returns:
+        The same Tuple (collection_id, list_of_pairs) for pipeline continuity.
+    """
+    task_id = f"CLEANUP-ORPHANS-{collection_id}"
+
+    if collection_id is None:
+        logger.warning(f"{task_id}: SKIPPED - No collection ID provided")
+        return (collection_id, list_of_pairs)
+
+    # Extract bundle identifiers from S3 keys
+    # S3 key format: "collection_id/bundle_id/v1/content/bundle_id.xml"
+    s3_bundle_identifiers: Set[str] = set()
+    for key in s3_bundle_keys:
+        parts = key.split('/')
+        if len(parts) >= 2:
+            # Bundle identifier is typically the second part (after collection)
+            bundle_identifier = parts[1]
+            s3_bundle_identifiers.add(bundle_identifier)
+
+    logger.info(
+        f"{task_id}: Found {len(s3_bundle_identifiers)} bundle identifiers in S3: {s3_bundle_identifiers}"
+    )
+
+    # Note: If s3_bundle_identifiers is empty, ALL bundles in DB are orphans
+    # and should be deleted (the collection has no bundles in S3)
+
+    try:
+        from lacos.blam.models.bundle.bundle_repository import Bundle
+        from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
+
+        # Find all bundles linked to this collection
+        linked_bundle_ids = BundleStructuralInfo.objects.filter(
+            is_member_of_collection_id=collection_id
+        ).values_list('bundle_id', flat=True)
+
+        db_bundles = Bundle.objects.filter(id__in=linked_bundle_ids)
+        logger.info(f"{task_id}: Found {db_bundles.count()} bundles in DB linked to collection")
+
+        # Find orphans: bundles in DB whose S3 folder is NOT in S3 bundle keys
+        # We use import_object_key to determine the S3 folder, not bundle.identifier
+        # import_object_key format: "collection/bundle_folder/v1/content/bundle.xml"
+        orphan_bundles = []
+        for bundle in db_bundles:
+            # Extract bundle folder from import_object_key
+            bundle_folder = None
+            if bundle.import_object_key:
+                parts = bundle.import_object_key.split('/')
+                if len(parts) >= 2:
+                    bundle_folder = parts[1]  # e.g., "collection_overview"
+
+            # Bundle is orphan if its folder is not in S3 bundle identifiers
+            if bundle_folder is None or bundle_folder not in s3_bundle_identifiers:
+                orphan_bundles.append(bundle)
+                logger.info(
+                    f"{task_id}: Identified orphan bundle: {bundle.identifier} "
+                    f"(folder: {bundle_folder}, ID: {bundle.id})"
+                )
+
+        if orphan_bundles:
+            logger.info(f"{task_id}: Deleting {len(orphan_bundles)} orphan bundles")
+            for bundle in orphan_bundles:
+                bundle_id = bundle.id
+                bundle_identifier = bundle.identifier
+                try:
+                    bundle.delete()
+                    logger.info(
+                        f"{task_id}: DELETED orphan bundle {bundle_identifier} (ID: {bundle_id})"
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"{task_id}: Failed to delete orphan bundle {bundle_identifier}: {e}",
+                        exc_info=True,
+                    )
+        else:
+            logger.info(f"{task_id}: No orphan bundles found")
+
+    except Exception as e:
+        logger.error(f"{task_id}: Error during orphan cleanup: {e}", exc_info=True)
+
+    return (collection_id, list_of_pairs)
+
+
 # --- Refactored Link Resolution Task ---
 @db_task()
 def resolve_collection_bundle_links_task(collection_id: Optional[UUID], list_of_pairs: List[Tuple[UUID, UUID]]) -> Tuple[Optional[UUID], List[Tuple[UUID, UUID]]]:
@@ -438,6 +539,14 @@ def process_s3_prefix(bucket: str = None, prefix: str = '', update_existing: boo
                     import_s3_bundles_for_collection.s(
                         bundle_keys=associated_bundle_keys,
                         bucket=actual_bucket,
+                    )
+                )
+
+            # Task 2.5: Cleanup orphan bundles (only during reindex)
+            if update_existing:
+                p = p.then(
+                    cleanup_orphan_bundles.s(
+                        s3_bundle_keys=associated_bundle_keys,
                     )
                 )
 

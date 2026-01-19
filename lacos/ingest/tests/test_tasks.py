@@ -650,3 +650,143 @@ def test_process_s3_prefix_groups_bundle_keys():
             bucket='test-bucket',
         )
         mock_huey.enqueue.assert_called_once_with(mock_task)
+
+
+# --- Tests for cleanup_orphan_bundles ---
+
+def test_cleanup_orphan_bundles_removes_orphans():
+    """Test that cleanup_orphan_bundles removes bundles not in S3."""
+    from uuid import uuid4
+    from lacos.blam.models.collection.collection_repository import Collection
+    from lacos.blam.models.bundle.bundle_repository import Bundle
+    from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
+
+    # Create a collection
+    collection = Collection.objects.create(identifier="test-collection")
+
+    # Create bundles - one that exists in S3, one orphan
+    # import_object_key format: "collection/bundle_folder/v1/content/bundle.xml"
+    bundle_in_s3 = Bundle.objects.create(
+        identifier="bundle_in_s3",
+        import_object_key="test-collection/bundle_in_s3/v1/content/bundle_in_s3.xml",
+    )
+    orphan_bundle = Bundle.objects.create(
+        identifier="orphan_bundle",
+        import_object_key="test-collection/orphan_bundle/v1/content/orphan_bundle.xml",
+    )
+
+    # Link both to collection
+    BundleStructuralInfo.objects.create(
+        bundle=bundle_in_s3,
+        is_member_of_collection=collection,
+    )
+    BundleStructuralInfo.objects.create(
+        bundle=orphan_bundle,
+        is_member_of_collection=collection,
+    )
+
+    # S3 only has bundle_in_s3
+    s3_bundle_keys = ["test-collection/bundle_in_s3/v1/content/bundle_in_s3.xml"]
+
+    # Call cleanup
+    result = ingest_tasks.cleanup_orphan_bundles(
+        collection_id=collection.id,
+        list_of_pairs=[(bundle_in_s3.id, uuid4())],
+        s3_bundle_keys=s3_bundle_keys,
+    )
+
+    # Verify result passes through
+    assert result[0] == collection.id
+
+    # Verify orphan was deleted
+    assert not Bundle.objects.filter(id=orphan_bundle.id).exists()
+    # Verify bundle_in_s3 still exists
+    assert Bundle.objects.filter(id=bundle_in_s3.id).exists()
+
+
+def test_cleanup_orphan_bundles_no_orphans():
+    """Test that cleanup_orphan_bundles does nothing when no orphans exist."""
+    from uuid import uuid4
+    from lacos.blam.models.collection.collection_repository import Collection
+    from lacos.blam.models.bundle.bundle_repository import Bundle
+    from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
+
+    # Create a collection
+    collection = Collection.objects.create(identifier="test-collection-2")
+
+    # Create bundle that exists in S3
+    bundle = Bundle.objects.create(
+        identifier="existing_bundle",
+        import_object_key="test-collection-2/existing_bundle/v1/content/existing_bundle.xml",
+    )
+    BundleStructuralInfo.objects.create(
+        bundle=bundle,
+        is_member_of_collection=collection,
+    )
+
+    # S3 has this bundle
+    s3_bundle_keys = ["test-collection-2/existing_bundle/v1/content/existing_bundle.xml"]
+
+    # Call cleanup
+    result = ingest_tasks.cleanup_orphan_bundles(
+        collection_id=collection.id,
+        list_of_pairs=[(bundle.id, uuid4())],
+        s3_bundle_keys=s3_bundle_keys,
+    )
+
+    # Verify bundle still exists
+    assert Bundle.objects.filter(id=bundle.id).exists()
+
+
+def test_cleanup_orphan_bundles_no_collection_id():
+    """Test that cleanup_orphan_bundles handles None collection_id."""
+    result = ingest_tasks.cleanup_orphan_bundles(
+        collection_id=None,
+        list_of_pairs=[],
+        s3_bundle_keys=[],
+    )
+
+    assert result == (None, [])
+
+
+def test_cleanup_orphan_bundles_no_bundles_in_s3():
+    """Test that all bundles are deleted when S3 has no bundles."""
+    from lacos.blam.models.collection.collection_repository import Collection
+    from lacos.blam.models.bundle.bundle_repository import Bundle
+    from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
+
+    # Create a collection
+    collection = Collection.objects.create(identifier="test-collection-3")
+
+    # Create bundles in DB
+    bundle1 = Bundle.objects.create(
+        identifier="bundle1",
+        import_object_key="test-collection-3/bundle1/v1/content/bundle1.xml",
+    )
+    bundle2 = Bundle.objects.create(
+        identifier="bundle2",
+        import_object_key="test-collection-3/bundle2/v1/content/bundle2.xml",
+    )
+
+    BundleStructuralInfo.objects.create(
+        bundle=bundle1,
+        is_member_of_collection=collection,
+    )
+    BundleStructuralInfo.objects.create(
+        bundle=bundle2,
+        is_member_of_collection=collection,
+    )
+
+    # S3 has NO bundles for this collection
+    s3_bundle_keys = []
+
+    # Call cleanup
+    result = ingest_tasks.cleanup_orphan_bundles(
+        collection_id=collection.id,
+        list_of_pairs=[],
+        s3_bundle_keys=s3_bundle_keys,
+    )
+
+    # Verify both bundles were deleted
+    assert not Bundle.objects.filter(id=bundle1.id).exists()
+    assert not Bundle.objects.filter(id=bundle2.id).exists()
