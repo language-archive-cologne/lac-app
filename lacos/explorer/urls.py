@@ -43,6 +43,11 @@ urlpatterns = [
     ),
     # Handle-based patterns last (path: is greedy, matches slashes)
     path(
+        "collections/<path:handle>/resources/<path:resource_id>/",
+        view=views.CollectionResourcesView.as_view(),
+        name="collection_resource_by_handle",
+    ),
+    path(
         "collections/<path:handle>/",
         view=views.CollectionDetailView.as_view(),
         name="collection_detail_by_handle",

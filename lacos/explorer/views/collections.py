@@ -1,10 +1,14 @@
 """Collection views for the explorer app."""
 
 import logging
+from urllib.parse import unquote
 
 from django.core.cache import cache
 from django.db.models import Count, Min, Prefetch
-from django.shortcuts import render
+from django.http import Http404, HttpResponseForbidden
+from django.shortcuts import redirect, render
+from django.utils.translation import gettext_lazy as _
+from django.views import View
 from django.views.generic import DetailView, ListView
 
 from lacos.blam.models import Collection
@@ -15,8 +19,9 @@ from lacos.blam.models.collection.collection_general_info import (
 from lacos.explorer.map_utils import get_collection_map_markers
 from lacos.explorer.search import search_archives
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
+from lacos.storage.services.resource_mapping_service import ResourceMappingService
 
-from .utils import get_formatted_location, paginate_bundle_contexts, HandleLookupMixin
+from .utils import get_formatted_location, paginate_bundle_contexts, HandleLookupMixin, annotate_resource, get_object_by_pk_or_handle
 
 
 logger = logging.getLogger(__name__)
@@ -141,6 +146,8 @@ class CollectionDetailView(HandleLookupMixin, DetailView):
             "general_info__object_languages",
             "publication_info",
             "publication_info__creators",
+            "structural_info",
+            "structural_info__additional_metadata_files",
         )
 
     def get_context_data(self, **kwargs):
@@ -183,6 +190,15 @@ class CollectionDetailView(HandleLookupMixin, DetailView):
         context['collection_can_read'] = collection_acl.allowed or not acl_service.enforcement_enabled
         context['collection_acl_enforcement_enabled'] = acl_service.enforcement_enabled
 
+        # Additional metadata files
+        context['additional_metadata_files'] = []
+        if hasattr(self.object, 'structural_info') and self.object.structural_info.first():
+            metadata_files = [
+                annotate_resource(res)
+                for res in self.object.structural_info.first().additional_metadata_files.all()
+            ]
+            context['additional_metadata_files'] = [res for res in metadata_files if res]
+
         for bundle_info in bundle_contexts:
             bundle = bundle_info.get('bundle')
             if not bundle:
@@ -203,3 +219,42 @@ class CollectionDetailView(HandleLookupMixin, DetailView):
                     context,
                 )
         return super().render_to_response(context, **response_kwargs)
+
+
+class CollectionResourcesView(View):
+    """View for accessing collection additional metadata files."""
+
+    permission_denied_message = _("You do not have permission to access this collection.")
+
+    def get(self, request, pk=None, handle=None, resource_id=None):
+        collection = get_object_by_pk_or_handle(Collection, pk=pk, handle=handle)
+        acl_service = ACLEvaluationService()
+        acl_result = acl_service.evaluate(request.user, collection, mode="acl:Read")
+        if acl_service.enforcement_enabled and not acl_result.allowed:
+            return HttpResponseForbidden(self.permission_denied_message)
+
+        if not resource_id:
+            raise Http404("Resource ID required")
+
+        try:
+            decoded_resource_id = unquote(resource_id)
+            if decoded_resource_id.startswith('ID_'):
+                decoded_resource_id = decoded_resource_id[3:]
+
+            resource_service = ResourceMappingService()
+            location = resource_service.resolve_pid_to_s3(decoded_resource_id)
+            if not location:
+                raise ValueError(f"No S3 location found for PID: {decoded_resource_id}")
+
+            presigned_url = resource_service.generate_presigned_url(
+                location.s3_bucket,
+                location.s3_key
+            )
+            return redirect(presigned_url)
+
+        except ValueError as e:
+            logger.error(f"Resource mapping service error: {e}")
+            raise Http404(f"Resource {resource_id} not found or cannot be accessed")
+        except Exception as e:
+            logger.error(f"Error accessing resource: {e}")
+            raise Http404(f"Error accessing resource: {str(e)}")
