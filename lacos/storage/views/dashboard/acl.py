@@ -327,7 +327,12 @@ def acl_load_selected(request):
         }
 
         if request.headers.get("HX-Request"):
-            return _render_load_summary_partial(request, summary=summary)
+            response = _render_load_summary_partial(request, summary=summary)
+            if total_loaded:
+                response["HX-Trigger"] = json.dumps(
+                    {"aclRecordsRefresh": {"scope": request.POST.get("scope")}}
+                )
+            return response
 
         msg = f"Loaded {total_loaded} ACLs for {scope_label}"
         return redirect(f"{reverse('storage:acl_admin_dashboard')}?message={msg}")

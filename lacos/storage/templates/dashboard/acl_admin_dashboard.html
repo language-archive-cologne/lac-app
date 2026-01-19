@@ -24,3 +24,149 @@
   </div>
 </div>
 {% endblock %}
+
+{% block inline_javascript %}
+<script>
+  (function() {
+    const selectionStore = window.aclSelection || {
+      collection: new Set(),
+      bundle: new Set(),
+    };
+    window.aclSelection = selectionStore;
+
+    function getScopeFromElement(el) {
+      const container = el.closest('[data-acl-scope]');
+      return container ? container.dataset.aclScope : null;
+    }
+
+    function updateSelectAll(scope) {
+      const container = document.querySelector('#acl-records-selection[data-acl-scope="' + scope + '"]');
+      if (!container) {
+        return;
+      }
+      const checkboxes = Array.from(container.querySelectorAll('input[data-acl-select]')).filter(cb => !cb.disabled);
+      const allControl = container.querySelector('input[data-acl-select-all]');
+      if (!allControl) {
+        return;
+      }
+      const selectedCount = checkboxes.filter(cb => cb.checked).length;
+      if (!checkboxes.length) {
+        allControl.checked = false;
+        allControl.indeterminate = false;
+        return;
+      }
+      allControl.checked = selectedCount === checkboxes.length;
+      allControl.indeterminate = selectedCount > 0 && selectedCount < checkboxes.length;
+    }
+
+    function updateSelectedCount(scope) {
+      const count = selectionStore[scope] ? selectionStore[scope].size : 0;
+      document.querySelectorAll('[data-acl-selected-count="' + scope + '"]').forEach(el => {
+        el.textContent = String(count);
+      });
+    }
+
+    function syncCheckboxes(scope) {
+      const container = document.querySelector('#acl-records-selection[data-acl-scope="' + scope + '"]');
+      if (!container) {
+        return;
+      }
+      const selected = selectionStore[scope] || new Set();
+      container.querySelectorAll('input[data-acl-select]').forEach(cb => {
+        cb.checked = selected.has(cb.value);
+      });
+      updateSelectAll(scope);
+      updateSelectedCount(scope);
+    }
+
+    function setSelection(scope, ids, isSelected) {
+      if (!selectionStore[scope]) {
+        selectionStore[scope] = new Set();
+      }
+      ids.forEach(id => {
+        if (isSelected) {
+          selectionStore[scope].add(id);
+        } else {
+          selectionStore[scope].delete(id);
+        }
+      });
+      updateSelectedCount(scope);
+    }
+
+    document.addEventListener('change', event => {
+      const target = event.target;
+      if (target.matches('input[data-acl-select]')) {
+        const scope = target.dataset.aclScope || getScopeFromElement(target);
+        if (!scope || !selectionStore[scope]) {
+          return;
+        }
+        if (target.checked) {
+          selectionStore[scope].add(target.value);
+        } else {
+          selectionStore[scope].delete(target.value);
+        }
+        updateSelectAll(scope);
+        updateSelectedCount(scope);
+        return;
+      }
+
+      if (target.matches('input[data-acl-select-all]')) {
+        const scope = target.dataset.aclScope || getScopeFromElement(target);
+        const container = document.querySelector('#acl-records-selection[data-acl-scope="' + scope + '"]');
+        if (!container || !scope) {
+          return;
+        }
+        const checkboxes = Array.from(container.querySelectorAll('input[data-acl-select]')).filter(cb => !cb.disabled);
+        checkboxes.forEach(cb => {
+          cb.checked = target.checked;
+        });
+        setSelection(scope, checkboxes.map(cb => cb.value), target.checked);
+        target.indeterminate = false;
+      }
+    });
+
+    document.addEventListener('submit', event => {
+      const form = event.target;
+      if (!form.matches('[data-acl-selection-form]')) {
+        return;
+      }
+      const scope = form.dataset.aclScope;
+      if (!scope || !selectionStore[scope]) {
+        return;
+      }
+      const container = form.querySelector('[data-acl-selected-inputs]');
+      if (!container) {
+        return;
+      }
+      while (container.firstChild) {
+        container.removeChild(container.firstChild);
+      }
+      selectionStore[scope].forEach(id => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = scope === 'collection' ? 'collection_ids' : 'bundle_ids';
+        input.value = id;
+        container.appendChild(input);
+      });
+    });
+
+    document.addEventListener('htmx:afterSwap', event => {
+      const target = event.target;
+      if (!target || target.id !== 'acl-records-table') {
+        return;
+      }
+      const scope = target.dataset.aclScope || target.querySelector('[data-acl-scope]')?.dataset.aclScope;
+      if (scope) {
+        syncCheckboxes(scope);
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const scope = document.querySelector('#acl-records-table')?.dataset.aclScope;
+      if (scope) {
+        syncCheckboxes(scope);
+      }
+    });
+  })();
+</script>
+{% endblock inline_javascript %}

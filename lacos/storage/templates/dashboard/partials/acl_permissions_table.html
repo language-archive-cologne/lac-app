@@ -8,20 +8,24 @@
           Showing {{ rows|length }} of {{ page_obj.paginator.count }} {{ scope }}s
         </p>
       </div>
-      <div class="flex items-center gap-2 flex-wrap">
+      <div class="flex items-center gap-2 flex-wrap" data-acl-scope="{{ scope }}">
         <form
           method="post"
           action="{% url 'storage:acl_load_selected' %}"
           hx-post="{% url 'storage:acl_load_selected' %}"
           hx-target="#acl-records-status"
           hx-swap="innerHTML"
-          hx-include="#acl-records-selection"
+          hx-include="[data-acl-selected-inputs]"
           hx-confirm="Load ACLs for selected {{ scope }}s? This will overwrite the database records."
+          data-acl-selection-form
+          data-acl-scope="{{ scope }}"
         >
           {% csrf_token %}
           <input type="hidden" name="scope" value="{{ scope }}">
+          <div data-acl-selected-inputs></div>
           <button type="submit" class="btn btn-outline btn-xs">Load selected</button>
         </form>
+        <span class="text-xs text-base-content/60">Selected: <span data-acl-selected-count="{{ scope }}">0</span></span>
         {% if orphan_count %}
         <form
           method="post"
@@ -42,7 +46,7 @@
     </div>
     <div id="acl-records-status"></div>
 
-    <div id="acl-records-selection" class="overflow-x-auto rounded-lg border border-base-300">
+    <div id="acl-records-selection" class="overflow-x-auto rounded-lg border border-base-300" data-acl-scope="{{ scope }}">
       <table class="table table-sm">
         <thead>
           <tr class="text-xs uppercase text-base-content/60">
@@ -51,7 +55,8 @@
                 type="checkbox"
                 class="checkbox checkbox-xs"
                 aria-label="Select all on page"
-                onclick="document.querySelectorAll('#acl-records-selection input[data-acl-select]').forEach(cb => { if (!cb.disabled) { cb.checked = this.checked; } });"
+                data-acl-select-all
+                data-acl-scope="{{ scope }}"
               >
             </th>
             <th class="w-1/3">
@@ -111,6 +116,7 @@
                 type="checkbox"
                 class="checkbox checkbox-xs"
                 data-acl-select
+                data-acl-scope="{{ scope }}"
                 name="{% if scope == 'collection' %}collection_ids{% else %}bundle_ids{% endif %}"
                 value="{{ row.object_id }}"
                 {% if not row.object_exists %}disabled{% endif %}
