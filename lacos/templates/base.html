@@ -19,7 +19,7 @@
     <meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}" />
     <meta property="og:title" content="Language Archive Cologne" />
     <meta property="og:description" content="The Language Archive Cologne is a digital archive of language resources containing collections of primary language data, including audio and video recordings, as well as linguistic analyses." />
-    <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'images/logo-LAC.png' %}" />
+    <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'images/og-image.png' %}" />
     <meta property="og:site_name" content="Language Archive Cologne" />
     <meta property="og:locale" content="{{ LANGUAGE_CODE }}" />
 
@@ -28,7 +28,7 @@
     <meta name="twitter:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}" />
     <meta name="twitter:title" content="Language Archive Cologne" />
     <meta name="twitter:description" content="The Language Archive Cologne is a digital archive of language resources containing collections of primary language data, including audio and video recordings, as well as linguistic analyses." />
-    <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'images/logo-LAC.png' %}" />
+    <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'images/og-image.png' %}" />
     {% endblock seo_meta %}
 
     {% block structured_data %}{% endblock structured_data %}
