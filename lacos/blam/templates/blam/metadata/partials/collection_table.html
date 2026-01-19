@@ -21,7 +21,22 @@
           <div class="text-xs font-mono text-base-content/50">{{ collection.identifier }}</div>
         </td>
         <td>
-          <a class="btn btn-sm" href="{% url 'blam:collection_metadata_overview' collection.pk %}">Edit</a>
+          {% if editor_target_id %}
+            <a
+              class="btn btn-sm"
+              href="{% url 'blam:collection_metadata_overview' collection.pk %}"
+              hx-get="{% url 'blam:collection_metadata_overview' collection.pk %}"
+              hx-target="#{{ editor_target_id }}"
+              hx-select="#metadata-editor"
+              hx-swap="innerHTML"
+              hx-push-url="true"
+              hx-indicator="#metadata-editor-spinner"
+            >
+              Edit
+            </a>
+          {% else %}
+            <a class="btn btn-sm" href="{% url 'blam:collection_metadata_overview' collection.pk %}">Edit</a>
+          {% endif %}
         </td>
       </tr>
     {% empty %}

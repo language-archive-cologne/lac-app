@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views.admin_views import (
     ArchivistDashboardView,
+    ArchivistMetadataPanelView,
     DatabaseCleanupView,
     DatabaseDeleteAllView,
     DatabaseDeleteCollectionsView,
@@ -103,6 +104,7 @@ app_name = "blam"
 urlpatterns = [
     # Dashboard
     path('dashboard/archivist/', ArchivistDashboardView.as_view(), name='blam_archivist_dashboard'),
+    path('dashboard/archivist/metadata-panel/', ArchivistMetadataPanelView.as_view(), name='blam_metadata_panel'),
     
     # Database operations
     path('admin/cleanup/', DatabaseCleanupView.as_view(), name='database_cleanup'),

@@ -9,6 +9,9 @@ from django.template.loader import render_to_string
 import logging
 
 from lacos.blam.services.cleanup_service import CleanupService
+from lacos.blam.models.collection.collection_repository import Collection
+from lacos.blam.models.bundle.bundle_repository import Bundle
+from lacos.common.mixins import HtmxTemplateHelperMixin
 
 class DatabaseCleanupView(LoginRequiredMixin, UserPassesTestMixin, View):
     """
@@ -279,7 +282,82 @@ class DatabaseDeleteBundlesConfirmView(LoginRequiredMixin, UserPassesTestMixin, 
         return HttpResponse(html)
 
 
-class ArchivistDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
+class ArchivistMetadataPanelView(LoginRequiredMixin, UserPassesTestMixin, HtmxTemplateHelperMixin, View):
+    """
+    HTMX view for the BLAM metadata dashboard panel.
+    """
+
+    def test_func(self):
+        """Only allow staff users to access this view."""
+        return self.request.user.is_staff
+
+    def get(self, request, *args, **kwargs):
+        from django.db.models import Q
+
+        kind = request.GET.get("kind", "collections")
+        if kind not in {"collections", "bundles"}:
+            return self.htmx_error_response("Unknown metadata type.", status=400)
+
+        search_query = request.GET.get("q", "").strip()
+
+        if kind == "collections":
+            base_qs = Collection.objects.all().order_by("identifier")
+            total_count = base_qs.count()
+            if search_query:
+                base_qs = base_qs.filter(
+                    Q(identifier__icontains=search_query)
+                    | Q(general_info__display_title__icontains=search_query)
+                    | Q(general_info__description__icontains=search_query)
+                ).distinct()
+            result_count = base_qs.count()
+            context = {
+                "kind": kind,
+                "kind_label": "Collections",
+                "collections": base_qs,
+                "search_query": search_query,
+                "total_count": total_count,
+                "result_count": result_count,
+                "editor_target_id": "metadata-editor-shell",
+            }
+        else:
+            base_qs = Bundle.objects.all().order_by("identifier")
+            total_count = base_qs.count()
+            if search_query:
+                base_qs = base_qs.filter(
+                    Q(identifier__icontains=search_query)
+                    | Q(general_info__display_title__icontains=search_query)
+                    | Q(general_info__description__icontains=search_query)
+                ).distinct()
+            result_count = base_qs.count()
+            context = {
+                "kind": kind,
+                "kind_label": "Bundles",
+                "bundles": base_qs,
+                "search_query": search_query,
+                "total_count": total_count,
+                "result_count": result_count,
+                "editor_target_id": "metadata-editor-shell",
+            }
+
+        panel_html = render_to_string(
+            "blam/dashboard/partials/metadata_panel.html",
+            context,
+            request=request,
+        )
+        meta_html = render_to_string(
+            "blam/dashboard/partials/metadata_meta.html",
+            context,
+            request=request,
+        )
+
+        if request.headers.get("HX-Request"):
+            html = self.build_oob_response(panel_html, {"metadata-meta": meta_html})
+            return HttpResponse(html)
+
+        return HttpResponse(panel_html)
+
+
+class ArchivistDashboardView(HtmxTemplateHelperMixin, LoginRequiredMixin, UserPassesTestMixin, TemplateView):
     """
     Archivist dashboard view.
     Shows administration options for archivists.

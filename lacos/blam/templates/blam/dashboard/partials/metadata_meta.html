@@ -1,0 +1,7 @@
+<div class="flex flex-col items-end gap-1 text-xs text-base-content/60">
+  <span class="text-base-content font-semibold">{{ kind_label }}</span>
+  <span>Showing {{ result_count }} of {{ total_count }}</span>
+  {% if search_query %}
+    <span class="badge badge-ghost badge-sm">Filtered</span>
+  {% endif %}
+</div>

@@ -1,0 +1,70 @@
+<div id="metadata-panel" class="space-y-4">
+  <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div class="tabs tabs-boxed">
+      <a
+        class="tab {% if kind == 'collections' %}tab-active{% endif %}"
+        hx-get="{% url 'blam:blam_metadata_panel' %}?kind=collections{% if search_query %}&q={{ search_query|urlencode }}{% endif %}"
+        hx-target="#metadata-panel"
+        hx-swap="outerHTML"
+      >
+        Collections
+      </a>
+      <a
+        class="tab {% if kind == 'bundles' %}tab-active{% endif %}"
+        hx-get="{% url 'blam:blam_metadata_panel' %}?kind=bundles{% if search_query %}&q={{ search_query|urlencode }}{% endif %}"
+        hx-target="#metadata-panel"
+        hx-swap="outerHTML"
+      >
+        Bundles
+      </a>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a class="btn btn-sm btn-outline" href="{% url 'blam:collection_metadata_create' %}" hx-boost="false">New collection</a>
+      <a class="btn btn-sm btn-outline" href="{% url 'blam:bundle_metadata_create' %}" hx-boost="false">New bundle</a>
+    </div>
+  </div>
+
+  <form
+    method="get"
+    class="flex flex-col gap-3"
+    hx-get="{% url 'blam:blam_metadata_panel' %}"
+    hx-target="#metadata-panel"
+    hx-swap="outerHTML"
+  >
+    <input type="hidden" name="kind" value="{{ kind }}">
+    <div class="join w-full">
+      <input
+        type="search"
+        name="q"
+        value="{{ search_query }}"
+        placeholder="Search by title, handle or description..."
+        class="input input-bordered join-item w-full"
+        hx-get="{% url 'blam:blam_metadata_panel' %}"
+        hx-target="#metadata-panel"
+        hx-swap="outerHTML"
+        hx-trigger="keyup delay:350ms, change, search"
+        hx-include="closest form"
+      >
+      <button class="btn btn-outline join-item" type="submit">Search</button>
+    </div>
+    {% if search_query %}
+      <button
+        class="btn btn-ghost btn-sm self-start"
+        type="button"
+        hx-get="{% url 'blam:blam_metadata_panel' %}?kind={{ kind }}"
+        hx-target="#metadata-panel"
+        hx-swap="outerHTML"
+      >
+        Clear search
+      </button>
+    {% endif %}
+  </form>
+
+  <div class="overflow-x-auto">
+    {% if kind == 'collections' %}
+      {% include "blam/metadata/partials/collection_table.html" with collections=collections editor_target_id=editor_target_id %}
+    {% else %}
+      {% include "blam/metadata/partials/bundle_table.html" with bundles=bundles editor_target_id=editor_target_id %}
+    {% endif %}
+  </div>
+</div>
