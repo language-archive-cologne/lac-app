@@ -528,9 +528,8 @@ if SAML_LOGIN_ENABLED:
     _saml_cert_file = env("SAML_SP_CERT_FILE", default="")
     if _saml_cert_file:
         SAML_CONFIG["cert_file"] = _saml_cert_file
-    _saml_xmlsec = env("SAML_XMLSEC_BINARY", default="")
-    if _saml_xmlsec:
-        SAML_CONFIG["xmlsec_binary"] = _saml_xmlsec
+    _saml_xmlsec = env("SAML_XMLSEC_BINARY", default="/usr/bin/xmlsec1")
+    SAML_CONFIG["xmlsec_binary"] = _saml_xmlsec
 else:
     SAML_ATTRIBUTE_MAPPING = {}
     SAML_CONFIG: dict[str, object] = {}
