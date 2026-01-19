@@ -239,14 +239,18 @@ class ResourceMappingService(BaseStorageService):
             int: Total number of objects mapped (Collection + Bundles + Resources)
         """
         from lacos.storage.services.file_discovery_service import FileDiscoveryService
-        
+
         total_mapped = 0
         discovery_service = FileDiscoveryService()
-        bucket = discovery_service.production_bucket # Get bucket once
-        
+
         # 1. Map the Collection object itself
         try:
             collection = Collection.objects.get(id=collection_id)
+
+            # Use collection's import_bucket if available, otherwise fall back to production_bucket
+            # This ensures presigned URLs point to where the data actually exists
+            bucket = collection.import_bucket if collection.import_bucket else discovery_service.production_bucket
+            logger.info(f"Using bucket '{bucket}' for collection {collection_id} (import_bucket: {collection.import_bucket})")
             collection_key_prefix = discovery_service.form_collection_path(collection_id) + "/"  # Ensure trailing slash
             self.register_s3_location(collection, bucket, collection_key_prefix)
             logger.info(f"Mapped Collection {collection_id} to S3 location: {bucket}/{collection_key_prefix}")
