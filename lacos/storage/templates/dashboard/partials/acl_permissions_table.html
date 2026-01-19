@@ -8,7 +8,24 @@
           Showing {{ rows|length }} of {{ page_obj.paginator.count }} {{ scope }}s
         </p>
       </div>
-      <span class="badge badge-ghost badge-sm">Manual override available</span>
+      <div class="flex items-center gap-2 flex-wrap">
+        {% if orphan_count %}
+        <form
+          method="post"
+          action="{% url 'storage:acl_delete_orphans' scope %}?sort={{ sort }}&dir={{ direction }}&page={{ page_obj.number }}"
+          hx-post="{% url 'storage:acl_delete_orphans' scope %}?sort={{ sort }}&dir={{ direction }}&page={{ page_obj.number }}"
+          hx-target="#acl-records-table"
+          hx-swap="innerHTML"
+          hx-confirm="Delete {{ orphan_count }} orphaned ACL record(s)?"
+        >
+          {% csrf_token %}
+          <button type="submit" class="btn btn-outline btn-xs">
+            Clean orphans ({{ orphan_count }})
+          </button>
+        </form>
+        {% endif %}
+        <span class="badge badge-ghost badge-sm">Manual override available</span>
+      </div>
     </div>
 
     <div class="overflow-x-auto rounded-lg border border-base-300">

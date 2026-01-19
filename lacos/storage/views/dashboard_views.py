@@ -9,6 +9,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.contenttypes.models import ContentType
 from django.core.paginator import Paginator
 from django.db import models
+from django.db.models import CharField, Subquery
+from django.db.models.functions import Cast
 from django.http import HttpResponse, QueryDict
 from django.middleware.csrf import get_token
 from django.shortcuts import render, redirect
@@ -156,6 +158,7 @@ def _build_acl_table_context(request, scope: str) -> dict[str, object]:
     perms = ACLPermissions.objects.filter(content_type=content_type).select_related("content_type")
 
     rows = _build_acl_table_rows(model, perms, scope)
+    orphan_count = sum(1 for row in rows if not row["object_exists"])
 
     sort = request.GET.get("sort", "identifier")
     direction = request.GET.get("dir", "asc")
@@ -199,6 +202,7 @@ def _build_acl_table_context(request, scope: str) -> dict[str, object]:
     return {
         "scope": scope,
         "page_obj": page_obj,
+        "orphan_count": orphan_count,
         "sort": sort,
         "direction": direction,
         "available_sorts": [
@@ -447,6 +451,41 @@ def acl_records_table(request, scope: str):
         request,
         "dashboard/partials/acl_records_table_wrapper.html",
         records_context,
+    )
+
+
+@login_required
+@require_http_methods(["POST"])
+def acl_delete_orphans(request, scope: str):
+    try:
+        model = _get_acl_scope_model(scope)
+    except ValueError:
+        return HttpResponse(status=400)
+
+    content_type = ContentType.objects.get_for_model(model)
+    existing_ids = model.objects.annotate(
+        pk_str=Cast("pk", output_field=CharField())
+    ).values("pk_str")
+    orphans = ACLPermissions.objects.filter(content_type=content_type).exclude(
+        object_id__in=Subquery(existing_ids)
+    )
+    deleted_count, _ = orphans.delete()
+
+    if request.headers.get("HX-Request"):
+        records_context = _build_acl_table_context(request, scope)
+        response = render(
+            request,
+            "dashboard/partials/acl_records_table_wrapper.html",
+            records_context,
+        )
+        response["HX-Trigger"] = json.dumps(
+            {"aclOrphansDeleted": {"scope": scope, "deleted": deleted_count}}
+        )
+        return response
+
+    message = f"Deleted {deleted_count} orphaned ACL record(s) for {scope}s."
+    return redirect(
+        f"{reverse('storage:acl_admin_dashboard')}?tab=records&scope={scope}&message={quote_plus(message)}"
     )
 
 

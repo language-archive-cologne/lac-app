@@ -28,5 +28,5 @@
     </button>
   </div>
 
-  {% include "dashboard/partials/acl_records_table_wrapper.html" with scope=records_context.scope page_obj=records_context.page_obj sort=records_context.sort direction=records_context.direction available_sorts=records_context.available_sorts endpoint=records_context.endpoint access_level_choices=records_context.access_level_choices next_url=records_context.next_url page_size=records_context.page_size sort_toggles=records_context.sort_toggles %}
+  {% include "dashboard/partials/acl_records_table_wrapper.html" with scope=records_context.scope page_obj=records_context.page_obj sort=records_context.sort direction=records_context.direction available_sorts=records_context.available_sorts endpoint=records_context.endpoint access_level_choices=records_context.access_level_choices next_url=records_context.next_url page_size=records_context.page_size sort_toggles=records_context.sort_toggles orphan_count=records_context.orphan_count %}
 </div>

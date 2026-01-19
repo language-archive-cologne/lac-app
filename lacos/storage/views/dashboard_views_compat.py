@@ -19,6 +19,7 @@ from .dashboard.archivist import (
 from .dashboard.acl import (
     acl_admin_dashboard,
     acl_load_all,
+    acl_load_selected,
     acl_load_single,
     acl_save_all,
     acl_save_single,
@@ -50,6 +51,7 @@ __all__ = [
     # ACL
     "acl_admin_dashboard",
     "acl_load_all",
+    "acl_load_selected",
     "acl_load_single",
     "acl_save_all",
     "acl_save_single",

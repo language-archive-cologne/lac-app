@@ -197,6 +197,12 @@ def acl_admin_dashboard(request):
     collection_options = _get_acl_options(Collection)
     bundle_options = _get_acl_options(Bundle)
 
+    active_tab = request.GET.get("tab", "dashboard")
+    if active_tab not in {"dashboard", "records"}:
+        active_tab = "dashboard"
+
+    records_scope = request.GET.get("scope", "collection")
+
     return render(
         request,
         "dashboard/acl_admin_dashboard.html",
@@ -211,6 +217,9 @@ def acl_admin_dashboard(request):
             "sync_summary": None,
             "collection_options": collection_options,
             "bundle_options": bundle_options,
+            "active_tab": active_tab,
+            "records_scope": records_scope,
+            "records_context": None,
             "message": request.GET.get("message"),
         },
     )
@@ -265,6 +274,63 @@ def acl_load_all(request):
             return _render_load_summary_partial(request, error_message=str(e))
         else:
             return redirect(f"{reverse('storage:acl_admin_dashboard')}?message=Load failed: {e}")
+
+
+@login_required
+@require_http_methods(["POST"])
+def acl_load_selected(request):
+    """Load ACLs from S3 for selected collections and bundles."""
+    from lacos.storage.services.acl_service import ACLService
+
+    collection_ids = [cid for cid in request.POST.getlist("collection_ids") if cid]
+    bundle_ids = [bid for bid in request.POST.getlist("bundle_ids") if bid]
+
+    if not collection_ids and not bundle_ids:
+        return _render_load_summary_partial(request, error_message="Select at least one collection or bundle.")
+
+    service = ACLService(skip_bucket_check=True)
+    results = []
+
+    try:
+        collections = list(Collection.objects.filter(pk__in=collection_ids))
+        bundles = list(Bundle.objects.filter(pk__in=bundle_ids))
+
+        if not collections and not bundles:
+            return _render_load_summary_partial(request, error_message="No matching collections or bundles found.")
+
+        for collection in collections:
+            results.append(service.load_collection(collection))
+        for bundle in bundles:
+            results.append(service.load_bundle(bundle))
+
+        total_loaded = sum(1 for r in results if r.success)
+        total_errors = sum(1 for r in results if not r.success)
+
+        scope_parts = []
+        if collections:
+            scope_parts.append(f"{len(collections)} collection(s)")
+        if bundles:
+            scope_parts.append(f"{len(bundles)} bundle(s)")
+        scope_label = f"Selected {', '.join(scope_parts)}"
+
+        summary = {
+            "scope": scope_label,
+            "loaded": total_loaded,
+            "errors": total_errors,
+            "total": len(results),
+        }
+
+        if request.headers.get("HX-Request"):
+            return _render_load_summary_partial(request, summary=summary)
+
+        msg = f"Loaded {total_loaded} ACLs for {scope_label}"
+        return redirect(f"{reverse('storage:acl_admin_dashboard')}?message={msg}")
+
+    except Exception as e:
+        logger.exception("Error in acl_load_selected: %s", e)
+        if request.headers.get("HX-Request"):
+            return _render_load_summary_partial(request, error_message=str(e))
+        return redirect(f"{reverse('storage:acl_admin_dashboard')}?message=Load failed: {e}")
 
 
 def _render_save_summary_partial(request, summary=None, error_message=None):
