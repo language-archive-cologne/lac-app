@@ -147,23 +147,23 @@
       </div>
       <div class="grid gap-2 md:grid-cols-2">
         <div class="flex items-center justify-between rounded-md border border-base-200 bg-base-200/40 px-3 py-2">
-          <span class="text-xs text-base-content/60">ACL records (all types)</span>
-          <span class="text-sm font-semibold text-primary">{{ overall_summary.synced_objects }}</span>
+          <span class="text-xs text-base-content/60">ACL rows / objects</span>
+          <span class="text-sm font-semibold text-primary">{{ overall_summary.records }}/{{ overall_summary.total_objects }}</span>
         </div>
         <div class="flex items-center justify-between rounded-md border border-base-200 bg-base-200/40 px-3 py-2">
           <span class="text-xs text-base-content/60">Objects missing ACL</span>
           <span class="text-sm font-semibold {% if overall_summary.unsynced_objects > 0 %}text-warning{% endif %}">{{ overall_summary.unsynced_objects }}</span>
         </div>
       </div>
-      {% if overall_summary.synced_objects > overall_summary.total_objects %}
-      <p class="text-[11px] text-base-content/50">Includes orphaned ACL records that no longer map to collections/bundles.</p>
+      {% if overall_summary.records > overall_summary.total_objects %}
+      <p class="text-[11px] text-base-content/50">ACL rows exceed objects; some rows are orphaned.</p>
       {% endif %}
       <div class="overflow-x-auto rounded-lg border border-base-200">
         <table class="table table-xs">
           <thead>
             <tr class="text-[11px] uppercase text-base-content/50">
               <th>Type</th>
-              <th>ACL / Objects</th>
+              <th>ACL rows / objects</th>
               <th>Missing ACL</th>
               <th>Last sync</th>
             </tr>
