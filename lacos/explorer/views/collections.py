@@ -5,7 +5,7 @@ import logging
 from urllib.parse import unquote
 
 from django.core.cache import cache
-from django.db.models import Count, Min, Prefetch
+from django.db.models import Count, Min, Prefetch, Q
 from django.http import Http404, HttpResponseForbidden
 from django.shortcuts import redirect, render
 from django.utils.translation import gettext_lazy as _
@@ -20,6 +20,7 @@ from lacos.blam.models.collection.collection_general_info import (
 from lacos.blam.models.collection.collection_structural_info import (
     CollectionAdditionalMetadataFile,
 )
+from lacos.explorer.glottolog import lookup_glottolog_entry
 from lacos.explorer.map_utils import get_collection_map_markers
 from lacos.explorer.media_utils import determine_media_type, guess_source_mime_type
 from lacos.explorer.search import search_archives
@@ -58,6 +59,14 @@ class CollectionListView(ListView):
             first_language=Min('general_info__object_languages__name'),
         )
 
+        language_filter = self.request.GET.get("language", "").strip()
+        if language_filter:
+            queryset = queryset.filter(
+                Q(general_info__object_languages__name__iexact=language_filter)
+                | Q(general_info__object_languages__display_name__iexact=language_filter)
+                | Q(general_info__object_languages__iso_639_3_code__iexact=language_filter)
+            ).distinct()
+
         sort = self.request.GET.get('sort', 'name')
         order = self.request.GET.get('order', 'asc')
         prefix = '-' if order == 'desc' else ''
@@ -78,6 +87,8 @@ class CollectionListView(ListView):
         context = super().get_context_data(**kwargs)
         search_query = self.request.GET.get("q", "").strip()
         context["search_query"] = search_query
+        language_filter = self.request.GET.get("language", "").strip()
+        context["language_filter"] = language_filter
         if search_query:
             search_results = search_archives(search_query)
             context["search_results"] = search_results
@@ -102,11 +113,16 @@ class CollectionListView(ListView):
 
         context['map_markers_json'] = get_collection_map_markers(context['collection_list'])
 
-        # Cache language count as it rarely changes
-        languages_count = cache.get(LANGUAGE_COUNT_CACHE_KEY)
-        if languages_count is None:
-            languages_count = CollectionObjectLanguage.objects.values('name').distinct().count()
-            cache.set(LANGUAGE_COUNT_CACHE_KEY, languages_count, LANGUAGE_COUNT_CACHE_TIMEOUT)
+        # Cache language count as it rarely changes unless filtered.
+        if language_filter:
+            languages_count = CollectionObjectLanguage.objects.filter(
+                collectiongeneralinfo__collection__in=context['collection_list']
+            ).distinct().count()
+        else:
+            languages_count = cache.get(LANGUAGE_COUNT_CACHE_KEY)
+            if languages_count is None:
+                languages_count = CollectionObjectLanguage.objects.values('name').distinct().count()
+                cache.set(LANGUAGE_COUNT_CACHE_KEY, languages_count, LANGUAGE_COUNT_CACHE_TIMEOUT)
 
         context['stats'] = {
             'collections_count': (
@@ -116,6 +132,47 @@ class CollectionListView(ListView):
             ),
             'languages_count': languages_count,
         }
+
+        if not search_query:
+            languages_qs = (
+                CollectionObjectLanguage.objects.filter(
+                    collectiongeneralinfo__collection__in=context['collection_list']
+                )
+                .exclude(name__isnull=True)
+                .exclude(name__exact="")
+                .distinct()
+                .annotate(collections_count=Count('collectiongeneralinfo', distinct=True))
+                .filter(collections_count__gt=0)
+            )
+            language_spotlight = list(languages_qs.order_by(
+                '-collections_count',
+                'name',
+            )[:12])
+            language_index = list(languages_qs.order_by('name'))
+            for language in language_spotlight + language_index:
+                entry = lookup_glottolog_entry(
+                    glottocode=language.glottolog_code,
+                    iso_code=language.iso_639_3_code,
+                )
+                if entry:
+                    language.glottolog_macroarea = entry.get("macroarea")
+                    language.glottolog_latitude = entry.get("latitude")
+                    language.glottolog_longitude = entry.get("longitude")
+            context['language_spotlight'] = language_spotlight
+            context['language_index'] = language_index
+            if language_filter:
+                context['selected_language'] = languages_qs.filter(
+                    Q(name__iexact=language_filter)
+                    | Q(display_name__iexact=language_filter)
+                    | Q(iso_639_3_code__iexact=language_filter)
+                ).first()
+                if context['selected_language']:
+                    entry = lookup_glottolog_entry(
+                        glottocode=context['selected_language'].glottolog_code,
+                        iso_code=context['selected_language'].iso_639_3_code,
+                    )
+                    if entry:
+                        context['selected_language'].glottolog_macroarea = entry.get("macroarea")
 
         context['current_sort'] = self.request.GET.get('sort', 'name')
         context['current_order'] = self.request.GET.get('order', 'asc')
@@ -128,6 +185,12 @@ class CollectionListView(ListView):
                 return render(
                     self.request,
                     'explorer/partials/collection_search_results_content.html',
+                    context,
+                )
+            if self.request.headers.get('HX-Target') == 'collection-language-shell':
+                return render(
+                    self.request,
+                    'explorer/partials/collection_language_shell.html',
                     context,
                 )
             if 'sort' in self.request.GET:

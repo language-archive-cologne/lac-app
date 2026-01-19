@@ -17,6 +17,7 @@
       <!-- Collections Map -->
       <div class="mb-4 rounded-xl shadow-sm border border-base-300 overflow-hidden relative">
         <div id="collections-map" style="height: 500px;"></div>
+        <script id="collections-markers" type="application/json">{{ map_markers_json|safe }}</script>
         <button id="recenter-btn"
                 class="absolute top-2 right-12 z-10 bg-base-100 hover:bg-base-200 border border-base-300 rounded-md p-1.5 shadow-sm transition-colors"
                 title="{% translate 'Fit all markers' %}">
@@ -26,13 +27,7 @@
         </button>
       </div>
 
-      <!-- Archive Statistics -->
-      <p class="text-sm text-base-content/60 mb-6">
-        {% blocktrans with collections=stats.collections_count languages=stats.languages_count %}
-          Browsing <strong class="text-base-content">{{ collections }}</strong> collections across <strong class="text-base-content">{{ languages }}</strong> languages
-        {% endblocktrans %}
-      </p>
-      {% include "explorer/partials/collections_table.html" %}
+      {% include "explorer/partials/collection_language_shell.html" %}
     {% else %}
       <p class="text-base-content/60">{% translate "No collections available." %}</p>
     {% endif %}
@@ -62,10 +57,17 @@
       }
     });
 
-    // Initialize collections overview map
-    (function() {
-      const markers = {{ map_markers_json|safe }};
-      if (markers.length === 0) return;
+    window.collectionsMap = null;
+    window.collectionMarkers = [];
+
+    window.initCollectionsMap = function initCollectionsMap() {
+      const container = document.getElementById('collections-map');
+      if (!container || container.dataset.mapInitialized === 'true') return;
+
+      const markersScript = document.getElementById('collections-markers');
+      const rawMarkers = markersScript ? markersScript.textContent.trim() : '[]';
+      const markers = rawMarkers ? JSON.parse(rawMarkers) : [];
+      if (!markers.length) return;
 
       const map = new maplibregl.Map({
         container: 'collections-map',
@@ -77,20 +79,76 @@
 
       map.addControl(new maplibregl.NavigationControl());
 
-      markers.forEach(function(m) {
+      window.collectionsMap = map;
+      window.collectionMarkers = markers.map(function(m) {
         const popup = new maplibregl.Popup({ offset: 25 })
           .setHTML('<a href="' + m.url + '" class="font-medium hover:underline">' + m.title + '</a>');
 
-        new maplibregl.Marker()
+        const marker = new maplibregl.Marker()
           .setLngLat([m.lng, m.lat])
           .setPopup(popup)
           .addTo(map);
+
+        return {
+          marker: marker,
+          data: m,
+        };
       });
 
-      // Recenter button - return to original position
+      container.dataset.mapInitialized = 'true';
+      window.updateCollectionsMap();
+
       document.getElementById('recenter-btn').addEventListener('click', function() {
         map.flyTo({ center: [20, 20], zoom: 0.7 });
       });
-    })();
+    };
+
+    window.updateCollectionsMap = function updateCollectionsMap() {
+      const map = window.collectionsMap;
+      if (!map || !window.collectionMarkers.length) return;
+
+      const state = document.getElementById('language-filter-state');
+      const activeLanguage = state ? state.dataset.languageFilter : '';
+      const activeKey = activeLanguage ? activeLanguage.toLowerCase() : '';
+      const bounds = new maplibregl.LngLatBounds();
+      const matchBounds = new maplibregl.LngLatBounds();
+      let hasMatch = false;
+
+      window.collectionMarkers.forEach(function(entry) {
+        const marker = entry.marker;
+        const data = entry.data;
+        const keys = data.language_keys || [];
+        const element = marker.getElement();
+        const isMatch = activeKey && keys.includes(activeKey);
+
+        if (activeKey) {
+          element.style.color = isMatch ? '#f97316' : '#1d4ed8';
+          element.style.opacity = isMatch ? '1' : '0.35';
+        } else {
+          element.style.color = '#1d4ed8';
+          element.style.opacity = '1';
+        }
+
+        bounds.extend([data.lng, data.lat]);
+        if (isMatch) {
+          matchBounds.extend([data.lng, data.lat]);
+          hasMatch = true;
+        }
+      });
+
+      if (activeKey && hasMatch) {
+        map.fitBounds(matchBounds, { padding: 60, maxZoom: 4 });
+      } else if (!bounds.isEmpty()) {
+        map.fitBounds(bounds, { padding: 60, maxZoom: 4 });
+      }
+    };
+
+    window.initCollectionsMap();
+
+    document.body.addEventListener('htmx:afterSwap', function(event) {
+      if (event.target && event.target.id === 'collection-language-shell') {
+        window.updateCollectionsMap();
+      }
+    });
   </script>
 {% endblock explorer_content %}
