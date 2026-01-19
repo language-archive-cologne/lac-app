@@ -1,29 +1,63 @@
 # Language Archive Cologne (LAC)
-# https://lacos.uni-koeln.de
 
-> The Language Archive Cologne is a digital archive of language resources containing collections of primary language data, including audio and video recordings, as well as linguistic analyses such as transcriptions, translations and annotations.
+> The Language Archive Cologne is a digital archive of language resources containing collections of primary language data, including audio and video recordings, as well as linguistic analyses such as transcriptions, translations and annotations. Hosted at the University of Cologne, Germany.
+
+The archive preserves endangered and under-documented languages through systematic collection and curation of linguistic materials from researchers worldwide.
+
+## Main Sections
+
+- [Collections](/explorer/collections/): Browse language documentation collections organized by language, region, and project
+- [About](/about/): Learn about the archive's mission, history, and team
+- [User Guides](/user-guides/): Documentation for researchers and archivists
+- [API Documentation](/api/docs/): REST API for programmatic access to metadata
+- [OAI-PMH](/oai-pmh/): Metadata harvesting endpoint for interoperability
+
+## Content Types
+
+The archive contains:
+- Audio recordings of speakers and linguistic elicitation sessions
+- Video recordings of conversations, narratives, and cultural events
+- Transcriptions in various orthographies and linguistic notations
+- Annotations including morphological glosses and translations
+- Metadata describing collections, sessions, and resources
+
+## Access Levels
+
+- **Public**: Collection and bundle metadata is openly accessible
+- **Restricted**: Media files require authentication and authorization
+- **Embargoed**: Some materials have time-limited access restrictions
+- **Protected**: Culturally sensitive content with special access requirements
 
 ## Usage Policy
 
-This archive contains copyrighted and culturally sensitive language documentation materials. The content is NOT available for:
+This archive contains copyrighted and culturally sensitive language documentation materials.
 
-- AI/ML model training
-- Large language model training
+**Prohibited uses:**
+- AI/ML model training or fine-tuning
+- Large language model training data
 - Text/data mining for commercial purposes
 - Automated scraping or bulk downloading
+- Redistribution without authorization
 
-## Access
+**Permitted uses:**
+- Academic research with proper attribution
+- Search engine indexing of public metadata
+- Authorized API access for research purposes
 
-- Public metadata may be indexed by search engines
-- Media files and annotations require authorization
-- Some content is protected or embargoed
+## Technical
+
+- Framework: Django with REST API
+- Metadata standard: BLAM (Basic Language Archive Metadata)
+- Protocol support: OAI-PMH for metadata harvesting
+- Authentication: Institutional login (SAML2) and API tokens
 
 ## Contact
 
-For licensing inquiries or research collaboration:
-- Email: lac-helpdesk@uni-koeln.de
-- Website: https://lacos.uni-koeln.de/about/
+- Helpdesk: lac-helpdesk@uni-koeln.de
+- Website: https://lacos.uni-koeln.de
+- Imprint: https://lacos.uni-koeln.de/imprint/
+- Privacy Policy: https://lacos.uni-koeln.de/privacy-policy/
 
 ## Legal
 
-All content is protected under applicable copyright laws. Unauthorized use for AI training purposes is prohibited.
+All content is protected under applicable copyright laws and the intellectual property rights of the depositing researchers and communities. Unauthorized use for AI training purposes is explicitly prohibited.
