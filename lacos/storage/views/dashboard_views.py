@@ -107,7 +107,7 @@ def _build_acl_table_rows(model, perms_qs, scope_type):
                 "object_exists": True,
                 "access_level": perm.access_level if perm else None,
                 "last_synced": perm.last_synced if perm else None,
-                "read_agents": perm.read_agents or [],
+                "read_agents": (perm.read_agents or []) if perm else [],
                 "bucket": perm.ACL_file_bucket if perm else None,
                 "key": perm.ACL_file_key if perm else None,
             }
