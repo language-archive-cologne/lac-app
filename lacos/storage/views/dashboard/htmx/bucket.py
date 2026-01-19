@@ -176,7 +176,7 @@ class RenameBucketModalHTMXView(HtmxTemplateHelperMixin, View):
         """Render the rename bucket modal."""
         return render(
             request,
-            "dashboard/modals/rename_bucket_modal.html",
+            "dashboard/partials/rename_bucket_modal.html",
             {"bucket_name": bucket_name},
         )
 
@@ -187,13 +187,32 @@ class RenameObjectModalHTMXView(HtmxTemplateHelperMixin, View):
 
     def get(self, request, bucket_name, object_type, object_path):
         """Render the rename object modal."""
+        from django.urls import reverse
+
+        # Extract the current name from the object path
+        current_name = object_path.rstrip('/').rsplit('/', 1)[-1]
+
+        # Build the form action URL
+        form_action = reverse(
+            'storage:rename_object_htmx',
+            kwargs={
+                'bucket_name': bucket_name,
+                'object_type': object_type,
+                'object_path': object_path,
+            }
+        )
+
         return render(
             request,
-            "dashboard/modals/rename_object_modal.html",
+            "dashboard/partials/rename_object_modal.html",
             {
                 "bucket_name": bucket_name,
                 "object_type": object_type,
                 "object_path": object_path,
+                "current_name": current_name,
+                "form_action": form_action,
+                "modal_open": True,
+                "oob": True,
             },
         )
 
