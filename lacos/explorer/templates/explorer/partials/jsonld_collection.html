@@ -1,0 +1,44 @@
+{% load i18n %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Dataset",
+  "name": "{% if collection.get_general_info.display_title %}{{ collection.get_general_info.display_title|escapejs }}{% elif collection.get_general_info.title %}{{ collection.get_general_info.title|escapejs }}{% else %}{{ collection.identifier|escapejs }}{% endif %}",
+  {% if collection.get_general_info.description %}"description": "{{ collection.get_general_info.description|escapejs }}",{% endif %}
+  "url": "{{ request.scheme }}://{{ request.get_host }}{% url 'explorer:collection_detail_by_handle' handle=collection.identifier %}",
+  "identifier": "{{ collection.identifier|escapejs }}",
+  "encodingFormat": "audio-visual",
+  "provider": {
+    "@type": "Organization",
+    "name": "Language Archive Cologne",
+    "url": "https://lacos.uni-koeln.de"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "University of Cologne",
+    "url": "https://www.uni-koeln.de"
+  }{% if collection.get_general_info.object_languages.all %},
+  "inLanguage": [{% for language in collection.get_general_info.object_languages.all %}{% if language.iso_639_3_code %}"{{ language.iso_639_3_code|escapejs }}"{% else %}"{{ language.name|escapejs }}"{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}],
+  "about": [{% for language in collection.get_general_info.object_languages.all %}{"@type": "Language", "name": "{{ language.name|escapejs }}"{% if language.iso_639_3_code %}, "alternateName": "{{ language.iso_639_3_code|escapejs }}"{% endif %}}{% if not forloop.last %}, {% endif %}{% endfor %}]{% endif %}{% if collection.formatted_location %},
+  "spatialCoverage": {
+    "@type": "Place",
+    "name": "{{ collection.formatted_location|escapejs }}"{% if collection.geo_location %},
+    "geo": {
+      "@type": "GeoCoordinates",
+      "latitude": {{ collection.geo_location.y }},
+      "longitude": {{ collection.geo_location.x }}
+    }{% endif %}
+  }{% endif %}{% if collection.publication_info.first %},
+  {% if collection.publication_info.first.publication_year %}"datePublished": "{{ collection.publication_info.first.publication_year }}",{% endif %}
+  {% if collection.publication_info.first.creators.all %}"creator": [{% for creator in collection.publication_info.first.creators.all %}{
+    "@type": "Person",
+    "name": "{{ creator.given_name|escapejs }} {{ creator.family_name|escapejs }}"{% if creator.affiliation %},
+    "affiliation": {
+      "@type": "Organization",
+      "name": "{{ creator.affiliation|escapejs }}"
+    }{% endif %}
+  }{% if not forloop.last %}, {% endif %}{% endfor %}]{% endif %}{% endif %},
+  "isAccessibleForFree": {% if collection_acl_check_result.access_level == 'public' %}true{% else %}false{% endif %},
+  "license": "https://lacos.uni-koeln.de/privacy-policy/"
+}
+</script>

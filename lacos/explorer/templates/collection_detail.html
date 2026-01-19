@@ -3,6 +3,10 @@
 {% load static %}
 {% load explorer_extras %}
 
+{% block structured_data %}
+  {% include "explorer/partials/jsonld_collection.html" %}
+{% endblock structured_data %}
+
 {% block title %}
   {% if collection.get_general_info.display_title %}
     {{ collection.get_general_info.display_title }}
