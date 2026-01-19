@@ -8,7 +8,7 @@
 <meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{% url 'explorer:collection_detail_by_handle' handle=collection.identifier %}" />
 <meta property="og:title" content="{% if collection.get_general_info.display_title %}{{ collection.get_general_info.display_title }}{% elif collection.get_general_info.title %}{{ collection.get_general_info.title }}{% else %}{{ collection.identifier }}{% endif %}" />
 <meta property="og:description" content="{% if collection.get_general_info.description %}{{ collection.get_general_info.description|truncatewords:30 }}{% else %}Language documentation collection from the Language Archive Cologne.{% endif %}" />
-<meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% load static %}{% static 'images/og-image.png' %}" />
+<meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% load static %}{% static 'images/logo-LAC.png' %}" />
 <meta property="og:site_name" content="Language Archive Cologne" />
 <meta property="og:locale" content="{{ LANGUAGE_CODE }}" />
 
@@ -17,4 +17,4 @@
 <meta name="twitter:url" content="{{ request.scheme }}://{{ request.get_host }}{% url 'explorer:collection_detail_by_handle' handle=collection.identifier %}" />
 <meta name="twitter:title" content="{% if collection.get_general_info.display_title %}{{ collection.get_general_info.display_title }}{% elif collection.get_general_info.title %}{{ collection.get_general_info.title }}{% else %}{{ collection.identifier }}{% endif %}" />
 <meta name="twitter:description" content="{% if collection.get_general_info.description %}{{ collection.get_general_info.description|truncatewords:30 }}{% else %}Language documentation collection from the Language Archive Cologne.{% endif %}" />
-<meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% load static %}{% static 'images/og-image.png' %}" />
+<meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% load static %}{% static 'images/logo-LAC.png' %}" />
