@@ -21,22 +21,47 @@
           <div class="text-xs font-mono text-base-content/50">{{ bundle.identifier }}</div>
         </td>
         <td>
-          {% if editor_target_id %}
-            <a
-              class="btn btn-sm"
-              href="{% url 'blam:bundle_metadata_overview' bundle.pk %}"
-              hx-get="{% url 'blam:bundle_metadata_overview' bundle.pk %}"
-              hx-target="#{{ editor_target_id }}"
-              hx-select="#metadata-editor"
-              hx-swap="innerHTML"
-              hx-push-url="true"
-              hx-indicator="#metadata-editor-spinner"
+          <div class="flex items-center gap-2">
+            {% if editor_target_id %}
+              <a
+                class="btn btn-ghost btn-xs"
+                href="{% url 'blam:bundle_metadata_overview' bundle.pk %}"
+                hx-get="{% url 'blam:bundle_metadata_overview' bundle.pk %}"
+                hx-target="#{{ editor_target_id }}"
+                hx-select="#metadata-editor"
+                hx-swap="innerHTML"
+                hx-push-url="true"
+                hx-indicator="#metadata-editor-spinner"
+                aria-label="Edit bundle"
+                title="Edit bundle"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5h6m-6 0l-7 7v6h6l7-7M11 5l6 6" />
+                </svg>
+              </a>
+            {% else %}
+              <a class="btn btn-ghost btn-xs" href="{% url 'blam:bundle_metadata_overview' bundle.pk %}" aria-label="Edit bundle" title="Edit bundle">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5h6m-6 0l-7 7v6h6l7-7M11 5l6 6" />
+                </svg>
+              </a>
+            {% endif %}
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs text-error"
+              hx-post="{% url 'blam:delete_model' model_type='bundle' object_id=bundle.pk %}"
+              hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+              hx-target="closest tr"
+              hx-swap="outerHTML"
+              hx-confirm="Delete this bundle?"
+              aria-label="Delete bundle"
+              title="Delete bundle"
             >
-              Edit
-            </a>
-          {% else %}
-            <a class="btn btn-sm" href="{% url 'blam:bundle_metadata_overview' bundle.pk %}">Edit</a>
-          {% endif %}
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          </div>
         </td>
       </tr>
     {% empty %}

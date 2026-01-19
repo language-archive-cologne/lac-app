@@ -37,141 +37,144 @@
         </div>
     </div>
 
-    <div class="grid gap-6 lg:grid-cols-12">
-        <div class="lg:col-span-5">
-            <div class="card bg-base-100 shadow">
-                <div class="card-body space-y-4">
-                    <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                        <div>
-                            <h2 class="card-title">Metadata workspace</h2>
-                            <p class="text-sm text-base-content/60">Search and open editors without leaving the dashboard.</p>
-                        </div>
-                        <div id="metadata-meta" class="text-xs text-base-content/60">
-                            <span class="loading loading-spinner loading-xs"></span>
+    <div class="tabs tabs-lifted" role="tablist">
+        <input type="radio" name="blam_dashboard_tabs" role="tab" class="tab" aria-label="Metadata" checked />
+        <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-6">
+            <div class="grid gap-6 lg:grid-cols-12">
+                <div class="lg:col-span-5">
+                    <div class="card bg-base-100 shadow">
+                        <div class="card-body space-y-4">
+                            <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                                <div>
+                                    <h2 class="card-title">Metadata workspace</h2>
+                                    <p class="text-sm text-base-content/60">Search and open editors without leaving the dashboard.</p>
+                                </div>
+                                <div id="metadata-meta" class="text-xs text-base-content/60">
+                                    <span class="loading loading-spinner loading-xs"></span>
+                                </div>
+                            </div>
+                            <div
+                                id="metadata-panel"
+                                hx-get="{% url 'blam:blam_metadata_panel' %}"
+                                hx-trigger="load"
+                                hx-target="#metadata-panel"
+                                hx-swap="outerHTML"
+                            >
+                                <div class="flex items-center justify-center py-10">
+                                    <span class="loading loading-spinner loading-md"></span>
+                                    <span class="ml-3 text-sm text-base-content/60">Loading metadata...</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div
-                        id="metadata-panel"
-                        hx-get="{% url 'blam:blam_metadata_panel' %}"
-                        hx-trigger="load"
-                        hx-target="#metadata-panel"
-                        hx-swap="outerHTML"
-                    >
-                        <div class="flex items-center justify-center py-10">
-                            <span class="loading loading-spinner loading-md"></span>
-                            <span class="ml-3 text-sm text-base-content/60">Loading metadata...</span>
+                </div>
+
+                <div class="lg:col-span-7">
+                    <div class="card bg-base-100 shadow">
+                        <div class="card-body">
+                            <div class="flex items-center justify-between">
+                                <h2 class="card-title">Metadata editor</h2>
+                                <div class="flex items-center gap-2 text-xs text-base-content/60">
+                                    <span id="metadata-editor-spinner" class="htmx-indicator loading loading-spinner loading-xs"></span>
+                                    <span>Loads inline</span>
+                                </div>
+                            </div>
+                            <div id="metadata-editor-shell" class="mt-4" hx-boost="false">
+                                <div class="rounded-lg border border-dashed border-base-300 bg-base-200/60 p-6 text-center">
+                                    <div class="text-sm text-base-content/60">Select a collection or bundle to start editing.</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="lg:col-span-7">
-            <div class="card bg-base-100 shadow">
-                <div class="card-body">
-                    <div class="flex items-center justify-between">
-                        <h2 class="card-title">Metadata editor</h2>
-                        <div class="flex items-center gap-2 text-xs text-base-content/60">
-                            <span id="metadata-editor-spinner" class="htmx-indicator loading loading-spinner loading-xs"></span>
-                            <span>Loads inline</span>
-                        </div>
+        <input type="radio" name="blam_dashboard_tabs" role="tab" class="tab" aria-label="Database" />
+        <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-semibold">Database statistics</h2>
+                <span class="text-xs text-base-content/60">Live snapshot</span>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="card bg-base-100 shadow">
+                    <div class="card-body">
+                        <h3 class="font-semibold">Collections</h3>
+                        <ul class="mt-3 divide-y divide-base-300 text-sm">
+                            <li class="flex justify-between items-center py-2">
+                                <span>Total collections</span>
+                                <span class="badge badge-primary badge-sm">{{ stats.collections.total }}</span>
+                            </li>
+                            <li class="flex justify-between items-center py-2">
+                                <span>With bundles</span>
+                                <span class="badge badge-primary badge-sm">{{ stats.collections.with_bundles }}</span>
+                            </li>
+                        </ul>
                     </div>
-                    <div id="metadata-editor-shell" class="mt-4" hx-boost="false">
-                        <div class="rounded-lg border border-dashed border-base-300 bg-base-200/60 p-6 text-center">
-                            <div class="text-sm text-base-content/60">Select a collection or bundle to start editing.</div>
-                        </div>
+                </div>
+
+                <div class="card bg-base-100 shadow">
+                    <div class="card-body">
+                        <h3 class="font-semibold">Bundles</h3>
+                        <ul class="mt-3 divide-y divide-base-300 text-sm">
+                            <li class="flex justify-between items-center py-2">
+                                <span>Total bundles</span>
+                                <span class="badge badge-primary badge-sm">{{ stats.bundles.total }}</span>
+                            </li>
+                            <li class="flex justify-between items-center py-2">
+                                <span>With collections</span>
+                                <span class="badge badge-primary badge-sm">{{ stats.bundles.with_collections }}</span>
+                            </li>
+                            <li class="flex justify-between items-center py-2">
+                                <span>Without collections</span>
+                                <span class="badge badge-primary badge-sm">{{ stats.bundles.without_collections }}</span>
+                            </li>
+                            <li class="flex justify-between items-center py-2">
+                                <span>With structural info</span>
+                                <span class="badge badge-primary badge-sm">{{ stats.bundles.with_structural_info }}</span>
+                            </li>
+                            <li class="flex justify-between items-center py-2">
+                                <span>With resources</span>
+                                <span class="badge badge-primary badge-sm">{{ stats.bundles.with_resources }}</span>
+                            </li>
+                            <li class="flex justify-between items-center py-2">
+                                <span>Without resources</span>
+                                <span class="badge badge-primary badge-sm">{{ stats.bundles.without_resources }}</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="card bg-base-100 shadow">
+                    <div class="card-body">
+                        <h3 class="font-semibold">Resources</h3>
+                        <ul class="mt-3 divide-y divide-base-300 text-sm">
+                            <li class="flex justify-between items-center py-2">
+                                <span>Resource containers</span>
+                                <span class="badge badge-primary badge-sm">{{ stats.resources.total_containers }}</span>
+                            </li>
+                            <li class="flex justify-between items-center py-2">
+                                <span>Empty containers</span>
+                                <span class="badge badge-primary badge-sm">{{ stats.resources.empty_containers }}</span>
+                            </li>
+                            <li class="flex justify-between items-center py-2">
+                                <span>Media resources</span>
+                                <span class="badge badge-primary badge-sm">{{ stats.resources.media_resources }}</span>
+                            </li>
+                            <li class="flex justify-between items-center py-2">
+                                <span>Written resources</span>
+                                <span class="badge badge-primary badge-sm">{{ stats.resources.written_resources }}</span>
+                            </li>
+                            <li class="flex justify-between items-center py-2">
+                                <span>Other resources</span>
+                                <span class="badge badge-primary badge-sm">{{ stats.resources.other_resources }}</span>
+                            </li>
+                        </ul>
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <!-- Database Statistics Section -->
-    <div class="mt-10">
-        <div class="flex items-center justify-between mb-4">
-            <h2 class="text-xl font-semibold">Database statistics</h2>
-            <span class="text-xs text-base-content/60">Live snapshot</span>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div class="card bg-base-100 shadow">
-                <div class="card-body">
-                    <h3 class="font-semibold">Collections</h3>
-                    <ul class="mt-3 divide-y divide-base-300 text-sm">
-                        <li class="flex justify-between items-center py-2">
-                            <span>Total collections</span>
-                            <span class="badge badge-primary badge-sm">{{ stats.collections.total }}</span>
-                        </li>
-                        <li class="flex justify-between items-center py-2">
-                            <span>With bundles</span>
-                            <span class="badge badge-primary badge-sm">{{ stats.collections.with_bundles }}</span>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-
-            <div class="card bg-base-100 shadow">
-                <div class="card-body">
-                    <h3 class="font-semibold">Bundles</h3>
-                    <ul class="mt-3 divide-y divide-base-300 text-sm">
-                        <li class="flex justify-between items-center py-2">
-                            <span>Total bundles</span>
-                            <span class="badge badge-primary badge-sm">{{ stats.bundles.total }}</span>
-                        </li>
-                        <li class="flex justify-between items-center py-2">
-                            <span>With collections</span>
-                            <span class="badge badge-primary badge-sm">{{ stats.bundles.with_collections }}</span>
-                        </li>
-                        <li class="flex justify-between items-center py-2">
-                            <span>Without collections</span>
-                            <span class="badge badge-primary badge-sm">{{ stats.bundles.without_collections }}</span>
-                        </li>
-                        <li class="flex justify-between items-center py-2">
-                            <span>With structural info</span>
-                            <span class="badge badge-primary badge-sm">{{ stats.bundles.with_structural_info }}</span>
-                        </li>
-                        <li class="flex justify-between items-center py-2">
-                            <span>With resources</span>
-                            <span class="badge badge-primary badge-sm">{{ stats.bundles.with_resources }}</span>
-                        </li>
-                        <li class="flex justify-between items-center py-2">
-                            <span>Without resources</span>
-                            <span class="badge badge-primary badge-sm">{{ stats.bundles.without_resources }}</span>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-
-            <div class="card bg-base-100 shadow">
-                <div class="card-body">
-                    <h3 class="font-semibold">Resources</h3>
-                    <ul class="mt-3 divide-y divide-base-300 text-sm">
-                        <li class="flex justify-between items-center py-2">
-                            <span>Resource containers</span>
-                            <span class="badge badge-primary badge-sm">{{ stats.resources.total_containers }}</span>
-                        </li>
-                        <li class="flex justify-between items-center py-2">
-                            <span>Empty containers</span>
-                            <span class="badge badge-primary badge-sm">{{ stats.resources.empty_containers }}</span>
-                        </li>
-                        <li class="flex justify-between items-center py-2">
-                            <span>Media resources</span>
-                            <span class="badge badge-primary badge-sm">{{ stats.resources.media_resources }}</span>
-                        </li>
-                        <li class="flex justify-between items-center py-2">
-                            <span>Written resources</span>
-                            <span class="badge badge-primary badge-sm">{{ stats.resources.written_resources }}</span>
-                        </li>
-                        <li class="flex justify-between items-center py-2">
-                            <span>Other resources</span>
-                            <span class="badge badge-primary badge-sm">{{ stats.resources.other_resources }}</span>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
         <!-- Database Maintenance Card -->
         <div>
             <div class="bg-base-100 rounded-lg shadow overflow-hidden">
@@ -269,13 +272,15 @@
         </div>
     </div>
     
-    <!-- Results container -->
-    <div id="results-container" class="mb-8"></div>
-    
-    <!-- Confirm Modal -->
-    <div id="confirm-modal-wrapper" class="hidden fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
-        <div id="confirm-modal" class="bg-base-100 rounded-lg shadow-lg p-6 max-w-lg w-full mx-4">
-            <!-- Content will be loaded here by HTMX -->
+            <!-- Results container -->
+            <div id="results-container" class="mt-8"></div>
+
+            <!-- Confirm Modal -->
+            <div id="confirm-modal-wrapper" class="hidden fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
+                <div id="confirm-modal" class="bg-base-100 rounded-lg shadow-lg p-6 max-w-lg w-full mx-4">
+                    <!-- Content will be loaded here by HTMX -->
+                </div>
+            </div>
         </div>
     </div>
 </div>

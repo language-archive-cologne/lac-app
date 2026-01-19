@@ -1,6 +1,8 @@
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.views.decorators.http import require_POST
+from django.db import transaction
+import json
 import logging
 
 from lacos.blam.models.collection.collection_repository import Collection
@@ -34,10 +36,22 @@ def delete_blam_model(request, model_type, object_id):
             return HttpResponseBadRequest(f"Invalid model type: {model_type}")
         
         logger.info(f"Deleting {model_name} with ID: {object_id}")
-        model.delete()
+
+        if model_type.lower() == 'collection':
+            bundles = Bundle.objects.filter(structural_info__is_member_of_collection=model).distinct()
+            logger.info(f"Deleting {bundles.count()} bundle(s) linked to Collection ID: {object_id}")
+            with transaction.atomic():
+                for bundle in bundles:
+                    bundle.delete()
+                model.delete()
+        else:
+            model.delete()
+
         logger.info(f"{model_name} with ID: {object_id} successfully deleted")
-        
-        return HttpResponse("", status=200)
+
+        response = HttpResponse("", status=200)
+        response["HX-Trigger"] = json.dumps({"blam-metadata-refresh": True})
+        return response
         
     except Exception as e:
         logger.error(f"Error deleting {model_type} with ID {object_id}: {str(e)}")
