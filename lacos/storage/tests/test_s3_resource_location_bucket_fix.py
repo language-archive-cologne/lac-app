@@ -1,8 +1,9 @@
 """
-Tests for verifying and fixing S3ResourceLocation bucket mismatches.
+Tests for verifying and fixing S3ResourceLocation bucket and path mismatches.
 
 These tests ensure that S3ResourceLocation records correctly reflect the
-bucket where collection data actually resides (Collection.import_bucket).
+bucket where collection data actually resides (Collection.import_bucket)
+and use the correct OCFL paths from import_object_key.
 """
 
 import pytest
@@ -23,6 +24,7 @@ from lacos.blam.models.bundle.bundle_structural_info import (
 )
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
 from lacos.storage.models.s3_resource_location import S3ResourceLocation
+from lacos.storage.services.resource_mapping_service import ResourceMappingService
 
 
 @pytest.fixture
@@ -292,3 +294,159 @@ class TestS3ResourceLocationBucketDetection:
         # Verify all are fixed
         assert S3ResourceLocation.objects.filter(s3_bucket="lacos-production").count() == 0
         assert S3ResourceLocation.objects.filter(s3_bucket="grails-dev").count() == 3
+
+
+@pytest.mark.django_db
+class TestOCFLPathExtraction:
+    """Tests for OCFL path extraction from import_object_key."""
+
+    def test_extract_collection_base_path(self):
+        """Test extracting collection base path from import_object_key."""
+        service = ResourceMappingService(skip_bucket_check=True)
+
+        # Standard collection import_object_key format
+        collection_key = "qaqet_child_language/v1/content/qaqet_child_language.xml"
+        result = service._extract_ocfl_base_path(collection_key)
+        assert result == "qaqet_child_language/"
+
+    def test_extract_bundle_base_path(self):
+        """Test extracting bundle base path from import_object_key."""
+        service = ResourceMappingService(skip_bucket_check=True)
+
+        # Standard bundle import_object_key format
+        bundle_key = "qaqet_child_language/bundle1/v1/content/bundle1.xml"
+        result = service._extract_ocfl_base_path(bundle_key)
+        assert result == "qaqet_child_language/bundle1/"
+
+    def test_extract_ocfl_base_path_with_none(self):
+        """Test that None input returns None."""
+        service = ResourceMappingService(skip_bucket_check=True)
+        result = service._extract_ocfl_base_path(None)
+        assert result is None
+
+    def test_extract_ocfl_base_path_without_v1_content(self):
+        """Test fallback when v1/content marker is not present."""
+        service = ResourceMappingService(skip_bucket_check=True)
+
+        # Path without v1/content marker but with file extension
+        path = "some/path/file.xml"
+        result = service._extract_ocfl_base_path(path)
+        assert result == "some/path/"
+
+    def test_get_ocfl_resource_base_path(self):
+        """Test getting resource base path from bundle import_object_key."""
+        service = ResourceMappingService(skip_bucket_check=True)
+
+        bundle_key = "qaqet_child_language/bundle1/v1/content/bundle1.xml"
+        result = service._get_ocfl_resource_base_path(bundle_key)
+        assert result == "qaqet_child_language/bundle1/v1/content/Resources/"
+
+    def test_get_ocfl_resource_base_path_with_none(self):
+        """Test that None input returns None."""
+        service = ResourceMappingService(skip_bucket_check=True)
+        result = service._get_ocfl_resource_base_path(None)
+        assert result is None
+
+
+@pytest.mark.django_db
+class TestS3ResourceLocationPathMapping:
+    """Tests for verifying that S3ResourceLocation uses correct OCFL paths."""
+
+    def test_collection_uses_ocfl_path_not_uuid(
+        self, collection_with_import_bucket
+    ):
+        """
+        Test that S3ResourceLocation for collection uses OCFL path from import_object_key,
+        not UUID-based path.
+        """
+        collection = collection_with_import_bucket
+        ct = ContentType.objects.get_for_model(collection)
+
+        # Create S3ResourceLocation with wrong UUID-based path
+        wrong_location = S3ResourceLocation.objects.create(
+            content_type=ct,
+            object_id=collection.id,
+            s3_bucket="grails-dev",
+            s3_key=f"collections/{collection.id}/",  # UUID-based path - WRONG
+        )
+
+        # The correct path should be derived from import_object_key
+        # import_object_key = "qaqet_child_language/v1/content/qaqet_child_language.xml"
+        expected_path = "qaqet_child_language/"
+
+        # Verify the mismatch exists
+        assert wrong_location.s3_key != expected_path
+        assert "collections/" in wrong_location.s3_key
+
+        # Fix using the OCFL path extraction logic
+        service = ResourceMappingService(skip_bucket_check=True)
+        correct_path = service._extract_ocfl_base_path(collection.import_object_key)
+
+        wrong_location.s3_key = correct_path
+        wrong_location.save()
+
+        wrong_location.refresh_from_db()
+        assert wrong_location.s3_key == expected_path
+
+    def test_bundle_uses_ocfl_path_not_uuid(
+        self, collection_with_import_bucket, bundle_with_resources
+    ):
+        """
+        Test that S3ResourceLocation for bundle uses OCFL path from import_object_key.
+        """
+        bundle = bundle_with_resources["bundle"]
+        bundle_ct = ContentType.objects.get_for_model(bundle)
+
+        # Create S3ResourceLocation with wrong UUID-based path
+        wrong_location = S3ResourceLocation.objects.create(
+            content_type=bundle_ct,
+            object_id=bundle.id,
+            s3_bucket="grails-dev",
+            s3_key=f"collections/{collection_with_import_bucket.id}/bundles/{bundle.id}/",
+        )
+
+        # Fix using the OCFL path extraction logic
+        service = ResourceMappingService(skip_bucket_check=True)
+        correct_path = service._extract_ocfl_base_path(bundle.import_object_key)
+
+        # Expected: "qaqet_child_language/bundle1/"
+        assert correct_path == "qaqet_child_language/bundle1/"
+
+        wrong_location.s3_key = correct_path
+        wrong_location.save()
+
+        wrong_location.refresh_from_db()
+        assert wrong_location.s3_key == "qaqet_child_language/bundle1/"
+
+    def test_resource_uses_ocfl_path_not_uuid(
+        self, collection_with_import_bucket, bundle_with_resources
+    ):
+        """
+        Test that S3ResourceLocation for resource uses OCFL path from bundle's import_object_key.
+        """
+        bundle = bundle_with_resources["bundle"]
+        media_resource = bundle_with_resources["media_resource"]
+        resource_ct = ContentType.objects.get_for_model(media_resource)
+
+        # Create S3ResourceLocation with wrong UUID-based path
+        wrong_location = S3ResourceLocation.objects.create(
+            content_type=resource_ct,
+            object_id=media_resource.id,
+            s3_bucket="grails-dev",
+            s3_key=f"collections/{collection_with_import_bucket.id}/bundles/{bundle.id}/resources/{media_resource.file_name}",
+            resource_pid=media_resource.file_pid,
+        )
+
+        # Fix using the OCFL resource path extraction logic
+        service = ResourceMappingService(skip_bucket_check=True)
+        resources_base_path = service._get_ocfl_resource_base_path(bundle.import_object_key)
+        correct_path = f"{resources_base_path}{media_resource.file_name}"
+
+        # Expected: "qaqet_child_language/bundle1/v1/content/Resources/test.wav"
+        assert correct_path == "qaqet_child_language/bundle1/v1/content/Resources/test.wav"
+
+        wrong_location.s3_key = correct_path
+        wrong_location.save()
+
+        wrong_location.refresh_from_db()
+        assert wrong_location.s3_key == "qaqet_child_language/bundle1/v1/content/Resources/test.wav"

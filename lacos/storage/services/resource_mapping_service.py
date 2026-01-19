@@ -222,6 +222,69 @@ class ResourceMappingService(BaseStorageService):
                 s3_key = f"{base_key}/{file_name}"
                 self.register_s3_location(resource, bucket, s3_key)
 
+    def _extract_ocfl_base_path(self, import_object_key: Optional[str]) -> Optional[str]:
+        """
+        Extract the base OCFL path from an import_object_key.
+
+        The import_object_key format is:
+        - Collection: "{collection_folder}/v1/content/{collection_folder}.xml"
+        - Bundle: "{collection_folder}/{bundle_folder}/v1/content/{bundle_folder}.xml"
+
+        This method extracts everything before '/v1/content/' to get the base path.
+
+        Args:
+            import_object_key: The import_object_key from a Collection or Bundle
+
+        Returns:
+            The base OCFL path (e.g., "qaqet_child_language/" or "qaqet_child_language/bundle1/")
+            or None if the path cannot be extracted
+        """
+        if not import_object_key:
+            return None
+
+        # Find the '/v1/content/' marker and extract everything before it
+        v1_marker = '/v1/content/'
+        idx = import_object_key.find(v1_marker)
+        if idx > 0:
+            base_path = import_object_key[:idx] + '/'
+            return base_path
+
+        # Fallback: if no v1/content marker, try to extract directory path
+        # This handles cases where import_object_key might just be a directory
+        if '/' in import_object_key:
+            # Remove trailing filename if present
+            parts = import_object_key.rsplit('/', 1)
+            if '.' in parts[-1]:  # Has file extension, so last part is a filename
+                return parts[0] + '/'
+            return import_object_key.rstrip('/') + '/'
+
+        return None
+
+    def _get_ocfl_resource_base_path(self, bundle_import_object_key: Optional[str]) -> Optional[str]:
+        """
+        Get the base path for resources within a bundle's OCFL structure.
+
+        Resources are stored at: {bundle_path}/v1/content/Resources/
+
+        Args:
+            bundle_import_object_key: The import_object_key from a Bundle
+
+        Returns:
+            The base path for resources (e.g., "qaqet_child_language/bundle1/v1/content/Resources/")
+            or None if the path cannot be extracted
+        """
+        if not bundle_import_object_key:
+            return None
+
+        # Find the '/v1/content/' marker
+        v1_marker = '/v1/content/'
+        idx = bundle_import_object_key.find(v1_marker)
+        if idx > 0:
+            # Return the path up to and including /v1/content/ plus Resources/
+            return bundle_import_object_key[:idx] + v1_marker + 'Resources/'
+
+        return None
+
     def map_collection_hierarchy(
         self,
         collection_id: UUID,
@@ -230,11 +293,14 @@ class ResourceMappingService(BaseStorageService):
         """
         Map an entire collection hierarchy to S3 locations.
         Uses explicitly passed (bundle_id, bundle_resources_id) pairs.
-        
+
+        Uses actual OCFL paths from import_object_key instead of UUID-based paths
+        to ensure presigned URLs point to where the data actually exists in S3.
+
         Args:
             collection_id: The collection UUID to map
             bundle_resources_pairs: List of tuples (bundle_id, bundle_resources_id or None)
-            
+
         Returns:
             int: Total number of objects mapped (Collection + Bundles + Resources)
         """
@@ -251,7 +317,14 @@ class ResourceMappingService(BaseStorageService):
             # This ensures presigned URLs point to where the data actually exists
             bucket = collection.import_bucket if collection.import_bucket else discovery_service.production_bucket
             logger.info(f"Using bucket '{bucket}' for collection {collection_id} (import_bucket: {collection.import_bucket})")
-            collection_key_prefix = discovery_service.form_collection_path(collection_id) + "/"  # Ensure trailing slash
+
+            # Use actual OCFL path from import_object_key instead of UUID-based path
+            collection_key_prefix = self._extract_ocfl_base_path(collection.import_object_key)
+            if not collection_key_prefix:
+                # Fallback to UUID-based path if import_object_key is not set
+                collection_key_prefix = discovery_service.form_collection_path(collection_id) + "/"
+                logger.warning(f"Collection {collection_id} has no import_object_key, falling back to UUID-based path: {collection_key_prefix}")
+
             self.register_s3_location(collection, bucket, collection_key_prefix)
             logger.info(f"Mapped Collection {collection_id} to S3 location: {bucket}/{collection_key_prefix}")
             total_mapped += 1
@@ -276,28 +349,37 @@ class ResourceMappingService(BaseStorageService):
             try:
                 # Fetch Bundle by ID
                 bundle = Bundle.objects.get(id=bundle_id)
-                
-                # Map the Bundle object
-                bundle_key_prefix = discovery_service.form_bundle_path(collection_id, bundle.id) + "/"  # Ensure trailing slash
+
+                # Use actual OCFL path from import_object_key instead of UUID-based path
+                bundle_key_prefix = self._extract_ocfl_base_path(bundle.import_object_key)
+                if not bundle_key_prefix:
+                    # Fallback to UUID-based path if import_object_key is not set
+                    bundle_key_prefix = discovery_service.form_bundle_path(collection_id, bundle.id) + "/"
+                    logger.warning(f"Bundle {bundle.id} has no import_object_key, falling back to UUID-based path: {bundle_key_prefix}")
+
                 self.register_s3_location(bundle, bucket, bundle_key_prefix)
                 logger.info(f"Mapped Bundle {bundle.id} to S3 location: {bucket}/{bundle_key_prefix}")
                 total_mapped += 1
-                
+
                 # 3. Map Resources using the BundleResources ID
                 if bundle_resources_id:
                     try:
                         # Fetch BundleResources directly by its ID
                         bundle_resources = BundleResources.objects.get(id=bundle_resources_id)
                         logger.info(f"Found BundleResources object (ID: {bundle_resources.id}) for Bundle {bundle.id} via passed ID.")
-                        
-                        # Get base S3 key for resources within this bundle
-                        try:
-                            resource_pattern = discovery_service.get_resource_path_pattern()
-                            prefix_pattern = resource_pattern.rsplit('{resource_filename}', 1)[0]
-                            resources_base_key = prefix_pattern.format(collection_id=collection_id, bundle_id=bundle.id)
-                        except Exception as format_e:
-                            logger.error(f"Could not format resource base key for bundle {bundle.id}: {format_e}")
-                            continue # Skip resource mapping for this bundle if key fails
+
+                        # Get base S3 key for resources using OCFL path
+                        resources_base_key = self._get_ocfl_resource_base_path(bundle.import_object_key)
+                        if not resources_base_key:
+                            # Fallback to UUID-based path if import_object_key is not set
+                            try:
+                                resource_pattern = discovery_service.get_resource_path_pattern()
+                                prefix_pattern = resource_pattern.rsplit('{resource_filename}', 1)[0]
+                                resources_base_key = prefix_pattern.format(collection_id=collection_id, bundle_id=bundle.id)
+                                logger.warning(f"Bundle {bundle.id} has no import_object_key, falling back to UUID-based resource path: {resources_base_key}")
+                            except Exception as format_e:
+                                logger.error(f"Could not format resource base key for bundle {bundle.id}: {format_e}")
+                                continue # Skip resource mapping for this bundle if key fails
 
                         resource_count = 0
                         # Map media resources
@@ -311,7 +393,7 @@ class ResourceMappingService(BaseStorageService):
                                         total_mapped += 1
                                     except Exception as res_map_e:
                                         logger.error(f"Failed to map media resource {getattr(media_resource, 'id', 'N/A')} (name: {media_resource.file_name}): {res_map_e}", exc_info=False)
-                        
+
                         # Map written resources
                         if hasattr(bundle_resources, 'bundle_written_resources'):
                              for written_resource in bundle_resources.bundle_written_resources.all():
@@ -323,7 +405,7 @@ class ResourceMappingService(BaseStorageService):
                                         total_mapped += 1
                                     except Exception as res_map_e:
                                         logger.error(f"Failed to map written resource {getattr(written_resource, 'id', 'N/A')} (name: {written_resource.file_name}): {res_map_e}", exc_info=False)
-                        
+
                         # Map other resources
                         if hasattr(bundle_resources, 'bundle_other_resources'):
                              for other_resource in bundle_resources.bundle_other_resources.all():
@@ -335,7 +417,7 @@ class ResourceMappingService(BaseStorageService):
                                         total_mapped += 1
                                     except Exception as res_map_e:
                                         logger.error(f"Failed to map other resource {getattr(other_resource, 'id', 'N/A')} (name: {other_resource.file_name}): {res_map_e}", exc_info=False)
-                        
+
                         logger.info(f"Mapped {resource_count} resources for Bundle {bundle.id} using BundleResources ID {bundle_resources.id}")
 
                     except BundleResources.DoesNotExist:
@@ -344,12 +426,12 @@ class ResourceMappingService(BaseStorageService):
                          logger.error(f"Error fetching or processing BundleResources {bundle_resources_id} for Bundle {bundle.id}: {res_fetch_e}", exc_info=True)
                 else:
                     logger.warning(f"No BundleResources ID provided for Bundle {bundle.id}. Skipping resource mapping.")
-                    
+
             except Bundle.DoesNotExist:
                 logger.error(f"Bundle with ID {bundle_id} not found. Cannot map bundle or its resources.")
             except Exception as bundle_map_e:
                 logger.error(f"Failed to map Bundle {bundle_id} or its resources: {bundle_map_e}", exc_info=True)
-        
+
         logger.info(f"Finished mapping for collection {collection_id}. Total objects mapped: {total_mapped}")
         return total_mapped  # Return count of mapped objects
 
