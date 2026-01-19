@@ -3,6 +3,7 @@ ACL admin dashboard views.
 
 Handles ACL configuration, sync operations, and permission management.
 """
+import json
 import logging
 from urllib.parse import quote_plus
 
@@ -263,7 +264,12 @@ def acl_load_all(request):
         }
 
         if request.headers.get("HX-Request"):
-            return _render_load_summary_partial(request, summary=summary)
+            response = _render_load_summary_partial(request, summary=summary)
+            if total_loaded:
+                response["HX-Trigger"] = json.dumps(
+                    {"aclRecordsRefresh": {"scope": request.POST.get("scope")}}
+                )
+            return response
         else:
             msg = f"Loaded {total_loaded} ACLs for {scope_label}"
             return redirect(f"{reverse('storage:acl_admin_dashboard')}?message={msg}")

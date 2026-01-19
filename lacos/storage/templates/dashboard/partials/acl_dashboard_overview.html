@@ -47,40 +47,6 @@
             <button type="submit" class="btn btn-outline btn-sm w-full">Bundles</button>
           </form>
         </div>
-        <div class="rounded-lg border border-base-200 p-3 space-y-2">
-          <div class="text-xs font-medium text-base-content/70">Load selected</div>
-          <form
-            method="post"
-            action="{% url 'storage:acl_load_selected' %}"
-            hx-post="{% url 'storage:acl_load_selected' %}"
-            hx-target="#acl-load-summary"
-            hx-swap="innerHTML"
-            hx-confirm="Load ACLs for selected items? This will overwrite the database records."
-            class="space-y-2"
-          >
-            {% csrf_token %}
-            <div class="space-y-1">
-              <label class="text-xs text-base-content/70">Collections</label>
-              <select name="collection_ids" multiple class="select select-bordered w-full h-32">
-                {% for option in collection_options %}
-                <option value="{{ option.id }}">{{ option.label }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="space-y-1">
-              <label class="text-xs text-base-content/70">Bundles</label>
-              <select name="bundle_ids" multiple class="select select-bordered w-full h-32">
-                {% for option in bundle_options %}
-                <option value="{{ option.id }}">{{ option.label }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <p class="text-[11px] text-base-content/50">Hold Ctrl/Cmd to select multiple. Leave a list empty to skip.</p>
-            <button type="submit" class="btn btn-outline btn-sm w-full">
-              Load selected
-            </button>
-          </form>
-        </div>
       </div>
     </div>
   </div>

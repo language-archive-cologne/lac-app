@@ -1,3 +1,10 @@
-<div id="acl-records-table" class="space-y-4" hx-target="this" hx-swap="innerHTML">
-  {% include "dashboard/partials/acl_permissions_table.html" with scope=scope page_obj=page_obj sort=sort direction=direction available_sorts=available_sorts endpoint=endpoint access_level_choices=access_level_choices next_url=next_url page_size=page_size sort_toggles=sort_toggles %}
+<div
+  id="acl-records-table"
+  class="space-y-4"
+  hx-target="this"
+  hx-swap="innerHTML"
+  hx-get="{{ endpoint }}?page={{ page_obj.number }}&sort={{ sort }}&dir={{ direction }}"
+  hx-trigger="aclRecordsRefresh from:body"
+>
+  {% include "dashboard/partials/acl_permissions_table.html" with scope=scope page_obj=page_obj sort=sort direction=direction available_sorts=available_sorts endpoint=endpoint access_level_choices=access_level_choices next_url=next_url page_size=page_size sort_toggles=sort_toggles orphan_count=orphan_count %}
 </div>

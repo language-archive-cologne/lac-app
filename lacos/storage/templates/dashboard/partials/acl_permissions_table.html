@@ -9,6 +9,19 @@
         </p>
       </div>
       <div class="flex items-center gap-2 flex-wrap">
+        <form
+          method="post"
+          action="{% url 'storage:acl_load_selected' %}"
+          hx-post="{% url 'storage:acl_load_selected' %}"
+          hx-target="#acl-records-status"
+          hx-swap="innerHTML"
+          hx-include="#acl-records-selection"
+          hx-confirm="Load ACLs for selected {{ scope }}s? This will overwrite the database records."
+        >
+          {% csrf_token %}
+          <input type="hidden" name="scope" value="{{ scope }}">
+          <button type="submit" class="btn btn-outline btn-xs">Load selected</button>
+        </form>
         {% if orphan_count %}
         <form
           method="post"
@@ -27,11 +40,20 @@
         <span class="badge badge-ghost badge-sm">Manual override available</span>
       </div>
     </div>
+    <div id="acl-records-status"></div>
 
-    <div class="overflow-x-auto rounded-lg border border-base-300">
+    <div id="acl-records-selection" class="overflow-x-auto rounded-lg border border-base-300">
       <table class="table table-sm">
         <thead>
           <tr class="text-xs uppercase text-base-content/60">
+            <th class="w-8">
+              <input
+                type="checkbox"
+                class="checkbox checkbox-xs"
+                aria-label="Select all on page"
+                onclick="document.querySelectorAll('#acl-records-selection input[data-acl-select]').forEach(cb => { if (!cb.disabled) { cb.checked = this.checked; } });"
+              >
+            </th>
             <th class="w-1/3">
               <button
                 type="button"
@@ -84,6 +106,16 @@
         <tbody>
           {% for row in rows %}
           <tr class="align-top">
+            <td>
+              <input
+                type="checkbox"
+                class="checkbox checkbox-xs"
+                data-acl-select
+                name="{% if scope == 'collection' %}collection_ids{% else %}bundle_ids{% endif %}"
+                value="{{ row.object_id }}"
+                {% if not row.object_exists %}disabled{% endif %}
+              >
+            </td>
             <td class="space-y-1">
               <div class="font-medium text-base-content/80">{{ row.identifier }}</div>
               {% if row.name %}
@@ -165,7 +197,7 @@
           </tr>
           {% empty %}
           <tr>
-            <td colspan="5" class="py-6 text-center text-sm text-base-content/60">
+            <td colspan="6" class="py-6 text-center text-sm text-base-content/60">
               No {{ scope }}s to display.
             </td>
           </tr>
