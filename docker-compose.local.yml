@@ -20,6 +20,7 @@ services:
       - minio
     volumes:
       - .:/app:z
+      - /etc/shibboleth:/etc/shibboleth:ro
     env_file:
       - ./.envs/.local/.django
       - ./.envs/.local/.postgres
@@ -97,6 +98,7 @@ services:
       - redis
     volumes:
       - .:/app:z
+      - /etc/shibboleth:/etc/shibboleth:ro
     env_file:
       - ./.envs/.local/.django
       - ./.envs/.local/.postgres
