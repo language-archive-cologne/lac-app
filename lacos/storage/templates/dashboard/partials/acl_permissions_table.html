@@ -218,8 +218,14 @@
               {% endif %}
             </td>
             <td>
-              <span class="badge badge-sm {% if row.access_level == 'public' %}badge-success{% elif row.access_level == 'protected' %}badge-info{% elif row.access_level == 'private' %}badge-warning{% else %}badge-error{% endif %}">
-                {{ row.access_level|default:"embargo"|title }}
+              <span class="badge badge-sm {% if row.access_level == 'public' %}badge-success{% elif row.access_level == 'academic' or row.access_level == 'protected' %}badge-info{% else %}badge-warning{% endif %}">
+                {% if row.access_level == 'public' %}
+                  Public
+                {% elif row.access_level == 'academic' or row.access_level == 'protected' %}
+                  Academic
+                {% else %}
+                  Private
+                {% endif %}
               </span>
             </td>
             <td class="text-sm text-base-content/70">

@@ -4,7 +4,6 @@ HTMX handlers for bucket operations.
 Handles bucket content loading, creation, deletion, and rename modals.
 """
 import logging
-from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.template.loader import render_to_string
@@ -15,11 +14,12 @@ from django.views.decorators.http import require_http_methods
 from lacos.common.mixins import BucketCoordinatorMixin, HtmxTemplateHelperMixin
 from lacos.storage.services.bucket_service import BucketService
 from lacos.storage.observability import profiling_scope
+from lacos.storage.permissions import archivist_required
 
 logger = logging.getLogger(__name__)
 
 
-@method_decorator(login_required, name="dispatch")
+@method_decorator(archivist_required, name="dispatch")
 class BucketContentHTMXView(HtmxTemplateHelperMixin, View):
     """
     Handle HTMX requests for bucket content display.
@@ -75,7 +75,7 @@ class BucketContentHTMXView(HtmxTemplateHelperMixin, View):
                 return self.htmx_error_response(f"Failed to load bucket: {str(e)}")
 
 
-@method_decorator(login_required, name="dispatch")
+@method_decorator(archivist_required, name="dispatch")
 class CreateBucketHTMXView(HtmxTemplateHelperMixin, View):
     """Handle bucket creation via HTMX."""
 
@@ -127,7 +127,7 @@ class CreateBucketHTMXView(HtmxTemplateHelperMixin, View):
             return self.htmx_error_response(str(e))
 
 
-@login_required
+@archivist_required
 @require_http_methods(["POST"])
 def delete_bucket_htmx(request, bucket_name):
     """Delete a bucket via HTMX."""
@@ -168,7 +168,7 @@ def delete_bucket_htmx(request, bucket_name):
         return HttpResponse(html, status=500)
 
 
-@method_decorator(login_required, name="dispatch")
+@method_decorator(archivist_required, name="dispatch")
 class RenameBucketModalHTMXView(HtmxTemplateHelperMixin, View):
     """Display rename bucket modal."""
 
@@ -181,7 +181,7 @@ class RenameBucketModalHTMXView(HtmxTemplateHelperMixin, View):
         )
 
 
-@method_decorator(login_required, name="dispatch")
+@method_decorator(archivist_required, name="dispatch")
 class RenameObjectModalHTMXView(HtmxTemplateHelperMixin, View):
     """Display rename object (folder/file) modal."""
 
@@ -217,7 +217,7 @@ class RenameObjectModalHTMXView(HtmxTemplateHelperMixin, View):
         )
 
 
-@method_decorator(login_required, name="dispatch")
+@method_decorator(archivist_required, name="dispatch")
 class RenameBucketHTMXView(HtmxTemplateHelperMixin, View):
     """Handle bucket rename via HTMX."""
 
@@ -254,7 +254,7 @@ class RenameBucketHTMXView(HtmxTemplateHelperMixin, View):
             return self.htmx_error_response(str(e))
 
 
-@method_decorator(login_required, name="dispatch")
+@method_decorator(archivist_required, name="dispatch")
 class BucketSelectHTMXView(HtmxTemplateHelperMixin, View):
     """Return updated bucket select dropdown for upload modal."""
 
@@ -266,7 +266,7 @@ class BucketSelectHTMXView(HtmxTemplateHelperMixin, View):
         return HttpResponse(bucket_select_html)
 
 
-@login_required
+@archivist_required
 def file_info_htmx(request, bucket_type, object_path):
     """
     Get file information for display.

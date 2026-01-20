@@ -18,8 +18,12 @@ def auth_user():
     user = MagicMock()
     user.is_authenticated = True
     user.is_active = True
+    user.is_superuser = False
     user.id = 1
     user.username = "testuser"
+    groups_qs = MagicMock()
+    groups_qs.exists.return_value = True
+    user.groups.filter.return_value = groups_qs
     return user
 
 

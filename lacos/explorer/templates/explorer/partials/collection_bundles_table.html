@@ -86,20 +86,20 @@
                       <span aria-hidden="true" class="mr-2">🌍</span>
                       <span>{% translate "Public" %}</span>
                     </span>
-                  {% elif level == 'protected' %}
+                  {% elif level == 'academic' or level == 'protected' %}
                     <span class="flex items-center text-info" title="{% translate 'Requires sign-in' %}">
                       <span aria-hidden="true" class="mr-2">🔒</span>
-                      <span>{% translate "Protected" %}</span>
+                      <span>{% translate "Academic" %}</span>
                     </span>
                   {% elif level == 'private' %}
-                    <span class="flex items-center text-warning" title="{% translate 'Restricted to specific users' %}">
+                    <span class="flex items-center text-warning" title="{% translate 'Restricted access' %}">
                       <span aria-hidden="true" class="mr-2">👤</span>
                       <span>{% translate "Private" %}</span>
                     </span>
                   {% else %}
-                    <span class="flex items-center text-error" title="{% translate 'No downloads allowed' %}">
-                      <span aria-hidden="true" class="mr-2">⛔</span>
-                      <span>{% translate "Embargo" %}</span>
+                    <span class="flex items-center text-warning" title="{% translate 'Restricted access' %}">
+                      <span aria-hidden="true" class="mr-2">👤</span>
+                      <span>{% translate "Private" %}</span>
                     </span>
                   {% endif %}
                 {% endwith %}

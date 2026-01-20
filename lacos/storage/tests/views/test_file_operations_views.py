@@ -38,6 +38,10 @@ def prepared_request():
         # Add a mock authenticated user
         mock_user = MagicMock()
         mock_user.is_authenticated = True
+        mock_user.is_superuser = False
+        groups_qs = MagicMock()
+        groups_qs.exists.return_value = True
+        mock_user.groups.filter.return_value = groups_qs
         request.user = mock_user
         
         return request

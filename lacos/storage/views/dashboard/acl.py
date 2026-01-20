@@ -8,7 +8,7 @@ import logging
 from urllib.parse import quote_plus
 
 from django.conf import settings
-from django.contrib.auth.decorators import login_required
+from lacos.storage.permissions import archivist_required
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.http import HttpResponse
@@ -22,7 +22,7 @@ from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.storage.models.acl_config import ACLConfig
 from lacos.storage.models.acl_permissions import ACLPermissions
-from lacos.storage.constants import ACL_LEVEL_PUBLIC, ACL_LEVEL_PROTECTED, ACL_LEVEL_PRIVATE
+from lacos.storage.constants import ACL_LEVEL_PUBLIC, ACL_LEVEL_ACADEMIC, ACL_LEVEL_PRIVATE
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +88,7 @@ def _render_load_summary_partial(request, summary=None, error_message=None):
 _render_sync_summary_partial = _render_load_summary_partial
 
 
-@login_required
+@archivist_required
 def acl_admin_dashboard(request):
     """
     Render the ACL Admin Dashboard with current settings, summary stats,
@@ -234,7 +234,7 @@ def acl_admin_dashboard(request):
     )
 
 
-@login_required
+@archivist_required
 @require_http_methods(["POST"])
 def acl_load_all(request):
     """
@@ -290,7 +290,7 @@ def acl_load_all(request):
             return redirect(f"{reverse('storage:acl_admin_dashboard')}?message=Load failed: {e}")
 
 
-@login_required
+@archivist_required
 @require_http_methods(["POST"])
 def acl_load_selected(request):
     """Load ACLs from S3 for selected collections and bundles."""
@@ -362,7 +362,7 @@ def _render_save_summary_partial(request, summary=None, error_message=None):
     return HttpResponse(html)
 
 
-@login_required
+@archivist_required
 @require_http_methods(["POST"])
 def acl_save_all(request):
     """
@@ -418,7 +418,7 @@ def acl_save_all(request):
             return redirect(f"{reverse('storage:acl_admin_dashboard')}?message=Save failed: {e}")
 
 
-@login_required
+@archivist_required
 @require_http_methods(["POST"])
 def acl_load_single(request, object_type, object_id):
     """Load ACL from S3 for a single collection or bundle."""
@@ -458,7 +458,7 @@ def acl_load_single(request, object_type, object_id):
         return redirect(f"{reverse('storage:acl_admin_dashboard')}?message=Load failed: {e}")
 
 
-@login_required
+@archivist_required
 @require_http_methods(["POST"])
 def acl_save_single(request, object_type, object_id):
     """Save ACL to S3 for a single collection or bundle."""
@@ -498,7 +498,7 @@ def acl_save_single(request, object_type, object_id):
         return redirect(f"{reverse('storage:acl_admin_dashboard')}?message=Save failed: {e}")
 
 
-@login_required
+@archivist_required
 @require_http_methods(["POST"])
 def acl_update_settings(request):
     """Update ACL configuration settings."""
@@ -515,7 +515,7 @@ def acl_update_settings(request):
         return redirect(f"{reverse('storage:acl_admin_dashboard')}?message=Update failed: {e}")
 
 
-@login_required
+@archivist_required
 @require_http_methods(["POST"])
 def acl_sync_scope_fields(request):
     """Sync ACL for specific Collections or Bundles by ID."""
@@ -557,7 +557,7 @@ def acl_sync_scope_fields(request):
         return _render_sync_summary_partial(request, error_message=str(e))
 
 
-@login_required
+@archivist_required
 @require_http_methods(["POST"])
 def acl_update_permission(request):
     """Allow administrators to manually adjust an object's recorded ACL level and agents."""
@@ -617,7 +617,7 @@ def acl_update_permission(request):
     if access_level == ACL_LEVEL_PUBLIC:
         permissions_data = [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}]
         read_agents = ["foaf:Agent"]
-    elif access_level == ACL_LEVEL_PROTECTED:
+    elif access_level == ACL_LEVEL_ACADEMIC:
         permissions_data = [{"agentClass": "acl:AuthenticatedAgent", "mode": ["acl:Read"]}]
         read_agents = ["acl:AuthenticatedAgent"]
     elif access_level == ACL_LEVEL_PRIVATE:
@@ -679,7 +679,7 @@ def acl_update_permission(request):
     return _redirect_with_message(next_url, message)
 
 
-@login_required
+@archivist_required
 def acl_edit_permission_form(request, object_type, object_id):
     """Render the ACL edit form for a specific object."""
     from lacos.users.models import User, GroupACL
@@ -713,13 +713,19 @@ def acl_edit_permission_form(request, object_type, object_id):
                 if group_acl:
                     selected_group_ids.add(group_acl.id)
 
+    current_access_level = perm.access_level if perm else ACL_LEVEL_PRIVATE
+    if current_access_level == "protected":
+        current_access_level = ACL_LEVEL_ACADEMIC
+    elif current_access_level == "embargo":
+        current_access_level = ACL_LEVEL_PRIVATE
+
     context = {
         "object_type": object_type,
         "object_id": object_id,
         "permission_id": perm.pk if perm else None,
         "identifier": getattr(obj, "identifier", str(obj.pk)),
         "name": _resolve_acl_display_name(obj),
-        "current_access_level": perm.access_level if perm else "embargo",
+        "current_access_level": current_access_level,
         "access_level_choices": ACLPermissions.ACCESS_LEVEL_CHOICES,
         "available_users": User.objects.exclude(acl_agent_uri__isnull=True).exclude(acl_agent_uri="").order_by("username"),
         "available_groups": GroupACL.objects.exclude(acl_agent_uri__isnull=True).exclude(acl_agent_uri="").select_related("group").order_by("group__name"),

@@ -1,7 +1,7 @@
 import json
 import logging
 
-from django.contrib.auth.decorators import login_required
+from lacos.storage.permissions import archivist_required
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.template.loader import render_to_string
@@ -131,7 +131,7 @@ def validate_metadata_xml(bucket: str, s3_key: str, metadata_type: str) -> dict:
     return result
 
 
-@login_required
+@archivist_required
 def metadata_ingest_modal(request, bucket_type, object_type, object_path):
     """Render the metadata ingest modal with sensible defaults."""
 
@@ -173,7 +173,7 @@ def metadata_ingest_modal(request, bucket_type, object_type, object_path):
 
 
 @require_POST
-@login_required
+@archivist_required
 def ingest_metadata(request):
     """Queue a metadata XML ingestion task for a collection or bundle."""
 
@@ -347,7 +347,7 @@ def ingest_metadata(request):
         return JsonResponse({"success": False, "error": str(exc)}, status=500)
 
 
-@login_required
+@archivist_required
 def validate_metadata_endpoint(request, bucket_type, object_path):
     """
     Validate a specific XML file and return results via HTMX.
@@ -514,7 +514,7 @@ def _parse_bool(value: object) -> bool:
     return str(value or "").strip().lower() in {"true", "1", "yes", "on"}
 
 
-@login_required
+@archivist_required
 def preview_metadata_ingest(request):
     """Return a preview of the metadata ingest that would be enqueued."""
 

@@ -10,13 +10,11 @@ from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.storage.models.acl_permissions import ACLPermissions
 from lacos.storage.constants import (
-    ACL_LEVEL_EMBARGO,
     ACL_LEVEL_PRIVATE,
-    ACL_LEVEL_PROTECTED,
-    ACL_LEVEL_PUBLIC,
     WAC_AGENT,
     WAC_AUTHENTICATED_AGENT,
 )
+from lacos.storage.permissions import is_archivist
 from lacos.storage.utils.acl import determine_access_level
 from lacos.storage.models.acl_config import ACLConfig
 
@@ -32,7 +30,7 @@ class ACLCheckResult:
     source: Optional[Any] = None
     default_applied: bool = False
     reason: Optional[str] = None
-    access_level: str = ACL_LEVEL_EMBARGO
+    access_level: str = ACL_LEVEL_PRIVATE
 
     def enforce(self) -> bool:
         """
@@ -75,6 +73,10 @@ class ACLEvaluationService:
         """
         result = self._evaluate_internal(user, obj, mode)
 
+        if is_archivist(user) and not result.allowed:
+            result.allowed = True
+            result.reason = "Archivist override"
+
         if self.log_attempts:
             self._log_attempt(user, obj, mode, result)
 
@@ -109,7 +111,7 @@ class ACLEvaluationService:
     # Internal logic -----------------------------------------------------------
     def _evaluate_internal(self, user, obj: Any, mode: str) -> ACLCheckResult:
         last_source = None
-        last_access_level = ACL_LEVEL_EMBARGO
+        last_access_level = ACL_LEVEL_PRIVATE
         for source in self._iter_acl_chain(obj):
             last_source = source
             permissions = self._get_permissions(source)

@@ -1,17 +1,17 @@
 import logging
 from django.shortcuts import render
-from django.contrib.auth.decorators import login_required
 from django.urls import reverse
 
 # Import views from their respective modules
 from lacos.storage.views.presigned_url_views import get_presigned_urls, mark_uploads_complete
 from lacos.storage.views.dashboard_views import archivist_dashboard
 from lacos.storage.views.direct_upload_views import direct_upload, process_upload
+from lacos.storage.permissions import archivist_required
 
 logger = logging.getLogger(__name__)
 
 
-@login_required
+@archivist_required
 def upload_form(request):
     """
     Render the upload form for uploading folders to the ingest bucket.
@@ -22,7 +22,7 @@ def upload_form(request):
     return render(request, "upload/upload_form.html")
 
 
-@login_required
+@archivist_required
 def upload_success(request):
     """
     Render the upload success page.

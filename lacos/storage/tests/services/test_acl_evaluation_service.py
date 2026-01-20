@@ -7,14 +7,15 @@ from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.storage.constants import (
+    ACL_LEVEL_ACADEMIC,
     ACL_LEVEL_PRIVATE,
-    ACL_LEVEL_PROTECTED,
     ACL_LEVEL_PUBLIC,
     WAC_AUTHENTICATED_AGENT,
 )
 from lacos.storage.models.acl_permissions import ACLPermissions
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
 from lacos.users.models import GroupACL
+from lacos.storage.permissions import ARCHIVIST_GROUP_NAME
 
 
 def _create_collection(identifier: str = "collection-eval") -> Collection:
@@ -60,12 +61,12 @@ def test_authenticated_agent_requires_login():
 
     anonymous_result = service.evaluate(AnonymousUser(), collection)
     assert anonymous_result.allowed is False
-    assert anonymous_result.access_level == ACL_LEVEL_PROTECTED
+    assert anonymous_result.access_level == ACL_LEVEL_ACADEMIC
 
     user = get_user_model().objects.create_user(username="auth-user", password="test123")
     result = service.evaluate(user, collection)
     assert result.allowed is True
-    assert result.access_level == ACL_LEVEL_PROTECTED
+    assert result.access_level == ACL_LEVEL_ACADEMIC
 
 
 @pytest.mark.django_db
@@ -143,4 +144,20 @@ def test_default_deny_when_no_rules_match():
     anonymous_result = service.evaluate(AnonymousUser(), bundle)
     assert anonymous_result.allowed is False
     assert anonymous_result.default_applied is True
-    assert anonymous_result.access_level == ACL_LEVEL_PROTECTED
+    assert anonymous_result.access_level == ACL_LEVEL_ACADEMIC
+
+
+@pytest.mark.django_db
+def test_archivist_override_allows_access():
+    collection = _create_collection()
+    bundle = _create_bundle(collection)
+    _store_acl(bundle, [{"agentClass": "foaf:Person", "agent": "http://example.org/users/other", "mode": ["acl:Read"]}])
+
+    group = Group.objects.create(name=ARCHIVIST_GROUP_NAME)
+    user = get_user_model().objects.create_user(username="archivist", password="pass")
+    user.groups.add(group)
+
+    service = ACLEvaluationService()
+    result = service.evaluate(user, bundle)
+    assert result.allowed is True
+    assert result.access_level == ACL_LEVEL_PRIVATE

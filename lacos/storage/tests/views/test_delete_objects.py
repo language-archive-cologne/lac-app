@@ -4,6 +4,8 @@ from unittest.mock import patch, MagicMock
 
 from django.urls import reverse
 from django.contrib.auth import get_user_model
+from django.contrib.messages.storage.fallback import FallbackStorage
+from django.contrib.sessions.middleware import SessionMiddleware
 from django.test import Client, RequestFactory
 from django.http import HttpResponse
 
@@ -163,11 +165,13 @@ def s3_test_paths():
 ])
 def test_delete_object_success(authenticated_client, s3_test_paths, object_type, is_directory):
     """Test successful deletion of a file or folder."""
-    with patch('lacos.storage.views.file_operations_views.get_storage_service') as mock_get_service:
-        # Mock the storage service
-        mock_service = MagicMock()
-        mock_service.delete_object.return_value = {'success': True}
-        mock_get_service.return_value = mock_service
+    with patch('lacos.storage.views.file_operations_views.BucketService') as MockBucketService:
+        mock_service = MockBucketService.return_value
+        mock_service.get_all_accessible_buckets.return_value = [s3_test_paths['bucket_type']]
+        if is_directory:
+            mock_service.delete_folder.return_value = {'success': True}
+        else:
+            mock_service.delete_file.return_value = {'success': True}
         
         # Get the path based on object type
         object_path = s3_test_paths['folder_path'] if object_type == 'folder' else s3_test_paths['file_path']
@@ -184,24 +188,22 @@ def test_delete_object_success(authenticated_client, s3_test_paths, object_type,
         assert response.status_code == 200
         
         # Verify the service was called correctly
-        mock_service.delete_object.assert_called_once_with(
-            bucket_name=f'lacos-{s3_test_paths["bucket_type"]}',
-            object_path=object_path,
-            is_directory=is_directory
-        )
+        if is_directory:
+            mock_service.delete_folder.assert_called_once_with(s3_test_paths["bucket_type"], object_path)
+        else:
+            mock_service.delete_file.assert_called_once_with(s3_test_paths["bucket_type"], object_path)
 
 
 @pytest.mark.django_db # Needs DB for authenticated_client -> admin_user
 def test_delete_object_error(authenticated_client, s3_test_paths):
     """Test error handling when deleting an object."""
-    with patch('lacos.storage.views.file_operations_views.get_storage_service') as mock_get_service:
-        # Mock the storage service to return an error
-        mock_service = MagicMock()
-        mock_service.delete_object.return_value = {
+    with patch('lacos.storage.views.file_operations_views.BucketService') as MockBucketService:
+        mock_service = MockBucketService.return_value
+        mock_service.get_all_accessible_buckets.return_value = [s3_test_paths['bucket_type']]
+        mock_service.delete_file.return_value = {
             'success': False,
             'error': 'Object not found'
         }
-        mock_get_service.return_value = mock_service
         
         # Make the delete request
         url = reverse('storage:delete_object', kwargs={
@@ -222,7 +224,7 @@ def test_delete_object_error(authenticated_client, s3_test_paths):
 @pytest.mark.django_db # Needs DB for authenticated_client -> admin_user
 def test_delete_invalid_object_type(authenticated_client, s3_test_paths):
     """Test deletion with an invalid object type."""
-    with patch('lacos.storage.views.file_operations_views.get_storage_service') as mock_get_service:
+    with patch('lacos.storage.views.file_operations_views.BucketService') as MockBucketService:
         # Make the delete request with an invalid object type
         url = reverse('storage:delete_object', kwargs={
             'bucket_type': s3_test_paths['bucket_type'],
@@ -235,7 +237,7 @@ def test_delete_invalid_object_type(authenticated_client, s3_test_paths):
         assert response.status_code == 400
         
         # Verify the service was not called
-        mock_get_service.assert_not_called()
+        MockBucketService.assert_not_called()
 
 
 @pytest.mark.django_db # Needs DB for admin_user
@@ -250,12 +252,16 @@ def test_delete_object_with_htmx(admin_user, s3_test_paths):
     })
     request = factory.post(url, HTTP_HX_REQUEST='true')
     request.user = admin_user
+    middleware = SessionMiddleware(lambda req: None)
+    middleware.process_request(request)
+    request.session.save = lambda: None
+    messages = FallbackStorage(request)
+    setattr(request, '_messages', messages)
     
-    with patch('lacos.storage.views.file_operations_views.get_storage_service') as mock_get_service:
-        # Mock the storage service
-        mock_service = MagicMock()
-        mock_service.delete_object.return_value = {'success': True}
-        mock_get_service.return_value = mock_service
+    with patch('lacos.storage.views.file_operations_views.BucketService') as MockBucketService:
+        mock_service = MockBucketService.return_value
+        mock_service.get_all_accessible_buckets.return_value = [s3_test_paths['bucket_type']]
+        mock_service.delete_file.return_value = {'success': True}
         
         response = delete_object(request, s3_test_paths['bucket_type'], 'file', s3_test_paths['file_path'])
     

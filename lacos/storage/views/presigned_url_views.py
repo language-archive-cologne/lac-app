@@ -3,7 +3,7 @@ import json
 from django.shortcuts import render
 from django.contrib import messages
 from django.views.decorators.http import require_http_methods
-from django.contrib.auth.decorators import login_required
+from lacos.storage.permissions import archivist_required
 from django.http import JsonResponse
 from lacos.storage.services.upload_service import UploadService
 from lacos.storage.services.base_storage_service import BaseStorageService
@@ -42,7 +42,7 @@ def get_bucket_service():
         _bucket_service = BucketService()
     return _bucket_service
 
-@login_required
+@archivist_required
 @require_http_methods(["POST"])
 def get_presigned_urls(request):
     """
@@ -157,7 +157,7 @@ def get_presigned_urls(request):
         return JsonResponse({"success": False, "error": error_message})
 
 
-@login_required
+@archivist_required
 def mark_uploads_complete(request):
     """
     Mark uploads as complete and verify the files in S3.
@@ -268,7 +268,7 @@ def mark_uploads_complete(request):
 
 # ----- Multipart Upload Views -----
 
-@login_required
+@archivist_required
 @require_http_methods(["POST"])
 def initialize_multipart_upload(request):
     """
@@ -319,7 +319,7 @@ def initialize_multipart_upload(request):
         return JsonResponse({"success": False, "error": error_message})
 
 
-@login_required
+@archivist_required
 @require_http_methods(["POST"])
 def get_part_upload_urls(request):
     """
@@ -381,7 +381,7 @@ def get_part_upload_urls(request):
         return JsonResponse({"success": False, "error": error_message})
 
 
-@login_required
+@archivist_required
 @require_http_methods(["POST"])
 def complete_multipart_upload(request):
     """
@@ -440,7 +440,7 @@ def complete_multipart_upload(request):
         return JsonResponse({"success": False, "error": error_message})
 
 
-@login_required
+@archivist_required
 @require_http_methods(["POST"])
 def abort_multipart_upload(request):
     """
@@ -488,7 +488,7 @@ def abort_multipart_upload(request):
         return JsonResponse({"success": False, "error": error_message})
 
 
-@login_required
+@archivist_required
 @require_http_methods(["GET"])
 def list_multipart_uploads(request):
     """

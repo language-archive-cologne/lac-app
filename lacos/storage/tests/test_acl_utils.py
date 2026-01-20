@@ -1,9 +1,8 @@
 import pytest
 
 from lacos.storage.constants import (
-    ACL_LEVEL_EMBARGO,
+    ACL_LEVEL_ACADEMIC,
     ACL_LEVEL_PRIVATE,
-    ACL_LEVEL_PROTECTED,
     ACL_LEVEL_PUBLIC,
     WAC_AGENT,
     WAC_AUTHENTICATED_AGENT,
@@ -20,17 +19,17 @@ from lacos.storage.utils.acl import (
 @pytest.mark.parametrize(
     "entries,expected",
     [
-        ([], ACL_LEVEL_EMBARGO),
-        (None, ACL_LEVEL_EMBARGO),
+        ([], ACL_LEVEL_PRIVATE),
+        (None, ACL_LEVEL_PRIVATE),
         ([{"mode": [WAC_READ], "agent": "user@example.org"}], ACL_LEVEL_PRIVATE),
-        ([{"mode": [WAC_READ], "agentClass": WAC_AUTHENTICATED_AGENT}], ACL_LEVEL_PROTECTED),
+        ([{"mode": [WAC_READ], "agentClass": WAC_AUTHENTICATED_AGENT}], ACL_LEVEL_ACADEMIC),
         ([{"mode": [WAC_READ], "agentClass": WAC_AGENT}], ACL_LEVEL_PUBLIC),
         (
             [
                 {"mode": [WAC_READ], "agent": "user1"},
                 {"mode": [WAC_READ], "agentClass": WAC_AUTHENTICATED_AGENT},
             ],
-            ACL_LEVEL_PROTECTED,
+            ACL_LEVEL_ACADEMIC,
         ),
     ],
 )

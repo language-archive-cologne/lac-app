@@ -4,9 +4,8 @@ from typing import Iterable, Mapping, Sequence
 
 from lacos.utils.text import normalize_nfc
 from lacos.storage.constants import (
-    ACL_LEVEL_EMBARGO,
+    ACL_LEVEL_ACADEMIC,
     ACL_LEVEL_PRIVATE,
-    ACL_LEVEL_PROTECTED,
     ACL_LEVEL_PUBLIC,
     WAC_AGENT,
     WAC_AUTHENTICATED_AGENT,
@@ -30,15 +29,14 @@ def determine_access_level(entries: Iterable[Mapping[str, object]] | None) -> st
 
     The logic mirrors the access levels from the legacy KA3 API:
         - Public:     Contains foaf:Agent with acl:Read
-        - Protected:  Contains acl:AuthenticatedAgent with acl:Read
-        - Private:    Contains specific agent(s) with acl:Read
-        - Embargo:    No readable entries
+        - Academic:   Contains acl:AuthenticatedAgent with acl:Read
+        - Private:    Contains specific agent(s) with acl:Read or no readable entries
     """
     if not entries:
-        return ACL_LEVEL_EMBARGO
+        return ACL_LEVEL_PRIVATE
 
     has_public = False
-    has_authenticated = False
+    has_academic = False
     has_person = False
 
     for entry in entries:
@@ -53,17 +51,17 @@ def determine_access_level(entries: Iterable[Mapping[str, object]] | None) -> st
         if agent_class == WAC_AGENT:
             has_public = True
         elif agent_class == WAC_AUTHENTICATED_AGENT:
-            has_authenticated = True
+            has_academic = True
         elif isinstance(agent, str) and agent:
             has_person = True
 
     if has_public:
         return ACL_LEVEL_PUBLIC
-    if has_authenticated:
-        return ACL_LEVEL_PROTECTED
+    if has_academic:
+        return ACL_LEVEL_ACADEMIC
     if has_person:
         return ACL_LEVEL_PRIVATE
-    return ACL_LEVEL_EMBARGO
+    return ACL_LEVEL_PRIVATE
 
 
 def extract_read_agents(entries: Iterable[Mapping[str, object]] | None) -> list[str]:

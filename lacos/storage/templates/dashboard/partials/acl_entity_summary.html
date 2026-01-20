@@ -19,7 +19,15 @@
     <div class="flex flex-wrap gap-2">
       {% for row in summary.by_level %}
       <div class="badge badge-outline gap-1">
-        <span class="font-medium">{{ row.access_level|title }}</span>
+        <span class="font-medium">
+          {% if row.access_level == 'public' %}
+            Public
+          {% elif row.access_level == 'academic' or row.access_level == 'protected' %}
+            Academic
+          {% else %}
+            Private
+          {% endif %}
+        </span>
         <span class="opacity-70">{{ row.count }}</span>
       </div>
       {% empty %}

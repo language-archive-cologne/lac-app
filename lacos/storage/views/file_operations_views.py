@@ -1,7 +1,7 @@
 import logging
 import json
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
+from lacos.storage.permissions import archivist_required
 from django.http import JsonResponse, HttpResponse, QueryDict
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -15,7 +15,7 @@ from lacos.common.mixins.htmx_template_helpers import HtmxTemplateHelperMixin
 logger = logging.getLogger(__name__)
 
 
-@login_required
+@archivist_required
 def file_content(request, bucket_type, file_path):
     """
     Retrieve and display the content of a file from a bucket.
@@ -59,7 +59,7 @@ def file_content(request, bucket_type, file_path):
         return HttpResponse(error_message, status=500)
 
 
-@login_required
+@archivist_required
 def file_viewer_htmx(request, bucket_type, object_path):
     """Return modal content with a presigned URL for streaming file previews."""
     bucket_service = BucketService()
@@ -152,7 +152,7 @@ def _determine_viewer_type(content_type: str, file_name: str) -> str:
     return "download"
 
 
-@method_decorator(login_required, name='dispatch')
+@method_decorator(archivist_required, name='dispatch')
 class RenameObjectHTMXView(HtmxTemplateHelperMixin, View):
     """HTMX endpoint for renaming files and folders within a bucket."""
 
@@ -259,7 +259,7 @@ class RenameObjectHTMXView(HtmxTemplateHelperMixin, View):
         return HttpResponse(content_html + modal_html)
 
 
-@login_required
+@archivist_required
 def delete_object(request, bucket_type, object_type, object_path):
     """
     Delete a file or folder from a bucket.
@@ -274,6 +274,9 @@ def delete_object(request, bucket_type, object_type, object_path):
     """
     if request.method != "POST":
         return JsonResponse({"success": False, "error": "Method not allowed"})
+
+    if object_type not in {"file", "folder"}:
+        return JsonResponse({"success": False, "error": "Invalid object type"}, status=400)
     
     try:
         bucket_service = BucketService()

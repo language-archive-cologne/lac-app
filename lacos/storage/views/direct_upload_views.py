@@ -4,7 +4,7 @@ import os
 from django.shortcuts import render
 from django.contrib import messages
 from django.views.decorators.http import require_http_methods
-from django.contrib.auth.decorators import login_required
+from lacos.storage.permissions import archivist_required
 from django.http import JsonResponse, HttpResponse
 from django.urls import reverse
 from lacos.storage.services.upload_service import UploadService
@@ -14,7 +14,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 
-@login_required
+@archivist_required
 def direct_upload(request):
     """Handle direct S3 uploads from the browser."""
     # If GET request, just show the form
@@ -220,7 +220,7 @@ def direct_upload(request):
         })
 
 
-@login_required
+@archivist_required
 @require_http_methods(["POST"])
 def process_upload(request):
     """Process folder uploads using presigned URLs."""
@@ -395,7 +395,7 @@ def format_file_size(size_bytes):
     return f"{size_bytes:.2f} {size_name[i]}"
 
 
-@login_required
+@archivist_required
 @require_http_methods(["POST"])
 def upload_complete(request):
     """Handle notification that all uploads are complete."""
@@ -456,7 +456,7 @@ def upload_complete(request):
 
 
 # Add a debug view to test presigned URL generation
-@login_required
+@archivist_required
 @require_http_methods(["GET"])
 def debug_presigned_url(request):
     """Debug endpoint to test presigned URL generation."""
@@ -582,7 +582,7 @@ def debug_presigned_url(request):
     return HttpResponse(html_content)
 
 
-@login_required
+@archivist_required
 @require_http_methods(["POST"])
 @csrf_exempt  # This is needed because some browsers may not include CSRF token in these requests
 def debug_upload_error(request):

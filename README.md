@@ -1,5 +1,23 @@
 # Language Archive Cologne
 
+## ACL access levels
+
+The ACL system exposes three access levels derived from `acl.json` rules:
+
+- `public`: `foaf:Agent` with `acl:Read` (anyone can read)
+- `academic`: `acl:AuthenticatedAgent` with `acl:Read` (signed-in users can read)
+- `private`: specific agents/groups with `acl:Read` or no readable entries
+
+Legacy ACL values are mapped as follows:
+
+- `protected` -> `academic`
+- `embargo` -> `private`
+
+Archivist access:
+
+- Users in the `archivists` Django group (or superusers) can access storage
+  management UI endpoints and bypass ACL read checks.
+
 ## Collection update workflow
 
 The importers now support an update mode that refreshes existing collections/bundles

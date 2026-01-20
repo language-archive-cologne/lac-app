@@ -9,11 +9,12 @@ from django.template.loader import render_to_string
 
 from lacos.storage.tasks import convert_folder_to_ocfl_task, analyze_folder_for_ocfl_task
 from lacos.storage.services.background_task_service import BackgroundTaskService
+from lacos.storage.permissions import archivist_required, ArchivistRequiredMixin
 
 logger = logging.getLogger(__name__)
 
 
-class ConvertToOCFLView(View):
+class ConvertToOCFLView(ArchivistRequiredMixin, View):
     """Handle OCFL conversion requests via HTMX"""
 
     def post(self, request, bucket_name, folder_path):
@@ -87,6 +88,7 @@ class ConvertToOCFLView(View):
             )
 
 
+@archivist_required
 def ocfl_conversion_modal(request, bucket_name, folder_path):
     """Render the OCFL conversion modal content"""
     return render(request, 'storage/ocfl_conversion_modal.html', {

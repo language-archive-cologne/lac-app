@@ -9,7 +9,6 @@ WAC_AUTHENTICATED_AGENT: str = "acl:AuthenticatedAgent"
 WAC_READ: str = "acl:Read"
 
 # Normalised access level labels
-ACL_LEVEL_EMBARGO: str = "embargo"
-ACL_LEVEL_PRIVATE: str = "private"
-ACL_LEVEL_PROTECTED: str = "protected"
 ACL_LEVEL_PUBLIC: str = "public"
+ACL_LEVEL_ACADEMIC: str = "academic"
+ACL_LEVEL_PRIVATE: str = "private"

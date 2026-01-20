@@ -34,20 +34,20 @@
           {{ collection.identifier }}
         {% endif %}
       </h1>
-      {% with access_level=collection_acl_check_result.access_level|default:'embargo' %}
+      {% with access_level=collection_acl_check_result.access_level|default:'private' %}
         <div class="mt-2 flex items-center text-sm">
           {% if access_level == 'public' %}
             <span class="mr-2" aria-hidden="true">🌍</span>
             <span class="text-success font-medium">Public – all visitors can read bundles in this collection.</span>
-          {% elif access_level == 'protected' %}
+          {% elif access_level == 'academic' or access_level == 'protected' %}
             <span class="mr-2" aria-hidden="true">🔒</span>
-            <span class="text-info font-medium">Protected – only signed-in users can read bundles.</span>
+            <span class="text-info font-medium">Academic – only signed-in users can read bundles.</span>
           {% elif access_level == 'private' %}
             <span class="mr-2" aria-hidden="true">👤</span>
-            <span class="text-warning font-medium">Private – access is limited to specific users.</span>
+            <span class="text-warning font-medium">Private – access is restricted.</span>
           {% else %}
-            <span class="mr-2" aria-hidden="true">⛔</span>
-            <span class="text-error font-medium">Embargoed – this collection is currently closed to readers.</span>
+            <span class="mr-2" aria-hidden="true">👤</span>
+            <span class="text-warning font-medium">Private – access is restricted.</span>
           {% endif %}
         </div>
       {% endwith %}

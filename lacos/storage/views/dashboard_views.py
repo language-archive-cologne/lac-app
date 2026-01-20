@@ -5,7 +5,7 @@ from datetime import datetime
 from urllib.parse import quote_plus, urlencode
 
 from django.conf import settings
-from django.contrib.auth.decorators import login_required
+from lacos.storage.permissions import archivist_required
 from django.contrib.contenttypes.models import ContentType
 from django.core.paginator import Paginator
 from django.db import models
@@ -375,7 +375,7 @@ def _build_acl_overview_context():
     }
 
 
-@login_required
+@archivist_required
 def archivist_dashboard(request):
     """
     Render the archivist dashboard showing all workspace buckets.
@@ -420,7 +420,7 @@ def archivist_dashboard(request):
         )
 
 
-@login_required
+@archivist_required
 def acl_admin_dashboard(request):
     """
     Render the ACL Admin Dashboard with current settings, summary stats,
@@ -456,7 +456,7 @@ def acl_admin_dashboard(request):
     )
 
 
-@login_required
+@archivist_required
 @require_http_methods(["GET"])
 def acl_dashboard_panel(request):
     """HTMX endpoint rendering the overview dashboard panel."""
@@ -468,7 +468,7 @@ def acl_dashboard_panel(request):
     )
 
 
-@login_required
+@archivist_required
 @require_http_methods(["GET"])
 def acl_records_panel(request):
     scope = request.GET.get("scope", "collection")
@@ -488,7 +488,7 @@ def acl_records_panel(request):
     )
 
 
-@login_required
+@archivist_required
 @require_http_methods(["GET"])
 def acl_records_table(request, scope: str):
     try:
@@ -502,7 +502,7 @@ def acl_records_table(request, scope: str):
     )
 
 
-@login_required
+@archivist_required
 @require_http_methods(["POST"])
 def acl_delete_orphans(request, scope: str):
     try:
@@ -537,7 +537,7 @@ def acl_delete_orphans(request, scope: str):
     )
 
 
-@login_required
+@archivist_required
 @require_http_methods(["POST"])
 def acl_sync_all(request):
     """
@@ -618,7 +618,7 @@ def acl_sync_all(request):
     return redirect(f"{reverse('storage:acl_admin_dashboard')}?message={quote_plus(message)}")
 
 
-@login_required
+@archivist_required
 @require_http_methods(["POST"])
 def acl_update_settings(request):
     """
@@ -652,7 +652,7 @@ def acl_update_settings(request):
         return HttpResponse(f"Error updating settings: {e}", status=500)
 
 
-@login_required
+@archivist_required
 @require_http_methods(["GET"])
 def acl_sync_scope_fields(request):
     scope = request.GET.get("scope", "all")
@@ -668,7 +668,7 @@ def acl_sync_scope_fields(request):
     )
 
 
-@login_required
+@archivist_required
 @require_http_methods(["POST"])
 def acl_update_permission(request):
     """Allow administrators to manually adjust an object's recorded ACL level."""
@@ -721,7 +721,7 @@ def acl_update_permission(request):
 
     # Build permissions_data based on access level and selected users/groups
     from lacos.users.models import User, GroupACL
-    from lacos.storage.constants import ACL_LEVEL_PUBLIC, ACL_LEVEL_PROTECTED, ACL_LEVEL_PRIVATE
+    from lacos.storage.constants import ACL_LEVEL_PUBLIC, ACL_LEVEL_ACADEMIC, ACL_LEVEL_PRIVATE
 
     permissions_data = []
     read_agents = []
@@ -729,7 +729,7 @@ def acl_update_permission(request):
     if access_level == ACL_LEVEL_PUBLIC:
         permissions_data = [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}]
         read_agents = ["foaf:Agent"]
-    elif access_level == ACL_LEVEL_PROTECTED:
+    elif access_level == ACL_LEVEL_ACADEMIC:
         permissions_data = [{"agentClass": "acl:AuthenticatedAgent", "mode": ["acl:Read"]}]
         read_agents = ["acl:AuthenticatedAgent"]
     elif access_level == ACL_LEVEL_PRIVATE:
@@ -761,7 +761,7 @@ def acl_update_permission(request):
                     read_agents.append(group_acl.acl_agent_uri)
             except GroupACL.DoesNotExist:
                 pass
-    # embargo = empty permissions
+    # private = empty permissions
 
     # Update the record
     perm.access_level = access_level
@@ -795,10 +795,11 @@ def _render_acl_records_table(request, scope):
     )
 
 
-@login_required
+@archivist_required
 def acl_edit_permission_form(request, object_type, object_id):
     """Render the ACL edit form for a specific object."""
     from lacos.users.models import User, GroupACL
+    from lacos.storage.constants import ACL_LEVEL_ACADEMIC, ACL_LEVEL_PRIVATE
 
     if object_type not in {"collection", "bundle"}:
         return HttpResponse("Invalid object type", status=400)
@@ -831,13 +832,19 @@ def acl_edit_permission_form(request, object_type, object_id):
                 if group_acl:
                     selected_group_ids.add(group_acl.id)
 
+    current_access_level = perm.access_level if perm else ACL_LEVEL_PRIVATE
+    if current_access_level == "protected":
+        current_access_level = ACL_LEVEL_ACADEMIC
+    elif current_access_level == "embargo":
+        current_access_level = ACL_LEVEL_PRIVATE
+
     context = {
         "object_type": object_type,
         "object_id": object_id,
         "permission_id": perm.pk if perm else None,
         "identifier": getattr(obj, "identifier", str(obj.pk)),
         "name": _resolve_acl_display_name(obj),
-        "current_access_level": perm.access_level if perm else "embargo",
+        "current_access_level": current_access_level,
         "access_level_choices": ACLPermissions.ACCESS_LEVEL_CHOICES,
         "available_users": User.objects.exclude(acl_agent_uri__isnull=True).exclude(acl_agent_uri="").order_by("username"),
         "available_groups": GroupACL.objects.exclude(acl_agent_uri__isnull=True).exclude(acl_agent_uri="").select_related("group").order_by("group__name"),
@@ -849,7 +856,7 @@ def acl_edit_permission_form(request, object_type, object_id):
     return render(request, "dashboard/partials/acl_edit_form.html", context)
 
 
-@login_required
+@archivist_required
 def load_folder_contents(request, bucket_type, folder_path):
     """
     Load contents of a specific folder when expanded.
@@ -937,7 +944,7 @@ def load_folder_contents(request, bucket_type, folder_path):
         )
 
 
-@login_required
+@archivist_required
 def bucket_size_info(request, bucket_name):
     """HTMX endpoint returning bucket size details."""
     bucket_service = BucketService(skip_bucket_check=True)
@@ -962,7 +969,7 @@ def bucket_size_info(request, bucket_name):
     return HttpResponse(html)
 
 
-@login_required
+@archivist_required
 def dashboard_content(request, bucket_type):
     """
     Return only the structure content for a specific bucket type.
@@ -1024,7 +1031,7 @@ def dashboard_content(request, bucket_type):
             return HttpResponse(f"Error: {str(e)}", status=500)
 
 
-@method_decorator(login_required, name='dispatch')
+@method_decorator(archivist_required, name='dispatch')
 class BucketContentHTMXView(HtmxTemplateHelperMixin, View):
     """
     Return bucket content for HTMX bucket switching.
@@ -1086,7 +1093,7 @@ class BucketContentHTMXView(HtmxTemplateHelperMixin, View):
 # Class-based view is now used directly in URLs
 
 
-@login_required
+@archivist_required
 def file_info_htmx(request, bucket_type, object_path):
     """Provide file metadata details via HTMX."""
     bucket_service = BucketService(skip_bucket_check=True)
@@ -1137,7 +1144,7 @@ def file_info_htmx(request, bucket_type, object_path):
     return HttpResponse(html)
 
 
-@method_decorator(login_required, name='dispatch')
+@method_decorator(archivist_required, name='dispatch')
 class BucketSelectHTMXView(HtmxTemplateHelperMixin, View):
     """Return updated bucket select dropdown for upload modal."""
 
@@ -1159,7 +1166,7 @@ class BucketSelectHTMXView(HtmxTemplateHelperMixin, View):
         return HttpResponse(html)
 
 
-@method_decorator(login_required, name='dispatch')
+@method_decorator(archivist_required, name='dispatch')
 class CreateBucketHTMXView(HtmxTemplateHelperMixin, View):
     """
     Create a new bucket via HTMX form submission.
@@ -1214,7 +1221,7 @@ class CreateBucketHTMXView(HtmxTemplateHelperMixin, View):
 # Class-based view is now used directly in URLs
 
 
-@login_required
+@archivist_required
 @require_http_methods(["DELETE"])
 def delete_bucket_htmx(request, bucket_name):
     """
@@ -1253,7 +1260,7 @@ def delete_bucket_htmx(request, bucket_name):
         return HttpResponse(f"Error deleting bucket: {str(e)}", status=500)
 
 
-@method_decorator(login_required, name='dispatch')
+@method_decorator(archivist_required, name='dispatch')
 class RenameBucketModalHTMXView(HtmxTemplateHelperMixin, View):
     """Serve the bucket rename modal populated with current values."""
 
@@ -1274,7 +1281,7 @@ class RenameBucketModalHTMXView(HtmxTemplateHelperMixin, View):
         return HttpResponse(html)
 
 
-@method_decorator(login_required, name='dispatch')
+@method_decorator(archivist_required, name='dispatch')
 class RenameObjectModalHTMXView(HtmxTemplateHelperMixin, View):
     """Serve the folder/file rename modal with the selected item."""
 
@@ -1299,7 +1306,7 @@ class RenameObjectModalHTMXView(HtmxTemplateHelperMixin, View):
         return HttpResponse(html)
 
 
-@method_decorator(login_required, name='dispatch')
+@method_decorator(archivist_required, name='dispatch')
 class RenameBucketHTMXView(HtmxTemplateHelperMixin, View):
     """Handle HTMX bucket rename requests."""
 

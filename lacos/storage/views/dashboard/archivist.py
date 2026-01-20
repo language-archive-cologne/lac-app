@@ -5,18 +5,18 @@ Handles the main archivist dashboard, bucket content display,
 and folder navigation for storage management.
 """
 import logging
-from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from django.urls import reverse
 
 from lacos.common.mixins import BucketCoordinatorMixin
 from lacos.storage.services.bucket_service import BucketService
 from lacos.storage.observability import profiling_scope
+from lacos.storage.permissions import archivist_required
 
 logger = logging.getLogger(__name__)
 
 
-@login_required
+@archivist_required
 def archivist_dashboard(request):
     """
     Render the archivist dashboard showing all workspace buckets.
@@ -61,7 +61,7 @@ def archivist_dashboard(request):
         )
 
 
-@login_required
+@archivist_required
 def load_folder_contents(request, bucket_type, folder_path):
     """
     Load folder contents via HTMX for lazy expansion.
@@ -111,7 +111,7 @@ def load_folder_contents(request, bucket_type, folder_path):
             )
 
 
-@login_required
+@archivist_required
 def dashboard_content(request, bucket_type):
     """
     Load the main content area of the dashboard for a specific bucket.
@@ -171,7 +171,7 @@ def dashboard_content(request, bucket_type):
             )
 
 
-@login_required
+@archivist_required
 def bucket_size_info(request, bucket_name):
     """
     Get bucket size information for display in the dashboard.
