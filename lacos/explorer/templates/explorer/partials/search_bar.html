@@ -9,11 +9,6 @@
       value="{{ search_query }}"
       placeholder="{% translate 'Search collections or bundles' %}"
       class="input input-bordered join-item w-full"
-      hx-get="{{ request.path }}"
-      hx-target="#collection-search-results"
-      hx-swap="innerHTML"
-      hx-trigger="change, keyup delay:400ms"
-      hx-push-url="true"
     >
     <button type="submit" class="btn btn-primary join-item">{% translate "Search" %}</button>
     {% if search_query %}

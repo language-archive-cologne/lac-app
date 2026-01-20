@@ -42,7 +42,9 @@ def search_archives(term: str, *, limit: int | None = None) -> list[SearchResult
     if not normalized:
         return []
 
-    query = SearchQuery(normalized, config="simple")
+    # Add prefix matching (:*) to each word for partial word search
+    prefix_terms = " & ".join(f"{word}:*" for word in normalized.split())
+    query = SearchQuery(prefix_terms, config="simple", search_type="raw")
 
     collection_results = _search_collections(query)
     bundle_results = _search_bundles(query)

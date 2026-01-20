@@ -8,11 +8,15 @@
 {% block explorer_content %}
   {% include "explorer/partials/search_bar.html" %}
 
-  {% if search_query %}
-    <div class="space-y-8" id="collection-search-results">
+  <!-- Search results (shown when searching, hidden otherwise) -->
+  <div id="collection-search-results" class="{% if not search_query %}hidden{% endif %} space-y-8 mb-8">
+    {% if search_query %}
       {% include "explorer/partials/collection_search_results_content.html" %}
-    </div>
-  {% else %}
+    {% endif %}
+  </div>
+
+  <!-- Main collections view (hidden when searching) -->
+  <div id="collections-main-view" class="{% if search_query %}hidden{% endif %}">
     {% if collection_list %}
       <!-- Map styles (outside shell so they persist) -->
       <style>
@@ -77,7 +81,7 @@
     {% else %}
       <p class="text-base-content/60">{% translate "No collections available." %}</p>
     {% endif %}
-  {% endif %}
+  </div>
 
   <!-- Preload MapLibre for map popups -->
   <link rel="stylesheet" href="{% static 'vendor/js/maplibre-gl/maplibre-gl.css' %}" />
