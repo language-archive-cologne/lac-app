@@ -14,53 +14,31 @@
     </div>
   {% else %}
     {% if collection_list %}
-      <!-- Hidden state for language filter (used by map JS) -->
-      <div id="language-filter-state" class="hidden" data-language-filter="{{ language_filter|default:''|escapejs }}"></div>
+      <!-- Map styles (outside shell so they persist) -->
+      <style>
+        #collections-map .collection-marker {
+          width: 24px;
+          height: 36px;
+          color: #1d4ed8;
+          filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+          transition: color 150ms ease, opacity 150ms ease;
+        }
+        #collections-map .collection-marker--match {
+          color: #f97316;
+          opacity: 1;
+        }
+        #collections-map .collection-marker--dim {
+          color: #1d4ed8;
+          opacity: 0.35;
+        }
+        #collections-map .collection-marker svg {
+          display: block;
+          width: 100%;
+          height: 100%;
+        }
+      </style>
+      <script id="collections-markers" type="application/json">{{ map_markers_json|safe }}</script>
 
-      <!-- Top row: Language Spotlight (left) + Map (right) -->
-      <div class="flex flex-col lg:flex-row gap-4 mb-4">
-        <!-- Language Spotlight -->
-        <div id="language-spotlight-container" class="flex-1">
-          {% include "explorer/partials/language_focus.html" %}
-        </div>
-
-        <!-- Collections Map -->
-        <div class="flex-1 rounded-xl shadow-sm border border-base-300 overflow-hidden relative min-h-[280px]">
-          <div id="collections-map" class="h-full w-full" style="min-height: 280px;"></div>
-          <style>
-            #collections-map .collection-marker {
-              width: 24px;
-              height: 36px;
-              color: #1d4ed8;
-              filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
-              transition: color 150ms ease, opacity 150ms ease;
-            }
-            #collections-map .collection-marker--match {
-              color: #f97316;
-              opacity: 1;
-            }
-            #collections-map .collection-marker--dim {
-              color: #1d4ed8;
-              opacity: 0.35;
-            }
-            #collections-map .collection-marker svg {
-              display: block;
-              width: 100%;
-              height: 100%;
-            }
-          </style>
-          <script id="collections-markers" type="application/json">{{ map_markers_json|safe }}</script>
-          <button id="recenter-btn"
-                  class="absolute top-2 right-12 z-10 bg-base-100 hover:bg-base-200 border border-base-300 rounded-md p-1.5 shadow-sm transition-colors"
-                  title="{% translate 'Fit all markers' %}">
-            <svg class="w-5 h-5 text-base-content/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      <!-- Collections Table -->
       {% include "explorer/partials/collection_language_shell.html" %}
     {% else %}
       <p class="text-base-content/60">{% translate "No collections available." %}</p>
@@ -179,7 +157,17 @@
     window.initCollectionsMap();
 
     function refreshCollectionsMap() {
-      if (typeof window.updateCollectionsMap === 'function') {
+      // Map container was replaced by HTMX, need to reinitialize
+      const container = document.getElementById('collections-map');
+      if (container && container.dataset.mapInitialized !== 'true') {
+        // Cleanup old map if exists
+        if (window.collectionsMap) {
+          window.collectionsMap.remove();
+          window.collectionsMap = null;
+          window.collectionMarkers = [];
+        }
+        window.initCollectionsMap();
+      } else if (typeof window.updateCollectionsMap === 'function') {
         window.updateCollectionsMap();
       }
     }

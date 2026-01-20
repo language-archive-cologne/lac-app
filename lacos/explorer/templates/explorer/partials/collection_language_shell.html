@@ -1,11 +1,26 @@
 {% load i18n %}
-<div id="collection-language-shell">
-  <!-- OOB swap for language filter state (used by map JS) -->
-  <div id="language-filter-state" class="hidden" data-language-filter="{{ language_filter|default:''|escapejs }}" hx-swap-oob="true"></div>
-  <!-- OOB swap for language spotlight -->
-  <div id="language-spotlight-container" class="flex-1" hx-swap-oob="true">
-    {% include "explorer/partials/language_focus.html" %}
+<div id="collection-language-shell" class="space-y-4">
+  <div id="language-filter-state" class="hidden" data-language-filter="{{ language_filter|default:''|escapejs }}"></div>
+
+  <!-- Top row: Language Spotlight (left) + Map (right) -->
+  <div class="flex flex-col lg:flex-row gap-4">
+    <!-- Language Spotlight -->
+    <div class="flex-1">
+      {% include "explorer/partials/language_focus.html" %}
+    </div>
+
+    <!-- Collections Map -->
+    <div class="flex-1 rounded-xl shadow-sm border border-base-300 overflow-hidden relative min-h-[300px]">
+      <div id="collections-map" class="h-full w-full" style="min-height: 300px;"></div>
+      <button id="recenter-btn"
+              class="absolute top-2 right-12 z-10 bg-base-100 hover:bg-base-200 border border-base-300 rounded-md p-1.5 shadow-sm transition-colors"
+              title="{% translate 'Fit all markers' %}">
+        <svg class="w-5 h-5 text-base-content/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>
+        </svg>
+      </button>
+    </div>
   </div>
-  <!-- Collections Table -->
+
   {% include "explorer/partials/collections_table.html" %}
 </div>
