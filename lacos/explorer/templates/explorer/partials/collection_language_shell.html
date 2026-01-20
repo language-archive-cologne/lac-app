@@ -1,7 +1,11 @@
 {% load i18n %}
-<div id="collection-language-shell" class="space-y-6">
-  <div id="language-filter-state" class="hidden" data-language-filter="{{ language_filter|default:''|escapejs }}"></div>
-  {% include "explorer/partials/language_focus.html" %}
-
+<div id="collection-language-shell">
+  <!-- OOB swap for language filter state (used by map JS) -->
+  <div id="language-filter-state" class="hidden" data-language-filter="{{ language_filter|default:''|escapejs }}" hx-swap-oob="true"></div>
+  <!-- OOB swap for language spotlight -->
+  <div id="language-spotlight-container" class="flex-1" hx-swap-oob="true">
+    {% include "explorer/partials/language_focus.html" %}
+  </div>
+  <!-- Collections Table -->
   {% include "explorer/partials/collections_table.html" %}
 </div>
