@@ -1,39 +1,25 @@
 {% load i18n %}
 {% load explorer_extras %}
 <div id="collections-table" class="rounded-2xl border border-base-300 bg-base-100 shadow-sm overflow-hidden">
-  <div class="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b border-base-300 bg-base-200">
-    <div class="space-y-1">
-      <span class="text-xs font-semibold uppercase tracking-widest text-base-content/60">{% translate "Collections" %}</span>
-      <p class="text-sm text-base-content/70">{% translate "Browse archive metadata and access collection details." %}</p>
-      <p class="text-xs text-base-content/60">
-        {% blocktrans with collections=stats.collections_count languages=stats.languages_count %}
-          Browsing <strong class="text-base-content">{{ collections }}</strong> collections across <strong class="text-base-content">{{ languages }}</strong> languages
-        {% endblocktrans %}
-      </p>
+  <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-base-300 bg-base-200">
+    <div class="flex items-center gap-3 text-xs text-base-content/60">
+      <span class="font-semibold uppercase tracking-widest">{{ stats.collections_count }} {% translate "collections" %}</span>
       {% if language_filter %}
-        <div class="flex items-center gap-2 text-xs text-base-content/60">
-          <span class="rounded-full border border-base-300 bg-base-100 px-2 py-0.5 font-semibold uppercase tracking-widest">
-            {% translate "Language" %}
-          </span>
-          <span class="text-base-content/70">
-            {% if selected_language %}
-              {{ selected_language.name }}{% if selected_language.iso_639_3_code %} [{{ selected_language.iso_639_3_code }}]{% endif %}
-            {% else %}
-              {{ language_filter }}
-            {% endif %}
-          </span>
-        </div>
+        <span class="text-base-content/40">·</span>
+        <span class="text-base-content/70">
+          {% if selected_language %}
+            {{ selected_language.name }}{% if selected_language.iso_639_3_code %} [{{ selected_language.iso_639_3_code }}]{% endif %}
+          {% else %}
+            {{ language_filter }}
+          {% endif %}
+        </span>
       {% endif %}
     </div>
-    <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-base-content/60">
-      <span>{% translate "Sorted by" %}</span>
+    <div class="flex items-center gap-2 text-xs text-base-content/60">
+      <span class="uppercase tracking-widest">{% translate "Sort" %}</span>
       <span class="rounded-full border border-base-300 bg-base-100 px-2 py-0.5 text-base-content/70">
-        {% if current_sort == 'language' %}
-          {% translate "Languages" %}
-        {% else %}
-          {% translate "Collection" %}
-        {% endif %}
-        {% if current_order == 'asc' %}&#8593;{% else %}&#8595;{% endif %}
+        {% if current_sort == 'language' %}{% translate "Language" %}{% else %}{% translate "Name" %}{% endif %}
+        {% if current_order == 'asc' %}↑{% else %}↓{% endif %}
       </span>
     </div>
   </div>
