@@ -36,8 +36,42 @@
           width: 100%;
           height: 100%;
         }
+        /* Grid layout for language index + map */
+        .collections-top-row {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 1rem;
+        }
+        @media (min-width: 1024px) {
+          .collections-top-row {
+            grid-template-columns: minmax(280px, 320px) 1fr;
+          }
+        }
       </style>
       <script id="collections-markers" type="application/json">{{ map_markers_json|safe }}</script>
+
+      <!-- Filter state for map JS (updated via OOB on HTMX requests) -->
+      <div id="language-filter-state" class="hidden" data-language-filter="{{ language_filter|default:''|escapejs }}"></div>
+
+      <!-- Top row: Language Index + Map -->
+      <div class="collections-top-row mb-4">
+        <!-- Language Index (updated via OOB on HTMX requests) -->
+        <div id="language-index-container">
+          {% include "explorer/partials/language_focus.html" %}
+        </div>
+
+        <!-- Collections Map (outside shell - never re-renders on language filter) -->
+        <div class="rounded-xl shadow-sm border border-base-300 overflow-hidden relative min-h-[300px]">
+          <div id="collections-map" class="h-full w-full" style="min-height: 300px;"></div>
+          <button id="recenter-btn"
+                  class="absolute top-2 right-12 z-10 bg-base-100 hover:bg-base-200 border border-base-300 rounded-md p-1.5 shadow-sm transition-colors"
+                  title="{% translate 'Fit all markers' %}">
+            <svg class="w-5 h-5 text-base-content/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
 
       {% include "explorer/partials/collection_language_shell.html" %}
     {% else %}
@@ -86,7 +120,8 @@
         style: 'https://tiles.openfreemap.org/styles/bright',
         center: [20, 20],
         zoom: 0.7,
-        renderWorldCopies: false
+        renderWorldCopies: false,
+        attributionControl: false
       });
 
       map.addControl(new maplibregl.NavigationControl());
@@ -148,31 +183,24 @@
       });
 
       if (activeKey && hasMatch) {
+        // Filter active with matches - zoom to matching markers
         map.fitBounds(matchBounds, { padding: 60, maxZoom: 4 });
-      } else if (!bounds.isEmpty()) {
-        map.fitBounds(bounds, { padding: 60, maxZoom: 4 });
+      } else if (!activeKey) {
+        // No filter - show all markers with world view
+        map.flyTo({ center: [20, 20], zoom: 1, duration: 500 });
       }
     };
 
     window.initCollectionsMap();
 
     function refreshCollectionsMap() {
-      // Map container was replaced by HTMX, need to reinitialize
-      const container = document.getElementById('collections-map');
-      if (container && container.dataset.mapInitialized !== 'true') {
-        // Cleanup old map if exists
-        if (window.collectionsMap) {
-          window.collectionsMap.remove();
-          window.collectionsMap = null;
-          window.collectionMarkers = [];
-        }
-        window.initCollectionsMap();
-      } else if (typeof window.updateCollectionsMap === 'function') {
+      // Map is outside shell, just update pin styles based on new filter state
+      if (typeof window.updateCollectionsMap === 'function') {
         window.updateCollectionsMap();
       }
     }
 
-    document.body.addEventListener('htmx:afterSwap', function(event) {
+    document.body.addEventListener('htmx:afterSettle', function(event) {
       const target = event.detail && event.detail.target ? event.detail.target : event.target;
       if (target && target.id === 'collection-language-shell') {
         refreshCollectionsMap();

@@ -85,6 +85,7 @@ class CollectionListView(ListView):
     def get_context_data(self, **kwargs):
         """Add processed location data to the context."""
         context = super().get_context_data(**kwargs)
+        context["is_htmx"] = self.request.headers.get("HX-Request") == "true"
         search_query = self.request.GET.get("q", "").strip()
         context["search_query"] = search_query
         language_filter = self.request.GET.get("language", "").strip()
