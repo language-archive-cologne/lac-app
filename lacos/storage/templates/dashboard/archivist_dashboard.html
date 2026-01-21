@@ -647,7 +647,12 @@ async function startModalUpload() {
 
         if (!result.success) throw new Error(result.error || 'Failed to get upload URLs');
 
-        const uploadedKeys = await uploadModalFiles(modalSelectedFiles, result.presigned_posts, bucket);
+        const uploadedKeys = await uploadModalFiles(
+            modalSelectedFiles,
+            result.presigned_posts,
+            bucket,
+            result.upload_session_id
+        );
         if (result.upload_session_id && uploadedKeys.length) {
             await markModalUploadsComplete(uploadedKeys, result.upload_session_id);
         }
@@ -685,7 +690,7 @@ async function startModalUpload() {
     }
 }
 
-async function uploadModalFiles(files, presignedPosts, bucketName) {
+async function uploadModalFiles(files, presignedPosts, bucketName, uploadSessionId) {
     const totalFiles = files.length;
     const uploadedKeys = [];
 
@@ -704,6 +709,9 @@ async function uploadModalFiles(files, presignedPosts, bucketName) {
 
         if (config.s3_key) {
             uploadedKeys.push(config.s3_key);
+            if (uploadSessionId) {
+                await markModalUploadsComplete([config.s3_key], uploadSessionId);
+            }
         }
         updateModalProgress(((i + 1) / totalFiles) * 100, `Completed ${i + 1} of ${totalFiles} files`);
     }
@@ -768,9 +776,17 @@ async function markModalUploadsComplete(s3Keys, uploadSessionId) {
 
         if (!response.ok) {
             console.warn('Failed to mark uploads complete:', response.status);
+            return false;
         }
+        const result = await response.json();
+        if (!result.success) {
+            console.warn('Upload verification failed:', result);
+            return false;
+        }
+        return true;
     } catch (error) {
         console.warn('Error marking uploads complete:', error);
+        return false;
     }
 }
 

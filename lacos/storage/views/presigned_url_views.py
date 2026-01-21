@@ -229,6 +229,9 @@ def get_presigned_urls(request):
         
         if result["success"]:
             logger.info(f"Successfully generated {result['total_urls']} presigned URLs")
+            if upload_session:
+                upload_session.status = "in_progress"
+                upload_session.save(update_fields=["status"])
             
             if is_htmx:
                 return render(request, "upload/presigned_urls.html", {
