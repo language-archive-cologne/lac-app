@@ -85,7 +85,7 @@ def mock_upload_service(mock_s3):
 def test_generate_presigned_post(mock_upload_service):
     """Test generating a presigned post URL for a single file"""
     # Test with large file (should trigger multipart)
-    large_file_size = 200 * 1024 * 1024  # 200MB
+    large_file_size = 6 * 1024 * 1024 * 1024  # 6GB
     result = mock_upload_service.generate_presigned_post(
         file_name="test.txt",
         file_type="text/plain",
@@ -169,9 +169,9 @@ def test_generate_presigned_post_with_spaces_in_filename(mock_upload_service):
 def test_generate_batch_presigned_posts(mock_upload_service):
     """Test generating multiple presigned post URLs"""
     files_metadata = [
-        {"file_name": "file1.txt", "file_type": "text/plain", "file_size": 200 * 1024 * 1024},  # 200MB
-        {"file_name": "file2.txt", "file_type": "text/plain", "file_size": 200 * 1024 * 1024},  # 200MB
-        {"file_name": "file3.jpg", "file_type": "image/jpeg", "file_size": 200 * 1024 * 1024}   # 200MB
+        {"file_name": "file1.txt", "file_type": "text/plain", "file_size": 6 * 1024 * 1024 * 1024},  # 6GB
+        {"file_name": "file2.txt", "file_type": "text/plain", "file_size": 6 * 1024 * 1024 * 1024},  # 6GB
+        {"file_name": "file3.jpg", "file_type": "image/jpeg", "file_size": 6 * 1024 * 1024 * 1024}   # 6GB
     ]
 
     # Test with large files (should trigger multipart)
@@ -452,6 +452,59 @@ def test_get_upload_part_urls(mock_upload_service):
     # Store the results for other tests
     global _parts_result
     _parts_result = result
+
+def test_multipart_upload_uses_target_bucket(mock_s3, mock_upload_service):
+    """Ensure multipart uploads honor the provided bucket name."""
+    target_bucket = "alternate-bucket"
+    mock_s3.create_bucket(Bucket=target_bucket)
+
+    file_name = "bucket_target_file.dat"
+    file_type = "application/octet-stream"
+    path_prefix = "bucket_target"
+
+    init_result = mock_upload_service.initialize_multipart_upload(
+        file_name=file_name,
+        file_type=file_type,
+        path_prefix=path_prefix,
+        bucket_name=target_bucket,
+    )
+    assert init_result["success"] is True, "Multipart upload initialization should succeed"
+    assert init_result["bucket_name"] == target_bucket, "Initialization should keep the target bucket"
+
+    s3_key = init_result["s3_key"]
+    upload_id = init_result["upload_id"]
+
+    part_count = 2
+    urls_result = mock_upload_service.get_upload_part_urls(
+        s3_key=s3_key,
+        upload_id=upload_id,
+        part_count=part_count,
+        bucket_name=target_bucket,
+    )
+    assert urls_result["success"] is True, "Part URL generation should succeed"
+    assert urls_result["bucket_name"] == target_bucket, "Part URLs should reflect the target bucket"
+
+    parts = []
+    part_size = 5 * 1024 * 1024
+    for part in urls_result["presigned_urls"]:
+        response = mock_s3.upload_part(
+            Bucket=target_bucket,
+            Key=s3_key,
+            UploadId=upload_id,
+            PartNumber=part["part_number"],
+            Body=b"X" * part_size,
+        )
+        parts.append({"part_number": part["part_number"], "etag": response["ETag"]})
+
+    complete_result = mock_upload_service.complete_multipart_upload(
+        s3_key=s3_key,
+        upload_id=upload_id,
+        parts=parts,
+        bucket_name=target_bucket,
+    )
+    assert complete_result["success"] is True, "Multipart completion should succeed"
+    assert complete_result["bucket"] == target_bucket, "Completion should use the target bucket"
+    mock_s3.head_object(Bucket=target_bucket, Key=s3_key)
 
 def test_complete_multipart_upload(mock_s3, mock_upload_service):
     """Test completing a multipart upload"""
