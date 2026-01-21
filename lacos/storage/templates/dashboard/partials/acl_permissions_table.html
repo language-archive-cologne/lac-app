@@ -218,13 +218,13 @@
               {% endif %}
             </td>
             <td>
-              <span class="badge badge-sm {% if row.access_level == 'public' %}badge-success{% elif row.access_level == 'academic' or row.access_level == 'protected' %}badge-info{% else %}badge-warning{% endif %}">
+              <span class="badge badge-sm {% if row.access_level == 'public' %}badge-success{% elif row.access_level == 'academic' %}badge-warning{% else %}bg-amber-500 text-white{% endif %}">
                 {% if row.access_level == 'public' %}
                   Public
-                {% elif row.access_level == 'academic' or row.access_level == 'protected' %}
+                {% elif row.access_level == 'academic' %}
                   Academic
                 {% else %}
-                  Private
+                  Restricted
                 {% endif %}
               </span>
             </td>

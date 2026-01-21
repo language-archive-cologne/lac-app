@@ -6,12 +6,12 @@ The ACL system exposes three access levels derived from `acl.json` rules:
 
 - `public`: `foaf:Agent` with `acl:Read` (anyone can read)
 - `academic`: `acl:AuthenticatedAgent` with `acl:Read` (signed-in users can read)
-- `private`: specific agents/groups with `acl:Read` or no readable entries
+- `restricted`: specific agents/groups with `acl:Read` or no readable entries
 
 Legacy ACL values are mapped as follows:
 
 - `protected` -> `academic`
-- `embargo` -> `private`
+- `embargo` -> `restricted`
 
 Archivist access:
 

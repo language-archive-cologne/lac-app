@@ -11,4 +11,4 @@ WAC_READ: str = "acl:Read"
 # Normalised access level labels
 ACL_LEVEL_PUBLIC: str = "public"
 ACL_LEVEL_ACADEMIC: str = "academic"
-ACL_LEVEL_PRIVATE: str = "private"
+ACL_LEVEL_RESTRICTED: str = "restricted"

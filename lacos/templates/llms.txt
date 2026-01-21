@@ -24,9 +24,8 @@ The archive contains:
 ## Access Levels
 
 - **Public**: Collection and bundle metadata is openly accessible
-- **Restricted**: Media files require authentication and authorization
-- **Embargoed**: Some materials have time-limited access restrictions
-- **Protected**: Culturally sensitive content with special access requirements
+- **Academic**: Authenticated users can access files
+- **Restricted**: Access is limited to authorized users
 
 ## Usage Policy
 

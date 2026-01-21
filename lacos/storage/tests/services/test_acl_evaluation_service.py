@@ -8,8 +8,8 @@ from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.storage.constants import (
     ACL_LEVEL_ACADEMIC,
-    ACL_LEVEL_PRIVATE,
     ACL_LEVEL_PUBLIC,
+    ACL_LEVEL_RESTRICTED,
     WAC_AUTHENTICATED_AGENT,
 )
 from lacos.storage.models.acl_permissions import ACLPermissions
@@ -81,12 +81,12 @@ def test_person_rule_matches_acl_agent_uri():
     user = get_user_model().objects.create_user(username="alice", password="pass", acl_agent_uri=person_uri)
     result = service.evaluate(user, bundle)
     assert result.allowed is True
-    assert result.access_level == ACL_LEVEL_PRIVATE
+    assert result.access_level == ACL_LEVEL_RESTRICTED
 
     other_user = get_user_model().objects.create_user(username="bob", password="pass")
     denied = service.evaluate(other_user, bundle)
     assert denied.allowed is False
-    assert denied.access_level == ACL_LEVEL_PRIVATE
+    assert denied.access_level == ACL_LEVEL_RESTRICTED
 
 
 @pytest.mark.django_db
@@ -106,12 +106,12 @@ def test_group_rule_matches_group_profile():
 
     allowed = service.evaluate(user, bundle)
     assert allowed.allowed is True
-    assert allowed.access_level == ACL_LEVEL_PRIVATE
+    assert allowed.access_level == ACL_LEVEL_RESTRICTED
 
     other_user = get_user_model().objects.create_user(username="outsider", password="pass")
     denied = service.evaluate(other_user, bundle)
     assert denied.allowed is False
-    assert denied.access_level == ACL_LEVEL_PRIVATE
+    assert denied.access_level == ACL_LEVEL_RESTRICTED
 
 
 @pytest.mark.django_db
@@ -131,7 +131,7 @@ def test_bundle_inherits_collection_acl():
     result = service.evaluate(user, bundle)
     assert result.allowed is True
     assert result.source == collection
-    assert result.access_level == ACL_LEVEL_PRIVATE
+    assert result.access_level == ACL_LEVEL_RESTRICTED
 
 
 @pytest.mark.django_db
@@ -160,4 +160,4 @@ def test_archivist_override_allows_access():
     service = ACLEvaluationService()
     result = service.evaluate(user, bundle)
     assert result.allowed is True
-    assert result.access_level == ACL_LEVEL_PRIVATE
+    assert result.access_level == ACL_LEVEL_RESTRICTED

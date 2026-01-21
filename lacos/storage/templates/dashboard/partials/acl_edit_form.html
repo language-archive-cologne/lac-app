@@ -38,12 +38,12 @@
     </select>
     <label class="label">
       <span class="label-text-alt text-base-content/60">
-        Public: anyone, Academic: logged-in users, Private: specific users/groups
+        Public: anyone, Academic: logged-in users, Restricted: specific users/groups
       </span>
     </label>
   </div>
 
-  <div id="agent-fields" class="space-y-4 {% if current_access_level != 'private' %}hidden{% endif %}">
+  <div id="agent-fields" class="space-y-4 {% if current_access_level != 'restricted' %}hidden{% endif %}">
     <div class="form-control">
       <label class="label">
         <span class="label-text font-medium">Users with access</span>
@@ -97,7 +97,7 @@
 <script>
 function toggleAgentFields(level) {
   const fields = document.getElementById('agent-fields');
-  if (level === 'private') {
+  if (level === 'restricted') {
     fields.classList.remove('hidden');
   } else {
     fields.classList.add('hidden');

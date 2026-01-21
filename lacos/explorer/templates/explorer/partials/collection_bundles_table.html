@@ -85,17 +85,13 @@
                     <span class="text-success" title="{% translate 'Anyone can read' %}">
                       {% translate "Public" %}
                     </span>
-                  {% elif level == 'academic' or level == 'protected' %}
-                    <span class="text-info" title="{% translate 'Authenticated users only' %}">
+                  {% elif level == 'academic' %}
+                    <span class="text-warning" title="{% translate 'Authenticated users only' %}">
                       {% translate "Academic" %}
                     </span>
-                  {% elif level == 'private' %}
-                    <span class="text-warning" title="{% translate 'Authorized users only' %}">
-                      {% translate "Private" %}
-                    </span>
                   {% else %}
-                    <span class="text-warning" title="{% translate 'Authorized users only' %}">
-                      {% translate "Private" %}
+                    <span class="text-amber-600" title="{% translate 'Authorized users only' %}">
+                      {% translate "Restricted" %}
                     </span>
                   {% endif %}
                 {% endwith %}

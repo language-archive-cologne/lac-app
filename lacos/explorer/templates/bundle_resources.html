@@ -38,16 +38,14 @@
           {{ bundle.identifier }}
         {% endif %}
       </p>
-      {% with access_level=acl_check_result.access_level|default:'private' %}
+      {% with access_level=acl_check_result.access_level|default:'restricted' %}
         <div class="mt-2 flex items-center text-sm">
           {% if access_level == 'public' %}
             <span class="text-green-700 font-medium">Public – anyone can read these files.</span>
-          {% elif access_level == 'academic' or access_level == 'protected' %}
-            <span class="text-blue-700 font-medium">Academic – only authenticated users can read these files.</span>
-          {% elif access_level == 'private' %}
-            <span class="text-yellow-700 font-medium">Private – only authorized users can access.</span>
+          {% elif access_level == 'academic' %}
+            <span class="text-yellow-700 font-medium">Academic – only authenticated users can read these files.</span>
           {% else %}
-            <span class="text-yellow-700 font-medium">Private – only authorized users can access.</span>
+            <span class="text-amber-600 font-medium">Restricted – only authorized users can access.</span>
           {% endif %}
         </div>
       {% endwith %}

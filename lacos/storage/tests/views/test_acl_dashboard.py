@@ -9,8 +9,8 @@ from django.contrib.auth.models import Group
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.storage.constants import (
-    ACL_LEVEL_PRIVATE,
     ACL_LEVEL_PUBLIC,
+    ACL_LEVEL_RESTRICTED,
 )
 from lacos.storage.models.acl_permissions import ACLPermissions
 from lacos.storage.permissions import ARCHIVIST_GROUP_NAME
@@ -69,14 +69,14 @@ def test_acl_update_permission_updates_existing_record(client, django_user_model
             "object_type": "bundle",
             "object_id": str(bundle.pk),
             "permission_id": str(record.pk),
-            "access_level": ACL_LEVEL_PRIVATE,
+            "access_level": ACL_LEVEL_RESTRICTED,
             "next": reverse("storage:acl_admin_dashboard"),
         },
     )
 
     assert response.status_code == 302
     record.refresh_from_db()
-    assert record.access_level == ACL_LEVEL_PRIVATE
+    assert record.access_level == ACL_LEVEL_RESTRICTED
 
 
 @pytest.mark.django_db
@@ -127,7 +127,7 @@ def test_acl_records_table_sorting(client, django_user_model):
     second = Collection.objects.create(identifier="beta")
 
     ct = ContentType.objects.get_for_model(Collection)
-    ACLPermissions.objects.create(content_type=ct, object_id=str(first.pk), access_level=ACL_LEVEL_PRIVATE)
+    ACLPermissions.objects.create(content_type=ct, object_id=str(first.pk), access_level=ACL_LEVEL_RESTRICTED)
     ACLPermissions.objects.create(content_type=ct, object_id=str(second.pk), access_level=ACL_LEVEL_PUBLIC)
 
     url = reverse("storage:acl_records_table", args=["collection"])

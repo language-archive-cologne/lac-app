@@ -4,8 +4,8 @@ from django.db import models
 
 from lacos.storage.constants import (
     ACL_LEVEL_ACADEMIC,
-    ACL_LEVEL_PRIVATE,
     ACL_LEVEL_PUBLIC,
+    ACL_LEVEL_RESTRICTED,
 )
 
 
@@ -17,7 +17,7 @@ class ACLPermissions(models.Model):
     ACCESS_LEVEL_CHOICES = [
         (ACL_LEVEL_PUBLIC, "Public"),
         (ACL_LEVEL_ACADEMIC, "Academic"),
-        (ACL_LEVEL_PRIVATE, "Private"),
+        (ACL_LEVEL_RESTRICTED, "Restricted"),
     ]
 
     # Generic foreign key to link to Collection or Bundle
@@ -57,7 +57,7 @@ class ACLPermissions(models.Model):
     access_level = models.CharField(
         max_length=20,
         choices=ACCESS_LEVEL_CHOICES,
-        default=ACL_LEVEL_PRIVATE,
+        default=ACL_LEVEL_RESTRICTED,
         help_text="Normalised access level inferred from the ACL entries",
     )
     read_agents = models.JSONField(

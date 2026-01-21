@@ -10,7 +10,7 @@ from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.storage.models.acl_permissions import ACLPermissions
 from lacos.storage.constants import (
-    ACL_LEVEL_PRIVATE,
+    ACL_LEVEL_RESTRICTED,
     WAC_AGENT,
     WAC_AUTHENTICATED_AGENT,
 )
@@ -30,7 +30,7 @@ class ACLCheckResult:
     source: Optional[Any] = None
     default_applied: bool = False
     reason: Optional[str] = None
-    access_level: str = ACL_LEVEL_PRIVATE
+    access_level: str = ACL_LEVEL_RESTRICTED
 
     def enforce(self) -> bool:
         """
@@ -111,7 +111,7 @@ class ACLEvaluationService:
     # Internal logic -----------------------------------------------------------
     def _evaluate_internal(self, user, obj: Any, mode: str) -> ACLCheckResult:
         last_source = None
-        last_access_level = ACL_LEVEL_PRIVATE
+        last_access_level = ACL_LEVEL_RESTRICTED
         for source in self._iter_acl_chain(obj):
             last_source = source
             permissions = self._get_permissions(source)

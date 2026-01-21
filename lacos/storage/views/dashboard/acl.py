@@ -22,7 +22,7 @@ from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.storage.models.acl_config import ACLConfig
 from lacos.storage.models.acl_permissions import ACLPermissions
-from lacos.storage.constants import ACL_LEVEL_PUBLIC, ACL_LEVEL_ACADEMIC, ACL_LEVEL_PRIVATE
+from lacos.storage.constants import ACL_LEVEL_PUBLIC, ACL_LEVEL_ACADEMIC, ACL_LEVEL_RESTRICTED
 
 logger = logging.getLogger(__name__)
 
@@ -620,7 +620,7 @@ def acl_update_permission(request):
     elif access_level == ACL_LEVEL_ACADEMIC:
         permissions_data = [{"agentClass": "acl:AuthenticatedAgent", "mode": ["acl:Read"]}]
         read_agents = ["acl:AuthenticatedAgent"]
-    elif access_level == ACL_LEVEL_PRIVATE:
+    elif access_level == ACL_LEVEL_RESTRICTED:
         user_ids = request.POST.getlist("user_ids")
         group_ids = request.POST.getlist("group_ids")
 
@@ -713,11 +713,9 @@ def acl_edit_permission_form(request, object_type, object_id):
                 if group_acl:
                     selected_group_ids.add(group_acl.id)
 
-    current_access_level = perm.access_level if perm else ACL_LEVEL_PRIVATE
-    if current_access_level == "protected":
-        current_access_level = ACL_LEVEL_ACADEMIC
-    elif current_access_level == "embargo":
-        current_access_level = ACL_LEVEL_PRIVATE
+    current_access_level = perm.access_level if perm else ACL_LEVEL_RESTRICTED
+    if current_access_level not in {ACL_LEVEL_PUBLIC, ACL_LEVEL_ACADEMIC, ACL_LEVEL_RESTRICTED}:
+        current_access_level = ACL_LEVEL_RESTRICTED
 
     context = {
         "object_type": object_type,
