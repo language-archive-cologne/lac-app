@@ -67,8 +67,12 @@ def fix_s3_resource_location_paths(apps, schema_editor):
     ContentType = apps.get_model('contenttypes', 'ContentType')
 
     # Get content types by app_label and model name
-    collection_ct = ContentType.objects.get(app_label='blam', model='collection')
-    bundle_ct = ContentType.objects.get(app_label='blam', model='bundle')
+    collection_ct = ContentType.objects.filter(app_label='blam', model='collection').first()
+    bundle_ct = ContentType.objects.filter(app_label='blam', model='bundle').first()
+
+    if not collection_ct or not bundle_ct:
+        print("Skipping path fix migration: required ContentType rows not available yet.")
+        return
 
     updated_count = 0
     skipped_count = 0
@@ -129,7 +133,10 @@ def fix_s3_resource_location_paths(apps, schema_editor):
     ]
 
     for ResourceModel, relation_name, model_name in resource_models:
-        resource_ct = ContentType.objects.get(app_label='blam', model=model_name)
+        resource_ct = ContentType.objects.filter(app_label='blam', model=model_name).first()
+        if not resource_ct:
+            print(f"  Skipping {ResourceModel.__name__} records: ContentType not found.")
+            continue
 
         for location in S3ResourceLocation.objects.filter(content_type=resource_ct):
             try:

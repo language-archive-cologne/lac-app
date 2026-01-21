@@ -235,3 +235,10 @@ def analyze_folder_for_ocfl_task(bucket_name: str, folder_path: str, tracking_id
             'bucket_name': bucket_name,
             'folder_path': folder_path
         }
+
+
+# Ensure upload verification tasks are registered with Huey.
+from lacos.storage.upload_verification_tasks import (  # noqa: E402,F401
+    verify_upload_session_task,
+    verify_pending_upload_sessions,
+)

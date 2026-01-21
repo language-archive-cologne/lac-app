@@ -12,6 +12,7 @@ from lacos.storage.services.upload_service import UploadService
 from lacos.storage.services.base_storage_service import BaseStorageService
 from lacos.storage.services.collection_service import CollectionService
 from lacos.storage.services.bucket_service import BucketService
+from lacos.storage.services.upload_verification_service import UploadVerificationService
 from lacos.storage.models import UploadSession, S3FileObject
 
 logger = logging.getLogger(__name__)
@@ -313,11 +314,9 @@ def mark_uploads_complete(request):
         logger.warning("No S3 keys provided in mark_uploads_complete request")
         return JsonResponse({"success": False, "error": "No S3 keys provided"})
     
-    logger.info(f"Verifying {len(s3_keys)} uploaded files")
-    
-    # Directly use the UploadService to verify each file
+    logger.info("Verifying %s uploaded files", len(s3_keys))
+
     try:
-        upload_service = get_upload_service()
         upload_session = None
         if upload_session_id:
             try:
@@ -326,88 +325,17 @@ def mark_uploads_complete(request):
                     bucket_name = upload_session.bucket_name
             except UploadSession.DoesNotExist:
                 logger.warning("UploadSession %s not found for verification.", upload_session_id)
-        results = []
-        success = True
-        total_verified = 0
-        total_failed = 0
-        total_size = 0
-        
-        for s3_key in s3_keys:
-            logger.info(f"Verifying upload for S3 key: {s3_key}")
-            
-            # Get the verification result from the service
-            result = upload_service.mark_upload_complete(s3_key, bucket_name=bucket_name)
 
-            if upload_session:
-                file_qs = S3FileObject.objects.filter(session=upload_session, s3_key=s3_key)
-                for file_obj in file_qs:
-                    if result.get("exists", False):
-                        file_obj.status = "verified"
-                        file_obj.upload_completed_at = timezone.now()
-                        etag = result.get("etag")
-                        if etag:
-                            file_obj.etag = etag
-                        if "file_size" in result:
-                            file_obj.file_size_bytes = result["file_size"]
-                        if result.get("content_type"):
-                            file_obj.content_type = result["content_type"]
-                        file_obj.error_message = ""
-                    else:
-                        file_obj.status = "failed"
-                        file_obj.error_message = result.get("error", "Upload verification failed")
-                    file_obj.save()
-            
-            # Ensure the result is serializable by converting to dict if needed
-            if not isinstance(result, dict):
-                # This is primarily a safeguard for testing environments
-                logger.warning(f"Result for {s3_key} is not a dict, converting...")
-                serializable_result = {
-                    "success": result.get("success", False),
-                    "exists": result.get("exists", False),
-                    "s3_key": s3_key
-                }
-                results.append(serializable_result)
-            else:
-                results.append(result)
-            
-            if result.get("exists", False):
-                total_verified += 1
-                # Add file size to total if available
-                if "file_size" in result:
-                    total_size += result["file_size"]
-            else:
-                total_failed += 1
-                success = False
-        
-        # Format the total size as a human-readable string
-        total_size_formatted = "0 B"
-        if total_size > 0:
-            try:
-                total_size_formatted = upload_service._format_size(total_size)
-            except Exception as e:
-                logger.warning(f"Error formatting size: {str(e)}")
-                total_size_formatted = f"{total_size} B"
-        
-        if upload_session:
-            total_files = upload_session.files.count()
-            verified_files = upload_session.files.filter(status="verified").count()
-            failed_files = upload_session.files.filter(status="failed").count()
-            if total_files > 0 and (verified_files + failed_files) == total_files:
-                upload_session.status = "failed" if failed_files > 0 else "completed"
-                upload_session.completed_at = timezone.now()
-            else:
-                upload_session.status = "in_progress"
-            upload_session.save(update_fields=["status", "completed_at"])
+        verification_service = UploadVerificationService(
+            upload_service=get_upload_service(),
+        )
+        result = verification_service.verify_keys(
+            s3_keys,
+            upload_session=upload_session,
+            bucket_name=bucket_name,
+        )
 
-        # Return the aggregated results with detailed information
-        return JsonResponse({
-            "success": success,
-            "results": results,
-            "total_verified": total_verified,
-            "total_failed": total_failed,
-            "total_size": total_size,
-            "total_size_formatted": total_size_formatted
-        })
+        return JsonResponse(result)
     
     except Exception as service_error:
         # Handle service call errors

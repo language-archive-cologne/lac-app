@@ -383,6 +383,19 @@ MULTIPART_UPLOAD_SETTINGS = {
     'cleanup_failed_uploads': env.bool('MULTIPART_CLEANUP_FAILED', default=True),
 }
 
+# Upload Verification Configuration
+# ------------------------------------------------------------------------------
+# Grace period before background verification runs on in-progress sessions.
+UPLOAD_VERIFICATION_GRACE_SECONDS = env.int(
+    "UPLOAD_VERIFICATION_GRACE_SECONDS",
+    default=24 * 60 * 60,
+)
+# Periodic schedule interval for verification tasks (minutes).
+UPLOAD_VERIFICATION_SCHEDULE_MINUTES = env.int(
+    "UPLOAD_VERIFICATION_SCHEDULE_MINUTES",
+    default=15,
+)
+
 # django-allauth
 # ------------------------------------------------------------------------------
 ACCOUNT_ALLOW_REGISTRATION = False
