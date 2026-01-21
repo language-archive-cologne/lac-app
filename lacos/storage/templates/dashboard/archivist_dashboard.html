@@ -59,6 +59,8 @@
         </div>
     </div>
 
+    <input type="hidden" id="current-folder-path-input" value="" />
+
     <!-- Single Bucket Content Container -->
     <div class="card bg-base-100 shadow-xl">
         <div id="bucket-content">
@@ -497,6 +499,55 @@ document.addEventListener('showMessage', function(event) {
 var modalSelectedFiles = modalSelectedFiles || [];
 var MULTIPART_THRESHOLD = (window.UPLOAD_CONFIG && window.UPLOAD_CONFIG.multipartThreshold) || window.MULTIPART_THRESHOLD || 5 * 1024 * 1024 * 1024; // 5GB default fallback
 
+function normalizeFolderPath(path) {
+    if (!path) {
+        return '';
+    }
+    return path.replace(/^\/+|\/+$/g, '');
+}
+
+function setCurrentFolderPath(path) {
+    const input = document.getElementById('current-folder-path-input');
+    if (!input) {
+        return;
+    }
+    input.value = normalizeFolderPath(path);
+}
+
+function getCurrentFolderPath() {
+    const input = document.getElementById('current-folder-path-input');
+    return input ? input.value.trim() : '';
+}
+
+document.addEventListener('click', (event) => {
+    const summary = event.target.closest('summary');
+    if (!summary) {
+        return;
+    }
+    const details = summary.closest('details[data-folder-path]');
+    if (!details) {
+        return;
+    }
+    setCurrentFolderPath(details.dataset.folderPath || '');
+});
+
+document.addEventListener('toggle', (event) => {
+    const details = event.target;
+    if (!details || !details.matches || !details.matches('details[data-folder-path]')) {
+        return;
+    }
+    if (details.open) {
+        setCurrentFolderPath(details.dataset.folderPath || '');
+    }
+});
+
+document.addEventListener('click', (event) => {
+    const bucketLink = event.target.closest('#bucket-tabs .dropdown-content a[hx-get]');
+    if (bucketLink) {
+        setCurrentFolderPath('');
+    }
+});
+
 function switchModalToFiles() {
     const input = document.getElementById('modal-file-picker');
     input.setAttribute('multiple', '');
@@ -581,10 +632,15 @@ function formatFileSize(bytes) {
 async function startModalUpload() {
     const bucket = document.getElementById('modal-bucket-select').value;
     let folder = document.getElementById('modal-folder-input').value.trim();
+    const currentFolderPath = getCurrentFolderPath();
 
     if (modalSelectedFiles.length === 0) {
         showModalMessage('error', 'Please select files to upload');
         return;
+    }
+
+    if (!folder && currentFolderPath) {
+        folder = currentFolderPath;
     }
 
     // When uploading a folder, webkitRelativePath already contains the full path
