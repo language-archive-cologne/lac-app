@@ -328,6 +328,29 @@ class ResourceMappingService(BaseStorageService):
             self.register_s3_location(collection, bucket, collection_key_prefix)
             logger.info(f"Mapped Collection {collection_id} to S3 location: {bucket}/{collection_key_prefix}")
             total_mapped += 1
+
+            # 1.5 Map collection additional metadata files
+            structural_info = collection.structural_info.first()
+            if structural_info:
+                additional_metadata_files = structural_info.additional_metadata_files.all()
+                if additional_metadata_files.exists():
+                    # Get the base path for resources using the same OCFL pattern as bundles
+                    collection_resources_base = self._get_ocfl_resource_base_path(collection.import_object_key)
+                    if collection_resources_base:
+                        metadata_count = 0
+                        for metadata_file in additional_metadata_files:
+                            if hasattr(metadata_file, 'file_name') and metadata_file.file_name:
+                                try:
+                                    resource_s3_key = f"{collection_resources_base}{metadata_file.file_name}"
+                                    self.register_s3_location(metadata_file, bucket, resource_s3_key)
+                                    metadata_count += 1
+                                    total_mapped += 1
+                                except Exception as meta_map_e:
+                                    logger.error(f"Failed to map collection metadata file {getattr(metadata_file, 'id', 'N/A')} (name: {metadata_file.file_name}): {meta_map_e}", exc_info=False)
+                        logger.info(f"Mapped {metadata_count} additional metadata files for Collection {collection_id}")
+                    else:
+                        logger.warning(f"Collection {collection_id} has no import_object_key, cannot map additional metadata files")
+
         except Collection.DoesNotExist:
              logger.error(f"Collection {collection_id} not found for resource mapping.")
              return 0 # Cannot proceed without collection
