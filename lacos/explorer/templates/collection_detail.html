@@ -41,13 +41,13 @@
             <span class="text-success font-medium">Public – all visitors can read bundles in this collection.</span>
           {% elif access_level == 'academic' or access_level == 'protected' %}
             <span class="mr-2" aria-hidden="true">🔒</span>
-            <span class="text-info font-medium">Academic – only signed-in users can read bundles.</span>
+            <span class="text-info font-medium">Academic – only authenticated users can read bundles.</span>
           {% elif access_level == 'private' %}
             <span class="mr-2" aria-hidden="true">👤</span>
-            <span class="text-warning font-medium">Private – access is restricted.</span>
+            <span class="text-warning font-medium">Private – only authorized users can access.</span>
           {% else %}
             <span class="mr-2" aria-hidden="true">👤</span>
-            <span class="text-warning font-medium">Private – access is restricted.</span>
+            <span class="text-warning font-medium">Private – only authorized users can access.</span>
           {% endif %}
         </div>
       {% endwith %}
