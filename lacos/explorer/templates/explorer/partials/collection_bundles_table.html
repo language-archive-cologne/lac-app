@@ -77,24 +77,22 @@
       </thead>
       <tbody class="bg-base-100 divide-y divide-base-200">
         {% for bundle_info in bundle_contexts %}
-          {% with bundle=bundle_info.bundle %}
+          {% with bundle=bundle_info.bundle level=bundle_info.access_level|default:bundle_info.acl_check_result.access_level %}
             <tr class="hover:bg-base-200 transition-colors">
               <td class="px-4 py-5 align-top text-sm">
-                {% with level=bundle_info.access_level|default:bundle_info.acl_check_result.access_level %}
-                  {% if level == 'public' %}
-                    <span class="text-success" title="{% translate 'Anyone can read' %}">
-                      {% translate "Public" %}
-                    </span>
-                  {% elif level == 'academic' %}
-                    <span class="text-warning" title="{% translate 'Authenticated users only' %}">
-                      {% translate "Academic" %}
-                    </span>
-                  {% else %}
-                    <span class="text-amber-600" title="{% translate 'Authorized users only' %}">
-                      {% translate "Restricted" %}
-                    </span>
-                  {% endif %}
-                {% endwith %}
+                {% if level == 'public' %}
+                  <span class="text-success" title="{% translate 'Anyone can read' %}">
+                    {% translate "Public" %}
+                  </span>
+                {% elif level == 'academic' %}
+                  <span class="text-warning" title="{% translate 'Authenticated users only' %}">
+                    {% translate "Academic" %}
+                  </span>
+                {% else %}
+                  <span class="text-amber-600" title="{% translate 'Authorized users only' %}">
+                    {% translate "Restricted" %}
+                  </span>
+                {% endif %}
               </td>
               <td class="px-6 py-5 align-top">
                 <div class="text-sm font-medium text-base-content hover:text-primary">
@@ -118,10 +116,17 @@
                         {% translate "Access files" %}
                       </a>
                     {% else %}
-                      <span class="inline-flex items-center text-xs text-error">
-                        <span aria-hidden="true" class="mr-1">⛔</span>
-                        {% translate "Restricted" %}
-                      </span>
+                      {% if level == 'academic' %}
+                        <span class="inline-flex items-center text-xs text-warning">
+                          <span aria-hidden="true" class="mr-1">⛔</span>
+                          {% translate "Sign in required" %}
+                        </span>
+                      {% else %}
+                        <span class="inline-flex items-center text-xs text-amber-600">
+                          <span aria-hidden="true" class="mr-1">⛔</span>
+                          {% translate "Restricted" %}
+                        </span>
+                      {% endif %}
                     {% endif %}
                   </div>
                 {% endif %}
@@ -298,10 +303,17 @@
                     {% endif %}
                   </div>
                 {% elif bundle_info.primary_resources %}
-                  <div class="text-xs text-error flex items-center">
-                    <span aria-hidden="true" class="mr-1">⛔</span>
-                    {% translate "Files are hidden due to access restrictions." %}
-                  </div>
+                  {% if level == 'academic' %}
+                    <div class="text-xs text-warning flex items-center">
+                      <span aria-hidden="true" class="mr-1">⛔</span>
+                      {% translate "Sign in to access these files." %}
+                    </div>
+                  {% else %}
+                    <div class="text-xs text-amber-600 flex items-center">
+                      <span aria-hidden="true" class="mr-1">⛔</span>
+                      {% translate "Files are restricted to authorized users." %}
+                    </div>
+                  {% endif %}
                 {% else %}
                   -
                 {% endif %}
