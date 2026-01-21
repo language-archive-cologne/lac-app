@@ -102,7 +102,8 @@ class UploadService(BaseStorageService):
                     init_result = self.initialize_multipart_upload(
                         file_name=file_name,
                         file_type=file_type,
-                        path_prefix=path_prefix
+                        path_prefix=path_prefix,
+                        bucket_name=bucket_name
                     )
 
                     if init_result['success']:
@@ -114,7 +115,8 @@ class UploadService(BaseStorageService):
                             'upload_type': 'multipart',
                             'upload_id': init_result['upload_id'],
                             'parts_info': parts_info,
-                            'expires_in': expiration
+                            'expires_in': expiration,
+                            'bucket_name': init_result.get('bucket_name')
                         }
 
             # Single-part upload for smaller files or when multipart is not needed
@@ -148,7 +150,8 @@ class UploadService(BaseStorageService):
                 'file_name': file_name,
                 'file_type': file_type,
                 'upload_type': 'single',
-                'expires_in': expiration
+                'expires_in': expiration,
+                'bucket_name': target_bucket
             }
         except Exception as e:
             logger.error(f"Error generating presigned POST for {file_name}: {str(e)}")
@@ -431,16 +434,16 @@ class UploadService(BaseStorageService):
 
     def _get_multipart_threshold(self) -> int:
         """
-        Resolve the multipart threshold from settings, defaulting to 100MB.
+        Resolve the multipart threshold from settings, defaulting to 5GB.
         A higher value means more uploads will use single-part.
         """
         try:
             from django.conf import settings
             cfg = getattr(settings, 'MULTIPART_UPLOAD_SETTINGS', {}) or {}
-            # Default to 100MB if not configured
-            return int(cfg.get('multipart_threshold', 100 * 1024 * 1024))
+            # Default to 5GB if not configured
+            return int(cfg.get('multipart_threshold', 5 * 1024 * 1024 * 1024))
         except Exception:
-            return 100 * 1024 * 1024
+            return 5 * 1024 * 1024 * 1024
 
     def calculate_optimal_chunk_size(self, file_size: int) -> int:
         """
@@ -619,8 +622,13 @@ class UploadService(BaseStorageService):
 
     # ----- Multipart Upload Methods -----
 
-    def initialize_multipart_upload(self, file_name: str, file_type: str, 
-                                  path_prefix: Optional[str] = None) -> Dict[str, Any]:
+    def initialize_multipart_upload(
+        self,
+        file_name: str,
+        file_type: str,
+        path_prefix: Optional[str] = None,
+        bucket_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         Initialize a multipart upload to S3.
         
@@ -636,11 +644,12 @@ class UploadService(BaseStorageService):
             # Generate a clean S3 key for the file
             s3_key = self._generate_file_key(file_name, path_prefix)
             
-            logger.info(f"Initializing multipart upload for {s3_key}")
+            target_bucket = bucket_name or self.ingest_bucket
+            logger.info(f"Initializing multipart upload for {s3_key} in {target_bucket}")
             
             # Create a multipart upload
             response = self.s3_client.create_multipart_upload(
-                Bucket=self.ingest_bucket,
+                Bucket=target_bucket,
                 Key=s3_key,
                 ContentType=file_type
             )
@@ -653,7 +662,8 @@ class UploadService(BaseStorageService):
                 'upload_id': upload_id,
                 's3_key': s3_key,
                 'file_name': file_name,
-                'file_type': file_type
+                'file_type': file_type,
+                'bucket_name': target_bucket
             }
         except Exception as e:
             logger.error(f"Error initializing multipart upload for {file_name}: {str(e)}")
@@ -663,8 +673,14 @@ class UploadService(BaseStorageService):
                 'file_name': file_name
             }
     
-    def get_upload_part_urls(self, s3_key: str, upload_id: str, 
-                           part_count: int, expiration: int = 3600) -> Dict[str, Any]:
+    def get_upload_part_urls(
+        self,
+        s3_key: str,
+        upload_id: str,
+        part_count: int,
+        expiration: int = 3600,
+        bucket_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         Generate presigned URLs for each part of a multipart upload.
         
@@ -680,12 +696,13 @@ class UploadService(BaseStorageService):
         try:
             presigned_urls = []
             
+            target_bucket = bucket_name or self.ingest_bucket
             for part_number in range(1, part_count + 1):
                 # Generate a presigned URL for this part using the presigned client
                 url = self.presigned_client.generate_presigned_url(
                     'upload_part',
                     Params={
-                        'Bucket': self.ingest_bucket,
+                        'Bucket': target_bucket,
                         'Key': s3_key,
                         'UploadId': upload_id,
                         'PartNumber': part_number
@@ -705,7 +722,8 @@ class UploadService(BaseStorageService):
                 'presigned_urls': presigned_urls,
                 's3_key': s3_key,
                 'upload_id': upload_id,
-                'part_count': part_count
+                'part_count': part_count,
+                'bucket_name': target_bucket
             }
         except Exception as e:
             logger.error(f"Error generating part upload URLs for {s3_key}: {str(e)}")
@@ -716,8 +734,13 @@ class UploadService(BaseStorageService):
                 'upload_id': upload_id
             }
     
-    def complete_multipart_upload(self, s3_key: str, upload_id: str, 
-                                parts: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def complete_multipart_upload(
+        self,
+        s3_key: str,
+        upload_id: str,
+        parts: List[Dict[str, Any]],
+        bucket_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         Complete a multipart upload by assembling all parts.
         
@@ -742,11 +765,12 @@ class UploadService(BaseStorageService):
             # Sort parts by part number to ensure correct order
             multipart_parts.sort(key=lambda x: x['PartNumber'])
             
-            logger.info(f"Completing multipart upload for {s3_key} with {len(multipart_parts)} parts")
+            target_bucket = bucket_name or self.ingest_bucket
+            logger.info(f"Completing multipart upload for {s3_key} in {target_bucket} with {len(multipart_parts)} parts")
             
             # Complete the multipart upload
             response = self.s3_client.complete_multipart_upload(
-                Bucket=self.ingest_bucket,
+                Bucket=target_bucket,
                 Key=s3_key,
                 UploadId=upload_id,
                 MultipartUpload={
@@ -758,7 +782,7 @@ class UploadService(BaseStorageService):
             
             # Check if file exists and get metadata
             head_response = self.s3_client.head_object(
-                Bucket=self.ingest_bucket,
+                Bucket=target_bucket,
                 Key=s3_key
             )
             
@@ -768,7 +792,7 @@ class UploadService(BaseStorageService):
                 'success': True,
                 's3_key': s3_key,
                 'location': response.get('Location', ''),
-                'bucket': self.ingest_bucket,
+                'bucket': target_bucket,
                 'key': s3_key,
                 'etag': response.get('ETag', '').strip('"'),
                 'file_size': file_size,
@@ -783,7 +807,12 @@ class UploadService(BaseStorageService):
                 'upload_id': upload_id
             }
     
-    def abort_multipart_upload(self, s3_key: str, upload_id: str) -> Dict[str, Any]:
+    def abort_multipart_upload(
+        self,
+        s3_key: str,
+        upload_id: str,
+        bucket_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         Abort a multipart upload and clean up any uploaded parts.
         
@@ -795,11 +824,12 @@ class UploadService(BaseStorageService):
             Dict[str, Any]: Dictionary containing status information or error information
         """
         try:
-            logger.info(f"Aborting multipart upload for {s3_key}")
+            target_bucket = bucket_name or self.ingest_bucket
+            logger.info(f"Aborting multipart upload for {s3_key} in {target_bucket}")
             
             # Abort the multipart upload
             self.s3_client.abort_multipart_upload(
-                Bucket=self.ingest_bucket,
+                Bucket=target_bucket,
                 Key=s3_key,
                 UploadId=upload_id
             )

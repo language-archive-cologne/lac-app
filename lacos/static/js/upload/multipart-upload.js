@@ -16,6 +16,7 @@ if (typeof MultipartUploadHandler === 'undefined') {
         this.onComplete = options.onComplete || (() => {});
         this.onError = options.onError || (() => {});
         this.folderName = options.folderName || '';
+        this.bucketName = options.bucketName || options.bucket || null;
 
         console.log(`Initializing multipart upload for ${file.name} (${this.formatSize(file.size)})`);
     }
@@ -52,6 +53,7 @@ if (typeof MultipartUploadHandler === 'undefined') {
             // uploadConfig contains upload_id, s3_key, and parts_info
             this.uploadId = uploadConfig.upload_id;
             this.s3Key = uploadConfig.s3_key;
+            this.bucketName = uploadConfig.bucket_name || this.bucketName;
             const partsInfo = uploadConfig.parts_info;
 
             console.log(`Starting multipart upload with ${partsInfo.part_count} parts`);
@@ -81,17 +83,22 @@ if (typeof MultipartUploadHandler === 'undefined') {
         const completedParts = [];
 
         // Get presigned URLs for all parts
+        const requestBody = {
+            s3_key: this.s3Key,
+            upload_id: this.uploadId,
+            part_count: partCount
+        };
+        if (this.bucketName) {
+            requestBody.bucket_name = this.bucketName;
+        }
+
         const urlsResponse = await fetch('/storage/multipart/get-part-urls/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': this.getCsrfToken()
             },
-            body: JSON.stringify({
-                s3_key: this.s3Key,
-                upload_id: this.uploadId,
-                part_count: partCount
-            })
+            body: JSON.stringify(requestBody)
         });
 
         if (!urlsResponse.ok) {
@@ -157,17 +164,22 @@ if (typeof MultipartUploadHandler === 'undefined') {
     async completeUpload(parts) {
         console.log('Completing multipart upload...');
 
+        const requestBody = {
+            s3_key: this.s3Key,
+            upload_id: this.uploadId,
+            parts: parts
+        };
+        if (this.bucketName) {
+            requestBody.bucket_name = this.bucketName;
+        }
+
         const response = await fetch('/storage/multipart/complete/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': this.getCsrfToken()
             },
-            body: JSON.stringify({
-                s3_key: this.s3Key,
-                upload_id: this.uploadId,
-                parts: parts
-            })
+            body: JSON.stringify(requestBody)
         });
 
         if (!response.ok) {

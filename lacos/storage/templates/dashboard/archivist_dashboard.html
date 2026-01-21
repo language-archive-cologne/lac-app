@@ -647,7 +647,7 @@ async function startModalUpload() {
 
         if (!result.success) throw new Error(result.error || 'Failed to get upload URLs');
 
-        await uploadModalFiles(modalSelectedFiles, result.presigned_posts);
+        await uploadModalFiles(modalSelectedFiles, result.presigned_posts, bucket);
 
         showModalMessage('success', `Successfully uploaded ${modalSelectedFiles.length} files`);
 
@@ -660,9 +660,12 @@ async function startModalUpload() {
         // Refresh bucket content and close modal
         setTimeout(() => {
             // Get current active bucket and refresh its content
-            const activeBucket = document.getElementById('current-active-bucket-input')?.value;
-            if (activeBucket) {
-                htmx.ajax('GET', `/storage/htmx/bucket-content/${activeBucket}/?force_fresh=true`, {
+            const activeBucketInput = document.getElementById('current-active-bucket-input');
+            if (activeBucketInput) {
+                activeBucketInput.value = bucket;
+            }
+            if (bucket) {
+                htmx.ajax('GET', `/storage/htmx/bucket-content/${bucket}/?force_fresh=true`, {
                     target: '#bucket-content',
                     swap: 'innerHTML'
                 });
@@ -679,7 +682,7 @@ async function startModalUpload() {
     }
 }
 
-async function uploadModalFiles(files, presignedPosts) {
+async function uploadModalFiles(files, presignedPosts, bucketName) {
     const totalFiles = files.length;
 
     for (let i = 0; i < totalFiles; i++) {
@@ -690,7 +693,7 @@ async function uploadModalFiles(files, presignedPosts) {
         updateModalProgress(((i / totalFiles) * 100), `Uploading ${fileName}...`);
 
         if (config.upload_type === 'multipart') {
-            await uploadModalMultipartFile(file, config, i, totalFiles);
+            await uploadModalMultipartFile(file, config, i, totalFiles, bucketName);
         } else {
             await uploadModalSingleFile(file, config);
         }
@@ -714,9 +717,10 @@ async function uploadModalSingleFile(file, config) {
     if (!response.ok) throw new Error(`S3 upload failed: ${response.status}`);
 }
 
-async function uploadModalMultipartFile(file, config, fileIndex, totalFiles) {
+async function uploadModalMultipartFile(file, config, fileIndex, totalFiles, bucketName) {
     // Simple multipart implementation for modal
     const handler = new MultipartUploadHandler(file, {
+        bucketName: bucketName,
         onProgress: (progress) => {
             const overallProgress = ((fileIndex / totalFiles) * 100) + (progress.percent / totalFiles);
             updateModalProgress(overallProgress, `Uploading ${file.name} (part ${progress.loaded}/${progress.total})...`);

@@ -284,6 +284,7 @@ def initialize_multipart_upload(request):
         file_name = data.get("file_name")
         file_type = data.get("file_type")
         path_prefix = data.get("path_prefix")
+        bucket_name = data.get("bucket_name")
         
         # Validate required fields
         if not file_name or not file_type:
@@ -298,7 +299,8 @@ def initialize_multipart_upload(request):
         result = upload_service.initialize_multipart_upload(
             file_name=file_name,
             file_type=file_type,
-            path_prefix=path_prefix
+            path_prefix=path_prefix,
+            bucket_name=bucket_name,
         )
         
         if result["success"]:
@@ -334,6 +336,7 @@ def get_part_upload_urls(request):
         s3_key = data.get("s3_key")
         upload_id = data.get("upload_id")
         part_count = data.get("part_count")
+        bucket_name = data.get("bucket_name")
         expiration = data.get("expiration", 3600)  # Default to 1 hour
         
         # Validate required fields
@@ -360,7 +363,8 @@ def get_part_upload_urls(request):
             s3_key=s3_key,
             upload_id=upload_id,
             part_count=part_count,
-            expiration=expiration
+            expiration=expiration,
+            bucket_name=bucket_name,
         )
         
         if result["success"]:
@@ -396,6 +400,7 @@ def complete_multipart_upload(request):
         s3_key = data.get("s3_key")
         upload_id = data.get("upload_id")
         parts = data.get("parts")
+        bucket_name = data.get("bucket_name")
         
         # Validate required fields
         if not s3_key or not upload_id or not parts:
@@ -419,7 +424,8 @@ def complete_multipart_upload(request):
         result = upload_service.complete_multipart_upload(
             s3_key=s3_key,
             upload_id=upload_id,
-            parts=parts
+            parts=parts,
+            bucket_name=bucket_name,
         )
         
         if result["success"]:
@@ -454,6 +460,7 @@ def abort_multipart_upload(request):
         data = json.loads(request.body)
         s3_key = data.get("s3_key")
         upload_id = data.get("upload_id")
+        bucket_name = data.get("bucket_name")
         
         # Validate required fields
         if not s3_key or not upload_id:
@@ -467,7 +474,8 @@ def abort_multipart_upload(request):
         upload_service = get_upload_service()
         result = upload_service.abort_multipart_upload(
             s3_key=s3_key,
-            upload_id=upload_id
+            upload_id=upload_id,
+            bucket_name=bucket_name,
         )
         
         if result["success"]:
