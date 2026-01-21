@@ -117,8 +117,8 @@ def test_mark_uploads_complete(mock_get_upload_service, prepared_request, mock_u
     assert mock_upload_service_instance.mark_upload_complete.call_count == 2
     
     # Check service calls
-    mock_upload_service_instance.mark_upload_complete.assert_any_call("folder/test.jpg")
-    mock_upload_service_instance.mark_upload_complete.assert_any_call("folder/test2.jpg")
+    mock_upload_service_instance.mark_upload_complete.assert_any_call("folder/test.jpg", bucket_name=None)
+    mock_upload_service_instance.mark_upload_complete.assert_any_call("folder/test2.jpg", bucket_name=None)
     
     # Check response
     response_data = json.loads(response.content)

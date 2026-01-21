@@ -647,7 +647,10 @@ async function startModalUpload() {
 
         if (!result.success) throw new Error(result.error || 'Failed to get upload URLs');
 
-        await uploadModalFiles(modalSelectedFiles, result.presigned_posts, bucket);
+        const uploadedKeys = await uploadModalFiles(modalSelectedFiles, result.presigned_posts, bucket);
+        if (result.upload_session_id && uploadedKeys.length) {
+            await markModalUploadsComplete(uploadedKeys, result.upload_session_id);
+        }
 
         showModalMessage('success', `Successfully uploaded ${modalSelectedFiles.length} files`);
 
@@ -684,6 +687,7 @@ async function startModalUpload() {
 
 async function uploadModalFiles(files, presignedPosts, bucketName) {
     const totalFiles = files.length;
+    const uploadedKeys = [];
 
     for (let i = 0; i < totalFiles; i++) {
         const file = files[i];
@@ -698,8 +702,12 @@ async function uploadModalFiles(files, presignedPosts, bucketName) {
             await uploadModalSingleFile(file, config);
         }
 
+        if (config.s3_key) {
+            uploadedKeys.push(config.s3_key);
+        }
         updateModalProgress(((i + 1) / totalFiles) * 100, `Completed ${i + 1} of ${totalFiles} files`);
     }
+    return uploadedKeys;
 }
 
 async function uploadModalSingleFile(file, config) {
@@ -742,6 +750,28 @@ function showModalMessage(type, message) {
 
     container.innerHTML = `<div class="alert ${alertClass}"><span>${message}</span></div>`;
     setTimeout(() => container.innerHTML = '', 5000);
+}
+
+async function markModalUploadsComplete(s3Keys, uploadSessionId) {
+    try {
+        const response = await fetch('/storage/mark-uploads-complete/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                s3_keys: s3Keys,
+                upload_session_id: uploadSessionId
+            })
+        });
+
+        if (!response.ok) {
+            console.warn('Failed to mark uploads complete:', response.status);
+        }
+    } catch (error) {
+        console.warn('Error marking uploads complete:', error);
+    }
 }
 
 function getCsrfToken() {

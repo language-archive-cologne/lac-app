@@ -366,26 +366,29 @@ class UploadService(BaseStorageService):
                 'file_name': file_name
             }
     
-    def mark_upload_complete(self, s3_key: str) -> Dict[str, Any]:
+    def mark_upload_complete(self, s3_key: str, bucket_name: Optional[str] = None) -> Dict[str, Any]:
         """
         Mark an S3 upload as complete and verify the file exists.
         
         Args:
             s3_key (str): The S3 key for the uploaded file
+            bucket_name (str, optional): Bucket to check (defaults to ingest bucket)
             
         Returns:
             Dict[str, Any]: Dictionary containing verification information or error information
         """
         try:
+            target_bucket = bucket_name or self.ingest_bucket
             # Check if the file exists in S3
             response = self.s3_client.head_object(
-                Bucket=self.ingest_bucket,
+                Bucket=target_bucket,
                 Key=s3_key
             )
             
             file_size = response.get('ContentLength', 0)
             content_type = response.get('ContentType', 'application/octet-stream')
             last_modified = response.get('LastModified', None)
+            etag = response.get('ETag', '').strip('"')
             
             return {
                 'success': True,
@@ -394,7 +397,9 @@ class UploadService(BaseStorageService):
                 'file_size': file_size,
                 'file_size_formatted': self._format_size(file_size),
                 'content_type': content_type,
-                'last_modified': last_modified.isoformat() if last_modified else None
+                'last_modified': last_modified.isoformat() if last_modified else None,
+                'etag': etag,
+                'bucket_name': target_bucket,
             }
             
         except Exception as e:

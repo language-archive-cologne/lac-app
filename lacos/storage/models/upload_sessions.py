@@ -12,6 +12,7 @@ class UploadSession(UUIDTimestampModel):
         on_delete=models.CASCADE
     )
     folder_name = models.CharField(max_length=255)
+    bucket_name = models.CharField(max_length=255, null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(
         max_length=20,
