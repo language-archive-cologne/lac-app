@@ -82,24 +82,20 @@
               <td class="px-4 py-5 align-top text-sm">
                 {% with level=bundle_info.access_level|default:bundle_info.acl_check_result.access_level %}
                   {% if level == 'public' %}
-                    <span class="flex items-center text-success" title="{% translate 'Public access' %}">
-                      <span aria-hidden="true" class="mr-2">🌍</span>
-                      <span>{% translate "Public" %}</span>
+                    <span class="text-success" title="{% translate 'Anyone can read' %}">
+                      {% translate "Public" %}
                     </span>
                   {% elif level == 'academic' or level == 'protected' %}
-                    <span class="flex items-center text-info" title="{% translate 'Requires sign-in' %}">
-                      <span aria-hidden="true" class="mr-2">🔒</span>
-                      <span>{% translate "Academic" %}</span>
+                    <span class="text-info" title="{% translate 'Authenticated users only' %}">
+                      {% translate "Academic" %}
                     </span>
                   {% elif level == 'private' %}
-                    <span class="flex items-center text-warning" title="{% translate 'Restricted access' %}">
-                      <span aria-hidden="true" class="mr-2">👤</span>
-                      <span>{% translate "Private" %}</span>
+                    <span class="text-warning" title="{% translate 'Authorized users only' %}">
+                      {% translate "Private" %}
                     </span>
                   {% else %}
-                    <span class="flex items-center text-warning" title="{% translate 'Restricted access' %}">
-                      <span aria-hidden="true" class="mr-2">👤</span>
-                      <span>{% translate "Private" %}</span>
+                    <span class="text-warning" title="{% translate 'Authorized users only' %}">
+                      {% translate "Private" %}
                     </span>
                   {% endif %}
                 {% endwith %}
