@@ -86,9 +86,9 @@
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                     </svg>
                   </button>
-                  <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-xs font-semibold text-base-content/70">
+                  <a href="{% url 'explorer:collection_detail_by_handle' handle=collection.identifier %}" class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-xs font-semibold text-base-content/70 hover:bg-primary hover:text-primary-content transition-colors">
                     {{ collection.bundles_count }} {% translate "bundles" %}
-                  </span>
+                  </a>
                 </div>
               </div>
             </td>
