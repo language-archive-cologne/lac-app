@@ -489,6 +489,7 @@ if SAML_LOGIN_ENABLED:
     SAML_CONFIG = {
         "debug": DEBUG,
         "entityid": SAML_ENTITY_ID,
+        "name": "Language Archive Cologne",
         "allow_unknown_attributes": True,
         "service": {
             "sp": {
