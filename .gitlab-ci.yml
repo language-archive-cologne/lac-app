@@ -20,7 +20,7 @@ deploy_dev:
     - nslookup $DEPLOY_HOST || true
     - nc -vz -w 5 $DEPLOY_HOST 22 || true
   script:
-    - ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd /opt/lacos/lac-app && git pull && docker compose -f docker-compose.dev.yml exec -T django python manage.py collectstatic --noinput && docker compose -f docker-compose.dev.yml restart django"
+    - ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd /opt/lacos/lac-app && git pull && docker compose -f docker-compose.dev.yml restart django"
   environment:
     name: development
     url: https://dev.lacos.uni-koeln.de
