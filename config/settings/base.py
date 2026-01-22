@@ -525,6 +525,17 @@ if SAML_LOGIN_ENABLED:
             },
         },
         "metadata": _saml_metadata,
+        "organization": {
+            "name": [("University of Cologne", "en")],
+            "display_name": [("University of Cologne", "en")],
+            "url": [("https://www.uni-koeln.de/", "en")],
+        },
+        "contact_person": [
+            {
+                "contact_type": "support",
+                "email_address": ["mailto:lac-helpdesk@uni-koeln.de"],
+            }
+        ],
         "security": {
             "wantAttributeStatementSigned": True,
             "requestedAuthnContext": env.list(
