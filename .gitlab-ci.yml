@@ -26,9 +26,9 @@ deploy_dev_full:
   rules:
     - if: '$CI_COMMIT_BRANCH == "dev"'
       changes:
-        - requirements/**/*
-        - compose/**/*
-        - **/migrations/**/*
+        - "requirements/**/*"
+        - "compose/**/*"
+        - "**/migrations/**/*"
   script:
     - ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd /opt/lacos/lac-app && git pull && docker compose -f docker-compose.dev.yml up -d --build django"
 
@@ -37,9 +37,9 @@ deploy_dev_fast:
   rules:
     - if: '$CI_COMMIT_BRANCH == "dev"'
       changes:
-        - requirements/**/*
-        - compose/**/*
-        - **/migrations/**/*
+        - "requirements/**/*"
+        - "compose/**/*"
+        - "**/migrations/**/*"
       when: never
     - if: '$CI_COMMIT_BRANCH == "dev"'
   script:
