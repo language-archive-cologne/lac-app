@@ -522,6 +522,7 @@ if SAML_LOGIN_ENABLED:
                     default=False,
                 ),
                 "name_id_format": [SAML_DEFAULT_NAME_ID_FORMAT],
+                "required_attributes": ["eduPersonPrincipalName"],
             },
         },
         "metadata": _saml_metadata,
