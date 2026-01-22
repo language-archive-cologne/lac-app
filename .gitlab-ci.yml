@@ -4,6 +4,8 @@ stages:
 deploy_dev:
   stage: deploy
   image: alpine:latest
+  tags:
+    - charch
   only:
     - dev
   before_script:
