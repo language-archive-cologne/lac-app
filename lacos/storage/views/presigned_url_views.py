@@ -6,8 +6,13 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
-from lacos.storage.permissions import archivist_required
-from django.http import JsonResponse
+from lacos.storage.permissions import (
+    archivist_required,
+    can_manage_collection,
+    manager_or_archivist_required,
+    resolve_collection_from_path,
+)
+from django.http import JsonResponse, HttpResponseForbidden
 from lacos.storage.services.upload_service import UploadService
 from lacos.storage.services.base_storage_service import BaseStorageService
 from lacos.storage.services.collection_service import CollectionService
@@ -47,7 +52,23 @@ def get_bucket_service():
         _bucket_service = BucketService()
     return _bucket_service
 
-@archivist_required
+def _ensure_collection_access(request, *, path_hint: str | None = None, s3_keys: list | None = None):
+    if path_hint is not None:
+        collection = resolve_collection_from_path(path_hint)
+        if not can_manage_collection(request.user, collection):
+            return HttpResponseForbidden("Collection manager access required.")
+        return None
+    if s3_keys:
+        if isinstance(s3_keys, (str, bytes)):
+            s3_keys = [s3_keys]
+        for key in s3_keys:
+            collection = resolve_collection_from_path(key)
+            if not can_manage_collection(request.user, collection):
+                return HttpResponseForbidden("Collection manager access required.")
+    return None
+
+
+@manager_or_archivist_required
 @require_http_methods(["POST"])
 def get_presigned_urls(request):
     """
@@ -107,6 +128,10 @@ def get_presigned_urls(request):
             })
         return JsonResponse({"success": False, "error": error_message})
     
+    access_error = _ensure_collection_access(request, path_hint=folder_name)
+    if access_error:
+        return access_error
+
     logger.info(f"Generating presigned URLs for folder: {folder_name} with {len(files_metadata)} files")
     
     # Log sample files information for debugging
@@ -272,7 +297,7 @@ def get_presigned_urls(request):
         return JsonResponse({"success": False, "error": error_message})
 
 
-@archivist_required
+@manager_or_archivist_required
 def mark_uploads_complete(request):
     """
     Mark uploads as complete and verify the files in S3.
@@ -313,6 +338,10 @@ def mark_uploads_complete(request):
     if not s3_keys:
         logger.warning("No S3 keys provided in mark_uploads_complete request")
         return JsonResponse({"success": False, "error": "No S3 keys provided"})
+
+    access_error = _ensure_collection_access(request, s3_keys=s3_keys)
+    if access_error:
+        return access_error
     
     logger.info("Verifying %s uploaded files", len(s3_keys))
 
@@ -351,7 +380,7 @@ def mark_uploads_complete(request):
 
 # ----- Multipart Upload Views -----
 
-@archivist_required
+@manager_or_archivist_required
 @require_http_methods(["POST"])
 def initialize_multipart_upload(request):
     """
@@ -374,6 +403,10 @@ def initialize_multipart_upload(request):
             error_message = "File name and type are required"
             logger.warning(error_message)
             return JsonResponse({"success": False, "error": error_message})
+
+        access_error = _ensure_collection_access(request, path_hint=path_prefix or "")
+        if access_error:
+            return access_error
         
         logger.info(f"Initializing multipart upload for {file_name}")
         
@@ -404,7 +437,7 @@ def initialize_multipart_upload(request):
         return JsonResponse({"success": False, "error": error_message})
 
 
-@archivist_required
+@manager_or_archivist_required
 @require_http_methods(["POST"])
 def get_part_upload_urls(request):
     """
@@ -438,6 +471,10 @@ def get_part_upload_urls(request):
             logger.warning(error_message)
             return JsonResponse({"success": False, "error": error_message})
         
+        access_error = _ensure_collection_access(request, path_hint=s3_key)
+        if access_error:
+            return access_error
+
         logger.info(f"Generating {part_count} part upload URLs for {s3_key}")
         
         # Use the upload service to get presigned URLs for each part
@@ -468,7 +505,7 @@ def get_part_upload_urls(request):
         return JsonResponse({"success": False, "error": error_message})
 
 
-@archivist_required
+@manager_or_archivist_required
 @require_http_methods(["POST"])
 def complete_multipart_upload(request):
     """
@@ -500,6 +537,10 @@ def complete_multipart_upload(request):
             logger.warning(error_message)
             return JsonResponse({"success": False, "error": error_message})
         
+        access_error = _ensure_collection_access(request, path_hint=s3_key)
+        if access_error:
+            return access_error
+
         logger.info(f"Completing multipart upload for {s3_key} with {len(parts)} parts")
         
         # Use the upload service to complete the multipart upload
@@ -529,7 +570,7 @@ def complete_multipart_upload(request):
         return JsonResponse({"success": False, "error": error_message})
 
 
-@archivist_required
+@manager_or_archivist_required
 @require_http_methods(["POST"])
 def abort_multipart_upload(request):
     """
@@ -551,6 +592,10 @@ def abort_multipart_upload(request):
             logger.warning(error_message)
             return JsonResponse({"success": False, "error": error_message})
         
+        access_error = _ensure_collection_access(request, path_hint=s3_key)
+        if access_error:
+            return access_error
+
         logger.info(f"Aborting multipart upload for {s3_key}")
         
         # Use the upload service to abort the multipart upload

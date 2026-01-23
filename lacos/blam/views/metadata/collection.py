@@ -1,4 +1,6 @@
 from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
@@ -20,6 +22,11 @@ from lacos.blam.models.collection.collection_publication_info import CollectionP
 from lacos.blam.models.collection.collection_administrative_info import CollectionAdministrativeInfo
 from lacos.blam.models.collection.collection_structural_info import CollectionStructuralInfo
 from lacos.blam.views.metadata.base import apply_audit_fields
+from lacos.storage.permissions import (
+    can_manage_collection,
+    is_archivist,
+    is_collection_manager,
+)
 
 
 def collection_nav_items(collection: Collection) -> list[dict]:
@@ -74,10 +81,17 @@ def render_collection_section(request, collection: Collection, section_slug: str
 
 class CollectionListView(View):
     def get(self, request):
+        if not (is_archivist(request.user) or is_collection_manager(request.user)):
+            return HttpResponseForbidden("Archivist or collection manager access required.")
+
         from django.db.models import Q
 
         search_query = request.GET.get("q", "").strip()
         collections = Collection.objects.all().order_by("identifier")
+        if not is_archivist(request.user):
+            collections = collections.filter(
+                collection_manager_assignments__user=request.user
+            ).distinct()
 
         if search_query:
             collections = collections.filter(
@@ -94,12 +108,16 @@ class CollectionListView(View):
         return render(request, "blam/metadata/collection_list.html", context)
 
 
-class CollectionCreateView(View):
+class CollectionCreateView(LoginRequiredMixin, View):
     def get(self, request):
+        if not is_archivist(request.user):
+            return HttpResponseForbidden("Archivist access required.")
         form = CollectionForm()
         return render(request, "blam/metadata/collection_create.html", {"form": form})
 
     def post(self, request):
+        if not is_archivist(request.user):
+            return HttpResponseForbidden("Archivist access required.")
         form = CollectionForm(request.POST)
         if form.is_valid():
             collection = form.save(commit=False)
@@ -112,9 +130,11 @@ class CollectionCreateView(View):
         return render(request, "blam/metadata/collection_create.html", {"form": form})
 
 
-class CollectionOverviewView(View):
+class CollectionOverviewView(LoginRequiredMixin, View):
     def get(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
+        if not can_manage_collection(request.user, collection):
+            return HttpResponseForbidden("Collection manager access required.")
         form = CollectionForm(instance=collection)
         return render_collection_section(
             request,
@@ -126,6 +146,8 @@ class CollectionOverviewView(View):
 
     def post(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
+        if not can_manage_collection(request.user, collection):
+            return HttpResponseForbidden("Collection manager access required.")
         form = CollectionForm(request.POST, instance=collection)
         if form.is_valid():
             collection = form.save(commit=False)
@@ -144,9 +166,11 @@ class CollectionOverviewView(View):
         )
 
 
-class CollectionHeaderView(View):
+class CollectionHeaderView(LoginRequiredMixin, View):
     def get(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
+        if not can_manage_collection(request.user, collection):
+            return HttpResponseForbidden("Collection manager access required.")
         instance = CollectionHeader.objects.filter(collection=collection).first()
         form = CollectionHeaderForm(instance=instance)
         return render_collection_section(
@@ -159,6 +183,8 @@ class CollectionHeaderView(View):
 
     def post(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
+        if not can_manage_collection(request.user, collection):
+            return HttpResponseForbidden("Collection manager access required.")
         instance = CollectionHeader.objects.filter(collection=collection).first()
         form = CollectionHeaderForm(request.POST, instance=instance)
         if form.is_valid():
@@ -179,9 +205,11 @@ class CollectionHeaderView(View):
         )
 
 
-class CollectionGeneralInfoView(View):
+class CollectionGeneralInfoView(LoginRequiredMixin, View):
     def get(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
+        if not can_manage_collection(request.user, collection):
+            return HttpResponseForbidden("Collection manager access required.")
         instance = CollectionGeneralInfo.objects.filter(collection=collection).first()
         location_instance = instance.location if instance else None
         form = CollectionGeneralInfoForm(instance=instance)
@@ -196,6 +224,8 @@ class CollectionGeneralInfoView(View):
 
     def post(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
+        if not can_manage_collection(request.user, collection):
+            return HttpResponseForbidden("Collection manager access required.")
         instance = CollectionGeneralInfo.objects.filter(collection=collection).first()
         location_instance = instance.location if instance else None
         form = CollectionGeneralInfoForm(request.POST, instance=instance)
@@ -225,9 +255,11 @@ class CollectionGeneralInfoView(View):
         )
 
 
-class CollectionPublicationInfoView(View):
+class CollectionPublicationInfoView(LoginRequiredMixin, View):
     def get(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
+        if not can_manage_collection(request.user, collection):
+            return HttpResponseForbidden("Collection manager access required.")
         instance = CollectionPublicationInfo.objects.filter(collection=collection).first()
         form = CollectionPublicationInfoForm(instance=instance)
         return render_collection_section(
@@ -240,6 +272,8 @@ class CollectionPublicationInfoView(View):
 
     def post(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
+        if not can_manage_collection(request.user, collection):
+            return HttpResponseForbidden("Collection manager access required.")
         instance = CollectionPublicationInfo.objects.filter(collection=collection).first()
         form = CollectionPublicationInfoForm(request.POST, instance=instance)
         if form.is_valid():
@@ -260,9 +294,11 @@ class CollectionPublicationInfoView(View):
         )
 
 
-class CollectionAdministrativeInfoView(View):
+class CollectionAdministrativeInfoView(LoginRequiredMixin, View):
     def get(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
+        if not can_manage_collection(request.user, collection):
+            return HttpResponseForbidden("Collection manager access required.")
         instance = CollectionAdministrativeInfo.objects.filter(collection=collection).first()
         form = CollectionAdministrativeInfoForm(instance=instance)
         return render_collection_section(
@@ -275,6 +311,8 @@ class CollectionAdministrativeInfoView(View):
 
     def post(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
+        if not can_manage_collection(request.user, collection):
+            return HttpResponseForbidden("Collection manager access required.")
         instance = CollectionAdministrativeInfo.objects.filter(collection=collection).first()
         form = CollectionAdministrativeInfoForm(request.POST, instance=instance)
         if form.is_valid():
@@ -295,9 +333,11 @@ class CollectionAdministrativeInfoView(View):
         )
 
 
-class CollectionStructuralInfoView(View):
+class CollectionStructuralInfoView(LoginRequiredMixin, View):
     def get(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
+        if not can_manage_collection(request.user, collection):
+            return HttpResponseForbidden("Collection manager access required.")
         instance = CollectionStructuralInfo.objects.filter(collection=collection).first()
         form = CollectionStructuralInfoForm(instance=instance)
         return render_collection_section(
@@ -310,6 +350,8 @@ class CollectionStructuralInfoView(View):
 
     def post(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
+        if not can_manage_collection(request.user, collection):
+            return HttpResponseForbidden("Collection manager access required.")
         instance = CollectionStructuralInfo.objects.filter(collection=collection).first()
         form = CollectionStructuralInfoForm(request.POST, instance=instance)
         if form.is_valid():
@@ -330,9 +372,11 @@ class CollectionStructuralInfoView(View):
         )
 
 
-class CollectionProjectInfoView(View):
+class CollectionProjectInfoView(LoginRequiredMixin, View):
     def get(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
+        if not can_manage_collection(request.user, collection):
+            return HttpResponseForbidden("Collection manager access required.")
         form = CollectionProjectInfoForm(instance=collection)
         return render_collection_section(
             request,
@@ -344,6 +388,8 @@ class CollectionProjectInfoView(View):
 
     def post(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
+        if not can_manage_collection(request.user, collection):
+            return HttpResponseForbidden("Collection manager access required.")
         form = CollectionProjectInfoForm(request.POST, instance=collection)
         if form.is_valid():
             collection = form.save(commit=False)

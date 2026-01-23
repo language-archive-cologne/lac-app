@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -17,6 +17,7 @@ from lacos.blam.models.collection.collection_publication_info import (
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.views.metadata.base import apply_audit_fields
 from lacos.common.mixins import HtmxTemplateHelperMixin
+from lacos.storage.permissions import can_manage_bundle, can_manage_collection
 
 
 COLLECTION_PUBLICATION_REFERENCE_CONFIG = {
@@ -78,6 +79,95 @@ class BasePublicationReferenceView(HtmxTemplateHelperMixin, View):
         if not config:
             raise Http404("Unknown reference type")
         return config
+
+    def _resolve_collection_targets(self, obj) -> list[Collection]:
+        if obj is None:
+            return []
+
+        if isinstance(obj, Collection):
+            return [obj]
+
+        if isinstance(obj, Bundle):
+            collection = None
+            structural = getattr(obj, "structural_info", None)
+            if structural:
+                struct_info = structural.first()
+                if struct_info:
+                    collection = getattr(struct_info, "is_member_of_collection", None)
+            return [collection] if collection else []
+
+        direct_collection = getattr(obj, "collection", None)
+        if direct_collection:
+            return [direct_collection]
+
+        direct_bundle = getattr(obj, "bundle", None)
+        if direct_bundle:
+            return self._resolve_collection_targets(direct_bundle)
+
+        from lacos.blam.models.base_project_info import ProjectInfo, FunderInfo
+        from lacos.blam.models.bundle.bundle_general_info import BundleGeneralInfo, BundleObjectLanguage
+        from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo, CollectionObjectLanguage
+        from lacos.blam.models.collection.collection_administrative_info import CollectionAdministrativeInfo, CollectionRightsHolder
+        from lacos.blam.models.bundle.bundle_administrative_info import BundleAdministrativeInfo, BundleRightsHolder
+        from lacos.blam.models.bundle.bundle_structural_info import BundleResources, WrittenResource
+
+        if isinstance(obj, ProjectInfo):
+            collections = list(obj.collections.all())
+            bundles = list(obj.bundles.all())
+            for bundle in bundles:
+                collections.extend(self._resolve_collection_targets(bundle))
+            return [c for c in collections if c]
+
+        if isinstance(obj, FunderInfo):
+            collections = []
+            for project in obj.projects.all():
+                collections.extend(self._resolve_collection_targets(project))
+            return [c for c in collections if c]
+
+        if isinstance(obj, WrittenResource):
+            resources = BundleResources.objects.filter(bundle_written_resources=obj)
+            collections = []
+            for resource in resources:
+                collections.extend(self._resolve_collection_targets(resource.bundle))
+            return [c for c in collections if c]
+
+        if isinstance(obj, CollectionObjectLanguage):
+            collections = [
+                info.collection for info in CollectionGeneralInfo.objects.filter(object_languages=obj)
+            ]
+            return [c for c in collections if c]
+
+        if isinstance(obj, BundleObjectLanguage):
+            collections = []
+            for info in BundleGeneralInfo.objects.filter(object_languages=obj):
+                collections.extend(self._resolve_collection_targets(info.bundle))
+            return [c for c in collections if c]
+
+        if isinstance(obj, CollectionRightsHolder):
+            collections = [
+                info.collection for info in CollectionAdministrativeInfo.objects.filter(rights_holders=obj)
+            ]
+            return [c for c in collections if c]
+
+        if isinstance(obj, BundleRightsHolder):
+            collections = []
+            for info in BundleAdministrativeInfo.objects.filter(rights_holders=obj):
+                collections.extend(self._resolve_collection_targets(info.bundle))
+            return [c for c in collections if c]
+
+        return []
+
+    def _authorize(self, request, parent, publication_info=None) -> bool:
+        if isinstance(parent, Bundle):
+            return can_manage_bundle(request.user, parent)
+        if isinstance(parent, Collection):
+            return can_manage_collection(request.user, parent)
+
+        targets = self._resolve_collection_targets(parent)
+        if not targets and publication_info is not None and publication_info is not parent:
+            targets = self._resolve_collection_targets(publication_info)
+
+        return any(can_manage_collection(request.user, collection) for collection in targets)
 
     def get_parent(self, **kwargs):
         parent_id = kwargs.get(self.parent_kwarg)
@@ -197,6 +287,8 @@ class BasePublicationReferenceView(HtmxTemplateHelperMixin, View):
     def get(self, request, reference_slug: str, object_id=None, **kwargs):
         parent = self.get_parent(**kwargs)
         publication_info = self.get_publication_info(parent)
+        if not self._authorize(request, parent, publication_info):
+            return HttpResponseForbidden("Collection manager access required.")
         config = self.get_reference_config(reference_slug)
         edit_object = None
         form = None
@@ -223,6 +315,8 @@ class BasePublicationReferenceView(HtmxTemplateHelperMixin, View):
     def post(self, request, reference_slug: str, object_id=None, **kwargs):
         parent = self.get_parent(**kwargs)
         publication_info = self.get_publication_info(parent)
+        if not self._authorize(request, parent, publication_info):
+            return HttpResponseForbidden("Collection manager access required.")
         config = self.get_reference_config(reference_slug)
         edit_object = None
 

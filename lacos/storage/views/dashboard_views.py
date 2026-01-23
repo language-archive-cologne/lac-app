@@ -5,7 +5,7 @@ from datetime import datetime
 from urllib.parse import quote_plus, urlencode
 
 from django.conf import settings
-from lacos.storage.permissions import archivist_required
+from lacos.storage.permissions import archivist_required, manager_or_archivist_required
 from django.contrib.contenttypes.models import ContentType
 from django.core.paginator import Paginator
 from django.db import models
@@ -375,7 +375,7 @@ def _build_acl_overview_context():
     }
 
 
-@archivist_required
+@manager_or_archivist_required
 def archivist_dashboard(request):
     """
     Render the archivist dashboard showing all workspace buckets.
@@ -854,7 +854,7 @@ def acl_edit_permission_form(request, object_type, object_id):
     return render(request, "dashboard/partials/acl_edit_form.html", context)
 
 
-@archivist_required
+@manager_or_archivist_required
 def load_folder_contents(request, bucket_type, folder_path):
     """
     Load contents of a specific folder when expanded.
@@ -942,7 +942,7 @@ def load_folder_contents(request, bucket_type, folder_path):
         )
 
 
-@archivist_required
+@manager_or_archivist_required
 def bucket_size_info(request, bucket_name):
     """HTMX endpoint returning bucket size details."""
     bucket_service = BucketService(skip_bucket_check=True)
@@ -967,7 +967,7 @@ def bucket_size_info(request, bucket_name):
     return HttpResponse(html)
 
 
-@archivist_required
+@manager_or_archivist_required
 def dashboard_content(request, bucket_type):
     """
     Return only the structure content for a specific bucket type.

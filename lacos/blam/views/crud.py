@@ -1,5 +1,5 @@
 from django.shortcuts import get_object_or_404
-from django.http import HttpResponse, HttpResponseBadRequest
+from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
 from django.views.decorators.http import require_POST
 from django.db import transaction
 import json
@@ -7,6 +7,7 @@ import logging
 
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.bundle.bundle_repository import Bundle
+from lacos.storage.permissions import can_manage_bundle, can_manage_collection
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +30,13 @@ def delete_blam_model(request, model_type, object_id):
         if model_type.lower() == 'collection':
             model = get_object_or_404(Collection, pk=object_id)
             model_name = "Collection"
+            if not can_manage_collection(request.user, model):
+                return HttpResponseForbidden("Collection manager access required.")
         elif model_type.lower() == 'bundle':
             model = get_object_or_404(Bundle, pk=object_id)
             model_name = "Bundle"
+            if not can_manage_bundle(request.user, model):
+                return HttpResponseForbidden("Collection manager access required.")
         else:
             return HttpResponseBadRequest(f"Invalid model type: {model_type}")
         

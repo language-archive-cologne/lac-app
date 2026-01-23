@@ -4,7 +4,12 @@ import os
 from django.shortcuts import render
 from django.contrib import messages
 from django.views.decorators.http import require_http_methods
-from lacos.storage.permissions import archivist_required
+from lacos.storage.permissions import (
+    archivist_required,
+    can_manage_collection,
+    manager_or_archivist_required,
+    resolve_collection_from_path,
+)
 from django.http import JsonResponse, HttpResponse
 from django.urls import reverse
 from lacos.storage.services.upload_service import UploadService
@@ -14,7 +19,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 
-@archivist_required
+@manager_or_archivist_required
 def direct_upload(request):
     """Handle direct S3 uploads from the browser."""
     # If GET request, just show the form
@@ -30,6 +35,10 @@ def direct_upload(request):
                 # Parse the files metadata from session
                 files_metadata = json.loads(files_metadata_json)
                 logger.info(f"Found session data for folder: {folder_name} with {len(files_metadata)} files")
+
+                collection = resolve_collection_from_path(folder_name)
+                if not can_manage_collection(request.user, collection):
+                    return HttpResponse(status=403)
                 
                 # Generate presigned URLs
                 upload_service = UploadService()
@@ -118,6 +127,10 @@ def direct_upload(request):
         return render(request, "upload/upload_status.html", {
             "success": False, "message": "Missing folder name or file paths"
         })
+
+    collection = resolve_collection_from_path(folder_name)
+    if not can_manage_collection(request.user, collection):
+        return HttpResponse(status=403)
     
     try:
         # Parse file information
@@ -220,7 +233,7 @@ def direct_upload(request):
         })
 
 
-@archivist_required
+@manager_or_archivist_required
 @require_http_methods(["POST"])
 def process_upload(request):
     """Process folder uploads using presigned URLs."""
@@ -242,6 +255,10 @@ def process_upload(request):
             return render(request, "upload/upload_status.html", {
                 "success": False, "message": error_message
             })
+
+        collection = resolve_collection_from_path(folder_name)
+        if not can_manage_collection(request.user, collection):
+            return HttpResponse(status=403)
         
         if not file_paths_json or not file_names_json:
             error_message = "No files metadata provided"
@@ -395,7 +412,7 @@ def format_file_size(size_bytes):
     return f"{size_bytes:.2f} {size_name[i]}"
 
 
-@archivist_required
+@manager_or_archivist_required
 @require_http_methods(["POST"])
 def upload_complete(request):
     """Handle notification that all uploads are complete."""
@@ -411,6 +428,10 @@ def upload_complete(request):
                 "success": False,
                 "message": "Missing folder name or uploaded files data"
             })
+
+        collection = resolve_collection_from_path(folder_name)
+        if not can_manage_collection(request.user, collection):
+            return HttpResponse(status=403)
         
         uploaded_files = json.loads(uploaded_files_json)
         logger.info(f"Processing {len(uploaded_files)} completed uploads")

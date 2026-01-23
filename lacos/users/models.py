@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser, Group
 from django.db import models
 from django.db.models import CharField
@@ -70,3 +71,31 @@ class GroupACL(models.Model):
 
     def __str__(self) -> str:  # pragma: no cover - trivial
         return f"{self.group.name} ACL profile"
+
+
+class CollectionManagerAssignment(models.Model):
+    """
+    Assigns a user to manage one or more collections.
+
+    Requires the user to also be in the collection_manager group for access checks.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="collection_manager_assignments",
+    )
+    collection = models.ForeignKey(
+        "blam.Collection",
+        on_delete=models.CASCADE,
+        related_name="collection_manager_assignments",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _("Collection manager assignment")
+        verbose_name_plural = _("Collection manager assignments")
+        unique_together = ("user", "collection")
+
+    def __str__(self) -> str:  # pragma: no cover - trivial
+        return f"{self.user} -> {self.collection}"

@@ -1,8 +1,9 @@
 import logging
 import json
 from django.contrib import messages
-from lacos.storage.permissions import archivist_required
-from django.http import JsonResponse, HttpResponse, QueryDict
+from django.contrib.auth.decorators import login_required
+from lacos.storage.permissions import can_manage_collection, resolve_collection_from_path
+from django.http import JsonResponse, HttpResponse, HttpResponseForbidden, QueryDict
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.template.loader import render_to_string
@@ -15,7 +16,7 @@ from lacos.common.mixins.htmx_template_helpers import HtmxTemplateHelperMixin
 logger = logging.getLogger(__name__)
 
 
-@archivist_required
+@login_required
 def file_content(request, bucket_type, file_path):
     """
     Retrieve and display the content of a file from a bucket.
@@ -25,6 +26,10 @@ def file_content(request, bucket_type, file_path):
     appropriate content type. For text files, it renders the content
     in a readable format.
     """
+    collection = resolve_collection_from_path(file_path)
+    if not can_manage_collection(request.user, collection):
+        return HttpResponseForbidden("Collection manager access required.")
+
     try:
         bucket_service = BucketService()
 
@@ -59,9 +64,12 @@ def file_content(request, bucket_type, file_path):
         return HttpResponse(error_message, status=500)
 
 
-@archivist_required
+@login_required
 def file_viewer_htmx(request, bucket_type, object_path):
     """Return modal content with a presigned URL for streaming file previews."""
+    collection = resolve_collection_from_path(object_path)
+    if not can_manage_collection(request.user, collection):
+        return HttpResponseForbidden("Collection manager access required.")
     bucket_service = BucketService()
 
     accessible_buckets = set(bucket_service.get_all_accessible_buckets())
@@ -152,11 +160,14 @@ def _determine_viewer_type(content_type: str, file_name: str) -> str:
     return "download"
 
 
-@method_decorator(archivist_required, name='dispatch')
+@method_decorator(login_required, name='dispatch')
 class RenameObjectHTMXView(HtmxTemplateHelperMixin, View):
     """HTMX endpoint for renaming files and folders within a bucket."""
 
     def post(self, request, bucket_name, object_type, object_path):
+        collection = resolve_collection_from_path(object_path)
+        if not can_manage_collection(request.user, collection):
+            return HttpResponseForbidden("Collection manager access required.")
         bucket_service = BucketService()
 
         new_name = (request.POST.get('newName') or request.POST.get('prompt') or '').strip()
@@ -259,7 +270,7 @@ class RenameObjectHTMXView(HtmxTemplateHelperMixin, View):
         return HttpResponse(content_html + modal_html)
 
 
-@archivist_required
+@login_required
 def delete_object(request, bucket_type, object_type, object_path):
     """
     Delete a file or folder from a bucket.
@@ -278,6 +289,10 @@ def delete_object(request, bucket_type, object_type, object_path):
     if object_type not in {"file", "folder"}:
         return JsonResponse({"success": False, "error": "Invalid object type"}, status=400)
     
+    collection = resolve_collection_from_path(object_path)
+    if not can_manage_collection(request.user, collection):
+        return JsonResponse({"success": False, "error": "Collection manager access required."}, status=403)
+
     try:
         bucket_service = BucketService()
         

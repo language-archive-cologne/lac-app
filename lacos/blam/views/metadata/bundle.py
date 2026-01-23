@@ -1,4 +1,6 @@
 from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import HttpResponseForbidden
 from django.forms import inlineformset_factory
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -28,6 +30,7 @@ from lacos.blam.models.bundle.bundle_structural_info import (
     BundleResources,
 )
 from lacos.blam.views.metadata.base import apply_audit_fields
+from lacos.storage.permissions import can_manage_bundle, is_archivist, is_collection_manager
 
 
 def bundle_nav_items(bundle: Bundle) -> list[dict]:
@@ -92,10 +95,17 @@ def render_bundle_section(request, bundle: Bundle, section_slug: str, template_n
 
 class BundleListView(View):
     def get(self, request):
+        if not (is_archivist(request.user) or is_collection_manager(request.user)):
+            return HttpResponseForbidden("Archivist or collection manager access required.")
+
         from django.db.models import Q
 
         search_query = request.GET.get("q", "").strip()
         bundles = Bundle.objects.all().order_by("identifier")
+        if not is_archivist(request.user):
+            bundles = bundles.filter(
+                structural_info__is_member_of_collection__collection_manager_assignments__user=request.user
+            ).distinct()
 
         if search_query:
             bundles = bundles.filter(
@@ -112,12 +122,16 @@ class BundleListView(View):
         return render(request, "blam/metadata/bundle_list.html", context)
 
 
-class BundleCreateView(View):
+class BundleCreateView(LoginRequiredMixin, View):
     def get(self, request):
+        if not is_archivist(request.user):
+            return HttpResponseForbidden("Archivist access required.")
         form = BundleForm()
         return render(request, "blam/metadata/bundle_create.html", {"form": form})
 
     def post(self, request):
+        if not is_archivist(request.user):
+            return HttpResponseForbidden("Archivist access required.")
         form = BundleForm(request.POST)
         if form.is_valid():
             bundle = form.save(commit=False)
@@ -130,9 +144,11 @@ class BundleCreateView(View):
         return render(request, "blam/metadata/bundle_create.html", {"form": form})
 
 
-class BundleOverviewView(View):
+class BundleOverviewView(LoginRequiredMixin, View):
     def get(self, request, bundle_id):
         bundle = get_object_or_404(Bundle, pk=bundle_id)
+        if not can_manage_bundle(request.user, bundle):
+            return HttpResponseForbidden("Collection manager access required.")
         form = BundleForm(instance=bundle)
         return render_bundle_section(
             request,
@@ -144,6 +160,8 @@ class BundleOverviewView(View):
 
     def post(self, request, bundle_id):
         bundle = get_object_or_404(Bundle, pk=bundle_id)
+        if not can_manage_bundle(request.user, bundle):
+            return HttpResponseForbidden("Collection manager access required.")
         form = BundleForm(request.POST, instance=bundle)
         if form.is_valid():
             bundle = form.save(commit=False)
@@ -162,9 +180,11 @@ class BundleOverviewView(View):
         )
 
 
-class BundleHeaderView(View):
+class BundleHeaderView(LoginRequiredMixin, View):
     def get(self, request, bundle_id):
         bundle = get_object_or_404(Bundle, pk=bundle_id)
+        if not can_manage_bundle(request.user, bundle):
+            return HttpResponseForbidden("Collection manager access required.")
         instance = BundleHeader.objects.filter(bundle=bundle).first()
         form = BundleHeaderForm(instance=instance)
         return render_bundle_section(
@@ -177,6 +197,8 @@ class BundleHeaderView(View):
 
     def post(self, request, bundle_id):
         bundle = get_object_or_404(Bundle, pk=bundle_id)
+        if not can_manage_bundle(request.user, bundle):
+            return HttpResponseForbidden("Collection manager access required.")
         instance = BundleHeader.objects.filter(bundle=bundle).first()
         form = BundleHeaderForm(request.POST, instance=instance)
         if form.is_valid():
@@ -197,9 +219,11 @@ class BundleHeaderView(View):
         )
 
 
-class BundleGeneralInfoView(View):
+class BundleGeneralInfoView(LoginRequiredMixin, View):
     def get(self, request, bundle_id):
         bundle = get_object_or_404(Bundle, pk=bundle_id)
+        if not can_manage_bundle(request.user, bundle):
+            return HttpResponseForbidden("Collection manager access required.")
         instance = BundleGeneralInfo.objects.filter(bundle=bundle).first()
         location_instance = instance.location if instance else None
         form = BundleGeneralInfoForm(instance=instance)
@@ -214,6 +238,8 @@ class BundleGeneralInfoView(View):
 
     def post(self, request, bundle_id):
         bundle = get_object_or_404(Bundle, pk=bundle_id)
+        if not can_manage_bundle(request.user, bundle):
+            return HttpResponseForbidden("Collection manager access required.")
         instance = BundleGeneralInfo.objects.filter(bundle=bundle).first()
         location_instance = instance.location if instance else None
         form = BundleGeneralInfoForm(request.POST, instance=instance)
@@ -243,9 +269,11 @@ class BundleGeneralInfoView(View):
         )
 
 
-class BundlePublicationInfoView(View):
+class BundlePublicationInfoView(LoginRequiredMixin, View):
     def get(self, request, bundle_id):
         bundle = get_object_or_404(Bundle, pk=bundle_id)
+        if not can_manage_bundle(request.user, bundle):
+            return HttpResponseForbidden("Collection manager access required.")
         instance = BundlePublicationInfo.objects.filter(bundle=bundle).first()
         form = BundlePublicationInfoForm(instance=instance)
         return render_bundle_section(
@@ -258,6 +286,8 @@ class BundlePublicationInfoView(View):
 
     def post(self, request, bundle_id):
         bundle = get_object_or_404(Bundle, pk=bundle_id)
+        if not can_manage_bundle(request.user, bundle):
+            return HttpResponseForbidden("Collection manager access required.")
         instance = BundlePublicationInfo.objects.filter(bundle=bundle).first()
         form = BundlePublicationInfoForm(request.POST, instance=instance)
         if form.is_valid():
@@ -278,9 +308,11 @@ class BundlePublicationInfoView(View):
         )
 
 
-class BundleAdministrativeInfoView(View):
+class BundleAdministrativeInfoView(LoginRequiredMixin, View):
     def get(self, request, bundle_id):
         bundle = get_object_or_404(Bundle, pk=bundle_id)
+        if not can_manage_bundle(request.user, bundle):
+            return HttpResponseForbidden("Collection manager access required.")
         instance = BundleAdministrativeInfo.objects.filter(bundle=bundle).first()
         form = BundleAdministrativeInfoForm(instance=instance)
         return render_bundle_section(
@@ -293,6 +325,8 @@ class BundleAdministrativeInfoView(View):
 
     def post(self, request, bundle_id):
         bundle = get_object_or_404(Bundle, pk=bundle_id)
+        if not can_manage_bundle(request.user, bundle):
+            return HttpResponseForbidden("Collection manager access required.")
         instance = BundleAdministrativeInfo.objects.filter(bundle=bundle).first()
         form = BundleAdministrativeInfoForm(request.POST, instance=instance)
         if form.is_valid():
@@ -313,9 +347,11 @@ class BundleAdministrativeInfoView(View):
         )
 
 
-class BundleStructuralInfoView(View):
+class BundleStructuralInfoView(LoginRequiredMixin, View):
     def get(self, request, bundle_id):
         bundle = get_object_or_404(Bundle, pk=bundle_id)
+        if not can_manage_bundle(request.user, bundle):
+            return HttpResponseForbidden("Collection manager access required.")
         instance = BundleStructuralInfo.objects.filter(bundle=bundle).first()
         form = BundleStructuralInfoForm(instance=instance)
         return render_bundle_section(
@@ -328,6 +364,8 @@ class BundleStructuralInfoView(View):
 
     def post(self, request, bundle_id):
         bundle = get_object_or_404(Bundle, pk=bundle_id)
+        if not can_manage_bundle(request.user, bundle):
+            return HttpResponseForbidden("Collection manager access required.")
         instance = BundleStructuralInfo.objects.filter(bundle=bundle).first()
         form = BundleStructuralInfoForm(request.POST, instance=instance)
         if form.is_valid():
@@ -348,9 +386,11 @@ class BundleStructuralInfoView(View):
         )
 
 
-class BundleMembersView(View):
+class BundleMembersView(LoginRequiredMixin, View):
     def get(self, request, bundle_id):
         bundle = get_object_or_404(Bundle, pk=bundle_id)
+        if not can_manage_bundle(request.user, bundle):
+            return HttpResponseForbidden("Collection manager access required.")
         bundle_members, created = BundleMembers.objects.get_or_create(bundle=bundle)
         if created:
             apply_audit_fields(bundle_members, request.user)
@@ -373,6 +413,8 @@ class BundleMembersView(View):
 
     def post(self, request, bundle_id):
         bundle = get_object_or_404(Bundle, pk=bundle_id)
+        if not can_manage_bundle(request.user, bundle):
+            return HttpResponseForbidden("Collection manager access required.")
         bundle_members, created = BundleMembers.objects.get_or_create(bundle=bundle)
         if created:
             apply_audit_fields(bundle_members, request.user)
@@ -404,9 +446,11 @@ class BundleMembersView(View):
         )
 
 
-class BundleResourcesView(View):
+class BundleResourcesView(LoginRequiredMixin, View):
     def get(self, request, bundle_id):
         bundle = get_object_or_404(Bundle, pk=bundle_id)
+        if not can_manage_bundle(request.user, bundle):
+            return HttpResponseForbidden("Collection manager access required.")
         instance = BundleResources.objects.filter(bundle=bundle).first()
         form = BundleResourcesForm(instance=instance)
         return render_bundle_section(
@@ -419,6 +463,8 @@ class BundleResourcesView(View):
 
     def post(self, request, bundle_id):
         bundle = get_object_or_404(Bundle, pk=bundle_id)
+        if not can_manage_bundle(request.user, bundle):
+            return HttpResponseForbidden("Collection manager access required.")
         instance = BundleResources.objects.filter(bundle=bundle).first()
         form = BundleResourcesForm(request.POST, instance=instance)
         if form.is_valid():
@@ -439,9 +485,11 @@ class BundleResourcesView(View):
         )
 
 
-class BundleProjectsView(View):
+class BundleProjectsView(LoginRequiredMixin, View):
     def get(self, request, bundle_id):
         bundle = get_object_or_404(Bundle, pk=bundle_id)
+        if not can_manage_bundle(request.user, bundle):
+            return HttpResponseForbidden("Collection manager access required.")
         form = BundleProjectsForm(instance=bundle)
         return render_bundle_section(
             request,
@@ -453,6 +501,8 @@ class BundleProjectsView(View):
 
     def post(self, request, bundle_id):
         bundle = get_object_or_404(Bundle, pk=bundle_id)
+        if not can_manage_bundle(request.user, bundle):
+            return HttpResponseForbidden("Collection manager access required.")
         form = BundleProjectsForm(request.POST, instance=bundle)
         if form.is_valid():
             bundle = form.save(commit=False)

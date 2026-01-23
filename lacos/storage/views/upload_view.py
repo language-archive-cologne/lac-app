@@ -6,12 +6,12 @@ from django.urls import reverse
 from lacos.storage.views.presigned_url_views import get_presigned_urls, mark_uploads_complete
 from lacos.storage.views.dashboard_views import archivist_dashboard
 from lacos.storage.views.direct_upload_views import direct_upload, process_upload
-from lacos.storage.permissions import archivist_required
+from lacos.storage.permissions import manager_or_archivist_required
 
 logger = logging.getLogger(__name__)
 
 
-@archivist_required
+@manager_or_archivist_required
 def upload_form(request):
     """
     Render the upload form for uploading folders to the ingest bucket.
@@ -22,7 +22,7 @@ def upload_form(request):
     return render(request, "upload/upload_form.html")
 
 
-@archivist_required
+@manager_or_archivist_required
 def upload_success(request):
     """
     Render the upload success page.
