@@ -14,17 +14,17 @@
 {% block title %}{% if bundle.get_general_info.display_title %}{{ bundle.get_general_info.display_title }}{% elif bundle.get_general_info.title %}{{ bundle.get_general_info.title }}{% else %}{{ bundle.identifier }}{% endif %} - Language Archive Cologne{% endblock title %}
 
 {% block explorer_content %}
-  <div class="mb-4">
+  <div class="mb-6">
     {% if collection %}
-      <a href="{% url 'explorer:collection_detail' pk=collection.pk %}" class="inline-flex items-center text-base-content/70 hover:text-base-content">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+      <a href="{% url 'explorer:collection_detail' pk=collection.pk %}" class="inline-flex items-center text-base-content/70 hover:text-base-content font-medium">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
         </svg>
         {% translate "Back to Collection" %}
       </a>
     {% else %}
-      <a href="{% url 'explorer:collection_list' %}" class="inline-flex items-center text-base-content/70 hover:text-base-content">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+      <a href="{% url 'explorer:collection_list' %}" class="inline-flex items-center text-base-content/70 hover:text-base-content font-medium">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
         </svg>
         {% translate "Back to Collections" %}
@@ -33,9 +33,9 @@
   </div>
 
   <!-- Bundle Info Section -->
-  <div class="bg-base-100 shadow overflow-hidden sm:rounded-lg mb-8 border border-base-300">
-    <div class="px-4 py-5 sm:px-6 border-b border-base-300">
-      <h1 class="text-2xl font-medium text-base-content">
+  <div class="bg-base-100 shadow-sm border border-base-300 rounded-xl mb-8">
+    <div class="px-8 py-6 border-b border-base-300">
+      <h1 class="text-3xl font-light text-base-content tracking-tight">
         {% if bundle.get_general_info.display_title %}
           {{ bundle.get_general_info.display_title }}
         {% elif bundle.get_general_info.title %}
@@ -45,13 +45,28 @@
         {% endif %}
       </h1>
       {% with access_level=acl_check_result.access_level|default:'restricted' %}
-        <div class="mt-2 flex items-center text-sm">
+        <div class="mt-2 flex items-center gap-1">
           {% if access_level == 'public' %}
-            <span class="text-success font-medium">Public – anyone can read these files.</span>
+            <span class="badge badge-success">Public</span>
+            <div class="tooltip" data-tip="{% translate 'Anyone can read these files' %}">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-base-content/40 cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
           {% elif access_level == 'academic' %}
-            <span class="text-warning font-medium">Academic – only authenticated users can read these files.</span>
+            <span class="badge badge-warning">Academic</span>
+            <div class="tooltip" data-tip="{% translate 'Only authenticated users can read these files' %}">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-base-content/40 cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
           {% else %}
-            <span class="text-amber-600 font-medium">Restricted – only authorized users can access.</span>
+            <span class="badge bg-amber-600 text-white border-amber-600">Restricted</span>
+            <div class="tooltip" data-tip="{% translate 'Only authorized users can access' %}">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-base-content/40 cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
           {% endif %}
         </div>
       {% endwith %}
@@ -65,32 +80,31 @@
           </a>
           <button
             type="button"
-            onclick="navigator.clipboard.writeText('{{ request.scheme }}://{{ request.get_host }}{% url 'explorer:bundle_detail_by_handle' handle=bundle.identifier %}'); this.querySelector('span').textContent = '{% translate 'Copied!' %}'; setTimeout(() => this.querySelector('span').textContent = '{% translate 'Copy' %}', 2000);"
-            class="btn btn-xs btn-ghost text-base-content/60 hover:text-base-content"
+            onclick="navigator.clipboard.writeText('{{ request.scheme }}://{{ request.get_host }}{% url 'explorer:bundle_detail_by_handle' handle=bundle.identifier %}'); this.classList.add('text-success'); setTimeout(() => this.classList.remove('text-success'), 2000);"
+            class="btn btn-xs btn-ghost btn-square text-base-content/60 hover:text-base-content"
             title="{% translate 'Copy handle URL' %}"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
-            <span class="ml-1">{% translate "Copy" %}</span>
           </button>
         </div>
       {% endif %}
     </div>
 
-    <div class="px-4 py-5 sm:p-6">
-      <div class="space-y-4">
+    <div class="px-8 py-6">
+      <dl class="space-y-4">
         {% if bundle.get_general_info.description %}
           <div>
-            <h2 class="text-lg font-medium text-base-content mb-2">{% translate "Description" %}</h2>
-            <p class="text-base-content/80">{{ bundle.get_general_info.description|urlize_text }}</p>
+            <dt class="text-sm font-semibold text-base-content/70 mb-1.5">{% translate "Description" %}</dt>
+            <dd class="text-sm text-base-content leading-relaxed">{{ bundle.get_general_info.description|urlize_text }}</dd>
           </div>
         {% endif %}
 
         {% if bundle.formatted_location %}
           <div>
-            <h2 class="text-lg font-medium text-base-content mb-2">{% translate "Location" %}</h2>
-            <p class="text-base-content/80">
+            <dt class="text-sm font-semibold text-base-content/70 mb-1.5">{% translate "Location" %}</dt>
+            <dd class="text-sm text-base-content">
               {% if bundle.geo_location %}
                 <span
                   class="cursor-pointer hover:text-primary hover:underline"
@@ -104,23 +118,25 @@
               {% else %}
                 {{ bundle.formatted_location }}
               {% endif %}
-            </p>
+            </dd>
           </div>
         {% endif %}
 
         {% if bundle.structural_info.first and bundle.structural_info.first.bundle_topics.all %}
           <div>
-            <h2 class="text-lg font-medium text-base-content mb-2">{% translate "Topics" %}</h2>
-            <div class="flex flex-wrap gap-2">
-              {% for topic in bundle.structural_info.first.bundle_topics.all %}
-                <span class="badge badge-success badge-outline">
-                  {{ topic.name }}
-                </span>
-              {% endfor %}
-            </div>
+            <dt class="text-sm font-semibold text-base-content/70 mb-1.5">{% translate "Topics" %}</dt>
+            <dd>
+              <div class="flex flex-wrap gap-1.5">
+                {% for topic in bundle.structural_info.first.bundle_topics.all %}
+                  <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-base-200 text-base-content border border-base-300">
+                    {{ topic.name }}
+                  </span>
+                {% endfor %}
+              </div>
+            </dd>
           </div>
         {% endif %}
-      </div>
+      </dl>
     </div>
   </div>
 

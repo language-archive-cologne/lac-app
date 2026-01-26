@@ -1,12 +1,13 @@
-"""JSON-LD serializer for BLAM Collection metadata.
+"""JSON-LD serializers for BLAM metadata.
 
-This serializer outputs JSON-LD that closely mirrors the BLAM XML schema structure,
+These serializers output JSON-LD that closely mirrors the BLAM XML schema structure,
 using BLAM vocabulary terms rather than mapping to external vocabularies like Schema.org.
 """
 
 import json
 from typing import Any, Optional
 
+from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.collection.collection_repository import Collection
 
 
