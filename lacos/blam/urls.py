@@ -12,6 +12,7 @@ from .views.admin_views import (
     DatabaseDeleteBundlesConfirmView
 )
 from .views.crud import delete_blam_model
+from .views.export import CollectionJsonLdExportView
 from .views.metadata import (
     CollectionListView,
     CollectionCreateView,
@@ -122,6 +123,7 @@ urlpatterns = [
     path('metadata/collections/', CollectionListView.as_view(), name='collection_metadata_list'),
     path('metadata/collections/new/', CollectionCreateView.as_view(), name='collection_metadata_create'),
     path('metadata/collections/<uuid:collection_id>/', CollectionOverviewView.as_view(), name='collection_metadata_overview'),
+    path('metadata/collections/<uuid:collection_id>/export/jsonld/', CollectionJsonLdExportView.as_view(), name='collection_export_jsonld'),
     path('metadata/collections/<uuid:collection_id>/header/', CollectionHeaderView.as_view(), name='collection_metadata_header'),
     path('metadata/collections/<uuid:collection_id>/general/', CollectionGeneralInfoView.as_view(), name='collection_metadata_general'),
     path(
