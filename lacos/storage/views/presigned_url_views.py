@@ -1,7 +1,5 @@
 import logging
 import json
-from django.shortcuts import render
-from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
@@ -14,9 +12,6 @@ from lacos.storage.permissions import (
 )
 from django.http import JsonResponse, HttpResponseForbidden
 from lacos.storage.services.upload_service import UploadService
-from lacos.storage.services.base_storage_service import BaseStorageService
-from lacos.storage.services.collection_service import CollectionService
-from lacos.storage.services.bucket_service import BucketService
 from lacos.storage.services.upload_verification_service import UploadVerificationService
 from lacos.storage.models import UploadSession, S3FileObject
 
@@ -24,33 +19,12 @@ logger = logging.getLogger(__name__)
 
 # Singleton instances
 _upload_service = None
-_base_storage_service = None
-_collection_service = None
-_bucket_service = None
 
 def get_upload_service():
     global _upload_service
     if _upload_service is None:
         _upload_service = UploadService()
     return _upload_service
-
-def get_base_storage_service():
-    global _base_storage_service
-    if _base_storage_service is None:
-        _base_storage_service = BaseStorageService()
-    return _base_storage_service
-
-def get_collection_service():
-    global _collection_service
-    if _collection_service is None:
-        _collection_service = CollectionService()
-    return _collection_service
-
-def get_bucket_service():
-    global _bucket_service
-    if _bucket_service is None:
-        _bucket_service = BucketService()
-    return _bucket_service
 
 def _ensure_collection_access(request, *, path_hint: str | None = None, s3_keys: list | None = None):
     if path_hint is not None:
@@ -96,8 +70,6 @@ def get_presigned_urls(request):
         bucket_name = request.POST.get("bucket_name")
         files_json = request.POST.get("files_metadata")
     
-    is_htmx = request.headers.get('HX-Request') == 'true'
-    logger.info(f"HTMX request detected: {is_htmx}")
     logger.info(f"Content type: {request.content_type}")
     
     # folder_name is optional - if empty, files go to bucket root
@@ -108,11 +80,6 @@ def get_presigned_urls(request):
     if not files_json:
         error_message = "No files metadata provided"
         logger.warning(error_message)
-        messages.error(request, error_message)
-        if is_htmx:
-            return render(request, "upload/upload_status.html", {
-                "success": False, "message": error_message
-            })
         return JsonResponse({"success": False, "error": error_message})
     
     # Parse file metadata
@@ -121,11 +88,6 @@ def get_presigned_urls(request):
     except json.JSONDecodeError as e:
         error_message = f"Invalid files metadata format: {e}"
         logger.error(error_message)
-        messages.error(request, error_message)
-        if is_htmx:
-            return render(request, "upload/upload_status.html", {
-                "success": False, "message": error_message
-            })
         return JsonResponse({"success": False, "error": error_message})
     
     access_error = _ensure_collection_access(request, path_hint=folder_name)
@@ -260,12 +222,6 @@ def get_presigned_urls(request):
                 upload_session.status = "in_progress"
                 upload_session.save(update_fields=["status"])
             
-            if is_htmx:
-                return render(request, "upload/presigned_urls.html", {
-                    "success": True,
-                    "result": result
-                })
-            
             # Ensure the response includes the full presigned post data including s3_key
             return JsonResponse({
                 "success": True,
@@ -278,23 +234,11 @@ def get_presigned_urls(request):
         else:
             error_message = f"Failed to generate presigned URLs: {result.get('error', 'Unknown error')}"
             logger.error(error_message)
-            messages.error(request, error_message)
-            
-            if is_htmx:
-                return render(request, "upload/upload_status.html", {
-                    "success": False, "message": error_message
-                })
             return JsonResponse({"success": False, "error": error_message, "failures": result.get("failures", [])})
     except Exception as service_error:
         # Handle service call errors
         error_message = f"Service error: {str(service_error)}"
         logger.error(error_message)
-        messages.error(request, error_message)
-        
-        if is_htmx:
-            return render(request, "upload/upload_status.html", {
-                "success": False, "message": error_message
-            })
         return JsonResponse({"success": False, "error": error_message})
 
 
