@@ -73,6 +73,16 @@ urlpatterns = [
         name="bundle_resources_by_handle",
     ),
     path(
+        "bundles/<path:handle>/metadata.jsonld",
+        view=views.BundleJsonLdView.as_view(),
+        name="bundle_jsonld_by_handle",
+    ),
+    path(
+        "bundles/<path:handle>/metadata.xml",
+        view=views.BundleXmlView.as_view(),
+        name="bundle_xml_by_handle",
+    ),
+    path(
         "bundles/<path:handle>/",
         view=views.BundleDetailView.as_view(),
         name="bundle_detail_by_handle",

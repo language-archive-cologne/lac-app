@@ -6,13 +6,15 @@ from pathlib import Path, PurePosixPath
 from typing import Optional
 from urllib.parse import unquote
 
-from django.http import Http404, HttpResponse, HttpResponseForbidden
+from django.http import Http404, HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import DetailView
 
 from lacos.blam.models import Bundle
+from lacos.blam.mappers.bundle.write.bundle_exporter import BundleExporter
+from lacos.blam.serializers import BundleJsonLdSerializer
 from lacos.explorer.media_utils import determine_media_type, guess_source_mime_type
 from lacos.explorer.permissions import ACLPermissionMixin
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
@@ -406,4 +408,117 @@ class ResourceAccessView(View):
             modal_context,
         )
         response['HX-Trigger'] = json.dumps({'showResourceModal': True})
+        return response
+
+
+class BundleJsonLdView(View):
+    """Export bundle metadata as JSON-LD."""
+
+    def get_queryset(self):
+        return Bundle.objects.prefetch_related(
+            "header",
+            "general_info",
+            "general_info__keywords",
+            "general_info__object_languages",
+            "general_info__object_languages__alternative_names",
+            "general_info__object_languages__taxonomy",
+            "general_info__object_languages__taxonomy__language_family",
+            "general_info__location",
+            "publication_info",
+            "publication_info__creators",
+            "publication_info__contributors",
+            "publication_info__identifiers",
+            "administrative_info",
+            "administrative_info__licenses",
+            "administrative_info__rights_holders",
+            "administrative_info__rights_holders__rights_holder_identifiers",
+            "administrative_info__is_identical_to",
+            "structural_info",
+            "structural_info__bundle_topics",
+            "structural_info__is_member_of_collection",
+            "structural_info__is_member_of_collection__general_info",
+            "structural_info__additional_metadata_files",
+        )
+
+    def get(self, request, pk=None, handle=None):
+        queryset = self.get_queryset()
+        if pk is not None:
+            bundle = queryset.filter(pk=pk).first()
+        elif handle is not None:
+            bundle = queryset.filter(identifier=handle).first()
+        else:
+            raise Http404("No bundle identifier provided")
+
+        if bundle is None:
+            raise Http404("Bundle not found")
+
+        serializer = BundleJsonLdSerializer(bundle)
+        data = serializer.serialize()
+
+        response = JsonResponse(data, json_dumps_params={"indent": 2, "ensure_ascii": False})
+        response["Content-Type"] = "application/ld+json"
+
+        # Only force download if explicitly requested (not AJAX/fetch)
+        is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        is_fetch = "fetch" in request.headers.get("Sec-Fetch-Mode", "")
+
+        if not is_ajax and not is_fetch:
+            general_info = bundle.general_info.first()
+            if general_info and general_info.display_title:
+                filename = general_info.display_title.replace(" ", "_")[:50]
+            else:
+                filename = str(bundle.id)[:8]
+            response["Content-Disposition"] = f'attachment; filename="{filename}.jsonld"'
+
+        return response
+
+
+class BundleXmlView(View):
+    """Export bundle metadata as BLAM XML."""
+
+    def get(self, request, pk=None, handle=None):
+        queryset = Bundle.objects.prefetch_related(
+            "header",
+            "general_info",
+            "general_info__keywords",
+            "general_info__object_languages",
+            "general_info__object_languages__alternative_names",
+            "general_info__object_languages__taxonomy",
+            "general_info__object_languages__taxonomy__language_family",
+            "general_info__location",
+            "publication_info",
+            "publication_info__creators",
+            "publication_info__contributors",
+            "publication_info__identifiers",
+            "administrative_info",
+            "administrative_info__licenses",
+            "administrative_info__rights_holders",
+            "administrative_info__rights_holders__rights_holder_identifiers",
+            "administrative_info__is_identical_to",
+            "structural_info",
+            "structural_info__bundle_topics",
+            "structural_info__additional_metadata_files",
+        )
+
+        if pk is not None:
+            bundle = queryset.filter(pk=pk).first()
+        elif handle is not None:
+            bundle = queryset.filter(identifier=handle).first()
+        else:
+            raise Http404("No bundle identifier provided")
+
+        if bundle is None:
+            raise Http404("Bundle not found")
+
+        exporter = BundleExporter()
+        xml_content = exporter.export(bundle)
+
+        general_info = bundle.general_info.first()
+        if general_info and general_info.display_title:
+            filename = general_info.display_title.replace(" ", "_")[:50]
+        else:
+            filename = str(bundle.id)[:8]
+
+        response = HttpResponse(xml_content, content_type="application/xml")
+        response["Content-Disposition"] = f'attachment; filename="{filename}.xml"'
         return response
