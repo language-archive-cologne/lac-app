@@ -1,11 +1,12 @@
 import logging
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Set
 
 from django.db.models import Count, Q
 from django.utils import timezone
 
 from lacos.storage.models import UploadSession, S3FileObject
 from lacos.storage.services.upload_service import UploadService
+from lacos.storage.services.folder_cache_service import FolderStructureCacheService
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +79,10 @@ class UploadVerificationService:
         if upload_session:
             self._update_session_status(upload_session)
 
+        # Invalidate folder cache for affected paths
+        if bucket_name and total_verified > 0:
+            self._invalidate_affected_folders(bucket_name, s3_keys)
+
         return {
             "success": success,
             "results": results,
@@ -146,3 +151,30 @@ class UploadVerificationService:
         except Exception as exc:  # pragma: no cover - fallback safety
             logger.warning("Failed to format size %s: %s", size_bytes, exc)
             return f"{size_bytes} B"
+
+    def _invalidate_affected_folders(self, bucket_name: str, s3_keys: list) -> None:
+        """Invalidate folder cache for all parent folders of uploaded files."""
+        folder_paths: Set[str] = set()
+
+        for s3_key in s3_keys:
+            # Extract all parent folder paths from the s3_key
+            parts = s3_key.rstrip("/").split("/")
+            # Build paths: "", "folder1/", "folder1/folder2/", etc.
+            folder_paths.add("")  # Root folder
+            for i in range(1, len(parts)):
+                folder_paths.add("/".join(parts[:i]) + "/")
+
+        try:
+            folder_cache = FolderStructureCacheService()
+            folder_cache.invalidate_many(bucket_name, *folder_paths)
+            logger.info(
+                "Invalidated %d folder cache entries for bucket %s",
+                len(folder_paths),
+                bucket_name,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to invalidate folder cache for %s: %s",
+                bucket_name,
+                exc,
+            )
