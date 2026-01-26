@@ -83,38 +83,45 @@
         </div>
 
         <!-- Metadata -->
-        <div class="mt-3 flex flex-col gap-2">
-          <div class="flex items-center gap-2">
-            <span class="badge badge-ghost font-mono text-xs w-16">JSON-LD</span>
-            <button type="button" onclick="openMetadataModal('jsonld')" class="btn btn-xs btn-outline gap-1">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-              {% translate "View" %}
-            </button>
-            <a href="{% url 'explorer:collection_jsonld_by_handle' handle=collection.identifier %}" download class="btn btn-xs btn-outline gap-1">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              {% translate "Download" %}
-            </a>
-          </div>
-          <div class="flex items-center gap-2">
-            <span class="badge badge-ghost font-mono text-xs w-16">XML</span>
-            <button type="button" onclick="openMetadataModal('xml')" class="btn btn-xs btn-outline gap-1">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-              {% translate "View" %}
-            </button>
-            <a href="{% url 'explorer:collection_xml_by_handle' handle=collection.identifier %}" download class="btn btn-xs btn-outline gap-1">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              {% translate "Download" %}
-            </a>
+        <div class="mt-3">
+          <span class="text-xs font-medium text-base-content/60 uppercase tracking-wide">{% translate "Metadata" %}:</span>
+          <div class="mt-1 inline-flex flex-col gap-1">
+            <div class="flex items-center">
+              <span class="text-xs text-base-content/70 w-32">JSON-LD (Linked Data)</span>
+              <div class="flex gap-1">
+                <button type="button" onclick="openMetadataModal('jsonld')" class="btn btn-xs btn-outline gap-1">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  {% translate "View" %}
+                </button>
+                <a href="{% url 'explorer:collection_jsonld_by_handle' handle=collection.identifier %}" download class="btn btn-xs btn-outline gap-1">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  {% translate "Download" %}
+                </a>
+              </div>
+            </div>
+            <div class="flex items-center">
+              <span class="text-xs text-base-content/70 w-32">XML (BLAM/CMDI)</span>
+              <div class="flex gap-1">
+                <button type="button" onclick="openMetadataModal('xml')" class="btn btn-xs btn-outline gap-1">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  {% translate "View" %}
+                </button>
+                <a href="{% url 'explorer:collection_xml_by_handle' handle=collection.identifier %}" download class="btn btn-xs btn-outline gap-1">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  {% translate "Download" %}
+                </a>
+              </div>
+            </div>
           </div>
         </div>
       {% endif %}
