@@ -64,16 +64,41 @@
             </svg>
             <span class="ml-1">{% translate "Copy" %}</span>
           </button>
-          <button
-            type="button"
-            onclick="openJsonLdModal()"
-            class="btn btn-xs btn-ghost text-base-content/60 hover:text-base-content"
-            title="{% translate 'View metadata as JSON-LD' %}">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-            </svg>
-            <span class="ml-1">JSON-LD</span>
-          </button>
+          <div class="dropdown dropdown-end">
+            <label tabindex="0" class="btn btn-xs btn-ghost text-base-content/60 hover:text-base-content" title="{% translate 'Download metadata' %}">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+              </svg>
+              <span class="ml-1">{% translate "Metadata" %}</span>
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </label>
+            <ul tabindex="0" class="dropdown-content z-[100] menu p-2 shadow-lg bg-base-100 rounded-box w-52 border border-base-300">
+              <li>
+                <button type="button" onclick="openJsonLdModal()" class="gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  {% translate "View JSON-LD" %}
+                </button>
+              </li>
+              <li class="menu-title"><span>{% translate "Download" %}</span></li>
+              <li>
+                <a href="{% url 'explorer:collection_jsonld_by_handle' handle=collection.identifier %}" download class="gap-2">
+                  <span class="badge badge-sm badge-ghost font-mono">JSON-LD</span>
+                  Linked Data
+                </a>
+              </li>
+              <li>
+                <a href="{% url 'explorer:collection_xml_by_handle' handle=collection.identifier %}" download class="gap-2">
+                  <span class="badge badge-sm badge-ghost font-mono">XML</span>
+                  BLAM/CMDI
+                </a>
+              </li>
+            </ul>
+          </div>
         </div>
       {% endif %}
     </div>
