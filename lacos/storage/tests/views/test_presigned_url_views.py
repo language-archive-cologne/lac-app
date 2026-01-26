@@ -101,7 +101,7 @@ def test_mark_uploads_complete(mock_get_upload_service, prepared_request, mock_u
     # Create request with S3 keys to verify - this function expects JSON in request.body
     json_data = {"s3_keys": ["folder/test.jpg", "folder/test2.jpg"]}
     request = prepared_request(
-        '/storage/upload/complete/',
+        '/storage/mark-uploads-complete/',
         method='post',
         data=json_data,
         content_type='application/json'

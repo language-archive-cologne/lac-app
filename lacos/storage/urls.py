@@ -3,18 +3,11 @@ from django.views.decorators.http import require_http_methods
 from django.views.generic import RedirectView
 
 from . import views
-from .views import direct_upload_views
-
 app_name = "storage"
 
 urlpatterns = [
     path("", views.archivist_dashboard, name="archivist_dashboard"),
-    path("upload/", views.upload_form, name="upload_form"),
-    path("upload/process/", views.process_upload, name="process_upload"),
     path('mark-uploads-complete/', views.mark_uploads_complete, name='mark_uploads_complete'),
-    path("upload/direct/", views.direct_upload, name="direct_upload"),
-    path("upload/success/", views.upload_success, name="upload_success"),
-    path('upload/complete/', views.upload_complete, name='upload_complete'),
     
     
     # Presigned URL API endpoints
@@ -77,9 +70,6 @@ urlpatterns = [
     path("htmx/rename-object/<str:bucket_name>/<str:object_type>/<path:object_path>/", views.RenameObjectHTMXView.as_view(), name="rename_object_htmx"),
     path("htmx/rename-bucket-modal/<str:bucket_name>/", views.RenameBucketModalHTMXView.as_view(), name="rename_bucket_modal_htmx"),
     path("htmx/rename-object-modal/<str:bucket_name>/<str:object_type>/<path:object_path>/", views.RenameObjectModalHTMXView.as_view(), name="rename_object_modal_htmx"),
-    path("debug/presigned-url/", direct_upload_views.debug_presigned_url, name="debug_presigned_url"),
-    path("upload/debug-error/", direct_upload_views.debug_upload_error, name="debug_upload_error"),
-
     # Add new route for dashboard content partials
     path("dashboard-content/<str:bucket_type>/", views.dashboard_content, name="dashboard_content"),
 
