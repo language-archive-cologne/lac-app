@@ -48,6 +48,11 @@ urlpatterns = [
         name="collection_resource_by_handle",
     ),
     path(
+        "collections/<path:handle>/metadata.jsonld",
+        view=views.CollectionJsonLdView.as_view(),
+        name="collection_jsonld_by_handle",
+    ),
+    path(
         "collections/<path:handle>/",
         view=views.CollectionDetailView.as_view(),
         name="collection_detail_by_handle",

@@ -12,7 +12,10 @@ from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import DetailView, ListView
 
+from django.http import JsonResponse
+
 from lacos.blam.models import Collection
+from lacos.blam.serializers import CollectionJsonLdSerializer
 from lacos.blam.models.collection.collection_general_info import (
     CollectionGeneralInfo,
     CollectionObjectLanguage,
@@ -397,4 +400,53 @@ class CollectionResourcesView(View):
             modal_context,
         )
         response['HX-Trigger'] = json.dumps({'showResourceModal': True})
+        return response
+
+
+class CollectionJsonLdView(HandleLookupMixin, View):
+    """Export collection metadata as JSON-LD."""
+
+    def get_queryset(self):
+        return Collection.objects.prefetch_related(
+            "header",
+            "general_info",
+            "general_info__keywords",
+            "general_info__object_languages",
+            "general_info__object_languages__alternative_names",
+            "general_info__object_languages__taxonomy",
+            "general_info__object_languages__taxonomy__language_family",
+            "general_info__location",
+            "publication_info",
+            "publication_info__creators",
+            "publication_info__contributors",
+            "administrative_info",
+            "administrative_info__licenses",
+            "administrative_info__rights_holders",
+            "administrative_info__rights_holders__rights_holder_identifiers",
+            "administrative_info__is_identical_to",
+            "structural_info",
+            "structural_info__additional_metadata_files",
+            "project_infos",
+            "project_infos__funder_infos",
+            "project_infos__funder_infos__funder_identifiers",
+        )
+
+    def get(self, request, pk=None, handle=None):
+        collection = get_object_by_pk_or_handle(
+            self.get_queryset(), pk=pk, handle=handle
+        )
+
+        serializer = CollectionJsonLdSerializer(collection)
+        data = serializer.serialize()
+
+        # Get filename from collection title or ID
+        general_info = collection.general_info.first()
+        if general_info and general_info.display_title:
+            filename = general_info.display_title.replace(" ", "_")[:50]
+        else:
+            filename = str(collection.id)[:8]
+
+        response = JsonResponse(data, json_dumps_params={"indent": 2, "ensure_ascii": False})
+        response["Content-Type"] = "application/ld+json"
+        response["Content-Disposition"] = f'attachment; filename="{filename}.jsonld"'
         return response

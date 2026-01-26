@@ -64,6 +64,15 @@
             </svg>
             <span class="ml-1">{% translate "Copy" %}</span>
           </button>
+          <a href="{% url 'explorer:collection_jsonld_by_handle' handle=collection.identifier %}"
+             class="btn btn-xs btn-ghost text-base-content/60 hover:text-base-content"
+             title="{% translate 'Download metadata as JSON-LD' %}"
+             download>
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            <span class="ml-1">JSON-LD</span>
+          </a>
         </div>
       {% endif %}
     </div>
