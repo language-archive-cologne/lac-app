@@ -439,6 +439,34 @@ SPECTACULAR_SETTINGS = {
     "SCHEMA_PATH_PREFIX": "/api/",
 }
 
+# SAML metadata refresh
+# ------------------------------------------------------------------------------
+SAML_METADATA_REFRESH_ENABLED = env.bool(
+    "SAML_METADATA_REFRESH_ENABLED",
+    default=SAML_LOGIN_ENABLED,
+)
+SAML_METADATA_REFRESH_URL = env(
+    "SAML_METADATA_REFRESH_URL",
+    default="https://idp.rrz.uni-koeln.de/idp/shibboleth",
+)
+SAML_METADATA_REFRESH_PATH = env("SAML_METADATA_REFRESH_PATH", default="")
+SAML_METADATA_REFRESH_TIMEOUT_SECONDS = env.int(
+    "SAML_METADATA_REFRESH_TIMEOUT_SECONDS",
+    default=15,
+)
+SAML_METADATA_REFRESH_CRON_HOUR = env.int(
+    "SAML_METADATA_REFRESH_CRON_HOUR",
+    default=3,
+)
+SAML_METADATA_REFRESH_CRON_MINUTE = env.int(
+    "SAML_METADATA_REFRESH_CRON_MINUTE",
+    default=5,
+)
+SAML_METADATA_REFRESH_EXPECTED_ENTITY_ID = env(
+    "SAML_METADATA_REFRESH_EXPECTED_ENTITY_ID",
+    default="",
+)
+
 # SAML / Shibboleth
 # ------------------------------------------------------------------------------
 if SAML_LOGIN_ENABLED:
