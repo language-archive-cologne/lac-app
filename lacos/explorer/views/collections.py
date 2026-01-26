@@ -104,6 +104,7 @@ class CollectionListView(ListView):
                 result for result in search_results if result.kind == "bundle"
             ]
 
+        acl_service = ACLEvaluationService()
         for collection in context['collection_list']:
             # Use prefetched data to avoid N+1 queries
             general_info_list = getattr(collection, 'prefetched_general_info', None)
@@ -115,6 +116,10 @@ class CollectionListView(ListView):
             else:
                 collection.formatted_location = ""
                 collection.geo_location = None
+
+            # Evaluate access level for display in list
+            acl_result = acl_service.evaluate(self.request.user, collection)
+            collection.access_level = acl_result.access_level or 'restricted'
 
         context['map_markers_json'] = get_collection_map_markers(context['collection_list'])
 
