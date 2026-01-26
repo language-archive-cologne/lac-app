@@ -639,16 +639,14 @@ async function startModalUpload() {
         return;
     }
 
-    if (!folder && currentFolderPath) {
-        folder = currentFolderPath;
-    }
-
     // When uploading a folder, webkitRelativePath already contains the full path
     // (e.g., "myFolder/subfolder/file.txt"), so we don't need an additional folder prefix
     const isUploadingFolder = modalSelectedFiles.length > 0 && modalSelectedFiles[0].webkitRelativePath;
-    if (isUploadingFolder && !folder) {
-        // Leave folder empty - the path in webkitRelativePath is the full path
-        folder = '';
+
+    // Only apply currentFolderPath default for single file uploads, not folder uploads
+    // For folder uploads, always use root unless explicitly specified
+    if (!folder && currentFolderPath && !isUploadingFolder) {
+        folder = currentFolderPath;
     }
 
     const uploadBtn = document.getElementById('modal-upload-btn');
