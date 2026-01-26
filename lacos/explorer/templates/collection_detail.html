@@ -64,15 +64,16 @@
             </svg>
             <span class="ml-1">{% translate "Copy" %}</span>
           </button>
-          <a href="{% url 'explorer:collection_jsonld_by_handle' handle=collection.identifier %}"
-             class="btn btn-xs btn-ghost text-base-content/60 hover:text-base-content"
-             title="{% translate 'Download metadata as JSON-LD' %}"
-             download>
+          <button
+            type="button"
+            onclick="openJsonLdModal()"
+            class="btn btn-xs btn-ghost text-base-content/60 hover:text-base-content"
+            title="{% translate 'View metadata as JSON-LD' %}">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
             </svg>
             <span class="ml-1">JSON-LD</span>
-          </a>
+          </button>
         </div>
       {% endif %}
     </div>
@@ -314,12 +315,103 @@
     </div>
   </div>
 
+  <!-- JSON-LD Modal -->
+  <div id="jsonld-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div
+      class="absolute inset-0 bg-neutral/60"
+      onclick="closeJsonLdModal()"
+    ></div>
+    <div class="relative w-full max-w-4xl max-h-[85vh] bg-base-100 rounded-xl shadow-xl flex flex-col">
+      <!-- Header -->
+      <div class="flex items-center justify-between px-6 py-4 border-b border-base-300">
+        <h3 class="text-lg font-semibold text-base-content">BLAM Metadata (JSON-LD)</h3>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            onclick="copyJsonLd()"
+            class="btn btn-sm btn-ghost gap-2"
+            title="{% translate 'Copy to clipboard' %}">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            <span id="copy-btn-text">{% translate "Copy" %}</span>
+          </button>
+          <a
+            href="{% url 'explorer:collection_jsonld_by_handle' handle=collection.identifier %}"
+            class="btn btn-sm btn-primary gap-2"
+            download>
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            {% translate "Download" %}
+          </a>
+          <button
+            type="button"
+            onclick="closeJsonLdModal()"
+            class="btn btn-sm btn-ghost btn-square"
+            title="{% translate 'Close' %}">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <!-- Content -->
+      <div class="flex-1 overflow-auto p-6">
+        <pre id="jsonld-content" class="bg-base-200 p-4 rounded-lg text-sm font-mono whitespace-pre-wrap break-words leading-relaxed"></pre>
+      </div>
+    </div>
+  </div>
+
   <script>
+    let jsonLdData = null;
+
+    async function openJsonLdModal() {
+      const modal = document.getElementById('jsonld-modal');
+      const content = document.getElementById('jsonld-content');
+
+      // Show modal with loading state
+      modal.classList.remove('hidden');
+      document.body.classList.add('overflow-hidden');
+      content.textContent = 'Loading...';
+
+      try {
+        const response = await fetch('{% url "explorer:collection_jsonld_by_handle" handle=collection.identifier %}');
+        jsonLdData = await response.json();
+        content.textContent = JSON.stringify(jsonLdData, null, 2);
+      } catch (error) {
+        content.textContent = 'Error loading metadata: ' + error.message;
+      }
+    }
+
+    function closeJsonLdModal() {
+      document.getElementById('jsonld-modal').classList.add('hidden');
+      document.body.classList.remove('overflow-hidden');
+    }
+
+    function copyJsonLd() {
+      if (!jsonLdData) return;
+
+      const text = JSON.stringify(jsonLdData, null, 2);
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('copy-btn-text');
+        btn.textContent = '{% translate "Copied!" %}';
+        setTimeout(() => btn.textContent = '{% translate "Copy" %}', 2000);
+      });
+    }
+
     document.addEventListener('keydown', function(e) {
-      const modal = document.getElementById('map-modal');
-      if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
-        modal.classList.add('hidden');
-        document.body.classList.remove('overflow-hidden');
+      if (e.key === 'Escape') {
+        const mapModal = document.getElementById('map-modal');
+        const jsonldModal = document.getElementById('jsonld-modal');
+
+        if (!mapModal.classList.contains('hidden')) {
+          mapModal.classList.add('hidden');
+          document.body.classList.remove('overflow-hidden');
+        }
+        if (!jsonldModal.classList.contains('hidden')) {
+          closeJsonLdModal();
+        }
       }
     });
   </script>

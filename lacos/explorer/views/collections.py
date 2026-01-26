@@ -449,14 +449,19 @@ class CollectionJsonLdView(View):
         serializer = CollectionJsonLdSerializer(collection)
         data = serializer.serialize()
 
-        # Get filename from collection title or ID
-        general_info = collection.general_info.first()
-        if general_info and general_info.display_title:
-            filename = general_info.display_title.replace(" ", "_")[:50]
-        else:
-            filename = str(collection.id)[:8]
-
         response = JsonResponse(data, json_dumps_params={"indent": 2, "ensure_ascii": False})
         response["Content-Type"] = "application/ld+json"
-        response["Content-Disposition"] = f'attachment; filename="{filename}.jsonld"'
+
+        # Only force download if explicitly requested (not AJAX/fetch)
+        is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        is_fetch = "fetch" in request.headers.get("Sec-Fetch-Mode", "")
+
+        if not is_ajax and not is_fetch:
+            general_info = collection.general_info.first()
+            if general_info and general_info.display_title:
+                filename = general_info.display_title.replace(" ", "_")[:50]
+            else:
+                filename = str(collection.id)[:8]
+            response["Content-Disposition"] = f'attachment; filename="{filename}.jsonld"'
+
         return response
