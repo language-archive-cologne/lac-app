@@ -5,7 +5,10 @@ from xml.etree import ElementTree as ET
 from xsdata.formats.dataclass.serializers import XmlSerializer
 from xsdata.formats.dataclass.serializers.config import SerializerConfig
 
-from blam_schemas.collection.blam_collection_repository_v1_0 import Cmd
+from blam_schemas.collection.blam_collection_repository_v1_0 import (
+    Cmd,
+    CollectionHasCollectionMemberIdentifierType,
+)
 from lacos.blam.models.collection.collection_repository import Collection
 
 from .export_header import export_header
@@ -78,8 +81,8 @@ class CollectionExporter:
         # Set MD license (from admin info if available)
         repo.mdlicense = self._create_md_license(admin_info)
 
-        # Structural info (empty for now, bundles handled separately)
-        repo.collection_structural_info = self._create_empty_structural_info()
+        # Structural info with collection members (bundles)
+        repo.collection_structural_info = self._create_structural_info(collection)
 
         return cmd
 
@@ -102,10 +105,48 @@ class CollectionExporter:
             md_license.value = "Unknown"
         return md_license
 
-    def _create_empty_structural_info(self):
-        """Create empty structural info section."""
+    def _create_structural_info(self, collection: Collection):
+        """Create structural info section with collection members (bundles)."""
         struct_info = Cmd.Components.BlamCollectionRepositoryV10.CollectionStructuralInfo()
         struct_info.collection_members = (
             Cmd.Components.BlamCollectionRepositoryV10.CollectionStructuralInfo.CollectionMembers()
         )
+
+        # Add bundle members
+        CollectionMember = (
+            Cmd.Components.BlamCollectionRepositoryV10.CollectionStructuralInfo
+            .CollectionMembers.CollectionHasCollectionMember
+        )
+
+        # Get bundles through the bundle_collection reverse relation
+        bundle_structural_infos = collection.bundle_collection.select_related(
+            "bundle",
+        ).prefetch_related(
+            "bundle__general_info",
+        ).all()
+
+        for bundle_info in bundle_structural_infos:
+            bundle = bundle_info.bundle
+
+            # Prefer handle identifier, fall back to general_info id
+            if bundle.identifier:
+                member = CollectionMember(
+                    value=bundle.identifier,
+                    identifier_type=CollectionHasCollectionMemberIdentifierType.HANDLE,
+                )
+            else:
+                general_info = bundle.general_info.first() if hasattr(bundle, 'general_info') else None
+                if general_info and general_info.id_value:
+                    member = CollectionMember(
+                        value=general_info.id_value,
+                        identifier_type=None,
+                    )
+                else:
+                    member = CollectionMember(
+                        value=str(bundle.id),
+                        identifier_type=None,
+                    )
+
+            struct_info.collection_members.collection_has_collection_member.append(member)
+
         return struct_info
