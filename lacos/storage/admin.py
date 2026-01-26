@@ -29,6 +29,7 @@ class S3FileObjectAdmin(admin.ModelAdmin):
     list_display = (
         'file_name',
         'bucket_name',
+        'truncated_key',
         'status_badge',
         'formatted_size',
         'content_type',
@@ -97,6 +98,15 @@ class S3FileObjectAdmin(admin.ModelAdmin):
                 obj.session.folder_name or str(obj.session.id)[:8]
             )
         return '-'
+
+    @admin.display(description='S3 Key')
+    def truncated_key(self, obj):
+        if not obj.s3_key:
+            return '-'
+        key = obj.s3_key
+        if len(key) > 50:
+            return format_html('<span title="{}">{}&hellip;</span>', key, key[:47])
+        return key
 
     @admin.display(description='S3 URI')
     def s3_uri(self, obj):
