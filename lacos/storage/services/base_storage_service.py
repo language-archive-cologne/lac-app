@@ -528,7 +528,7 @@ class BaseStorageService:
             # Define the required CORS rule for uploads and video streaming with range requests
             required_rule = {
                 'AllowedHeaders': ['*'],
-                'AllowedMethods': ['GET', 'HEAD', 'POST'],
+                'AllowedMethods': ['GET', 'HEAD', 'PUT', 'POST', 'DELETE'],
                 'AllowedOrigins': ['*'],
                 'ExposeHeaders': ['Content-Range', 'Accept-Ranges', 'Content-Length', 'ETag']
             }
