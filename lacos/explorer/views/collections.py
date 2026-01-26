@@ -403,7 +403,7 @@ class CollectionResourcesView(View):
         return response
 
 
-class CollectionJsonLdView(HandleLookupMixin, View):
+class CollectionJsonLdView(View):
     """Export collection metadata as JSON-LD."""
 
     def get_queryset(self):
@@ -432,9 +432,16 @@ class CollectionJsonLdView(HandleLookupMixin, View):
         )
 
     def get(self, request, pk=None, handle=None):
-        collection = get_object_by_pk_or_handle(
-            self.get_queryset(), pk=pk, handle=handle
-        )
+        queryset = self.get_queryset()
+        if pk is not None:
+            collection = queryset.filter(pk=pk).first()
+        elif handle is not None:
+            collection = queryset.filter(identifier=handle).first()
+        else:
+            raise Http404("No collection identifier provided")
+
+        if collection is None:
+            raise Http404("Collection not found")
 
         serializer = CollectionJsonLdSerializer(collection)
         data = serializer.serialize()
