@@ -336,15 +336,31 @@
             </svg>
             <span id="copy-btn-text">{% translate "Copy" %}</span>
           </button>
-          <a
-            href="{% url 'explorer:collection_jsonld_by_handle' handle=collection.identifier %}"
-            class="btn btn-sm btn-primary gap-2"
-            download>
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            {% translate "Download" %}
-          </a>
+          <div class="dropdown dropdown-end">
+            <label tabindex="0" class="btn btn-sm btn-primary gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              {% translate "Download" %}
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </label>
+            <ul tabindex="0" class="dropdown-content z-[100] menu p-2 shadow-lg bg-base-100 rounded-box w-48 border border-base-300">
+              <li>
+                <a href="{% url 'explorer:collection_jsonld_by_handle' handle=collection.identifier %}" download class="gap-2">
+                  <span class="badge badge-sm badge-ghost font-mono">JSON-LD</span>
+                  Linked Data
+                </a>
+              </li>
+              <li>
+                <a href="{% url 'explorer:collection_xml_by_handle' handle=collection.identifier %}" download class="gap-2">
+                  <span class="badge badge-sm badge-ghost font-mono">XML</span>
+                  BLAM/CMDI
+                </a>
+              </li>
+            </ul>
+          </div>
           <button
             type="button"
             onclick="closeJsonLdModal()"

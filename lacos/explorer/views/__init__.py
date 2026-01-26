@@ -4,7 +4,7 @@ Re-exports all views for backwards compatibility with existing URL patterns.
 """
 
 from .bundles import BundleDetailView, BundleResourcesView, ResourceAccessView
-from .collections import CollectionDetailView, CollectionJsonLdView, CollectionListView, CollectionResourcesView
+from .collections import CollectionDetailView, CollectionJsonLdView, CollectionListView, CollectionResourcesView, CollectionXmlView
 from .utils import map_popup_view
 
 
@@ -13,6 +13,7 @@ __all__ = [
     "CollectionListView",
     "CollectionDetailView",
     "CollectionJsonLdView",
+    "CollectionXmlView",
     "CollectionResourcesView",
     # Bundle views
     "BundleDetailView",

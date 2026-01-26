@@ -15,6 +15,7 @@ from django.views.generic import DetailView, ListView
 from django.http import JsonResponse
 
 from lacos.blam.models import Collection
+from lacos.blam.mappers.collection.write.collection_exporter import CollectionExporter
 from lacos.blam.serializers import CollectionJsonLdSerializer
 from lacos.blam.models.collection.collection_general_info import (
     CollectionGeneralInfo,
@@ -464,4 +465,58 @@ class CollectionJsonLdView(View):
                 filename = str(collection.id)[:8]
             response["Content-Disposition"] = f'attachment; filename="{filename}.jsonld"'
 
+        return response
+
+
+class CollectionXmlView(View):
+    """Export collection metadata as BLAM XML."""
+
+    def get(self, request, pk=None, handle=None):
+        from django.http import HttpResponse
+
+        queryset = Collection.objects.prefetch_related(
+            "header",
+            "general_info",
+            "general_info__keywords",
+            "general_info__object_languages",
+            "general_info__object_languages__alternative_names",
+            "general_info__object_languages__taxonomy",
+            "general_info__object_languages__taxonomy__language_family",
+            "general_info__location",
+            "publication_info",
+            "publication_info__creators",
+            "publication_info__contributors",
+            "administrative_info",
+            "administrative_info__licenses",
+            "administrative_info__rights_holders",
+            "administrative_info__rights_holders__rights_holder_identifiers",
+            "administrative_info__is_identical_to",
+            "structural_info",
+            "structural_info__additional_metadata_files",
+            "project_infos",
+            "project_infos__funder_infos",
+            "project_infos__funder_infos__funder_identifiers",
+        )
+
+        if pk is not None:
+            collection = queryset.filter(pk=pk).first()
+        elif handle is not None:
+            collection = queryset.filter(identifier=handle).first()
+        else:
+            raise Http404("No collection identifier provided")
+
+        if collection is None:
+            raise Http404("Collection not found")
+
+        exporter = CollectionExporter()
+        xml_content = exporter.export(collection)
+
+        general_info = collection.general_info.first()
+        if general_info and general_info.display_title:
+            filename = general_info.display_title.replace(" ", "_")[:50]
+        else:
+            filename = str(collection.id)[:8]
+
+        response = HttpResponse(xml_content, content_type="application/xml")
+        response["Content-Disposition"] = f'attachment; filename="{filename}.xml"'
         return response
