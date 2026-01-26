@@ -376,6 +376,7 @@ class CollectionJsonLdSerializer:
         # Get bundles through the bundle_collection reverse relation
         bundle_structural_infos = self.collection.bundle_collection.select_related(
             "bundle",
+        ).prefetch_related(
             "bundle__general_info",
         ).all()
 
