@@ -8,6 +8,7 @@ from .upload_sessions import UploadSession
 class S3FileObject(UUIDTimestampModel):
     """Represents a file in S3"""
     session = models.ForeignKey(UploadSession, related_name='files', on_delete=models.CASCADE)
+    bucket_name = models.CharField(max_length=255, blank=True)
     file_name = models.CharField(max_length=255)
     original_path = models.CharField(max_length=1024, blank=True)
     s3_key = models.CharField(max_length=1024)

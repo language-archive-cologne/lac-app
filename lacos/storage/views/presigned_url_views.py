@@ -217,6 +217,7 @@ def get_presigned_urls(request):
 
                     file_objects.append(S3FileObject(
                         session=upload_session,
+                        bucket_name=bucket_name or "",
                         file_name=file_name,
                         original_path=original_path,
                         s3_key=s3_key,
