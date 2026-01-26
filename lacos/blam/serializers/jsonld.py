@@ -59,10 +59,17 @@ class CollectionJsonLdSerializer:
         if admin_info:
             data["CollectionAdministrativeInfo"] = self._serialize_administrative_info(admin_info)
 
-        # Structural Info
+        # Structural Info (including collection members/bundles)
         structural_info = self.collection.structural_info.first()
-        if structural_info:
-            data["CollectionStructuralInfo"] = self._serialize_structural_info(structural_info)
+        structural_data = self._serialize_structural_info(structural_info) if structural_info else {}
+
+        # Add collection members (bundles)
+        bundle_members = self._serialize_collection_members()
+        if bundle_members:
+            structural_data["CollectionMembers"] = bundle_members
+
+        if structural_data:
+            data["CollectionStructuralInfo"] = structural_data
 
         # Project Info
         if self.collection.project_infos.exists():
@@ -363,6 +370,42 @@ class CollectionJsonLdSerializer:
             }
 
         return data
+
+    def _serialize_collection_members(self) -> Optional[dict[str, Any]]:
+        """Serialize collection members (bundles belonging to this collection)."""
+        # Get bundles through the bundle_collection reverse relation
+        bundle_structural_infos = self.collection.bundle_collection.select_related(
+            "bundle",
+            "bundle__general_info",
+        ).all()
+
+        if not bundle_structural_infos:
+            return None
+
+        members = []
+        for bundle_info in bundle_structural_infos:
+            bundle = bundle_info.bundle
+            general_info = bundle.general_info.first() if hasattr(bundle, 'general_info') else None
+
+            member_data = {
+                "@type": "BLAMBundleRepository",
+            }
+
+            # Use identifier or ID
+            if bundle.identifier:
+                member_data["@id"] = bundle.identifier
+                member_data["IdentifierType"] = "HANDLE"
+            elif general_info and general_info.id_value:
+                member_data["@id"] = general_info.id_value
+                member_data["IdentifierType"] = general_info.id_type
+
+            # Add display title if available
+            if general_info and general_info.display_title:
+                member_data["BundleDisplayTitle"] = general_info.display_title
+
+            members.append(member_data)
+
+        return {"CollectionHasBundleMember": members}
 
     def _serialize_additional_metadata_file(self, file) -> dict[str, Any]:
         """Serialize an additional metadata file."""

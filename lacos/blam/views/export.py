@@ -34,6 +34,9 @@ class CollectionJsonLdExportView(View):
                 "project_infos",
                 "project_infos__funder_infos",
                 "project_infos__funder_infos__funder_identifiers",
+                "bundle_collection",
+                "bundle_collection__bundle",
+                "bundle_collection__bundle__general_info",
             ).get(id=collection_id)
         except Collection.DoesNotExist:
             raise Http404("Collection not found")
