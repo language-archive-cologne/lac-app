@@ -26,6 +26,7 @@ services:
     volumes:
       - .:/app:z
       - /etc/shibboleth:/etc/shibboleth:ro
+      - /opt/lacos/lac-guidelines:/app/lac-guidelines:ro
     env_file:
       - ./.envs/.dev/.django
       - ./.envs/.dev/.postgres
@@ -33,6 +34,7 @@ services:
       - ./.envs/.dev/.docker
     environment:
       SAML_LOGIN_ENABLED: "true"
+      GUIDELINES_REPO_URL: /app/lac-guidelines
     ports:
       - '127.0.0.1:8102:8000'
     command: /start
