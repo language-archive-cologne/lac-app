@@ -1,3 +1,5 @@
+from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.search import SearchVectorField
 from django.db import models
 
 from lacos.blam.models.base_repository import Repository
@@ -27,6 +29,8 @@ class Bundle(Repository):
         related_name='bundles',
         help_text="Projects associated with this bundle",
     )
+    search_vector = SearchVectorField(null=True, blank=True)
+
     @property
     def base_header(self):
         """Get the bundle header"""
@@ -55,3 +59,6 @@ class Bundle(Repository):
     class Meta:
         verbose_name = "Bundle"
         verbose_name_plural = "Bundles"
+        indexes = [
+            GinIndex(fields=['search_vector'], name='bundle_search_gin_idx'),
+        ]

@@ -59,7 +59,7 @@ def test_collection_search_matches_title_and_keywords():
     creator = CollectionCreator.objects.create(family_name="Diallo")
     publication_info.creators.add(creator)
 
-    results = search_archives("senufo")
+    results = search_archives("senufo", use_stored_vectors=False)
 
     assert any(result.kind == "collection" and result.object_id == str(collection.pk) for result in results)
 
@@ -119,10 +119,10 @@ def test_bundle_search_matches_topics_and_parent_collection():
     )
     bundle_resources.bundle_media_resources.add(media_resource)
 
-    by_topic = search_archives("history")
+    by_topic = search_archives("history", use_stored_vectors=False)
     assert any(result.kind == "bundle" and result.object_id == str(bundle.pk) for result in by_topic)
 
-    by_parent_identifier = search_archives("COL-RES")
+    by_parent_identifier = search_archives("COL-RES", use_stored_vectors=False)
     assert any(result.kind == "bundle" and result.object_id == str(bundle.pk) for result in by_parent_identifier)
 
 

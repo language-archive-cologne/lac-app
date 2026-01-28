@@ -1,4 +1,7 @@
+from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.search import SearchVectorField
 from django.db import models
+
 from lacos.blam.models.base_repository import Repository
 
 
@@ -30,6 +33,8 @@ class Collection(Repository):
         related_name='collections',
         help_text="Projects associated with this collection",
     )
+    search_vector = SearchVectorField(null=True, blank=True)
+
     @property
     def base_header(self):
         """Get the collection header"""
@@ -63,3 +68,6 @@ class Collection(Repository):
     class Meta:
         verbose_name = "Collection"
         verbose_name_plural = "Collections"
+        indexes = [
+            GinIndex(fields=['search_vector'], name='collection_search_gin_idx'),
+        ]
