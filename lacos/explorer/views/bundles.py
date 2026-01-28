@@ -65,9 +65,13 @@ class BundleDetailView(HandleLookupMixin, ACLPermissionMixin, DetailView):
             location = self.object.get_general_info.location
             self.object.formatted_location = get_formatted_location(location)
             self.object.geo_location = location.geo_location
+            self.object.region_facet = location.region_facet
+            self.object.country_facet = location.country_facet
         else:
             self.object.formatted_location = ""
             self.object.geo_location = None
+            self.object.region_facet = None
+            self.object.country_facet = None
 
         context['media_resources'] = []
         context['written_resources'] = []

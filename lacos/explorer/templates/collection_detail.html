@@ -154,23 +154,27 @@
               </div>
             {% endif %}
 
-            {% if collection.formatted_location %}
+            {% if collection.region_facet or collection.country_facet %}
               <div>
                 <dt class="text-sm font-semibold text-base-content/70 mb-1.5">{% translate "Location" %}</dt>
-                <dd class="text-sm text-base-content">
+                <dd class="text-sm text-base-content flex items-center gap-2">
                   {% if collection.geo_location %}
-                    <span
-                      class="cursor-pointer hover:text-primary hover:underline"
-                      hx-get="{% url 'explorer:map_popup' %}?geo={{ collection.geo_location }}&title={{ collection.formatted_location|urlencode }}"
+                    <button
+                      class="text-base-content/50 hover:text-primary transition-colors"
+                      hx-get="{% url 'explorer:map_popup' %}?geo={{ collection.geo_location }}&title={% if collection.region_facet %}{{ collection.region_facet|urlencode }}{% endif %}{% if collection.region_facet and collection.country_facet %}, {% endif %}{% if collection.country_facet %}{{ collection.country_facet|urlencode }}{% endif %}"
                       hx-target="#map-modal-content"
                       hx-swap="innerHTML"
                       hx-on::before-request="document.getElementById('map-modal-content').innerHTML = '';"
                       hx-on::after-request="document.getElementById('map-modal').classList.remove('hidden'); document.body.classList.add('overflow-hidden');"
                       title="{% translate 'Show on map' %}"
-                    >{{ collection.formatted_location }}</span>
-                  {% else %}
-                    {{ collection.formatted_location }}
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                      </svg>
+                    </button>
                   {% endif %}
+                  <span>{% if collection.region_facet %}{{ collection.region_facet }}{% endif %}{% if collection.region_facet and collection.country_facet %}, {% endif %}{% if collection.country_facet %}{{ collection.country_facet }}{% endif %}</span>
                 </dd>
               </div>
             {% endif %}
