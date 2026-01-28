@@ -196,13 +196,6 @@
               </div>
             {% endif %}
 
-            {% if collection.publication_info.first and collection.publication_info.first.data_provider %}
-              <div>
-                <dt class="text-sm font-semibold text-base-content/70 mb-1.5">{% translate "Data Provider" %}</dt>
-                <dd class="text-sm text-base-content">{{ collection.publication_info.first.data_provider }}</dd>
-              </div>
-            {% endif %}
-
             {% if collection.publication_info.first and collection.publication_info.first.creators.all %}
               <div>
                 <dt class="text-sm font-semibold text-base-content/70 mb-1.5">{% translate "Researchers" %}</dt>
