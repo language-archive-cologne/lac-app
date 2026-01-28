@@ -6,6 +6,16 @@ from django.urls import reverse
 from lacos.blam.models import Bundle, Collection
 
 
+# Slugs for user guide pages (only pages with MD files in lac-guidelines/texts/)
+USER_GUIDE_SLUGS = [
+    "user",
+    "depositing-policy",
+    "submission-guidelines",
+    "depositor-agreement",
+    "format-whitelist",
+]
+
+
 class StaticSitemap(Sitemap):
     """Sitemap for static pages."""
 
@@ -13,28 +23,23 @@ class StaticSitemap(Sitemap):
     changefreq = "monthly"
 
     def items(self):
-        return [
+        # Static pages without parameters
+        static_pages = [
             "home",
             "about",
             "privacy-policy",
             "imprint",
             "oai-pmh",
             "user-guides",
-            "user-guide-mission",
-            "user-guide-privacy",
-            "user-guide-terms",
-            "user-guide-dua",
-            "user-guide-depositing",
-            "user-guide-depositor",
-            "user-guide-agreement",
-            "user-guide-submission",
-            "user-guide-metadata",
-            "user-guide-formats",
-            "user-guide-archive",
-            "user-guide-preservation",
         ]
+        # User guide pages (as tuples with slug)
+        guide_pages = [("user-guide", slug) for slug in USER_GUIDE_SLUGS]
+        return static_pages + guide_pages
 
     def location(self, item):
+        if isinstance(item, tuple):
+            name, slug = item
+            return reverse(name, kwargs={"slug": slug})
         return reverse(item)
 
 

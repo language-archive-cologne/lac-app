@@ -81,6 +81,9 @@ AWS_S3_REGION_NAME = env("AWS_S3_REGION_NAME", default="us-east-1")
 # Your stuff...
 # ------------------------------------------------------------------------------
 
+# Guidelines - use local mounted volume for development
+GUIDELINES_REPO_URL = "/lac-guidelines"
+
 # Huey configuration for development
 # ------------------------------------------------------------------------------
 # Uncomment this to use immediate mode during development

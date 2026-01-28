@@ -197,6 +197,14 @@ MEDIA_ROOT = str(APPS_DIR / "media")
 # https://docs.djangoproject.com/en/dev/ref/settings/#media-url
 MEDIA_URL = "/media/"
 
+# GUIDELINES
+# ------------------------------------------------------------------------------
+GUIDELINES_REPO_URL = env(
+    "GUIDELINES_REPO_URL",
+    default="https://gitlab.git.nrw/uzk-lac/lac-guidelines.git",
+)
+GUIDELINES_HTML_DIR = Path(MEDIA_ROOT) / "guidelines"
+
 # TEMPLATES
 # ------------------------------------------------------------------------------
 # https://docs.djangoproject.com/en/dev/ref/settings/#templates
