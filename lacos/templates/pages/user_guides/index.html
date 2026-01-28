@@ -20,28 +20,6 @@
   </div>
 </div>
 
-    <!-- General Information -->
-    <section id="general" class="mb-12 scroll-mt-8">
-      <div class="flex items-center gap-3 mb-6">
-        <div class="w-1 h-8 bg-blue-500 rounded-full"></div>
-        <h2 class="text-xl font-semibold text-base-content">General Information</h2>
-      </div>
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <a href="{% url 'user-guide-mission' %}" class="group block bg-base-100 border border-base-300 rounded-xl p-5 hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/5 transition-all duration-200">
-          <h3 class="font-medium text-base-content group-hover:text-blue-400 transition-colors">Mission Statement</h3>
-          <p class="text-sm text-base-content/70 mt-2 leading-relaxed">Our role in supporting research with digital language resources</p>
-        </a>
-        <a href="{% url 'user-guide-archive' %}" class="group block bg-base-100 border border-base-300 rounded-xl p-5 hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/5 transition-all duration-200">
-          <h3 class="font-medium text-base-content group-hover:text-blue-400 transition-colors">Archive Setup</h3>
-          <p class="text-sm text-base-content/70 mt-2 leading-relaxed">Technical information about our repository infrastructure</p>
-        </a>
-        <a href="{% url 'user-guide-preservation' %}" class="group block bg-base-100 border border-base-300 rounded-xl p-5 hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/5 transition-all duration-200">
-          <h3 class="font-medium text-base-content group-hover:text-blue-400 transition-colors">Preservation Plan</h3>
-          <p class="text-sm text-base-content/70 mt-2 leading-relaxed">Long-term data preservation strategy</p>
-        </a>
-      </div>
-    </section>
-
     <!-- For Data Users -->
     <section id="users" class="mb-12 scroll-mt-8">
       <div class="flex items-center gap-3 mb-6">
@@ -49,17 +27,9 @@
         <h2 class="text-xl font-semibold text-base-content">For Data Users</h2>
       </div>
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <a href="{% url 'user-guide-terms' %}" class="group block bg-base-100 border border-base-300 rounded-xl p-5 hover:border-emerald-500/50 hover:shadow-lg hover:shadow-emerald-500/5 transition-all duration-200">
-          <h3 class="font-medium text-base-content group-hover:text-emerald-400 transition-colors">Terms of Use</h3>
-          <p class="text-sm text-base-content/70 mt-2 leading-relaxed">Ground rules for accessing LAC data and services</p>
-        </a>
-        <a href="{% url 'user-guide-privacy' %}" class="group block bg-base-100 border border-base-300 rounded-xl p-5 hover:border-emerald-500/50 hover:shadow-lg hover:shadow-emerald-500/5 transition-all duration-200">
-          <h3 class="font-medium text-base-content group-hover:text-emerald-400 transition-colors">Privacy Policy</h3>
-          <p class="text-sm text-base-content/70 mt-2 leading-relaxed">Details on personal data protection</p>
-        </a>
-        <a href="{% url 'user-guide-dua' %}" class="group block bg-base-100 border border-base-300 rounded-xl p-5 hover:border-emerald-500/50 hover:shadow-lg hover:shadow-emerald-500/5 transition-all duration-200">
-          <h3 class="font-medium text-base-content group-hover:text-emerald-400 transition-colors">Data User Agreement</h3>
-          <p class="text-sm text-base-content/70 mt-2 leading-relaxed">Terms for research users accessing data</p>
+        <a href="{% url 'user-guide' 'user' %}" class="group block bg-base-100 border border-base-300 rounded-xl p-5 hover:border-emerald-500/50 hover:shadow-lg hover:shadow-emerald-500/5 transition-all duration-200">
+          <h3 class="font-medium text-base-content group-hover:text-emerald-400 transition-colors">Finding Data</h3>
+          <p class="text-sm text-base-content/70 mt-2 leading-relaxed">How to search and access data in the LAC</p>
         </a>
       </div>
     </section>
@@ -71,21 +41,17 @@
         <h2 class="text-xl font-semibold text-base-content">For Depositors</h2>
       </div>
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <a href="{% url 'user-guide-depositing' %}" class="group block bg-base-100 border border-base-300 rounded-xl p-5 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/5 transition-all duration-200">
-          <h3 class="font-medium text-base-content group-hover:text-amber-400 transition-colors">Depositing Policy</h3>
-          <p class="text-sm text-base-content/70 mt-2 leading-relaxed">Policies for submitting audiovisual speech corpora</p>
+        <a href="{% url 'user-guide' 'depositing-policy' %}" class="group block bg-base-100 border border-base-300 rounded-xl p-5 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/5 transition-all duration-200">
+          <h3 class="font-medium text-base-content group-hover:text-amber-400 transition-colors">Archiving at the LAC</h3>
+          <p class="text-sm text-base-content/70 mt-2 leading-relaxed">Information about depositing data with the archive</p>
         </a>
-        <a href="{% url 'user-guide-depositor' %}" class="group block bg-base-100 border border-base-300 rounded-xl p-5 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/5 transition-all duration-200">
-          <h3 class="font-medium text-base-content group-hover:text-amber-400 transition-colors">Depositor Guidelines</h3>
-          <p class="text-sm text-base-content/70 mt-2 leading-relaxed">Guidance for those contributing materials</p>
-        </a>
-        <a href="{% url 'user-guide-agreement' %}" class="group block bg-base-100 border border-base-300 rounded-xl p-5 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/5 transition-all duration-200">
-          <h3 class="font-medium text-base-content group-hover:text-amber-400 transition-colors">Depositor Agreement</h3>
-          <p class="text-sm text-base-content/70 mt-2 leading-relaxed">Agreement for making materials available through CLARIN</p>
-        </a>
-        <a href="{% url 'user-guide-submission' %}" class="group block bg-base-100 border border-base-300 rounded-xl p-5 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/5 transition-all duration-200">
+        <a href="{% url 'user-guide' 'submission-guidelines' %}" class="group block bg-base-100 border border-base-300 rounded-xl p-5 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/5 transition-all duration-200">
           <h3 class="font-medium text-base-content group-hover:text-amber-400 transition-colors">Submission Guidelines</h3>
-          <p class="text-sm text-base-content/70 mt-2 leading-relaxed">Instructions for submitting content</p>
+          <p class="text-sm text-base-content/70 mt-2 leading-relaxed">Instructions for preparing and submitting content</p>
+        </a>
+        <a href="{% url 'user-guide' 'depositor-agreement' %}" class="group block bg-base-100 border border-base-300 rounded-xl p-5 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/5 transition-all duration-200">
+          <h3 class="font-medium text-base-content group-hover:text-amber-400 transition-colors">Licenses</h3>
+          <p class="text-sm text-base-content/70 mt-2 leading-relaxed">License options for publishing your data</p>
         </a>
       </div>
     </section>
@@ -97,11 +63,7 @@
         <h2 class="text-xl font-semibold text-base-content">Technical Specifications</h2>
       </div>
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <a href="{% url 'user-guide-metadata' %}" class="group block bg-base-100 border border-base-300 rounded-xl p-5 hover:border-violet-500/50 hover:shadow-lg hover:shadow-violet-500/5 transition-all duration-200">
-          <h3 class="font-medium text-base-content group-hover:text-violet-400 transition-colors">Metadata Template</h3>
-          <p class="text-sm text-base-content/70 mt-2 leading-relaxed">Format for describing deposited materials</p>
-        </a>
-        <a href="{% url 'user-guide-formats' %}" class="group block bg-base-100 border border-base-300 rounded-xl p-5 hover:border-violet-500/50 hover:shadow-lg hover:shadow-violet-500/5 transition-all duration-200">
+        <a href="{% url 'user-guide' 'format-whitelist' %}" class="group block bg-base-100 border border-base-300 rounded-xl p-5 hover:border-violet-500/50 hover:shadow-lg hover:shadow-violet-500/5 transition-all duration-200">
           <h3 class="font-medium text-base-content group-hover:text-violet-400 transition-colors">Format Whitelist</h3>
           <p class="text-sm text-base-content/70 mt-2 leading-relaxed">Approved file formats for the archive</p>
         </a>
