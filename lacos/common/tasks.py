@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import subprocess
 import tempfile
@@ -170,7 +171,8 @@ def sync_guidelines() -> dict:
         if not local_path.exists():
             return {"success": False, "error": f"Local path does not exist: {repo_url}"}
 
-        tag = _get_local_latest_tag(local_path)
+        # Try env var first (set by CI), then git describe, then fallback
+        tag = os.environ.get("GUIDELINES_TAG") or _get_local_latest_tag(local_path)
         if not tag:
             tag = "local-dev"
 
