@@ -113,9 +113,13 @@ class CollectionListView(ListView):
                 location = general_info.location
                 collection.formatted_location = get_formatted_location(location)
                 collection.geo_location = location.geo_location
+                collection.country_facet = location.country_facet
+                collection.region_facet = location.region_facet
             else:
                 collection.formatted_location = ""
                 collection.geo_location = None
+                collection.country_facet = None
+                collection.region_facet = None
 
             # Evaluate access level for display in list
             acl_result = acl_service.evaluate(self.request.user, collection)
