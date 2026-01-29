@@ -232,34 +232,32 @@ def ingest_metadata(request):
             )
             task = None
         elif metadata_type == "collection":
-            # If s3_key is a folder path, use pipeline to import collection AND its bundles
-            if s3_key.endswith('/') or not s3_key.endswith('.xml'):
-                # Extract collection ID from folder path (e.g., "algerien/" -> "algerien")
-                collection_id = s3_key.rstrip('/').split('/')[-1]
-                # Use the prefix to discover and import collection + all bundles
-                prefix = f"{collection_id}/"
-                logger.info(
-                    "Launching collection+bundles pipeline from folder",
-                    extra={
-                        "bucket": bucket,
-                        "original_key": s3_key,
-                        "collection_id": collection_id,
-                        "prefix": prefix,
-                    },
-                )
-                process_s3_prefix(
-                    bucket=bucket,
-                    prefix=prefix,
-                    update_existing=update_existing,
-                )
-                task = None
+            # Always use pipeline to ensure S3 resource locations are updated
+            # Extract the collection folder prefix from the path
+            if s3_key.endswith('.xml'):
+                # Extract folder from XML path (e.g., "coll/coll/v1/content/coll.xml" -> "coll/")
+                parts = s3_key.split('/')
+                prefix = f"{parts[0]}/"
             else:
-                # Direct XML file path provided - import just the collection
-                task = import_s3_collection(
-                    bucket=bucket,
-                    s3_key=s3_key,
-                    update_existing=update_existing,
-                )
+                # Folder path provided
+                collection_id = s3_key.rstrip('/').split('/')[-1]
+                prefix = f"{collection_id}/"
+
+            logger.info(
+                "Launching collection pipeline",
+                extra={
+                    "bucket": bucket,
+                    "original_key": s3_key,
+                    "prefix": prefix,
+                    "update_existing": update_existing,
+                },
+            )
+            process_s3_prefix(
+                bucket=bucket,
+                prefix=prefix,
+                update_existing=update_existing,
+            )
+            task = None
         else:
             # If s3_key is a folder path for bundle, form the proper OCFL XML path
             actual_s3_key = s3_key
