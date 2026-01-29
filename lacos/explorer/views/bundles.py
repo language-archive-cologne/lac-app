@@ -13,6 +13,7 @@ from django.views import View
 from django.views.generic import DetailView
 
 from lacos.blam.models import Bundle
+from lacos.blam.models.bundle.bundle_structural_info import BundleAdditionalMetadataFile
 from lacos.blam.mappers.bundle.write.bundle_exporter import BundleExporter
 from lacos.blam.serializers import BundleJsonLdSerializer
 from lacos.explorer.media_utils import determine_media_type, guess_source_mime_type
@@ -227,10 +228,9 @@ class BundleResourcesView(View):
         structural_info = struct_info_manager.first() if struct_info_manager else None
         if structural_info:
             context['collection'] = structural_info.is_member_of_collection
+            # Additional metadata files are always public, no ACL check needed
             metadata_files = [annotate_resource(res) for res in structural_info.additional_metadata_files.all()]
             metadata_files = [res for res in metadata_files if res]
-            if not can_read:
-                metadata_files = []
             context['metadata_files'] = metadata_files
 
         return render(request, 'bundle_resources.html', context)
@@ -243,10 +243,20 @@ class ResourceAccessView(View):
 
     def get(self, request, bundle_id, resource_id):
         bundle = get_object_or_404(Bundle, pk=bundle_id)
-        acl_service = ACLEvaluationService()
-        acl_result = acl_service.evaluate(request.user, bundle, mode="acl:Read")
-        if acl_service.enforcement_enabled and not acl_result.allowed:
-            return HttpResponseForbidden(self.permission_denied_message)
+
+        # Find resource first to check if it's additional metadata (always public)
+        resource = find_resource_in_bundle(bundle, resource_id=resource_id)
+
+        # Additional metadata files are always public, skip ACL check for them
+        is_additional_metadata = isinstance(resource, BundleAdditionalMetadataFile)
+        if not is_additional_metadata:
+            acl_service = ACLEvaluationService()
+            acl_result = acl_service.evaluate(request.user, bundle, mode="acl:Read")
+            if acl_service.enforcement_enabled and not acl_result.allowed:
+                return HttpResponseForbidden(self.permission_denied_message)
+
+        if not resource:
+            raise Http404(f"Resource with id {resource_id} not found in bundle {bundle_id}")
 
         collection_for_path = None
         if hasattr(bundle, 'structural_info') and bundle.structural_info.first():
@@ -256,10 +266,6 @@ class ResourceAccessView(View):
             action = 'play'
 
         try:
-            resource = find_resource_in_bundle(bundle, resource_id=resource_id)
-
-            if not resource:
-                raise Http404(f"Resource with id {resource_id} not found in bundle {bundle_id}")
 
             mime_type = getattr(resource, 'mime_type', None)
             normalized_mime_type = mime_type.lower().strip() if mime_type else ''

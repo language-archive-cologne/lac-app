@@ -7,7 +7,7 @@ from django.urls import reverse
 
 from lacos.blam.models.bundle.bundle_general_info import BundleGeneralInfo, BundleLocation
 from lacos.blam.models.bundle.bundle_repository import Bundle
-from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
+from lacos.blam.models.bundle.bundle_structural_info import BundleAdditionalMetadataFile, BundleStructuralInfo
 from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo, CollectionLocation
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
@@ -119,3 +119,35 @@ def test_resource_access_denied_without_permission(client):
         )
     )
     assert response.status_code == 403
+
+
+@pytest.mark.django_db
+@override_settings(ACL_ENFORCEMENT_ENABLED=True)
+def test_additional_metadata_file_access_allowed_despite_acl(client):
+    """Additional metadata files should be public regardless of ACL restrictions."""
+    collection = _create_collection("restricted-metadata-collection")
+    bundle = _create_bundle(collection, "restricted-metadata-bundle")
+    # Restrict access to specific user only
+    _store_acl(bundle, [{"agentClass": "foaf:Person", "agent": "http://example.org/users/other", "mode": ["acl:Read"]}])
+
+    # Create an additional metadata file
+    metadata_file = BundleAdditionalMetadataFile.objects.create(
+        file_pid="hdl:test/metadata-file-1",
+        file_name="metadata.xml",
+        file_description="Test metadata",
+        mime_type="application/xml",
+    )
+    structural_info = bundle.structural_info.first()
+    structural_info.additional_metadata_files.add(metadata_file)
+
+    # Anonymous user should be able to access additional metadata file
+    # (even though regular resources would be blocked)
+    response = client.get(
+        reverse(
+            "explorer:resource_access",
+            kwargs={"bundle_id": bundle.pk, "resource_id": metadata_file.pk},
+        )
+    )
+    # Should not be 403 Forbidden - the file is public
+    # It may be 404 if the S3 storage is not configured, but not 403
+    assert response.status_code != 403

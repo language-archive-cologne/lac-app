@@ -309,16 +309,13 @@ class CollectionDetailView(HandleLookupMixin, DetailView):
 
 
 class CollectionResourcesView(View):
-    """View for accessing collection additional metadata files."""
+    """View for accessing collection additional metadata files.
 
-    permission_denied_message = _("You do not have permission to access this collection.")
+    Additional metadata files are always public and do not require ACL checks.
+    """
 
     def get(self, request, pk=None, handle=None, resource_id=None):
         collection = get_object_by_pk_or_handle(Collection, pk=pk, handle=handle)
-        acl_service = ACLEvaluationService()
-        acl_result = acl_service.evaluate(request.user, collection, mode="acl:Read")
-        if acl_service.enforcement_enabled and not acl_result.allowed:
-            return HttpResponseForbidden(self.permission_denied_message)
 
         if not resource_id:
             raise Http404("Resource ID required")
