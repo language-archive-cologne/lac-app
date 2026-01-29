@@ -148,39 +148,53 @@ class ResourceMappingService(BaseStorageService):
     def register_s3_location(self, obj, bucket, key=None, pid_url=None):
         """
         Register S3 location for an object
-        
+
         Args:
             obj: The object to register (Collection, Bundle, or Resource)
             bucket: S3 bucket name
             key: S3 object key (if None, will be constructed from the object)
             pid_url: PID URL (if None, will try to use obj.file_pid)
-            
+
         Returns:
             S3ResourceLocation: The created or updated location
         """
         from django.contrib.contenttypes.models import ContentType
         ct = ContentType.objects.get_for_model(obj)
-        
+
         # If no key provided, try to construct it
         if key is None:
             key = self.construct_s3_path(obj)
             if key is None:
                 raise ValueError(f"Could not construct S3 path for {obj}. Please provide a key.")
-        
+
         # If no PID URL provided but object has file_pid, use that
         if pid_url is None and hasattr(obj, 'file_pid'):
             pid_url = obj.file_pid
-        
+
         # Create or update S3 location
-        location, created = S3ResourceLocation.objects.update_or_create(
-            content_type=ct,
-            object_id=obj.id,
-            defaults={
-                'resource_pid': pid_url,
-                's3_bucket': bucket,
-                's3_key': key
-            }
-        )
+        # Use resource_pid as lookup key if available (since it has unique constraint)
+        # This ensures we update the existing record even if object_id changed
+        if pid_url:
+            location, created = S3ResourceLocation.objects.update_or_create(
+                resource_pid=pid_url,
+                defaults={
+                    'content_type': ct,
+                    'object_id': obj.id,
+                    's3_bucket': bucket,
+                    's3_key': key
+                }
+            )
+        else:
+            # Fall back to content_type + object_id for objects without PID
+            location, created = S3ResourceLocation.objects.update_or_create(
+                content_type=ct,
+                object_id=obj.id,
+                defaults={
+                    'resource_pid': pid_url,
+                    's3_bucket': bucket,
+                    's3_key': key
+                }
+            )
         return location
     
     def generate_presigned_url(self, bucket, key, expires_in=3600, response_headers=None):
