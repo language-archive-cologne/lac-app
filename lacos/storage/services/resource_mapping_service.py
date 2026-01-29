@@ -171,6 +171,8 @@ class ResourceMappingService(BaseStorageService):
         if pid_url is None and hasattr(obj, 'file_pid'):
             pid_url = obj.file_pid
 
+        logger.info(f"register_s3_location: obj={type(obj).__name__}(id={obj.id}), bucket={bucket}, key={key}, pid_url={pid_url}")
+
         # Create or update S3 location
         # Use resource_pid as lookup key if available (since it has unique constraint)
         # This ensures we update the existing record even if object_id changed
@@ -184,6 +186,7 @@ class ResourceMappingService(BaseStorageService):
                     's3_key': key
                 }
             )
+            logger.info(f"register_s3_location: {'CREATED' if created else 'UPDATED'} S3ResourceLocation(id={location.id}) for pid={pid_url}")
         else:
             # Fall back to content_type + object_id for objects without PID
             location, created = S3ResourceLocation.objects.update_or_create(
@@ -195,6 +198,7 @@ class ResourceMappingService(BaseStorageService):
                     's3_key': key
                 }
             )
+            logger.info(f"register_s3_location: {'CREATED' if created else 'UPDATED'} S3ResourceLocation(id={location.id}) for content_type={ct}, object_id={obj.id}")
         return location
     
     def generate_presigned_url(self, bucket, key, expires_in=3600, response_headers=None):
@@ -330,7 +334,10 @@ class ResourceMappingService(BaseStorageService):
             # Use collection's import_bucket if available, otherwise fall back to production_bucket
             # This ensures presigned URLs point to where the data actually exists
             bucket = collection.import_bucket if collection.import_bucket else discovery_service.production_bucket
-            logger.info(f"Using bucket '{bucket}' for collection {collection_id} (import_bucket: {collection.import_bucket})")
+            logger.info(f"map_collection_hierarchy: collection_id={collection_id}")
+            logger.info(f"map_collection_hierarchy: import_bucket={collection.import_bucket}")
+            logger.info(f"map_collection_hierarchy: import_object_key={collection.import_object_key}")
+            logger.info(f"map_collection_hierarchy: using bucket={bucket}")
 
             # Use actual OCFL path from import_object_key instead of UUID-based path
             collection_key_prefix = self._extract_ocfl_base_path(collection.import_object_key)
