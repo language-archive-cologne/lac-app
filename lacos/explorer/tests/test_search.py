@@ -9,6 +9,7 @@ from lacos.blam.models.bundle.bundle_general_info import BundleGeneralInfo
 from lacos.blam.models.bundle.bundle_general_info import BundleKeyword
 from lacos.blam.models.bundle.bundle_general_info import BundleLocation
 from lacos.blam.models.bundle.bundle_general_info import BundleObjectLanguage
+from lacos.blam.models.bundle.bundle_general_info import BundleObjectLanguageAlternativeName
 from lacos.blam.models.bundle.bundle_structural_info import BundleResources
 from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
 from lacos.blam.models.bundle.bundle_structural_info import BundleTopic
@@ -17,9 +18,11 @@ from lacos.blam.models.collection.collection_general_info import CollectionGener
 from lacos.blam.models.collection.collection_general_info import CollectionKeyword
 from lacos.blam.models.collection.collection_general_info import CollectionLocation
 from lacos.blam.models.collection.collection_general_info import CollectionObjectLanguage
+from lacos.blam.models.collection.collection_general_info import CollectionObjectLanguageAlternativeName
 from lacos.blam.models.collection.collection_publication_info import CollectionCreator
 from lacos.blam.models.collection.collection_publication_info import CollectionPublicationInfo
 from lacos.explorer.search import search_archives
+from lacos.explorer.search_indexing import rebuild_all_search_vectors
 
 
 @pytest.mark.django_db
@@ -129,3 +132,125 @@ def test_bundle_search_matches_topics_and_parent_collection():
 @pytest.mark.django_db
 def test_search_ignores_blank_terms():
     assert search_archives("   ") == []
+
+
+@pytest.mark.django_db
+def test_collection_search_matches_object_language_alternative_name():
+    """Test that collections can be found by searching for language alternative names."""
+    collection = Collection.objects.create(identifier="COL-ALTNAME-001")
+    location = CollectionLocation.objects.create(
+        geo_location="22.5726,88.3639",
+        location_name="Kolkata",
+        region_name="West Bengal",
+        country_name="India",
+        country_code="IN",
+    )
+    general_info = CollectionGeneralInfo.objects.create(
+        collection=collection,
+        id_value="CID-ALT-001",
+        id_type=IdentifierTypeChoices.DOI,
+        display_title="Gtaq Field Recordings",
+        description="Documentation of the Gtaq language.",
+        location=location,
+        version="1.0",
+    )
+    language = CollectionObjectLanguage.objects.create(
+        display_name="Gtaq",
+        name="Gtaq",
+        iso_639_3_code="gaq",
+        glottolog_code="gtaq1234",
+    )
+    alt_name = CollectionObjectLanguageAlternativeName.objects.create(value="Didei")
+    language.alternative_names.add(alt_name)
+    general_info.object_languages.add(language)
+
+    # Search by alternative name should find the collection
+    results = search_archives("Didei", use_stored_vectors=False)
+    assert any(result.kind == "collection" and result.object_id == str(collection.pk) for result in results)
+
+
+@pytest.mark.django_db
+def test_bundle_search_matches_object_language_alternative_name():
+    """Test that bundles can be found by searching for language alternative names."""
+    collection = Collection.objects.create(identifier="COL-PARENT-ALTNAME")
+    collection_location = CollectionLocation.objects.create(
+        location_name="Mumbai",
+        country_name="India",
+        country_code="IN",
+    )
+    CollectionGeneralInfo.objects.create(
+        collection=collection,
+        id_value="CID-PARENT-ALT",
+        id_type=IdentifierTypeChoices.DOI,
+        display_title="Indian Languages Archive",
+        description="Collection of Indian language recordings.",
+        location=collection_location,
+        version="1.0",
+    )
+
+    bundle = Bundle.objects.create(identifier="BND-ALTNAME-001")
+    bundle_location = BundleLocation.objects.create(location_name="Mumbai")
+    bundle_general_info = BundleGeneralInfo.objects.create(
+        bundle=bundle,
+        id_value="BID-ALT-001",
+        id_type=IdentifierTypeChoices.DOI,
+        display_title="Chakravarti Gtaq Data 1",
+        description="Language documentation recordings.",
+        location=bundle_location,
+        version="1.0",
+    )
+    bundle_language = BundleObjectLanguage.objects.create(
+        display_name="Gtaq",
+        name="Gtaq",
+        iso_639_3_code="gaq",
+        glottolog_code="gtaq1234",
+    )
+    alt_name = BundleObjectLanguageAlternativeName.objects.create(value="Didei")
+    bundle_language.alternative_names.add(alt_name)
+    bundle_general_info.object_languages.add(bundle_language)
+
+    BundleStructuralInfo.objects.create(
+        bundle=bundle,
+        is_member_of_collection=collection,
+    )
+
+    # Search by alternative name should find the bundle
+    results = search_archives("Didei", use_stored_vectors=False)
+    assert any(result.kind == "bundle" and result.object_id == str(bundle.pk) for result in results)
+
+
+@pytest.mark.django_db
+def test_stored_vectors_search_matches_object_language_alternative_name():
+    """Test that stored vectors include alternative names for search."""
+    # Create collection with alternative language name
+    collection = Collection.objects.create(identifier="COL-STORED-001")
+    location = CollectionLocation.objects.create(
+        location_name="Test Location",
+        country_name="Test Country",
+        country_code="TC",
+    )
+    general_info = CollectionGeneralInfo.objects.create(
+        collection=collection,
+        id_value="CID-STORED-001",
+        id_type=IdentifierTypeChoices.DOI,
+        display_title="Stored Vector Test Collection",
+        description="Testing stored vectors with alternative names.",
+        location=location,
+        version="1.0",
+    )
+    language = CollectionObjectLanguage.objects.create(
+        display_name="TestLang",
+        name="TestLang",
+        iso_639_3_code="tst",
+        glottolog_code="test1234",
+    )
+    alt_name = CollectionObjectLanguageAlternativeName.objects.create(value="AlternativeTestName")
+    language.alternative_names.add(alt_name)
+    general_info.object_languages.add(language)
+
+    # Rebuild search vectors
+    rebuild_all_search_vectors()
+
+    # Search using stored vectors should find the collection by alternative name
+    results = search_archives("AlternativeTestName", use_stored_vectors=True)
+    assert any(result.kind == "collection" and result.object_id == str(collection.pk) for result in results)

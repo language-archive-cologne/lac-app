@@ -35,6 +35,9 @@ def build_collection_search_vector(collection: Collection) -> SearchVector:
         for lang in general_info.object_languages.all():
             vectors.append(SearchVector(Value(lang.name or ""), weight="C", config="simple"))
             vectors.append(SearchVector(Value(lang.display_name or ""), weight="C", config="simple"))
+            # Alternative names
+            for alt_name in lang.alternative_names.all():
+                vectors.append(SearchVector(Value(alt_name.value or ""), weight="C", config="simple"))
             # Language family
             if hasattr(lang, 'taxonomy') and lang.taxonomy:
                 for family in lang.taxonomy.language_family.all():
@@ -100,6 +103,9 @@ def build_bundle_search_vector(bundle: Bundle) -> SearchVector:
         for lang in general_info.object_languages.all():
             vectors.append(SearchVector(Value(lang.name or ""), weight="C", config="simple"))
             vectors.append(SearchVector(Value(lang.display_name or ""), weight="C", config="simple"))
+            # Alternative names
+            for alt_name in lang.alternative_names.all():
+                vectors.append(SearchVector(Value(alt_name.value or ""), weight="C", config="simple"))
             # Language family
             if hasattr(lang, 'bundle_object_language_taxonomy') and lang.bundle_object_language_taxonomy:
                 for family in lang.bundle_object_language_taxonomy.language_family.all():
@@ -163,6 +169,7 @@ def update_collection_search_vector(collection: Collection) -> None:
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT kw.value, ' '), '')), 'B') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT ol.name, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT ol.display_name, ' '), '')), 'C') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT olan.value, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT lf.value, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT cr.family_name, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT co.family_name, ' '), '')), 'D') ||
@@ -180,6 +187,8 @@ def update_collection_search_vector(collection: Collection) -> None:
                 LEFT JOIN blam_collectionkeyword kw ON kw.id = gik.collectionkeyword_id
                 LEFT JOIN blam_collectiongeneralinfo_object_languages giol ON giol.collectiongeneralinfo_id = gi.id
                 LEFT JOIN blam_collectionobjectlanguage ol ON ol.id = giol.collectionobjectlanguage_id
+                LEFT JOIN blam_collectionobjectlanguage_alternative_names olans ON olans.collectionobjectlanguage_id = ol.id
+                LEFT JOIN blam_collectionobjectlanguagealternativename olan ON olan.id = olans.collectionobjectlanguagealternativename_id
                 LEFT JOIN blam_collectionobjectlanguagetaxonomy olt ON olt.object_language_id = ol.id
                 LEFT JOIN blam_collectionobjectlanguagetaxonomy_language_family oltlf ON oltlf.collectionobjectlanguagetaxonomy_id = olt.id
                 LEFT JOIN blam_collectionobjectlanguagelanguagefamily lf ON lf.id = oltlf.collectionobjectlanguagelanguagefamily_id
@@ -219,6 +228,7 @@ def update_bundle_search_vector(bundle: Bundle) -> None:
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT kw.value, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT ol.name, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT ol.display_name, ' '), '')), 'C') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT olan.value, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT lf.value, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(loc.location_facet, '')), 'D') ||
                     setweight(to_tsvector('simple', COALESCE(loc.region_facet, '')), 'D') ||
@@ -233,6 +243,8 @@ def update_bundle_search_vector(bundle: Bundle) -> None:
                 LEFT JOIN blam_bundlekeyword kw ON kw.id = gik.bundlekeyword_id
                 LEFT JOIN blam_bundlegeneralinfo_object_languages giol ON giol.bundlegeneralinfo_id = gi.id
                 LEFT JOIN blam_bundleobjectlanguage ol ON ol.id = giol.bundleobjectlanguage_id
+                LEFT JOIN blam_bundleobjectlanguage_alternative_names olans ON olans.bundleobjectlanguage_id = ol.id
+                LEFT JOIN blam_bundleobjectlanguagealternativename olan ON olan.id = olans.bundleobjectlanguagealternativename_id
                 LEFT JOIN blam_bundleobjectlanguagetaxonomy olt ON olt.object_language_id = ol.id
                 LEFT JOIN blam_bundleobjectlanguagetaxonomy_language_family oltlf ON oltlf.bundleobjectlanguagetaxonomy_id = olt.id
                 LEFT JOIN blam_bundleobjectlanguagelanguagefamily lf ON lf.id = oltlf.bundleobjectlanguagelanguagefamily_id
@@ -274,6 +286,7 @@ def rebuild_all_search_vectors() -> tuple[int, int]:
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT kw.value, ' '), '')), 'B') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT ol.name, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT ol.display_name, ' '), '')), 'C') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT olan.value, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT lf.value, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT cr.family_name, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT co.family_name, ' '), '')), 'D') ||
@@ -292,6 +305,8 @@ def rebuild_all_search_vectors() -> tuple[int, int]:
                 LEFT JOIN blam_collectionkeyword kw ON kw.id = gik.collectionkeyword_id
                 LEFT JOIN blam_collectiongeneralinfo_object_languages giol ON giol.collectiongeneralinfo_id = gi.id
                 LEFT JOIN blam_collectionobjectlanguage ol ON ol.id = giol.collectionobjectlanguage_id
+                LEFT JOIN blam_collectionobjectlanguage_alternative_names olans ON olans.collectionobjectlanguage_id = ol.id
+                LEFT JOIN blam_collectionobjectlanguagealternativename olan ON olan.id = olans.collectionobjectlanguagealternativename_id
                 LEFT JOIN blam_collectionobjectlanguagetaxonomy olt ON olt.object_language_id = ol.id
                 LEFT JOIN blam_collectionobjectlanguagetaxonomy_language_family oltlf ON oltlf.collectionobjectlanguagetaxonomy_id = olt.id
                 LEFT JOIN blam_collectionobjectlanguagelanguagefamily lf ON lf.id = oltlf.collectionobjectlanguagelanguagefamily_id
@@ -328,6 +343,7 @@ def rebuild_all_search_vectors() -> tuple[int, int]:
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT kw.value, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT ol.name, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT ol.display_name, ' '), '')), 'C') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT olan.value, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT lf.value, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(loc.location_facet, '')), 'D') ||
                     setweight(to_tsvector('simple', COALESCE(loc.region_facet, '')), 'D') ||
@@ -343,6 +359,8 @@ def rebuild_all_search_vectors() -> tuple[int, int]:
                 LEFT JOIN blam_bundlekeyword kw ON kw.id = gik.bundlekeyword_id
                 LEFT JOIN blam_bundlegeneralinfo_object_languages giol ON giol.bundlegeneralinfo_id = gi.id
                 LEFT JOIN blam_bundleobjectlanguage ol ON ol.id = giol.bundleobjectlanguage_id
+                LEFT JOIN blam_bundleobjectlanguage_alternative_names olans ON olans.bundleobjectlanguage_id = ol.id
+                LEFT JOIN blam_bundleobjectlanguagealternativename olan ON olan.id = olans.bundleobjectlanguagealternativename_id
                 LEFT JOIN blam_bundleobjectlanguagetaxonomy olt ON olt.object_language_id = ol.id
                 LEFT JOIN blam_bundleobjectlanguagetaxonomy_language_family oltlf ON oltlf.bundleobjectlanguagetaxonomy_id = olt.id
                 LEFT JOIN blam_bundleobjectlanguagelanguagefamily lf ON lf.id = oltlf.bundleobjectlanguagelanguagefamily_id
