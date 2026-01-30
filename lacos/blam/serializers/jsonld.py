@@ -547,7 +547,8 @@ class BundleJsonLdSerializer:
         if header.md_profile:
             data["MdProfile"] = header.md_profile
 
-        if header.md_collection_display_name:
+        # md_collection_display_name only exists on CollectionHeader, not BundleHeader
+        if hasattr(header, 'md_collection_display_name') and header.md_collection_display_name:
             data["MdCollectionDisplayName"] = header.md_collection_display_name
 
         return data
@@ -685,16 +686,27 @@ class BundleJsonLdSerializer:
                 "Contributor": [self._serialize_contributor(c) for c in contributors]
             }
 
-        # Identifiers
-        identifiers = info.identifiers.all()
-        if identifiers:
+        # Identifiers - BundlePublicationInfo has single identifier/identifier_type fields
+        # instead of identifiers ManyToMany relation
+        if hasattr(info, 'identifiers'):
+            identifiers = info.identifiers.all()
+            if identifiers:
+                data["Identifiers"] = {
+                    "Identifier": [
+                        {
+                            "@value": ident.identifier,
+                            "IdentifierType": ident.identifier_type,
+                        }
+                        for ident in identifiers
+                    ]
+                }
+        elif info.identifier:
             data["Identifiers"] = {
                 "Identifier": [
                     {
-                        "@value": ident.identifier,
-                        "IdentifierType": ident.identifier_type,
+                        "@value": info.identifier,
+                        "IdentifierType": info.identifier_type,
                     }
-                    for ident in identifiers
                 ]
             }
 
