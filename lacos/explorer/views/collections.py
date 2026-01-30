@@ -302,7 +302,73 @@ class CollectionDetailView(HandleLookupMixin, DetailView):
         if hasattr(self.object, 'administrative_info') and self.object.administrative_info.first():
             context['licenses'] = self.object.administrative_info.first().licenses.all()
 
+        # Citation
+        context['citation'] = self._format_citation()
+
         return context
+
+    def _format_citation(self) -> str:
+        """
+        Format citation for the collection.
+
+        Format: Creator1 family, given, Creator2 given family & Creator3 given family.
+                Year. Title. Language Archive Cologne. Handle URL.
+        """
+        parts = []
+
+        # Get creators from publication info
+        pub_info = self.object.publication_info.first()
+        if pub_info:
+            creators = list(pub_info.creators.all())
+            # Sort by order field if present, otherwise keep original order
+            creators.sort(key=lambda c: (c.order is None, c.order or 0))
+
+            if creators:
+                creator_names = []
+                for i, creator in enumerate(creators):
+                    if i == 0:
+                        # First creator: "family, given"
+                        if creator.given_name:
+                            creator_names.append(f"{creator.family_name}, {creator.given_name}")
+                        else:
+                            creator_names.append(creator.family_name)
+                    else:
+                        # Other creators: "given family"
+                        if creator.given_name:
+                            creator_names.append(f"{creator.given_name} {creator.family_name}")
+                        else:
+                            creator_names.append(creator.family_name)
+
+                # Join with ", " and " & " before the last one
+                if len(creator_names) == 1:
+                    parts.append(creator_names[0])
+                elif len(creator_names) == 2:
+                    parts.append(f"{creator_names[0]} & {creator_names[1]}")
+                else:
+                    parts.append(", ".join(creator_names[:-1]) + " & " + creator_names[-1])
+
+            # Publication year
+            if pub_info.publication_year:
+                parts.append(str(pub_info.publication_year))
+
+        # Title (from general info)
+        general_info = self.object.get_general_info
+        if general_info and general_info.display_title:
+            parts.append(general_info.display_title)
+
+        # Data provider
+        parts.append("Language Archive Cologne")
+
+        # Handle URL
+        if self.object.identifier:
+            handle = self.object.identifier
+            if handle.startswith('hdl:'):
+                handle_url = f"https://hdl.handle.net/{handle[4:]}"
+            else:
+                handle_url = handle
+            parts.append(handle_url)
+
+        return ". ".join(parts) + "." if parts else ""
 
     def render_to_response(self, context, **response_kwargs):
         if self.request.headers.get('HX-Request'):

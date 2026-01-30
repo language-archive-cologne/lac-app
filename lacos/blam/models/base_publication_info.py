@@ -21,7 +21,7 @@ class PublicationInfo(BaseModel):
 class Creator(BaseModel):
     """
     Abstract model for resource creators
-    
+
     Represents individuals who created the resource. Stores personal information
     and identifiers. Will be linked to PublicationInfo via ManyToMany relationship.
     """
@@ -36,7 +36,8 @@ class Creator(BaseModel):
         blank=True
     )
     affiliation = models.CharField(max_length=255, null=True, blank=True)
-    
+    order = models.IntegerField(null=True, blank=True, help_text="Order in citation list")
+
     class Meta:
         abstract = True
 

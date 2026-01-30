@@ -120,16 +120,20 @@ def import_creators(publication_info: CollectionPublicationInfo, publication_inf
         for creator_schema in publication_info_schema.collection_creators.collection_creator:
             # Prepare creator data
             creator_data = {}
-            
+
             # Set name fields
             if creator_schema.creator_name:
                 creator_data['family_name'] = creator_schema.creator_name.creator_family_name
-                
+
                 if hasattr(creator_schema.creator_name, 'creator_given_name') and creator_schema.creator_name.creator_given_name:
                     creator_data['given_name'] = creator_schema.creator_name.creator_given_name
                 else:
                     creator_data['given_name'] = ""  # Required field, use empty string if missing
-            
+
+            # Set order if present
+            if hasattr(creator_schema, 'order') and creator_schema.order is not None:
+                creator_data['order'] = creator_schema.order
+
             # Try to find an existing creator with the same name, or create a new one
             creator, created = CollectionCreator.objects.get_or_create(
                 family_name=creator_data['family_name'],
@@ -137,10 +141,14 @@ def import_creators(publication_info: CollectionPublicationInfo, publication_inf
                 defaults=creator_data
             )
             
-            # Update fields that might have changed
+            # Update fields that might have changed (including order)
             if not created:
                 for key, value in creator_data.items():
                     setattr(creator, key, value)
+                creator.save()
+            elif 'order' in creator_data:
+                # Ensure order is set even for newly created creators
+                creator.order = creator_data['order']
                 creator.save()
             
             # Add affiliations if they exist
