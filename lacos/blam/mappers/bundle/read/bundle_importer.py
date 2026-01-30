@@ -8,7 +8,7 @@ import uuid
 
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo, BundleResources
-from blam_schemas.bundle.blam_bundle_repository_v1_0 import Cmd
+from blam_schemas.bundle.blam_bundle_repository_v1_1 import Cmd
 from xsdata.formats.dataclass.parsers import XmlParser
 
 # Import the standalone import functions
@@ -240,7 +240,7 @@ class BundleImporter:
         """Import structural info from CMD data. Returns the BundleStructuralInfo object."""
         try:
             # Navigate through parsed XML data
-            repo_info = cmd_data.components.blam_bundle_repository_v1_0
+            repo_info = cmd_data.components.blam_bundle_repository_v1_1
             if not repo_info or not repo_info.bundle_structural_info:
                 logger.warning("Bundle XML is missing BundleStructuralInfo section.")
                 return None

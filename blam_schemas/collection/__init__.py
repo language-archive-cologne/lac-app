@@ -1,4 +1,5 @@
-from blam_schemas.collection.blam_collection_repository_v1_0 import (
+# Default exports from v1.2 (latest version)
+from blam_schemas.collection.blam_collection_repository_v1_2 import (
     Cmd,
     CollectionHasCollectionMemberIdentifierType,
     CollectionIdIdentifierType,
@@ -13,48 +14,42 @@ from blam_schemas.collection.blam_collection_repository_v1_0 import (
     RightsHolderIdentifierIdentifierType,
     SimpletypeAccess41,
 )
+
+# Legacy v1.0 imports (for backward compatibility)
+from blam_schemas.collection.blam_collection_repository_v1_0 import (
+    Cmd as CmdV10,
+    SimpletypeAccess41 as SimpletypeAccess41V10,
+)
+
+# Legacy v1.1 imports (for backward compatibility)
 from blam_schemas.collection.blam_collection_repository_v1_1 import (
     BlamCollectionRepositoryV11,
-    CollectionHasCollectionMemberIdentifierType as CollectionHasCollectionMemberIdentifierTypeV11,
-    CollectionIdIdentifierType as CollectionIdIdentifierTypeV11,
-    ComplextypeAccess41 as ComplextypeAccess41V11,
-    ComplextypeCollectionCountryCode711,
-    ComplextypeObjectLanguageGlottologCode1611,
-    ComplextypeObjectLanguageIso6393Code1611,
-    ContributorNameIdentifierIdentifierType as ContributorNameIdentifierIdentifierTypeV11,
-    CreatorNameIdentifierIdentifierType as CreatorNameIdentifierIdentifierTypeV11,
-    FunderIdentifierIdentifierType as FunderIdentifierIdentifierTypeV11,
-    RightsHolderIdentifierIdentifierType as RightsHolderIdentifierIdentifierTypeV11,
     SimpletypeAccess41 as SimpletypeAccess41V11,
 )
+
 from blam_schemas.collection.cmd_envelop import Cmd as EnvelopeCmd, ResourcetypeSimple as EnvelopeResourcetypeSimple
 
 __all__ = [
+    # Default (v1.2)
     "Cmd",
-    "EnvelopeCmd",
     "CollectionHasCollectionMemberIdentifierType",
-    "CollectionHasCollectionMemberIdentifierTypeV11",
     "CollectionIdIdentifierType",
-    "CollectionIdIdentifierTypeV11",
-    "ContributorNameIdentifierIdentifierType",
-    "ContributorNameIdentifierIdentifierTypeV11",
-    "CreatorNameIdentifierIdentifierType",
-    "CreatorNameIdentifierIdentifierTypeV11",
-    "FunderIdentifierIdentifierType",
-    "FunderIdentifierIdentifierTypeV11",
-    "ResourcetypeSimple",
-    "EnvelopeResourcetypeSimple",
-    "RightsHolderIdentifierIdentifierType",
-    "RightsHolderIdentifierIdentifierTypeV11",
     "ComplextypeAccess41",
-    "ComplextypeAccess41V11",
     "ComplextypeCollectionCountryCode611",
-    "ComplextypeCollectionCountryCode711",
     "ComplextypeObjectLanguageGlottologCode0511",
-    "ComplextypeObjectLanguageGlottologCode1611",
     "ComplextypeObjectLanguageIso6393Code0511",
-    "ComplextypeObjectLanguageIso6393Code1611",
+    "ContributorNameIdentifierIdentifierType",
+    "CreatorNameIdentifierIdentifierType",
+    "FunderIdentifierIdentifierType",
+    "ResourcetypeSimple",
+    "RightsHolderIdentifierIdentifierType",
     "SimpletypeAccess41",
+    # Legacy
+    "CmdV10",
+    "SimpletypeAccess41V10",
     "SimpletypeAccess41V11",
     "BlamCollectionRepositoryV11",
+    # Envelope
+    "EnvelopeCmd",
+    "EnvelopeResourcetypeSimple",
 ]

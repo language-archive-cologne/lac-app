@@ -2,7 +2,7 @@
 
 from xsdata.models.datatype import XmlDate
 
-from blam_schemas.collection.blam_collection_repository_v1_0 import Cmd
+from blam_schemas.collection.blam_collection_repository_v1_2 import Cmd
 from lacos.blam.models.collection.collection_header import CollectionHeader
 
 HeaderType = Cmd.Header

@@ -2,7 +2,7 @@
 
 from django.db.models import QuerySet
 
-from blam_schemas.collection.blam_collection_repository_v1_0 import (
+from blam_schemas.collection.blam_collection_repository_v1_2 import (
     Cmd,
     CollectionIdIdentifierType,
     ComplextypeObjectLanguageIso6393Code0511 as IsoCodeType,
@@ -18,14 +18,14 @@ from lacos.blam.models.collection.collection_general_info import (
 )
 
 # Type aliases
-GeneralInfoType = Cmd.Components.BlamCollectionRepositoryV10.CollectionGeneralInfo
-CollectionIdType = Cmd.Components.BlamCollectionRepositoryV10.CollectionGeneralInfo.CollectionId
-KeywordsType = Cmd.Components.BlamCollectionRepositoryV10.CollectionGeneralInfo.CollectionKeywords
-ObjectLanguagesType = Cmd.Components.BlamCollectionRepositoryV10.CollectionGeneralInfo.CollectionObjectLanguages
-ObjectLanguageType = Cmd.Components.BlamCollectionRepositoryV10.CollectionGeneralInfo.CollectionObjectLanguages.CollectionObjectLanguage
-AltNamesType = Cmd.Components.BlamCollectionRepositoryV10.CollectionGeneralInfo.CollectionObjectLanguages.CollectionObjectLanguage.ObjectLanguageAlternativeNames
-TaxonomyType = Cmd.Components.BlamCollectionRepositoryV10.CollectionGeneralInfo.CollectionObjectLanguages.CollectionObjectLanguage.ObjectLanguageTaxonomy
-LocationType = Cmd.Components.BlamCollectionRepositoryV10.CollectionGeneralInfo.CollectionLocation
+GeneralInfoType = Cmd.Components.BlamCollectionRepositoryV12.CollectionGeneralInfo
+CollectionIdType = Cmd.Components.BlamCollectionRepositoryV12.CollectionGeneralInfo.CollectionId
+KeywordsType = Cmd.Components.BlamCollectionRepositoryV12.CollectionGeneralInfo.CollectionKeywords
+ObjectLanguagesType = Cmd.Components.BlamCollectionRepositoryV12.CollectionGeneralInfo.CollectionObjectLanguages
+ObjectLanguageType = Cmd.Components.BlamCollectionRepositoryV12.CollectionGeneralInfo.CollectionObjectLanguages.CollectionObjectLanguage
+AltNamesType = Cmd.Components.BlamCollectionRepositoryV12.CollectionGeneralInfo.CollectionObjectLanguages.CollectionObjectLanguage.ObjectLanguageAlternativeNames
+TaxonomyType = Cmd.Components.BlamCollectionRepositoryV12.CollectionGeneralInfo.CollectionObjectLanguages.CollectionObjectLanguage.ObjectLanguageTaxonomy
+LocationType = Cmd.Components.BlamCollectionRepositoryV12.CollectionGeneralInfo.CollectionLocation
 
 
 def export_general_info(general_info: CollectionGeneralInfo, repo) -> None:

@@ -31,7 +31,7 @@ def import_administrative_info(cmd_data: Any, collection: Collection) -> Collect
         A fully populated CollectionAdministrativeInfo instance with all related objects.
     """
     # Extract the administrative info section from the schema
-    admin_info_schema = cmd_data.components.blam_collection_repository_v1_0.collection_administrative_info
+    admin_info_schema = cmd_data.components.blam_collection_repository_v1_2.collection_administrative_info
     
     # Create and populate the administrative info model with reference to collection
     admin_info = create_base_administrative_info(admin_info_schema, collection)

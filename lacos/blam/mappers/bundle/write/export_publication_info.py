@@ -5,7 +5,7 @@ from django.db.models import QuerySet
 from xsdata.models.datatype import XmlPeriod
 
 from lacos.blam.models.base_indentifiers import PersonIdentifierTypeChoices
-from blam_schemas.bundle.blam_bundle_repository_v1_0 import (
+from blam_schemas.bundle.blam_bundle_repository_v1_1 import (
     Cmd,
     CreatorNameIdentifierIdentifierType,
     ContributorNameIdentifierIdentifierType
@@ -17,15 +17,15 @@ from lacos.blam.models.bundle.bundle_publication_info import (
 )
 
 # Type aliases for nested classes from the schema
-BundlePublicationInfoType = Cmd.Components.BlamBundleRepositoryV10.BundlePublicationInfo
-BundleCreatorsType = Cmd.Components.BlamBundleRepositoryV10.BundlePublicationInfo.BundleCreators
-BundleCreatorType = Cmd.Components.BlamBundleRepositoryV10.BundlePublicationInfo.BundleCreators.BundleCreator
-CreatorNameIdentifierType = Cmd.Components.BlamBundleRepositoryV10.BundlePublicationInfo.BundleCreators.BundleCreator.CreatorNameIdentifier
-CreatorNameType = Cmd.Components.BlamBundleRepositoryV10.BundlePublicationInfo.BundleCreators.BundleCreator.CreatorName
-BundleContributorsType = Cmd.Components.BlamBundleRepositoryV10.BundlePublicationInfo.BundleContributors
-BundleContributorType = Cmd.Components.BlamBundleRepositoryV10.BundlePublicationInfo.BundleContributors.BundleContributor
-ContributorNameIdentifierType = Cmd.Components.BlamBundleRepositoryV10.BundlePublicationInfo.BundleContributors.BundleContributor.ContributorNameIdentifier
-ContributorNameType = Cmd.Components.BlamBundleRepositoryV10.BundlePublicationInfo.BundleContributors.BundleContributor.ContributorName
+BundlePublicationInfoType = Cmd.Components.BlamBundleRepositoryV11.BundlePublicationInfo
+BundleCreatorsType = Cmd.Components.BlamBundleRepositoryV11.BundlePublicationInfo.BundleCreators
+BundleCreatorType = Cmd.Components.BlamBundleRepositoryV11.BundlePublicationInfo.BundleCreators.BundleCreator
+CreatorNameIdentifierType = Cmd.Components.BlamBundleRepositoryV11.BundlePublicationInfo.BundleCreators.BundleCreator.CreatorNameIdentifier
+CreatorNameType = Cmd.Components.BlamBundleRepositoryV11.BundlePublicationInfo.BundleCreators.BundleCreator.CreatorName
+BundleContributorsType = Cmd.Components.BlamBundleRepositoryV11.BundlePublicationInfo.BundleContributors
+BundleContributorType = Cmd.Components.BlamBundleRepositoryV11.BundlePublicationInfo.BundleContributors.BundleContributor
+ContributorNameIdentifierType = Cmd.Components.BlamBundleRepositoryV11.BundlePublicationInfo.BundleContributors.BundleContributor.ContributorNameIdentifier
+ContributorNameType = Cmd.Components.BlamBundleRepositoryV11.BundlePublicationInfo.BundleContributors.BundleContributor.ContributorName
 
 
 def export_publication_info(publication_info: BundlePublicationInfo, cmd_data: Cmd) -> None:
@@ -39,7 +39,7 @@ def export_publication_info(publication_info: BundlePublicationInfo, cmd_data: C
     if publication_info.contributors.exists():
         bundle_info.bundle_contributors = export_contributors(publication_info.contributors.all())
 
-    cmd_data.components.blam_bundle_repository_v1_0.bundle_publication_info = bundle_info
+    cmd_data.components.blam_bundle_repository_v1_1.bundle_publication_info = bundle_info
 
 
 def export_creators(creators: QuerySet) -> BundleCreatorsType:

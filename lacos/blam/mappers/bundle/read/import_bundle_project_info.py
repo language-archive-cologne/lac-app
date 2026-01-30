@@ -2,7 +2,7 @@ from django.db import transaction
 from enum import Enum
 from typing import Dict, Any, Optional, List
 
-from blam_schemas.bundle.blam_bundle_repository_v1_0 import (
+from blam_schemas.bundle.blam_bundle_repository_v1_1 import (
     Cmd, FunderIdentifierIdentifierType
 )
 from lacos.blam.models.base_project_info import (
@@ -27,10 +27,10 @@ def import_project_info(cmd_data: Cmd, bundle: 'Bundle') -> List[ProjectInfo]:
         List of created or updated ProjectInfo instances
     """
     # Check if project info exists in the schema
-    if not hasattr(cmd_data.components.blam_bundle_repository_v1_0, 'project_info'):
+    if not hasattr(cmd_data.components.blam_bundle_repository_v1_1, 'project_info'):
         return []
     
-    project_info_data = cmd_data.components.blam_bundle_repository_v1_0.project_info
+    project_info_data = cmd_data.components.blam_bundle_repository_v1_1.project_info
     
     # If no projects defined, return empty list
     if not project_info_data or not project_info_data.project:

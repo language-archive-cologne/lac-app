@@ -2,7 +2,7 @@ from django.db import transaction
 from enum import Enum
 from typing import Dict, Any, Optional, List
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
-from blam_schemas.bundle.blam_bundle_repository_v1_0 import (
+from blam_schemas.bundle.blam_bundle_repository_v1_1 import (
     Cmd, BundleIdIdentifierType
 )
 from lacos.blam.models.bundle.bundle_general_info import (
@@ -29,7 +29,7 @@ def import_general_info(cmd_data: Cmd, bundle: 'Bundle') -> BundleGeneralInfo:
     Returns:
         The created BundleGeneralInfo instance
     """
-    bundle_info = cmd_data.components.blam_bundle_repository_v1_0.bundle_general_info
+    bundle_info = cmd_data.components.blam_bundle_repository_v1_1.bundle_general_info
     
     # Create location first since it's needed as a foreign key
     location = create_bundle_location(bundle_info.bundle_location)

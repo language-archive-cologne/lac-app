@@ -1,7 +1,7 @@
 from typing import Optional
 from django.db.models import QuerySet
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
-from blam_schemas.bundle.blam_bundle_repository_v1_0 import (
+from blam_schemas.bundle.blam_bundle_repository_v1_1 import (
     Cmd, BundleIdIdentifierType,
     ComplextypeBundleRecordingDate11 as BundleRecordingDateType,
     ComplextypeBundleCountryCode711 as BundleCountryCodeType,
@@ -17,14 +17,14 @@ from lacos.blam.models.bundle.bundle_general_info import (
 )
 
 # Type aliases for nested classes from the schema
-BundleGeneralInfoType = Cmd.Components.BlamBundleRepositoryV10.BundleGeneralInfo
-BundleIdType = Cmd.Components.BlamBundleRepositoryV10.BundleGeneralInfo.BundleId
-BundleLocationType = Cmd.Components.BlamBundleRepositoryV10.BundleGeneralInfo.BundleLocation
-BundleKeywordsType = Cmd.Components.BlamBundleRepositoryV10.BundleGeneralInfo.BundleKeywords
-BundleObjectLanguagesType = Cmd.Components.BlamBundleRepositoryV10.BundleGeneralInfo.BundleObjectLanguages
-BundleObjectLanguageType = Cmd.Components.BlamBundleRepositoryV10.BundleGeneralInfo.BundleObjectLanguages.BundleObjectLanguage
-ObjectLanguageAlternativeNamesType = Cmd.Components.BlamBundleRepositoryV10.BundleGeneralInfo.BundleObjectLanguages.BundleObjectLanguage.ObjectLanguageAlternativeNames
-ObjectLanguageTaxonomyType = Cmd.Components.BlamBundleRepositoryV10.BundleGeneralInfo.BundleObjectLanguages.BundleObjectLanguage.ObjectLanguageTaxonomy
+BundleGeneralInfoType = Cmd.Components.BlamBundleRepositoryV11.BundleGeneralInfo
+BundleIdType = Cmd.Components.BlamBundleRepositoryV11.BundleGeneralInfo.BundleId
+BundleLocationType = Cmd.Components.BlamBundleRepositoryV11.BundleGeneralInfo.BundleLocation
+BundleKeywordsType = Cmd.Components.BlamBundleRepositoryV11.BundleGeneralInfo.BundleKeywords
+BundleObjectLanguagesType = Cmd.Components.BlamBundleRepositoryV11.BundleGeneralInfo.BundleObjectLanguages
+BundleObjectLanguageType = Cmd.Components.BlamBundleRepositoryV11.BundleGeneralInfo.BundleObjectLanguages.BundleObjectLanguage
+ObjectLanguageAlternativeNamesType = Cmd.Components.BlamBundleRepositoryV11.BundleGeneralInfo.BundleObjectLanguages.BundleObjectLanguage.ObjectLanguageAlternativeNames
+ObjectLanguageTaxonomyType = Cmd.Components.BlamBundleRepositoryV11.BundleGeneralInfo.BundleObjectLanguages.BundleObjectLanguage.ObjectLanguageTaxonomy
 
 
 def export_general_info(general_info: BundleGeneralInfo, cmd_data: Cmd) -> None:
@@ -53,7 +53,7 @@ def export_general_info(general_info: BundleGeneralInfo, cmd_data: Cmd) -> None:
     bundle_info.bundle_object_languages = export_object_languages(general_info.object_languages.all())
 
     # Assign to cmd_data
-    cmd_data.components.blam_bundle_repository_v1_0.bundle_general_info = bundle_info
+    cmd_data.components.blam_bundle_repository_v1_1.bundle_general_info = bundle_info
 
 
 def create_bundle_id(general_info: BundleGeneralInfo) -> BundleIdType:

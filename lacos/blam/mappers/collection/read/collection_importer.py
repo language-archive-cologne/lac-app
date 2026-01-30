@@ -11,7 +11,7 @@ from django.db import transaction
 from xsdata.formats.dataclass.models.generics import AnyElement
 from xsdata.formats.dataclass.parsers import XmlParser
 
-from blam_schemas.collection.blam_collection_repository_v1_0 import Cmd as CmdV10
+from blam_schemas.collection.blam_collection_repository_v1_2 import Cmd as CmdV12
 from blam_schemas.collection.blam_collection_repository_v1_1 import (
     BlamCollectionRepositoryV11,
 )
@@ -53,7 +53,7 @@ class CollectionComponentsAdapter:
     version: str
 
     def __getattr__(self, name: str) -> Any:
-        if name in {"blam_collection_repository_v1_0", "blam_collection_repository_v1_1"}:
+        if name in {"blam_collection_repository_v1_2", "blam_collection_repository_v1_1"}:
             return self.repository
         raise AttributeError(name)
 
@@ -137,7 +137,7 @@ class CollectionImporter:
             cls._import_structural_info(cmd_data, collection)
             cls._import_license(cmd_data, collection)
 
-            repository = getattr(cmd_data.components, "blam_collection_repository_v1_0", None)
+            repository = getattr(cmd_data.components, "blam_collection_repository_v1_2", None)
             if repository and getattr(repository, "project_info", None):
                 cls._import_project_info(cmd_data, collection)
                 logger.info("Project info found and imported for update")
@@ -180,7 +180,7 @@ class CollectionImporter:
             cls._import_structural_info(cmd_data, collection)
             cls._import_license(cmd_data, collection)
 
-            repository = getattr(cmd_data.components, "blam_collection_repository_v1_0", None)
+            repository = getattr(cmd_data.components, "blam_collection_repository_v1_2", None)
             if repository and getattr(repository, "project_info", None):
                 cls._import_project_info(cmd_data, collection)
                 logger.info("Project info found and imported")
@@ -269,11 +269,11 @@ class CollectionImporter:
     def _parse_v10(xml_content: str) -> CollectionCmdAdapter:
         try:
             parser = XmlParser()
-            cmd = parser.from_string(xml_content, CmdV10)
+            cmd = parser.from_string(xml_content, CmdV12)
         except Exception as exc:  # pragma: no cover - xsdata validation
             raise ValidationError(f"Invalid BLAM collection XML: {exc}") from exc
 
-        repository = getattr(cmd.components, "blam_collection_repository_v1_0", None)
+        repository = getattr(cmd.components, "blam_collection_repository_v1_2", None)
         components = CollectionComponentsAdapter(repository=repository, version=BLAM_VERSION_1_0)
         return CollectionCmdAdapter(header=cmd.header, components=components, version=BLAM_VERSION_1_0)
 

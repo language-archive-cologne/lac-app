@@ -1,7 +1,7 @@
 import logging
 from typing import Optional
 
-from blam_schemas.bundle.blam_bundle_repository_v1_0 import Cmd
+from blam_schemas.bundle.blam_bundle_repository_v1_1 import Cmd
 from lacos.blam.models.bundle.bundle_header import BundleHeader
 
 logger = logging.getLogger(__name__)

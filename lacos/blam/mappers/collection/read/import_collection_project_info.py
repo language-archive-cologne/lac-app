@@ -6,7 +6,7 @@ from lacos.blam.models.base_project_info import (
     FunderIdentifier
 )
 from lacos.blam.models.collection.collection_repository import Collection
-from blam_schemas.collection.blam_collection_repository_v1_0 import (
+from blam_schemas.collection.blam_collection_repository_v1_2 import (
     FunderIdentifierIdentifierType
 )
 
@@ -31,7 +31,7 @@ def import_project_info(cmd_data: Any, collection: Collection) -> list[ProjectIn
         A list of ProjectInfo instances with all related objects.
     """
     # Get repository component
-    repo = cmd_data.components.blam_collection_repository_v1_0
+    repo = cmd_data.components.blam_collection_repository_v1_2
     
     # Check if project_info exists in the schema
     if not hasattr(repo, 'project_info'):

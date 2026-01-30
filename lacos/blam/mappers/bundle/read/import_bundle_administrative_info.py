@@ -7,10 +7,7 @@ from lacos.blam.models.bundle.bundle_administrative_info import (
     BundleRightsHolder,
     BundleRightsHolderIdentifier
 )
-from blam_schemas.bundle.blam_bundle_repository_v1_0 import (
-    Cmd,
-    SimpletypeAccess51
-)
+from blam_schemas.bundle import Cmd, SimpletypeAccess51
 
 
 @transaction.atomic
@@ -33,7 +30,7 @@ def import_administrative_info(bundle_schema: Cmd, bundle: 'Bundle') -> BundleAd
         A fully populated BundleAdministrativeInfo instance with all related objects.
     """
     # Extract the administrative info section from the schema
-    admin_info_schema = bundle_schema.components.blam_bundle_repository_v1_0.bundle_administrative_info
+    admin_info_schema = bundle_schema.components.blam_bundle_repository_v1_1.bundle_administrative_info
     
     # Format the date for lookup
     date_str = None
@@ -124,15 +121,15 @@ def import_licenses(admin_info: BundleAdministrativeInfo, admin_info_schema) -> 
         admin_info: The BundleAdministrativeInfo instance to add licenses to.
         admin_info_schema: The administrative info section of the BLAM bundle repository schema.
     """
-    # Map access type from schema to model
-    access = "open"  # Default value
+    # Map access type from schema to model (v1.1 uses public/academic/restricted)
+    access = "public"  # Default value
     if admin_info_schema.access and admin_info_schema.access.value:
         access_mapping = {
-            SimpletypeAccess51.OPEN: "open",
-            SimpletypeAccess51.REGISTRATION_REQUIRED: "registration_required",
-            SimpletypeAccess51.REQUEST_REQUIRED: "request_required"
+            SimpletypeAccess51.PUBLIC: "public",
+            SimpletypeAccess51.ACADEMIC: "academic",
+            SimpletypeAccess51.RESTRICTED: "restricted"
         }
-        access = access_mapping.get(admin_info_schema.access.value, "open")
+        access = access_mapping.get(admin_info_schema.access.value, "public")
     
     for license_schema in admin_info_schema.license:
         # Handle None or empty values

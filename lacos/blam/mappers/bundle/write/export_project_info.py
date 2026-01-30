@@ -1,7 +1,7 @@
 from typing import Dict, Any, List, Optional
 from django.db.models import QuerySet
 from lacos.blam.models.base_indentifiers import FunderIdentifierTypeChoices
-from blam_schemas.bundle.blam_bundle_repository_v1_0 import (
+from blam_schemas.bundle.blam_bundle_repository_v1_1 import (
     Cmd,
     FunderIdentifierIdentifierType
 )
@@ -25,14 +25,14 @@ def export_project_info(projects: List[ProjectInfo], cmd_data: Cmd) -> None:
         return
     
     # Create the project info structure
-    project_info = Cmd.Components.BlamBundleRepositoryV10.ProjectInfo()
+    project_info = Cmd.Components.BlamBundleRepositoryV11.ProjectInfo()
     
     # Export each project
     for project in projects:
         project_info.project.append(export_project(project))
     
     # Assign to cmd_data
-    cmd_data.components.blam_bundle_repository_v1_0.project_info = project_info
+    cmd_data.components.blam_bundle_repository_v1_1.project_info = project_info
 
 
 def export_project(project: ProjectInfo) -> Any:
@@ -45,7 +45,7 @@ def export_project(project: ProjectInfo) -> Any:
     Returns:
         A project object for the schema
     """
-    project_data = Cmd.Components.BlamBundleRepositoryV10.ProjectInfo.Project()
+    project_data = Cmd.Components.BlamBundleRepositoryV11.ProjectInfo.Project()
     
     # Set basic fields
     project_data.project_display_name = project.project_display_name
@@ -68,7 +68,7 @@ def export_funder_infos(funders: QuerySet) -> Any:
     Returns:
         A funder infos container for the schema
     """
-    funder_infos = Cmd.Components.BlamBundleRepositoryV10.ProjectInfo.Project.FunderInfos()
+    funder_infos = Cmd.Components.BlamBundleRepositoryV11.ProjectInfo.Project.FunderInfos()
     
     for funder in funders:
         funder_infos.funder_info.append(export_funder_info(funder))
@@ -86,7 +86,7 @@ def export_funder_info(funder: FunderInfo) -> Any:
     Returns:
         A funder info object for the schema
     """
-    funder_data = Cmd.Components.BlamBundleRepositoryV10.ProjectInfo.Project.FunderInfos.FunderInfo()
+    funder_data = Cmd.Components.BlamBundleRepositoryV11.ProjectInfo.Project.FunderInfos.FunderInfo()
     
     # Set required fields
     funder_data.funder_name = funder.funder_name
@@ -115,7 +115,7 @@ def export_funder_identifier(identifier: FunderIdentifier) -> Any:
     Returns:
         A funder identifier object for the schema
     """
-    identifier_data = Cmd.Components.BlamBundleRepositoryV10.ProjectInfo.Project.FunderInfos.FunderInfo.FunderIdentifier()
+    identifier_data = Cmd.Components.BlamBundleRepositoryV11.ProjectInfo.Project.FunderInfos.FunderInfo.FunderIdentifier()
     
     # Set value
     identifier_data.value = identifier.value

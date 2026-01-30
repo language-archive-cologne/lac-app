@@ -13,7 +13,7 @@ from lacos.blam.models.bundle.bundle_structural_info import (
 )
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo
-from blam_schemas.bundle.blam_bundle_repository_v1_0 import (
+from blam_schemas.bundle.blam_bundle_repository_v1_1 import (
     Cmd
 )
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
@@ -37,10 +37,10 @@ def import_structural_info(cmd_data: Cmd, collection_identifier: str, identifier
         BundleStructuralInfo object or None if structural info is missing
     """
     components = cmd_data.components
-    if not components or not components.blam_bundle_repository_v1_0:
+    if not components or not components.blam_bundle_repository_v1_1:
         return None
         
-    repo = components.blam_bundle_repository_v1_0
+    repo = components.blam_bundle_repository_v1_1
     struct_info = repo.bundle_structural_info
     if not struct_info:
         return None

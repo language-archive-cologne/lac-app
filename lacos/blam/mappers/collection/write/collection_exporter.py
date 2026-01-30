@@ -5,7 +5,7 @@ from xml.etree import ElementTree as ET
 from xsdata.formats.dataclass.serializers import XmlSerializer
 from xsdata.formats.dataclass.serializers.config import SerializerConfig
 
-from blam_schemas.collection.blam_collection_repository_v1_0 import (
+from blam_schemas.collection.blam_collection_repository_v1_2 import (
     Cmd,
     CollectionHasCollectionMemberIdentifierType,
 )
@@ -52,11 +52,11 @@ class CollectionExporter:
         cmd.header = Cmd.Header()
         cmd.resources = self._create_empty_resources()
         cmd.components = Cmd.Components()
-        cmd.components.blam_collection_repository_v1_0 = (
-            Cmd.Components.BlamCollectionRepositoryV10()
+        cmd.components.blam_collection_repository_v1_2 = (
+            Cmd.Components.BlamCollectionRepositoryV12()
         )
 
-        repo = cmd.components.blam_collection_repository_v1_0
+        repo = cmd.components.blam_collection_repository_v1_2
 
         # Export header
         header = collection.header.first()
@@ -94,9 +94,9 @@ class CollectionExporter:
         resources.resource_relation_list = Cmd.Resources.ResourceRelationList()
         return resources
 
-    def _create_md_license(self, admin_info) -> Cmd.Components.BlamCollectionRepositoryV10.Mdlicense:
+    def _create_md_license(self, admin_info) -> Cmd.Components.BlamCollectionRepositoryV12.Mdlicense:
         """Create MD license from administrative info."""
-        md_license = Cmd.Components.BlamCollectionRepositoryV10.Mdlicense()
+        md_license = Cmd.Components.BlamCollectionRepositoryV12.Mdlicense()
         if admin_info and admin_info.licenses.exists():
             first_license = admin_info.licenses.first()
             md_license.value = first_license.license_name
@@ -107,14 +107,14 @@ class CollectionExporter:
 
     def _create_structural_info(self, collection: Collection):
         """Create structural info section with collection members (bundles)."""
-        struct_info = Cmd.Components.BlamCollectionRepositoryV10.CollectionStructuralInfo()
+        struct_info = Cmd.Components.BlamCollectionRepositoryV12.CollectionStructuralInfo()
         struct_info.collection_members = (
-            Cmd.Components.BlamCollectionRepositoryV10.CollectionStructuralInfo.CollectionMembers()
+            Cmd.Components.BlamCollectionRepositoryV12.CollectionStructuralInfo.CollectionMembers()
         )
 
         # Add bundle members
         CollectionMember = (
-            Cmd.Components.BlamCollectionRepositoryV10.CollectionStructuralInfo
+            Cmd.Components.BlamCollectionRepositoryV12.CollectionStructuralInfo
             .CollectionMembers.CollectionHasCollectionMember
         )
 

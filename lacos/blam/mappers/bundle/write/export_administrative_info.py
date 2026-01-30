@@ -2,7 +2,7 @@ from typing import Dict, Any, List, Optional
 from django.db.models import QuerySet
 from datetime import date
 from lacos.blam.models.base_indentifiers import AccessTypeChoices
-from blam_schemas.bundle.blam_bundle_repository_v1_0 import (
+from blam_schemas.bundle.blam_bundle_repository_v1_1 import (
     Cmd,
     RightsHolderIdentifierIdentifierType,
     ComplextypeAccess51 as AccessType
@@ -17,10 +17,10 @@ from lacos.blam.models.bundle.bundle_administrative_info import (
 from xsdata.models.datatype import XmlDate
 
 # Type aliases for nested classes from the schema
-BundleAdministrativeInfoType = Cmd.Components.BlamBundleRepositoryV10.BundleAdministrativeInfo
-LicenseType = Cmd.Components.BlamBundleRepositoryV10.BundleAdministrativeInfo.License
-RightsHolderType = Cmd.Components.BlamBundleRepositoryV10.BundleAdministrativeInfo.RightsHolder
-RightsHolderIdentifierType = Cmd.Components.BlamBundleRepositoryV10.BundleAdministrativeInfo.RightsHolder.RightsHolderIdentifier
+BundleAdministrativeInfoType = Cmd.Components.BlamBundleRepositoryV11.BundleAdministrativeInfo
+LicenseType = Cmd.Components.BlamBundleRepositoryV11.BundleAdministrativeInfo.License
+RightsHolderType = Cmd.Components.BlamBundleRepositoryV11.BundleAdministrativeInfo.RightsHolder
+RightsHolderIdentifierType = Cmd.Components.BlamBundleRepositoryV11.BundleAdministrativeInfo.RightsHolder.RightsHolderIdentifier
 
 
 def export_administrative_info(administrative_info: BundleAdministrativeInfo, cmd_data: Cmd) -> None:
@@ -61,7 +61,7 @@ def export_administrative_info(administrative_info: BundleAdministrativeInfo, cm
     ]
     
     # Assign to cmd_data
-    cmd_data.components.blam_bundle_repository_v1_0.bundle_administrative_info = bundle_info
+    cmd_data.components.blam_bundle_repository_v1_1.bundle_administrative_info = bundle_info
 
 
 def create_access_type(administrative_info: BundleAdministrativeInfo) -> AccessType:
@@ -82,20 +82,24 @@ def create_access_type(administrative_info: BundleAdministrativeInfo) -> AccessT
         first_license = administrative_info.licenses.first()
         access.value = map_to_schema_access_type(first_license.access)
     else:
-        # Default to OPEN if no licenses are defined
-        access.value = "open"
+        # Default to public if no licenses are defined
+        access.value = "public"
     
     return access
 
 
 def map_to_schema_access_type(access_type: str) -> str:
-    """Map model access type to schema access type."""
+    """Map model access type to schema access type (v1.1 uses public/academic/restricted)."""
     mapping = {
-        AccessTypeChoices.OPEN.value: "open",
-        AccessTypeChoices.REGISTRATION_REQUIRED.value: "registration-required",
-        AccessTypeChoices.REQUEST_REQUIRED.value: "request-required",
+        "public": "public",
+        "academic": "academic",
+        "restricted": "restricted",
+        # Legacy mappings for backward compatibility
+        AccessTypeChoices.OPEN.value: "public",
+        AccessTypeChoices.REGISTRATION_REQUIRED.value: "academic",
+        AccessTypeChoices.REQUEST_REQUIRED.value: "restricted",
     }
-    return mapping.get(access_type, "open")
+    return mapping.get(access_type, "public")
 
 
 def create_availability_date(availability_date: Optional[date]) -> Optional[XmlDate]:

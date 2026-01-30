@@ -1,7 +1,7 @@
 from typing import Any, Optional, Tuple
 from django.db import transaction
 from django.utils import timezone
-from blam_schemas.collection.blam_collection_repository_v1_0 import SimpletypeAccess41
+from blam_schemas.collection import SimpletypeAccess41
 from lacos.blam.models.collection.collection_administrative_info import CollectionLicense, CollectionAdministrativeInfo
 from lacos.blam.models.collection.collection_repository import Collection
 
@@ -19,7 +19,7 @@ def import_collection_license(cmd_data: Any, collection: Collection) -> Optional
         The created CollectionLicense instance or None if no license data is found
     """
     # Get the repository component
-    repo = cmd_data.components.blam_collection_repository_v1_0
+    repo = cmd_data.components.blam_collection_repository_v1_2
     
     # If there's no administrative info, return None
     if not hasattr(repo, 'collection_administrative_info') or not repo.collection_administrative_info:
@@ -131,15 +131,15 @@ def create_collection_license(admin_info_schema, license_schema=None) -> Optiona
     Returns:
         A CollectionLicense instance or None if no valid license data.
     """
-    # Map access type from schema to model
-    access = "open"  # Default value
+    # Map access type from schema to model (v1.2 uses public/academic/restricted)
+    access = "public"  # Default value
     if admin_info_schema.access and admin_info_schema.access.value:
         access_mapping = {
-            SimpletypeAccess41.OPEN: "open",
-            SimpletypeAccess41.REGISTRATION_REQUIRED: "registration_required",
-            SimpletypeAccess41.REQUEST_REQUIRED: "request_required"
+            SimpletypeAccess41.PUBLIC: "public",
+            SimpletypeAccess41.ACADEMIC: "academic",
+            SimpletypeAccess41.RESTRICTED: "restricted"
         }
-        access = access_mapping.get(admin_info_schema.access.value, "open")
+        access = access_mapping.get(admin_info_schema.access.value, "public")
     
     # Use provided license schema or get first one
     license_data = license_schema or (admin_info_schema.license[0] if admin_info_schema.license else None)

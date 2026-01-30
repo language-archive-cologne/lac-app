@@ -5,7 +5,7 @@ from typing import Optional
 from django.db.models import QuerySet
 from xsdata.models.datatype import XmlPeriod
 
-from blam_schemas.collection.blam_collection_repository_v1_0 import (
+from blam_schemas.collection.blam_collection_repository_v1_2 import (
     Cmd,
     CreatorNameIdentifierIdentifierType,
     ContributorNameIdentifierIdentifierType,
@@ -18,15 +18,15 @@ from lacos.blam.models.collection.collection_publication_info import (
 )
 
 # Type aliases
-PubInfoType = Cmd.Components.BlamCollectionRepositoryV10.CollectionPublicationInfo
-CreatorsType = Cmd.Components.BlamCollectionRepositoryV10.CollectionPublicationInfo.CollectionCreators
-CreatorType = Cmd.Components.BlamCollectionRepositoryV10.CollectionPublicationInfo.CollectionCreators.CollectionCreator
-CreatorNameType = Cmd.Components.BlamCollectionRepositoryV10.CollectionPublicationInfo.CollectionCreators.CollectionCreator.CreatorName
-CreatorNameIdType = Cmd.Components.BlamCollectionRepositoryV10.CollectionPublicationInfo.CollectionCreators.CollectionCreator.CreatorNameIdentifier
-ContributorsType = Cmd.Components.BlamCollectionRepositoryV10.CollectionPublicationInfo.CollectionContributors
-ContributorType = Cmd.Components.BlamCollectionRepositoryV10.CollectionPublicationInfo.CollectionContributors.CollectionContributor
-ContributorNameType = Cmd.Components.BlamCollectionRepositoryV10.CollectionPublicationInfo.CollectionContributors.CollectionContributor.ContributorName
-ContributorNameIdType = Cmd.Components.BlamCollectionRepositoryV10.CollectionPublicationInfo.CollectionContributors.CollectionContributor.ContributorNameIdentifier
+PubInfoType = Cmd.Components.BlamCollectionRepositoryV12.CollectionPublicationInfo
+CreatorsType = Cmd.Components.BlamCollectionRepositoryV12.CollectionPublicationInfo.CollectionCreators
+CreatorType = Cmd.Components.BlamCollectionRepositoryV12.CollectionPublicationInfo.CollectionCreators.CollectionCreator
+CreatorNameType = Cmd.Components.BlamCollectionRepositoryV12.CollectionPublicationInfo.CollectionCreators.CollectionCreator.CreatorName
+CreatorNameIdType = Cmd.Components.BlamCollectionRepositoryV12.CollectionPublicationInfo.CollectionCreators.CollectionCreator.CreatorNameIdentifier
+ContributorsType = Cmd.Components.BlamCollectionRepositoryV12.CollectionPublicationInfo.CollectionContributors
+ContributorType = Cmd.Components.BlamCollectionRepositoryV12.CollectionPublicationInfo.CollectionContributors.CollectionContributor
+ContributorNameType = Cmd.Components.BlamCollectionRepositoryV12.CollectionPublicationInfo.CollectionContributors.CollectionContributor.ContributorName
+ContributorNameIdType = Cmd.Components.BlamCollectionRepositoryV12.CollectionPublicationInfo.CollectionContributors.CollectionContributor.ContributorNameIdentifier
 
 
 def export_publication_info(pub_info: CollectionPublicationInfo, repo) -> None:

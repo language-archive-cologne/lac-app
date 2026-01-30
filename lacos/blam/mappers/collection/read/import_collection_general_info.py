@@ -36,7 +36,7 @@ def import_general_info(cmd_data: Any, collection: Collection) -> CollectionGene
         A fully populated CollectionGeneralInfo instance with all related objects.
     """
     # Extract the general info section from the schema
-    general_info_schema = cmd_data.components.blam_collection_repository_v1_0.collection_general_info
+    general_info_schema = cmd_data.components.blam_collection_repository_v1_2.collection_general_info
     
     # Create location first since it's required by general info
     location = create_location(general_info_schema.collection_location)

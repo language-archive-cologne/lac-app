@@ -5,7 +5,7 @@ from typing import Optional
 from django.db.models import QuerySet
 from xsdata.models.datatype import XmlDate
 
-from blam_schemas.collection.blam_collection_repository_v1_0 import (
+from blam_schemas.collection.blam_collection_repository_v1_2 import (
     Cmd,
     ComplextypeAccess41,
     SimpletypeAccess41,
@@ -19,10 +19,10 @@ from lacos.blam.models.collection.collection_administrative_info import (
 )
 
 # Type aliases
-AdminInfoType = Cmd.Components.BlamCollectionRepositoryV10.CollectionAdministrativeInfo
-LicenseType = Cmd.Components.BlamCollectionRepositoryV10.CollectionAdministrativeInfo.License
-RightsHolderType = Cmd.Components.BlamCollectionRepositoryV10.CollectionAdministrativeInfo.RightsHolder
-RightsHolderIdType = Cmd.Components.BlamCollectionRepositoryV10.CollectionAdministrativeInfo.RightsHolder.RightsHolderIdentifier
+AdminInfoType = Cmd.Components.BlamCollectionRepositoryV12.CollectionAdministrativeInfo
+LicenseType = Cmd.Components.BlamCollectionRepositoryV12.CollectionAdministrativeInfo.License
+RightsHolderType = Cmd.Components.BlamCollectionRepositoryV12.CollectionAdministrativeInfo.RightsHolder
+RightsHolderIdType = Cmd.Components.BlamCollectionRepositoryV12.CollectionAdministrativeInfo.RightsHolder.RightsHolderIdentifier
 
 
 def export_administrative_info(admin_info: CollectionAdministrativeInfo, repo) -> None:
@@ -58,13 +58,18 @@ def export_administrative_info(admin_info: CollectionAdministrativeInfo, repo) -
 
 def _export_access(access_level: str) -> ComplextypeAccess41:
     access = ComplextypeAccess41()
+    # v1.2 uses public/academic/restricted directly
     mapping = {
-        "public": SimpletypeAccess41.OPEN,
-        "protected": SimpletypeAccess41.REGISTRATION_REQUIRED,
-        "private": SimpletypeAccess41.REQUEST_REQUIRED,
-        "embargo": SimpletypeAccess41.REQUEST_REQUIRED,
+        "public": SimpletypeAccess41.PUBLIC,
+        "academic": SimpletypeAccess41.ACADEMIC,
+        "restricted": SimpletypeAccess41.RESTRICTED,
+        # Legacy mappings for backward compatibility
+        "open": SimpletypeAccess41.PUBLIC,
+        "protected": SimpletypeAccess41.ACADEMIC,
+        "private": SimpletypeAccess41.RESTRICTED,
+        "embargo": SimpletypeAccess41.RESTRICTED,
     }
-    access.value = mapping.get(access_level, SimpletypeAccess41.OPEN)
+    access.value = mapping.get(access_level, SimpletypeAccess41.PUBLIC)
     return access
 
 

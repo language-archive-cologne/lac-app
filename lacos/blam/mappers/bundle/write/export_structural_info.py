@@ -5,18 +5,18 @@ from lacos.blam.models.bundle.bundle_structural_info import (
     BundleAdditionalMetadataFile,
     BundleResources
 )
-from blam_schemas.bundle.blam_bundle_repository_v1_0 import (
+from blam_schemas.bundle.blam_bundle_repository_v1_1 import (
     Cmd,
     BundleIsMemberOfCollectionIdentifierType
 )
 
 # Type aliases for nested classes from the schema
-BundleStructuralInfoType = Cmd.Components.BlamBundleRepositoryV10.BundleStructuralInfo
-BundleResourcesType = Cmd.Components.BlamBundleRepositoryV10.BundleStructuralInfo.BundleResources
-MediaResourceType = Cmd.Components.BlamBundleRepositoryV10.BundleStructuralInfo.BundleResources.MediaResource
-WrittenResourceType = Cmd.Components.BlamBundleRepositoryV10.BundleStructuralInfo.BundleResources.WrittenResource
-OtherResourceType = Cmd.Components.BlamBundleRepositoryV10.BundleStructuralInfo.BundleResources.OtherResource
-BundleAdditionalMetadataFileType = Cmd.Components.BlamBundleRepositoryV10.BundleStructuralInfo.BundleAdditionalMetadataFile
+BundleStructuralInfoType = Cmd.Components.BlamBundleRepositoryV11.BundleStructuralInfo
+BundleResourcesType = Cmd.Components.BlamBundleRepositoryV11.BundleStructuralInfo.BundleResources
+MediaResourceType = Cmd.Components.BlamBundleRepositoryV11.BundleStructuralInfo.BundleResources.MediaResource
+WrittenResourceType = Cmd.Components.BlamBundleRepositoryV11.BundleStructuralInfo.BundleResources.WrittenResource
+OtherResourceType = Cmd.Components.BlamBundleRepositoryV11.BundleStructuralInfo.BundleResources.OtherResource
+BundleAdditionalMetadataFileType = Cmd.Components.BlamBundleRepositoryV11.BundleStructuralInfo.BundleAdditionalMetadataFile
 
 
 def export_structural_info(structural_info: BundleStructuralInfo, cmd_data: Cmd) -> None:
@@ -47,7 +47,7 @@ def export_structural_info(structural_info: BundleStructuralInfo, cmd_data: Cmd)
     bundle_info.bundle_resources = export_bundle_resources(structural_info)
     
     # Assign to cmd_data
-    cmd_data.components.blam_bundle_repository_v1_0.bundle_structural_info = bundle_info
+    cmd_data.components.blam_bundle_repository_v1_1.bundle_structural_info = bundle_info
 
 
 def create_collection_membership(collection_info: Any) -> Any:
@@ -60,7 +60,7 @@ def create_collection_membership(collection_info: Any) -> Any:
     Returns:
         A collection membership object for the schema
     """
-    membership = Cmd.Components.BlamBundleRepositoryV10.BundleStructuralInfo.BundleIsMemberOfCollection()
+    membership = Cmd.Components.BlamBundleRepositoryV11.BundleStructuralInfo.BundleIsMemberOfCollection()
     membership.value = collection_info.id_value
     membership.identifier_type = map_to_collection_identifier_type(collection_info.id_type)
     return membership

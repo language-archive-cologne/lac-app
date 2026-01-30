@@ -27,7 +27,7 @@ def import_structural_info(cmd_data: Any, collection: Collection) -> CollectionS
         A fully populated CollectionStructuralInfo instance with all related objects.
     """
     # Extract the structural info section from the schema
-    structural_info_schema = cmd_data.components.blam_collection_repository_v1_0.collection_structural_info
+    structural_info_schema = cmd_data.components.blam_collection_repository_v1_2.collection_structural_info
     
     # Try to find an existing structural info for this collection or create a new one
     try:

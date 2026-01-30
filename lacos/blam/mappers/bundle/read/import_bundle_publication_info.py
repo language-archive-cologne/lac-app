@@ -3,7 +3,7 @@ from django.db import transaction
 from lacos.blam.models.bundle.bundle_publication_info import (
     BundlePublicationInfo, BundleCreator, BundleContributor, BundleContributorName
 )
-from blam_schemas.bundle.blam_bundle_repository_v1_0 import (
+from blam_schemas.bundle.blam_bundle_repository_v1_1 import (
     Cmd,
     CreatorNameIdentifierIdentifierType,
     ContributorNameIdentifierIdentifierType,
@@ -26,10 +26,10 @@ def import_publication_info(cmd_data: Cmd, bundle: 'Bundle') -> Optional[BundleP
         BundlePublicationInfo object or None if publication info is missing
     """
     components = cmd_data.components
-    if not components or not components.blam_bundle_repository_v1_0:
+    if not components or not components.blam_bundle_repository_v1_1:
         return None
         
-    repo = components.blam_bundle_repository_v1_0
+    repo = components.blam_bundle_repository_v1_1
     pub_info = repo.bundle_publication_info
     if not pub_info:
         return None

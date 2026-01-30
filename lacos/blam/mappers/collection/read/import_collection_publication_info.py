@@ -6,7 +6,7 @@ from lacos.blam.models.collection.collection_publication_info import (
     CollectionContributor
 )
 from lacos.blam.models.collection.collection_repository import Collection
-from blam_schemas.collection.blam_collection_repository_v1_0 import (
+from blam_schemas.collection.blam_collection_repository_v1_2 import (
     CreatorNameIdentifierIdentifierType,
     ContributorNameIdentifierIdentifierType
 )
@@ -32,7 +32,7 @@ def import_publication_info(cmd_data: Any, collection: Collection) -> Collection
         A fully populated CollectionPublicationInfo instance with all related objects.
     """
     # Extract the publication info section from the schema
-    publication_info_schema = cmd_data.components.blam_collection_repository_v1_0.collection_publication_info
+    publication_info_schema = cmd_data.components.blam_collection_repository_v1_2.collection_publication_info
     
     # Create and populate the publication info model
     publication_info = create_base_publication_info(publication_info_schema, collection)
