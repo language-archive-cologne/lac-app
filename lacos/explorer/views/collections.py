@@ -371,6 +371,11 @@ class CollectionDetailView(HandleLookupMixin, DetailView):
         return ". ".join(parts) + "." if parts else ""
 
     def render_to_response(self, context, **response_kwargs):
+        # CLARIN content negotiation: return CMDI/XML if requested
+        accept = self.request.headers.get('Accept', '')
+        if 'application/x-cmdi+xml' in accept:
+            return redirect('explorer:collection_xml_by_handle', handle=self.object.identifier)
+
         if self.request.headers.get('HX-Request'):
             if 'bundle_page' in self.request.GET or 'bundle_search' in self.request.GET:
                 return render(

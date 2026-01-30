@@ -59,6 +59,17 @@ class BundleDetailView(HandleLookupMixin, ACLPermissionMixin, DetailView):
             "resources",
         )
 
+    def render_to_response(self, context, **response_kwargs):
+        """Handle content negotiation for CLARIN infrastructure compatibility.
+
+        Returns CMDI/XML when Accept header requests application/x-cmdi+xml.
+        """
+        accept = self.request.headers.get('Accept', '')
+        if 'application/x-cmdi+xml' in accept:
+            return redirect('explorer:bundle_xml_by_handle', handle=self.object.identifier)
+
+        return super().render_to_response(context, **response_kwargs)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         result = getattr(self, "acl_result", None)
