@@ -47,6 +47,18 @@ class BundleDetailView(HandleLookupMixin, ACLPermissionMixin, DetailView):
     template_name = "bundle_detail.html"
     context_object_name = "bundle"
 
+    def get_queryset(self):
+        return Bundle.objects.prefetch_related(
+            "general_info",
+            "general_info__object_languages",
+            "structural_info",
+            "structural_info__bundle_topics",
+            "structural_info__additional_metadata_files",
+            "administrative_info",
+            "administrative_info__licenses",
+            "resources",
+        )
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         result = getattr(self, "acl_result", None)
@@ -92,6 +104,11 @@ class BundleDetailView(HandleLookupMixin, ACLPermissionMixin, DetailView):
                 for res in self.object.structural_info.first().additional_metadata_files.all()
             ]
             context['metadata_files'] = [res for res in metadata_files if res]
+
+        # Licenses
+        context['licenses'] = []
+        if hasattr(self.object, 'administrative_info') and self.object.administrative_info.first():
+            context['licenses'] = self.object.administrative_info.first().licenses.all()
 
         return context
 

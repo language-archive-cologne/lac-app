@@ -231,6 +231,8 @@ class CollectionDetailView(HandleLookupMixin, DetailView):
             "publication_info__creators",
             "structural_info",
             "structural_info__additional_metadata_files",
+            "administrative_info",
+            "administrative_info__licenses",
         )
 
     def get_context_data(self, **kwargs):
@@ -294,6 +296,11 @@ class CollectionDetailView(HandleLookupMixin, DetailView):
             bundle_info['acl_check_result'] = bundle_acl
             bundle_info['access_level'] = bundle_acl.access_level
             bundle_info['can_read_bundle'] = bundle_acl.allowed or not acl_service.enforcement_enabled
+
+        # Licenses
+        context['licenses'] = []
+        if hasattr(self.object, 'administrative_info') and self.object.administrative_info.first():
+            context['licenses'] = self.object.administrative_info.first().licenses.all()
 
         return context
 

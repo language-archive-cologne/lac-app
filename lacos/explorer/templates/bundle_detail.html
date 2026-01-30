@@ -45,7 +45,7 @@
         {% endif %}
       </h1>
       {% with access_level=acl_check_result.access_level|default:'restricted' %}
-        <div class="mt-2 flex items-center gap-1">
+        <div class="mt-2 flex items-center gap-2 flex-wrap">
           {% if access_level == 'public' %}
             <span class="badge badge-success">Public</span>
             <div class="tooltip" data-tip="{% translate 'Anyone can read these files' %}">
@@ -68,6 +68,11 @@
               </svg>
             </div>
           {% endif %}
+          {% for license in licenses %}
+            <a href="{{ license.license_identifier }}" target="_blank" rel="noopener" class="badge badge-outline hover:badge-primary transition-colors">
+              {{ license.license_name }}
+            </a>
+          {% endfor %}
         </div>
       {% endwith %}
       {% if bundle.identifier %}
