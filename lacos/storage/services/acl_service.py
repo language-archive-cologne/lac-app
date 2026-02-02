@@ -89,13 +89,31 @@ class ACLService(BaseStorageService):
         """Load ACL from S3 for a single collection."""
         bucket = collection.import_bucket or self.production_bucket
         key = self._build_acl_key(collection)
-        return self._load_object(collection, bucket, key)
+        result = self._load_object(collection, bucket, key)
+
+        # Fallback to legacy path if OCFL 1.1 path not found
+        if not result.success and result.error is None:
+            legacy_key = self._build_legacy_acl_key(collection)
+            if legacy_key and legacy_key != key:
+                self.logger.info(f"Trying legacy ACL path for collection {collection.pk}: {legacy_key}")
+                result = self._load_object(collection, bucket, legacy_key)
+
+        return result
 
     def load_bundle(self, bundle: Bundle) -> ACLResult:
         """Load ACL from S3 for a single bundle."""
         bucket = bundle.import_bucket or self.production_bucket
         key = self._build_acl_key(bundle)
-        return self._load_object(bundle, bucket, key)
+        result = self._load_object(bundle, bucket, key)
+
+        # Fallback to legacy path if OCFL 1.1 path not found
+        if not result.success and result.error is None:
+            legacy_key = self._build_legacy_acl_key(bundle)
+            if legacy_key and legacy_key != key:
+                self.logger.info(f"Trying legacy ACL path for bundle {bundle.pk}: {legacy_key}")
+                result = self._load_object(bundle, bucket, legacy_key)
+
+        return result
 
     def _load_object(self, obj: Any, bucket: Optional[str], key: Optional[str]) -> ACLResult:
         if not bucket or not key:
@@ -303,7 +321,24 @@ class ACLService(BaseStorageService):
         return data, True, None, {"from_cache": False, "etag": response.get("ETag"), "last_modified": response.get("LastModified")}
 
     def _build_acl_key(self, obj: Any) -> Optional[str]:
-        """Build the S3 key for an object's acl.json file."""
+        """
+        Build the S3 key for an object's acl.json file.
+
+        OCFL 1.1 structure places ACL in extensions/<object>-acl/acl.json
+        """
+        base_prefix = self._resolve_object_prefix(obj)
+        if not base_prefix:
+            return None
+
+        # Get the object identifier for the extension directory name
+        base_prefix = base_prefix.rstrip('/')
+        obj_id = base_prefix.rsplit('/', 1)[-1]  # Get last path component
+
+        # OCFL 1.1: ACL in extensions/<object>-acl/acl.json
+        return f"{base_prefix}/extensions/{obj_id}-acl/acl.json"
+
+    def _build_legacy_acl_key(self, obj: Any) -> Optional[str]:
+        """Build the legacy S3 key for an object's acl.json file (pre-OCFL 1.1)."""
         base_prefix = self._resolve_object_prefix(obj)
         if not base_prefix:
             return None

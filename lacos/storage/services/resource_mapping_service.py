@@ -332,10 +332,12 @@ class ResourceMappingService(BaseStorageService):
         Extract the base OCFL path from an import_object_key.
 
         The import_object_key format is:
-        - Collection: "{collection_folder}/v1/content/{collection_folder}.xml"
-        - Bundle: "{collection_folder}/{bundle_folder}/v1/content/{bundle_folder}.xml"
+        - OCFL 1.1: "{collection_folder}/v1/metadata/{collection_folder}.xml"
+        - Legacy: "{collection_folder}/v1/content/{collection_folder}.xml"
+        - Bundle OCFL 1.1: "{collection_folder}/{bundle_folder}/v1/metadata/{bundle_folder}.xml"
+        - Bundle Legacy: "{collection_folder}/{bundle_folder}/v1/content/{bundle_folder}.xml"
 
-        This method extracts everything before '/v1/content/' to get the base path.
+        This method extracts everything before '/v1/' to get the base path.
 
         Args:
             import_object_key: The import_object_key from a Collection or Bundle
@@ -347,14 +349,28 @@ class ResourceMappingService(BaseStorageService):
         if not import_object_key:
             return None
 
-        # Find the '/v1/content/' marker and extract everything before it
-        v1_marker = '/v1/content/'
+        # OCFL 1.1: metadata in /v1/metadata/
+        v1_metadata_marker = '/v1/metadata/'
+        idx = import_object_key.find(v1_metadata_marker)
+        if idx > 0:
+            base_path = import_object_key[:idx] + '/'
+            return base_path
+
+        # Legacy: metadata in /v1/content/
+        v1_content_marker = '/v1/content/'
+        idx = import_object_key.find(v1_content_marker)
+        if idx > 0:
+            base_path = import_object_key[:idx] + '/'
+            return base_path
+
+        # Generic fallback: find /v1/ marker
+        v1_marker = '/v1/'
         idx = import_object_key.find(v1_marker)
         if idx > 0:
             base_path = import_object_key[:idx] + '/'
             return base_path
 
-        # Fallback: if no v1/content marker, try to extract directory path
+        # Fallback: if no v1 marker, try to extract directory path
         # This handles cases where import_object_key might just be a directory
         if '/' in import_object_key:
             # Remove trailing filename if present
@@ -369,24 +385,24 @@ class ResourceMappingService(BaseStorageService):
         """
         Get the base path for resources within a bundle's OCFL structure.
 
-        Resources are stored at: {bundle_path}/v1/content/Resources/
+        OCFL 1.1 structure: Resources are stored at: {bundle_path}/v1/content/
+        Legacy structure: Resources were at: {bundle_path}/v1/content/Resources/
 
         Args:
             bundle_import_object_key: The import_object_key from a Bundle
 
         Returns:
-            The base path for resources (e.g., "qaqet_child_language/bundle1/v1/content/Resources/")
+            The base path for resources (e.g., "qaqet_child_language/bundle1/v1/content/")
             or None if the path cannot be extracted
         """
         if not bundle_import_object_key:
             return None
 
-        # Find the '/v1/content/' marker
-        v1_marker = '/v1/content/'
-        idx = bundle_import_object_key.find(v1_marker)
-        if idx > 0:
-            # Return the path up to and including /v1/content/ plus Resources/
-            return bundle_import_object_key[:idx] + v1_marker + 'Resources/'
+        # Extract base path first
+        base_path = self._extract_ocfl_base_path(bundle_import_object_key)
+        if base_path:
+            # OCFL 1.1: resources directly in v1/content/ (no Resources subdirectory)
+            return base_path.rstrip('/') + '/v1/content/'
 
         return None
 

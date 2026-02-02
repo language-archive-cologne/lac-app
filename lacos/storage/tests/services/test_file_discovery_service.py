@@ -14,29 +14,25 @@ load_dotenv(env_file_path)
 
 # Test to verify environment variables are loaded
 def test_env_vars_loaded():
-    """Verify that environment variables from .django are loaded correctly."""
-    os.environ['RESOURCE_PATH_PATTERN'] = '{collection_id}/{bundle_id}/v1/content/data/{resource_filename}'
+    """Verify that environment variables from .django are loaded correctly (OCFL 1.1 structure)."""
     # Check specific environment variables for base patterns
     assert os.environ.get('COLLECTION_PATH_PATTERN') == '{collection_id}/{collection_id}'
     assert os.environ.get('BUNDLE_PATH_PATTERN') == '{collection_id}/{bundle_id}'
-    
-    # The derived patterns should either be explicitly set or will be derived
-    # If set explicitly, check their values
-    # If not set, that's also fine as they'll be derived in the code
+
+    # OCFL 1.1: resources in v1/content/ (no data subdirectory)
     if 'RESOURCE_PATH_PATTERN' in os.environ:
-        from lacos.storage.constants import OCFL_DATA_DIR
-        assert f"/content/{OCFL_DATA_DIR}/" in os.environ.get('RESOURCE_PATH_PATTERN')
-    
+        resource_pattern = os.environ.get('RESOURCE_PATH_PATTERN')
+        assert '/v1/content/' in resource_pattern
+
+    # OCFL 1.1: metadata in v1/metadata/ (not v1/content/)
     if 'COLLECTION_XML_PATH' in os.environ:
-        # Check if explicitly set
         collection_xml = os.environ.get('COLLECTION_XML_PATH')
-        assert collection_xml is None or collection_xml == '{collection_id}/{collection_id}/v1/content/{collection_id}.xml'
-    
+        assert collection_xml is None or collection_xml == '{collection_id}/{collection_id}/v1/metadata/{collection_id}.xml'
+
     if 'BUNDLE_XML_PATH' in os.environ:
-        # Check if explicitly set
         bundle_xml = os.environ.get('BUNDLE_XML_PATH')
-        assert bundle_xml is None or bundle_xml == '{collection_id}/{bundle_id}/v1/content/{bundle_id}.xml'
-    
+        assert bundle_xml is None or bundle_xml == '{collection_id}/{bundle_id}/v1/metadata/{bundle_id}.xml'
+
     print(f"Environment variables loaded: {dict((k,v) for k,v in os.environ.items() if k.endswith('_PATH') or k.endswith('_PATTERN'))}")
 
 # Use mock_s3 fixture from conftest.py
@@ -72,25 +68,28 @@ def test_bundle_path(discovery_service):
     assert path == "algerien/bundle123"
 
 def test_resource_path(discovery_service):
+    """OCFL 1.1: resources directly in v1/content/ (no data subdirectory)"""
     path = discovery_service.form_resource_path("algerien", "bundle123", "audio.mp3")
-    assert path == "algerien/bundle123/v1/content/data/audio.mp3"
+    assert path == "algerien/bundle123/v1/content/audio.mp3"
 
 def test_collection_xml_path(discovery_service):
+    """OCFL 1.1: metadata in v1/metadata/ (not v1/content/)"""
     path = discovery_service.form_collection_xml_path("algerien")
-    assert path == "algerien/algerien/v1/content/algerien.xml"
+    assert path == "algerien/algerien/v1/metadata/algerien.xml"
 
 def test_bundle_xml_path(discovery_service):
+    """OCFL 1.1: metadata in v1/metadata/ (not v1/content/)"""
     path = discovery_service.form_bundle_xml_path("algerien", "bundle123")
-    assert path == "algerien/bundle123/v1/content/bundle123.xml"
+    assert path == "algerien/bundle123/v1/metadata/bundle123.xml"
 
 
 # Test S3 operations with real folder structure
 def test_find_collections_s3(mock_s3, discovery_service):
-    """Test finding collections using the S3 API with a real directory structure"""
+    """Test finding collections using the S3 API with a real directory structure (OCFL 1.1)"""
     # Create test collection folders with proper structure
     for collection_id in ["algerien", "alwateti"]:
-        # Create collection XML file
-        xml_path = f"{collection_id}/{collection_id}/v1/content/{collection_id}.xml"
+        # Create collection XML file (OCFL 1.1: metadata in v1/metadata/)
+        xml_path = f"{collection_id}/{collection_id}/v1/metadata/{collection_id}.xml"
         mock_s3.put_object(
             Bucket=TEST_BUCKET_NAME,
             Key=xml_path,

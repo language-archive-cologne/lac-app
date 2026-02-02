@@ -3,16 +3,20 @@
 USE_DOCKER=yes
 IPYTHONDIR=/app/.ipython
 
-# COLLECTION PATH STRUCTURE CONFIGURATION
+# COLLECTION PATH STRUCTURE CONFIGURATION (OCFL 1.1)
 # ======================================================
 
 # Base path patterns - Use Python-style string format placeholders
 COLLECTION_PATH_PATTERN={collection_id}/{collection_id}
 BUNDLE_PATH_PATTERN={collection_id}/{bundle_id}
-# Resource and XML paths are explicitly defined
-RESOURCE_PATH_PATTERN={collection_id}/{bundle_id}/v1/content/data/{resource_filename}
-COLLECTION_XML_PATH={collection_id}/{collection_id}/v1/content/{collection_id}.xml
-BUNDLE_XML_PATH={collection_id}/{bundle_id}/v1/content/{bundle_id}.xml
+
+# OCFL 1.1 structure:
+# - Metadata XML in v1/metadata/ (not versioned, outside content)
+# - Resources in v1/content/ (versioned, tracked in inventory)
+# - ACL in extensions/<bundle>-acl/ (handled by ACLService)
+RESOURCE_PATH_PATTERN={collection_id}/{bundle_id}/v1/content/{resource_filename}
+COLLECTION_XML_PATH={collection_id}/{collection_id}/v1/metadata/{collection_id}.xml
+BUNDLE_XML_PATH={collection_id}/{bundle_id}/v1/metadata/{bundle_id}.xml
 
 # Database backup (Huey - local/MinIO)
 # ------------------------------------------------------------------------------

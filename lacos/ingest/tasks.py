@@ -282,7 +282,8 @@ def cleanup_orphan_bundles(
         return (collection_id, list_of_pairs)
 
     # Extract bundle identifiers from S3 keys
-    # S3 key format: "collection_id/bundle_id/v1/content/bundle_id.xml"
+    # S3 key format (OCFL 1.1): "collection_id/bundle_id/v1/metadata/bundle_id.xml"
+    # S3 key format (legacy): "collection_id/bundle_id/v1/content/bundle_id.xml"
     s3_bundle_identifiers: Set[str] = set()
     for key in s3_bundle_keys:
         parts = key.split('/')
@@ -316,6 +317,7 @@ def cleanup_orphan_bundles(
         orphan_bundles = []
         for bundle in db_bundles:
             # Extract bundle folder from import_object_key
+            # Format: "collection/bundle_folder/v1/{metadata|content}/bundle.xml"
             bundle_folder = None
             if bundle.import_object_key:
                 parts = bundle.import_object_key.split('/')
