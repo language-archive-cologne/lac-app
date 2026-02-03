@@ -4,11 +4,14 @@ from pathlib import Path
 from typing import Iterable, Optional
 from urllib.parse import unquote
 
+from django.contrib.contenttypes.models import ContentType
+
 from lacos.explorer.media_utils import determine_media_type
+from lacos.storage.models.s3_resource_location import S3ResourceLocation
 
 
 def annotate_resource(resource):
-    """Add detected_media_type attribute to a resource based on mime_type and file_name."""
+    """Add detected_media_type and s3_location attributes to a resource."""
     if resource is None:
         return None
 
@@ -16,6 +19,20 @@ def annotate_resource(resource):
         getattr(resource, "mime_type", None),
         getattr(resource, "file_name", None),
     )
+
+    # Look up S3 location for size info
+    try:
+        content_type = ContentType.objects.get_for_model(resource)
+        s3_location = S3ResourceLocation.objects.filter(
+            content_type=content_type,
+            object_id=str(resource.id)
+        ).first()
+        resource.s3_location = s3_location
+        resource.size_bytes = s3_location.size_bytes if s3_location else 0
+    except Exception:
+        resource.s3_location = None
+        resource.size_bytes = 0
+
     return resource
 
 
