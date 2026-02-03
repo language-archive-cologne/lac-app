@@ -33,6 +33,30 @@ WINDOWS_INVALID_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 class DownloadScriptService:
     """Generates download scripts and manifests for bundle downloads."""
 
+    def sanitize_entity_name(self, name: str) -> str:
+        """Sanitize an entity name for safe inclusion in generated scripts.
+
+        Removes shell metacharacters that could be used for command injection.
+
+        Args:
+            name: Original entity name (bundle/collection name)
+
+        Returns:
+            Sanitized name with only safe characters
+        """
+        # Keep only alphanumeric, spaces, dashes, underscores, and periods
+        safe_chars = []
+        for char in name:
+            if char.isalnum() or char in " -_.":
+                safe_chars.append(char)
+        sanitized = "".join(safe_chars)
+
+        # Collapse multiple spaces and strip
+        sanitized = " ".join(sanitized.split())
+
+        # Ensure non-empty result
+        return sanitized if sanitized else "unnamed"
+
     def sanitize_filename(self, filename: str, existing: set[str]) -> str:
         """Sanitize a filename for cross-platform compatibility.
 
@@ -101,12 +125,13 @@ class DownloadScriptService:
         Returns:
             Complete bash script as a string
         """
+        safe_bundle_name = self.sanitize_entity_name(bundle_name)
         now_iso = datetime.now(UTC).isoformat().replace("+00:00", "Z")
         lines = [
             "#!/bin/bash",
             "set -euo pipefail",
             "",
-            f"# Download script for bundle: {bundle_name}",
+            f"# Download script for bundle: {safe_bundle_name}",
             f"# Generated: {now_iso}",
             f"# WARNING: URLs expire at {expires_at.isoformat()}Z",
             "",
@@ -163,10 +188,11 @@ class DownloadScriptService:
         Returns:
             Complete PowerShell script as a string
         """
+        safe_bundle_name = self.sanitize_entity_name(bundle_name)
         now_iso = datetime.now(UTC).isoformat().replace("+00:00", "Z")
         lines = [
             "# PowerShell download script",
-            f"# Bundle: {bundle_name}",
+            f"# Bundle: {safe_bundle_name}",
             f"# Generated: {now_iso}",
             f"# WARNING: URLs expire at {expires_at.isoformat()}Z",
             "",
