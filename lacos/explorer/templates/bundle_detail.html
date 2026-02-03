@@ -199,8 +199,8 @@
           {% if can_read_bundle %}
           <div class="flex items-center gap-3">
             <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" class="checkbox checkbox-sm resource-select-all" />
-              <span class="text-sm">{% translate "Select All" %}</span>
+              <input type="checkbox" class="checkbox checkbox-sm resource-select-all" id="select-all-checkbox" />
+              <span class="text-sm select-all-label">{% translate "Select All" %}</span>
             </label>
             <button id="download-selected" class="btn btn-primary btn-sm" disabled>
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -213,7 +213,7 @@
         </div>
       </div>
 
-      <div id="bundle-resources-container">
+      <div id="bundle-resources-container" data-select-all-id="select-all-checkbox">
       <!-- Media Resources -->
       {% if media_resources %}
         <div class="px-4 py-5 sm:p-6">
@@ -225,7 +225,7 @@
           </h3>
           <div class="space-y-4">
             {% for resource in media_resources %}
-              <div class="resource-item flex items-center justify-between p-3 bg-base-200 rounded-lg" data-resource-id="{{ resource.id }}" data-size="0" data-filename="{{ resource.file_name }}">
+              <div class="resource-item flex items-center justify-between p-3 bg-base-200 rounded-lg" data-resource-id="{{ resource.id }}" data-size="{{ resource.size_bytes|default:0 }}" data-filename="{{ resource.file_name }}" data-bucket="{{ resource.s3_location.s3_bucket|default:'' }}" data-key="{{ resource.s3_location.s3_key|default:'' }}">
                 <div class="flex items-center gap-3 flex-1">
                   {% if can_read_bundle %}
                   <input type="checkbox" class="checkbox checkbox-sm resource-checkbox" />
@@ -241,14 +241,16 @@
                 <div>
                   {% if can_read_bundle %}
                   <div class="flex space-x-2">
-                    <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}"
-                       class="btn btn-primary btn-xs"
-                       target="_blank">
+                    <button type="button"
+                       class="btn btn-primary btn-xs single-download-btn"
+                       data-bucket="{{ resource.s3_location.s3_bucket|default:'' }}"
+                       data-key="{{ resource.s3_location.s3_key|default:'' }}"
+                       data-filename="{{ resource.file_name }}">
                       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                       </svg>
                       {% translate "Download" %}
-                    </a>
+                    </button>
 
                     {% if resource|is_media_type:"audio" or resource|is_media_type:"video" %}
                     <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play"
@@ -306,7 +308,7 @@
           </h3>
           <div class="space-y-4">
             {% for resource in written_resources %}
-              <div class="resource-item flex items-center justify-between p-3 bg-base-200 rounded-lg" data-resource-id="{{ resource.id }}" data-size="0" data-filename="{{ resource.file_name }}">
+              <div class="resource-item flex items-center justify-between p-3 bg-base-200 rounded-lg" data-resource-id="{{ resource.id }}" data-size="{{ resource.size_bytes|default:0 }}" data-filename="{{ resource.file_name }}" data-bucket="{{ resource.s3_location.s3_bucket|default:'' }}" data-key="{{ resource.s3_location.s3_key|default:'' }}">
                 <div class="flex items-center gap-3 flex-1">
                   {% if can_read_bundle %}
                   <input type="checkbox" class="checkbox checkbox-sm resource-checkbox" />
@@ -322,14 +324,16 @@
                 <div>
                   {% if can_read_bundle %}
                   <div class="flex space-x-2">
-                    <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}"
-                       class="btn btn-primary btn-xs"
-                       target="_blank">
+                    <button type="button"
+                       class="btn btn-primary btn-xs single-download-btn"
+                       data-bucket="{{ resource.s3_location.s3_bucket|default:'' }}"
+                       data-key="{{ resource.s3_location.s3_key|default:'' }}"
+                       data-filename="{{ resource.file_name }}">
                       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                       </svg>
                       {% translate "Download" %}
-                    </a>
+                    </button>
 
                     {% if resource|is_media_type:"audio" or resource|is_media_type:"video" %}
                     <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play"
@@ -391,7 +395,7 @@
           </h3>
           <div class="space-y-4">
             {% for resource in other_resources %}
-              <div class="resource-item flex items-center justify-between p-3 bg-base-200 rounded-lg" data-resource-id="{{ resource.id }}" data-size="0" data-filename="{{ resource.file_name }}">
+              <div class="resource-item flex items-center justify-between p-3 bg-base-200 rounded-lg" data-resource-id="{{ resource.id }}" data-size="{{ resource.size_bytes|default:0 }}" data-filename="{{ resource.file_name }}" data-bucket="{{ resource.s3_location.s3_bucket|default:'' }}" data-key="{{ resource.s3_location.s3_key|default:'' }}">
                 <div class="flex items-center gap-3 flex-1">
                   {% if can_read_bundle %}
                   <input type="checkbox" class="checkbox checkbox-sm resource-checkbox" />
@@ -407,14 +411,16 @@
                 <div>
                   {% if can_read_bundle %}
                   <div class="flex space-x-2">
-                    <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}"
-                       class="btn btn-primary btn-xs"
-                       target="_blank">
+                    <button type="button"
+                       class="btn btn-primary btn-xs single-download-btn"
+                       data-bucket="{{ resource.s3_location.s3_bucket|default:'' }}"
+                       data-key="{{ resource.s3_location.s3_key|default:'' }}"
+                       data-filename="{{ resource.file_name }}">
                       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                       </svg>
                       {% translate "Download" %}
-                    </a>
+                    </button>
 
                     {% if resource|is_media_type:"audio" or resource|is_media_type:"video" %}
                     <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play"
@@ -735,6 +741,7 @@
   {% if can_read_bundle %}
     {% if media_resources or written_resources or other_resources %}
       {% include "dashboard/partials/bundle_download_modal.html" %}
+      {% include "dashboard/partials/single_file_download_modal.html" %}
     {% endif %}
   {% endif %}
 {% endblock explorer_content %}
@@ -756,7 +763,7 @@ document.addEventListener('DOMContentLoaded', () => {
             checkboxSelector: '.resource-checkbox'
         });
 
-        // Open modal when download button clicked
+        // Open modal when download button clicked (multi-file)
         document.getElementById('download-selected').addEventListener('click', () => {
             const selectedIds = selector.getSelectedIds();
             if (selectedIds.length > 0 && window.bundleDownloadModal) {
@@ -766,6 +773,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     '{% if bundle.get_general_info.display_title %}{{ bundle.get_general_info.display_title|escapejs }}{% elif bundle.get_general_info.title %}{{ bundle.get_general_info.title|escapejs }}{% else %}{{ bundle.identifier|escapejs }}{% endif %}'
                 );
             }
+        });
+
+        // Single file download buttons - open modal with ALTCHA
+        document.querySelectorAll('.single-download-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (window.singleFileDownloadModal) {
+                    window.singleFileDownloadModal.open({
+                        bucket: btn.dataset.bucket,
+                        key: btn.dataset.key,
+                        filename: btn.dataset.filename
+                    });
+                }
+            });
         });
     }
 });

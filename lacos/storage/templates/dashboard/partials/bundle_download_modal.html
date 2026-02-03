@@ -47,8 +47,19 @@
 
     {# Script options (shown after verification) #}
     <div id="bundle-script-options" class="hidden space-y-4">
+      {# Skipped files warning (shown if some files couldn't be included) #}
+      <div id="bundle-skipped-warning" class="hidden alert alert-warning text-sm">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <div>
+          <p id="bundle-skipped-message" class="font-medium"></p>
+          <ul id="bundle-skipped-reasons" class="text-xs mt-1 list-disc list-inside"></ul>
+        </div>
+      </div>
+
       {# Expiration warning #}
-      <div class="alert alert-warning text-sm">
+      <div class="alert alert-info text-sm">
         <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
@@ -58,30 +69,70 @@
         </span>
       </div>
 
-      {# Download buttons #}
-      <div class="flex flex-wrap gap-2">
-        <button id="btn-download-bash" class="btn btn-primary">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          download.sh (Bash)
-        </button>
-        <button id="btn-download-powershell" class="btn btn-secondary">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-          </svg>
-          download.ps1 (PowerShell)
-        </button>
-        <button id="btn-download-manifest" class="btn btn-outline">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          manifest.json
-        </button>
+      {# How it works #}
+      <details class="collapse collapse-arrow bg-base-200">
+        <summary class="collapse-title text-sm font-medium">{% translate "How does this work?" %}</summary>
+        <div class="collapse-content text-sm space-y-2">
+          <p>{% translate "Instead of downloading files directly in your browser, we provide scripts that download files using command-line tools. This allows for:" %}</p>
+          <ul class="list-disc list-inside space-y-1 text-base-content/80">
+            <li>{% translate "Resumable downloads if connection is interrupted" %}</li>
+            <li>{% translate "Downloading multiple files automatically" %}</li>
+            <li>{% translate "Better handling of large files" %}</li>
+          </ul>
+        </div>
+      </details>
+
+      {# Download buttons with descriptions #}
+      <div class="space-y-3">
+        <p class="text-sm font-medium">{% translate "Choose your download method:" %}</p>
+
+        <div class="grid gap-2">
+          {# Bash script #}
+          <div class="flex items-start gap-3 p-3 bg-base-200 rounded-lg">
+            <button id="btn-download-bash" class="btn btn-primary btn-sm flex-shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              download.sh
+            </button>
+            <div class="text-sm">
+              <p class="font-medium">{% translate "Bash Script" %} <span class="badge badge-sm">Linux / macOS</span></p>
+              <p class="text-base-content/70">{% translate "Run in Terminal:" %} <code class="bg-base-300 px-1 rounded">bash download.sh</code></p>
+            </div>
+          </div>
+
+          {# PowerShell script #}
+          <div class="flex items-start gap-3 p-3 bg-base-200 rounded-lg">
+            <button id="btn-download-powershell" class="btn btn-secondary btn-sm flex-shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              download.ps1
+            </button>
+            <div class="text-sm">
+              <p class="font-medium">{% translate "PowerShell Script" %} <span class="badge badge-sm">Windows</span></p>
+              <p class="text-base-content/70">{% translate "Run in PowerShell:" %} <code class="bg-base-300 px-1 rounded">.\download.ps1</code></p>
+            </div>
+          </div>
+
+          {# Manifest JSON #}
+          <div class="flex items-start gap-3 p-3 bg-base-200 rounded-lg">
+            <button id="btn-download-manifest" class="btn btn-outline btn-sm flex-shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              manifest.json
+            </button>
+            <div class="text-sm">
+              <p class="font-medium">{% translate "JSON Manifest" %} <span class="badge badge-sm badge-ghost">{% translate "Advanced" %}</span></p>
+              <p class="text-base-content/70">{% translate "Machine-readable file list with URLs for custom tools" %}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {# Copy curl commands #}
-      <div class="divider">{% translate "Or copy commands" %}</div>
+      <div class="divider text-sm">{% translate "Or copy commands manually" %}</div>
       <button id="btn-copy-curl" class="btn btn-outline btn-sm w-full">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -91,8 +142,9 @@
 
       {# Individual file list with curl commands #}
       <details class="collapse collapse-arrow bg-base-200">
-        <summary class="collapse-title font-medium">{% translate "Individual file commands" %}</summary>
+        <summary class="collapse-title text-sm font-medium">{% translate "Individual file commands" %}</summary>
         <div class="collapse-content">
+          <p class="text-xs text-base-content/70 mb-2">{% translate "Copy and paste these commands in your terminal to download individual files:" %}</p>
           <div id="bundle-file-commands" class="space-y-2 text-sm font-mono"></div>
         </div>
       </details>
