@@ -357,8 +357,10 @@ STORAGE_ACL_CACHE_TIMEOUT = env.int("STORAGE_ACL_CACHE_TIMEOUT", default=900)
 # Presigned URL Configuration
 # ------------------------------------------------------------------------------
 # Default expiration time for presigned download URLs (in seconds)
-# 3600 = 1 hour - provides enough time for users to download files
-PRESIGNED_URL_EXPIRATION = env.int("PRESIGNED_URL_EXPIRATION", default=3600)
+# 86400 = 24 hours - allows resumable downloads for large files
+PRESIGNED_URL_EXPIRATION = env.int("PRESIGNED_URL_EXPIRATION", default=86400)
+# Buffer time to subtract from expiration when caching URLs (handles clock skew)
+PRESIGNED_URL_CACHE_BUFFER = env.int("PRESIGNED_URL_CACHE_BUFFER", default=300)
 
 # ACL Configuration
 # ------------------------------------------------------------------------------
