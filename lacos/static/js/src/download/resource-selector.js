@@ -57,7 +57,17 @@ export class ResourceSelector {
         this.downloadButton = document.querySelector(this.options.downloadButtonSelector);
 
         /** @type {HTMLInputElement|null} */
-        this.selectAllCheckbox = this.container.querySelector(this.options.selectAllSelector);
+        // Look for select-all checkbox - first try container's data attribute, then inside container, then globally
+        const selectAllId = this.container.dataset.selectAllId;
+        if (selectAllId) {
+            this.selectAllCheckbox = document.getElementById(selectAllId);
+        } else {
+            this.selectAllCheckbox = this.container.querySelector(this.options.selectAllSelector)
+                || document.querySelector(this.options.selectAllSelector);
+        }
+
+        /** @type {HTMLElement|null} */
+        this.selectAllLabel = this.selectAllCheckbox?.closest('label')?.querySelector('.select-all-label');
 
         /** @type {NodeListOf<HTMLElement>} */
         this.resourceItems = this.container.querySelectorAll(this.options.itemSelector);
@@ -273,11 +283,27 @@ export class ResourceSelector {
         if (this.downloadButton) {
             this.downloadButton.disabled = count === 0;
 
+            // Find or create text span, preserve any icon
+            let textSpan = this.downloadButton.querySelector('.btn-text');
+            if (!textSpan) {
+                // First time: wrap existing text in a span
+                const svg = this.downloadButton.querySelector('svg');
+                textSpan = document.createElement('span');
+                textSpan.className = 'btn-text';
+                if (svg) {
+                    this.downloadButton.innerHTML = '';
+                    this.downloadButton.appendChild(svg);
+                    this.downloadButton.appendChild(textSpan);
+                } else {
+                    this.downloadButton.appendChild(textSpan);
+                }
+            }
+
             if (count === 0) {
-                this.downloadButton.textContent = 'Download Selected';
+                textSpan.textContent = 'Download Selected';
             } else {
                 const sizeText = formatBytes(totalSize);
-                this.downloadButton.textContent = `Download Selected (${count}) - ${sizeText}`;
+                textSpan.textContent = `Download Selected (${count}) - ${sizeText}`;
             }
         }
 
@@ -292,6 +318,11 @@ export class ResourceSelector {
             } else {
                 this.selectAllCheckbox.checked = false;
                 this.selectAllCheckbox.indeterminate = true;
+            }
+
+            // Update label text
+            if (this.selectAllLabel) {
+                this.selectAllLabel.textContent = count === totalItems ? 'Deselect All' : 'Select All';
             }
         }
     }
