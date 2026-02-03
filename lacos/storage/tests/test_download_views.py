@@ -1,6 +1,7 @@
 """Tests for download views."""
 
 import json
+import uuid
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
@@ -13,7 +14,7 @@ from lacos.storage.services.resource_resolver_service import (
     ResolvedResource,
     ResourceError,
 )
-from lacos.storage.views.download_views import BundleScriptDownloadView
+from lacos.storage.views.script_download_views import BundleScriptDownloadView
 
 
 @pytest.fixture
@@ -26,6 +27,12 @@ def request_factory():
 def valid_altcha_payload():
     """Return a valid ALTCHA payload string."""
     return "eyJhbGdvcml0aG0iOiJTSEEtMjU2Iiwic2lnbmF0dXJlIjoiYWJjMTIzIn0="
+
+
+@pytest.fixture
+def valid_bundle_id():
+    """Return a valid UUID string for bundle_id."""
+    return str(uuid.uuid4())
 
 
 @pytest.fixture
@@ -73,10 +80,10 @@ class TestBundleScriptDownloadView:
         return request
 
     @pytest.mark.django_db
-    @patch("lacos.storage.views.download_views.check_rate_limit")
-    @patch("lacos.storage.views.download_views.get_altcha_service")
-    @patch("lacos.storage.views.download_views.ResourceResolverService")
-    @patch("lacos.storage.views.download_views.Bundle")
+    @patch("lacos.storage.views.script_download_views.check_rate_limit")
+    @patch("lacos.storage.views.script_download_views.get_altcha_service")
+    @patch("lacos.storage.views.script_download_views.ResourceResolverService")
+    @patch("lacos.storage.views.script_download_views.Bundle")
     def test_valid_request_returns_scripts(
         self,
         mock_bundle_class,
@@ -86,6 +93,7 @@ class TestBundleScriptDownloadView:
         view,
         request_factory,
         valid_altcha_payload,
+        valid_bundle_id,
         sample_resolved_resources,
     ):
         """Test valid request returns all script formats."""
@@ -100,12 +108,16 @@ class TestBundleScriptDownloadView:
         mock_resolver_class.return_value = mock_resolver
 
         mock_bundle = MagicMock()
-        mock_bundle.name = "Test Bundle"
+        mock_general_info = MagicMock()
+        mock_general_info.display_title = "Test Bundle"
+        mock_general_info.title = "Test Bundle"
+        mock_bundle.get_general_info = mock_general_info
+        mock_bundle.identifier = "test-bundle"
         mock_bundle_class.objects.get.return_value = mock_bundle
 
         request = self._make_request(request_factory, {
             "altcha": valid_altcha_payload,
-            "bundle_id": "bundle-123",
+            "bundle_id": valid_bundle_id,
             "resource_ids": ["res-1", "res-2"],
             "format": "all",
         })
@@ -125,17 +137,20 @@ class TestBundleScriptDownloadView:
         assert data["errors"] == []
 
     @pytest.mark.django_db
-    @patch("lacos.storage.views.download_views.check_rate_limit")
-    @patch("lacos.storage.views.download_views.get_altcha_service")
-    @patch("lacos.storage.views.download_views.ResourceResolverService")
+    @patch("lacos.storage.views.script_download_views.check_rate_limit")
+    @patch("lacos.storage.views.script_download_views.get_altcha_service")
+    @patch("lacos.storage.views.script_download_views.ResourceResolverService")
+    @patch("lacos.storage.views.script_download_views.Bundle")
     def test_invalid_bundle_id_returns_404(
         self,
+        mock_bundle_class,
         mock_resolver_class,
         mock_altcha_service,
         mock_rate_limit,
         view,
         request_factory,
         valid_altcha_payload,
+        valid_bundle_id,
     ):
         """Test invalid bundle_id returns 404-style error."""
         mock_rate_limit.return_value = True
@@ -151,15 +166,20 @@ class TestBundleScriptDownloadView:
                 ResourceError(
                     resource_id="res-1",
                     error="bundle_not_found",
-                    message="Bundle invalid-bundle not found",
+                    message=f"Bundle {valid_bundle_id} not found",
                 ),
             ],
         )
         mock_resolver_class.return_value = mock_resolver
 
+        # Bundle.DoesNotExist when looking up name
+        from lacos.blam.models.bundle.bundle_repository import Bundle
+        mock_bundle_class.DoesNotExist = Bundle.DoesNotExist
+        mock_bundle_class.objects.get.side_effect = Bundle.DoesNotExist()
+
         request = self._make_request(request_factory, {
             "altcha": valid_altcha_payload,
-            "bundle_id": "invalid-bundle",
+            "bundle_id": valid_bundle_id,
             "resource_ids": ["res-1"],
             "format": "all",
         })
@@ -172,8 +192,8 @@ class TestBundleScriptDownloadView:
         assert "not found" in data["error"]
 
     @pytest.mark.django_db
-    @patch("lacos.storage.views.download_views.check_rate_limit")
-    @patch("lacos.storage.views.download_views.get_altcha_service")
+    @patch("lacos.storage.views.script_download_views.check_rate_limit")
+    @patch("lacos.storage.views.script_download_views.get_altcha_service")
     def test_altcha_verification_failure_returns_403(
         self,
         mock_altcha_service,
@@ -201,8 +221,8 @@ class TestBundleScriptDownloadView:
         assert "Verification failed" in data["error"]
 
     @pytest.mark.django_db
-    @patch("lacos.storage.views.download_views.check_rate_limit")
-    @patch("lacos.storage.views.download_views.get_altcha_service")
+    @patch("lacos.storage.views.script_download_views.check_rate_limit")
+    @patch("lacos.storage.views.script_download_views.get_altcha_service")
     def test_too_many_resources_returns_400(
         self,
         mock_altcha_service,
@@ -234,7 +254,7 @@ class TestBundleScriptDownloadView:
         assert "Too many resources" in data["error"]
 
     @pytest.mark.django_db
-    @patch("lacos.storage.views.download_views.check_rate_limit")
+    @patch("lacos.storage.views.script_download_views.check_rate_limit")
     def test_rate_limiting(
         self,
         mock_rate_limit,
@@ -259,8 +279,8 @@ class TestBundleScriptDownloadView:
         assert "Too many requests" in data["error"]
 
     @pytest.mark.django_db
-    @patch("lacos.storage.views.download_views.check_rate_limit")
-    @patch("lacos.storage.views.download_views.get_altcha_service")
+    @patch("lacos.storage.views.script_download_views.check_rate_limit")
+    @patch("lacos.storage.views.script_download_views.get_altcha_service")
     def test_invalid_format_returns_400(
         self,
         mock_altcha_service,
@@ -289,8 +309,8 @@ class TestBundleScriptDownloadView:
         assert "Invalid format" in data["error"]
 
     @pytest.mark.django_db
-    @patch("lacos.storage.views.download_views.check_rate_limit")
-    @patch("lacos.storage.views.download_views.get_altcha_service")
+    @patch("lacos.storage.views.script_download_views.check_rate_limit")
+    @patch("lacos.storage.views.script_download_views.get_altcha_service")
     def test_empty_resource_ids_returns_empty_scripts(
         self,
         mock_altcha_service,
@@ -322,8 +342,8 @@ class TestBundleScriptDownloadView:
         assert data["scripts"] == {}
 
     @pytest.mark.django_db
-    @patch("lacos.storage.views.download_views.check_rate_limit")
-    @patch("lacos.storage.views.download_views.get_altcha_service")
+    @patch("lacos.storage.views.script_download_views.check_rate_limit")
+    @patch("lacos.storage.views.script_download_views.get_altcha_service")
     def test_missing_altcha_returns_400(
         self,
         mock_altcha_service,
@@ -347,8 +367,8 @@ class TestBundleScriptDownloadView:
         assert "Missing ALTCHA" in data["error"]
 
     @pytest.mark.django_db
-    @patch("lacos.storage.views.download_views.check_rate_limit")
-    @patch("lacos.storage.views.download_views.get_altcha_service")
+    @patch("lacos.storage.views.script_download_views.check_rate_limit")
+    @patch("lacos.storage.views.script_download_views.get_altcha_service")
     def test_missing_bundle_id_returns_400(
         self,
         mock_altcha_service,
@@ -373,7 +393,7 @@ class TestBundleScriptDownloadView:
         assert "Missing bundle_id" in data["error"]
 
     @pytest.mark.django_db
-    @patch("lacos.storage.views.download_views.check_rate_limit")
+    @patch("lacos.storage.views.script_download_views.check_rate_limit")
     def test_invalid_json_returns_400(
         self,
         mock_rate_limit,
@@ -398,10 +418,10 @@ class TestBundleScriptDownloadView:
         assert "Invalid JSON" in data["error"]
 
     @pytest.mark.django_db
-    @patch("lacos.storage.views.download_views.check_rate_limit")
-    @patch("lacos.storage.views.download_views.get_altcha_service")
-    @patch("lacos.storage.views.download_views.ResourceResolverService")
-    @patch("lacos.storage.views.download_views.Bundle")
+    @patch("lacos.storage.views.script_download_views.check_rate_limit")
+    @patch("lacos.storage.views.script_download_views.get_altcha_service")
+    @patch("lacos.storage.views.script_download_views.ResourceResolverService")
+    @patch("lacos.storage.views.script_download_views.Bundle")
     def test_bash_only_format(
         self,
         mock_bundle_class,
@@ -411,6 +431,7 @@ class TestBundleScriptDownloadView:
         view,
         request_factory,
         valid_altcha_payload,
+        valid_bundle_id,
         sample_resolved_resources,
     ):
         """Test bash-only format returns only bash script."""
@@ -424,12 +445,16 @@ class TestBundleScriptDownloadView:
         mock_resolver_class.return_value = mock_resolver
 
         mock_bundle = MagicMock()
-        mock_bundle.name = "Test Bundle"
+        mock_general_info = MagicMock()
+        mock_general_info.display_title = "Test Bundle"
+        mock_general_info.title = "Test Bundle"
+        mock_bundle.get_general_info = mock_general_info
+        mock_bundle.identifier = "test-bundle"
         mock_bundle_class.objects.get.return_value = mock_bundle
 
         request = self._make_request(request_factory, {
             "altcha": valid_altcha_payload,
-            "bundle_id": "bundle-123",
+            "bundle_id": valid_bundle_id,
             "resource_ids": ["res-1", "res-2"],
             "format": "bash",
         })
@@ -444,17 +469,20 @@ class TestBundleScriptDownloadView:
         assert "#!/bin/bash" in data["scripts"]["bash"]
 
     @pytest.mark.django_db
-    @patch("lacos.storage.views.download_views.check_rate_limit")
-    @patch("lacos.storage.views.download_views.get_altcha_service")
-    @patch("lacos.storage.views.download_views.ResourceResolverService")
+    @patch("lacos.storage.views.script_download_views.check_rate_limit")
+    @patch("lacos.storage.views.script_download_views.get_altcha_service")
+    @patch("lacos.storage.views.script_download_views.ResourceResolverService")
+    @patch("lacos.storage.views.script_download_views.Bundle")
     def test_access_denied_returns_403(
         self,
+        mock_bundle_class,
         mock_resolver_class,
         mock_altcha_service,
         mock_rate_limit,
         view,
         request_factory,
         valid_altcha_payload,
+        valid_bundle_id,
     ):
         """Test access denied error returns 403."""
         mock_rate_limit.return_value = True
@@ -476,9 +504,14 @@ class TestBundleScriptDownloadView:
         )
         mock_resolver_class.return_value = mock_resolver
 
+        # Bundle.DoesNotExist when looking up name
+        from lacos.blam.models.bundle.bundle_repository import Bundle
+        mock_bundle_class.DoesNotExist = Bundle.DoesNotExist
+        mock_bundle_class.objects.get.side_effect = Bundle.DoesNotExist()
+
         request = self._make_request(request_factory, {
             "altcha": valid_altcha_payload,
-            "bundle_id": "bundle-123",
+            "bundle_id": valid_bundle_id,
             "resource_ids": ["res-1"],
             "format": "all",
         })
@@ -491,10 +524,10 @@ class TestBundleScriptDownloadView:
         assert "Access denied" in data["error"]
 
     @pytest.mark.django_db
-    @patch("lacos.storage.views.download_views.check_rate_limit")
-    @patch("lacos.storage.views.download_views.get_altcha_service")
-    @patch("lacos.storage.views.download_views.ResourceResolverService")
-    @patch("lacos.storage.views.download_views.Bundle")
+    @patch("lacos.storage.views.script_download_views.check_rate_limit")
+    @patch("lacos.storage.views.script_download_views.get_altcha_service")
+    @patch("lacos.storage.views.script_download_views.ResourceResolverService")
+    @patch("lacos.storage.views.script_download_views.Bundle")
     def test_partial_errors_included_in_response(
         self,
         mock_bundle_class,
@@ -504,6 +537,7 @@ class TestBundleScriptDownloadView:
         view,
         request_factory,
         valid_altcha_payload,
+        valid_bundle_id,
         sample_resolved_resources,
     ):
         """Test partial errors are included in the response."""
@@ -527,12 +561,16 @@ class TestBundleScriptDownloadView:
         mock_resolver_class.return_value = mock_resolver
 
         mock_bundle = MagicMock()
-        mock_bundle.name = "Test Bundle"
+        mock_general_info = MagicMock()
+        mock_general_info.display_title = "Test Bundle"
+        mock_general_info.title = "Test Bundle"
+        mock_bundle.get_general_info = mock_general_info
+        mock_bundle.identifier = "test-bundle"
         mock_bundle_class.objects.get.return_value = mock_bundle
 
         request = self._make_request(request_factory, {
             "altcha": valid_altcha_payload,
-            "bundle_id": "bundle-123",
+            "bundle_id": valid_bundle_id,
             "resource_ids": ["res-1", "res-2"],
             "format": "all",
         })

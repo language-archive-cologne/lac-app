@@ -1,11 +1,22 @@
-"""Service for resolving bundle resources to presigned URLs."""
+"""Service for resolving bundle and collection resources to presigned URLs."""
 
 import logging
+import uuid
 from dataclasses import dataclass
 from typing import Optional
 
 from django.contrib.contenttypes.models import ContentType
 
+
+def is_valid_uuid(value: str) -> bool:
+    """Check if a string is a valid UUID format."""
+    try:
+        uuid.UUID(str(value))
+        return True
+    except (ValueError, TypeError):
+        return False
+
+from lacos.blam.models.base_structural_info import AdditionalMetadataFile
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import (
     BundleResources,
@@ -13,6 +24,7 @@ from lacos.blam.models.bundle.bundle_structural_info import (
     OtherResource,
     WrittenResource,
 )
+from lacos.blam.models.collection.collection_repository import Collection
 from lacos.storage.models.s3_resource_location import S3ResourceLocation
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
 from lacos.storage.services.presigned_url_cache_service import (
@@ -60,6 +72,11 @@ class ResourceResolverService:
         self.acl_service = ACLEvaluationService()
         self.presigned_url_service = get_presigned_url_cache_service()
 
+    def _build_auth_context(self, user) -> Optional[str]:
+        if user and getattr(user, "is_authenticated", False):
+            return f"user:{user.pk}"
+        return None
+
     def resolve_resources(
         self,
         bundle_id: str,
@@ -82,10 +99,23 @@ class ResourceResolverService:
         resolved: list[ResolvedResource] = []
         errors: list[ResourceError] = []
 
-        # 1. Load bundle
+        # 1. Validate bundle_id format
+        if not is_valid_uuid(bundle_id):
+            logger.warning(f"Invalid bundle UUID format: {bundle_id}")
+            for resource_id in resource_ids:
+                errors.append(
+                    ResourceError(
+                        resource_id=resource_id,
+                        error="bundle_not_found",
+                        message=f"Bundle {bundle_id} not found",
+                    )
+                )
+            return resolved, errors
+
+        # 2. Load bundle
         try:
             bundle = Bundle.objects.get(id=bundle_id)
-        except Bundle.DoesNotExist:
+        except (Bundle.DoesNotExist, ValueError):
             logger.warning(f"Bundle not found: {bundle_id}")
             # Return error for all requested resources
             for resource_id in resource_ids:
@@ -98,7 +128,7 @@ class ResourceResolverService:
                 )
             return resolved, errors
 
-        # 2. Check ACL permissions
+        # 3. Check ACL permissions
         if not self.acl_service.is_allowed(user, bundle, mode="acl:Read"):
             logger.info(
                 f"ACL denied for user {getattr(user, 'pk', 'anonymous')} on bundle {bundle_id}"
@@ -113,16 +143,17 @@ class ResourceResolverService:
                 )
             return resolved, errors
 
-        # 3. Get all resources belonging to this bundle
+        # 4. Get all resources belonging to this bundle
         bundle_resource_ids = self._get_bundle_resource_ids(bundle)
 
-        # 4. Resolve each resource
+        # 5. Resolve each resource
         for resource_id in resource_ids:
             try:
                 result = self._resolve_single_resource(
                     resource_id=resource_id,
                     bundle=bundle,
                     bundle_resource_ids=bundle_resource_ids,
+                    user=user,
                 )
                 if isinstance(result, ResolvedResource):
                     resolved.append(result)
@@ -139,6 +170,171 @@ class ResourceResolverService:
                 )
 
         return resolved, errors
+
+    def resolve_collection_resources(
+        self,
+        collection_id: str,
+        resource_ids: list[str],
+        user,
+    ) -> tuple[list[ResolvedResource], list[ResourceError]]:
+        """
+        Resolve collection metadata file IDs to presigned URLs.
+
+        Args:
+            collection_id: The UUID of the collection
+            resource_ids: List of resource IDs (UUIDs) to resolve
+            user: The user requesting access (for ACL checks)
+
+        Returns:
+            Tuple of (resolved_resources, errors)
+        """
+        resolved: list[ResolvedResource] = []
+        errors: list[ResourceError] = []
+
+        # 1. Validate collection_id format
+        if not is_valid_uuid(collection_id):
+            logger.warning(f"Invalid collection UUID format: {collection_id}")
+            for resource_id in resource_ids:
+                errors.append(
+                    ResourceError(
+                        resource_id=resource_id,
+                        error="collection_not_found",
+                        message=f"Collection {collection_id} not found",
+                    )
+                )
+            return resolved, errors
+
+        # 2. Load collection
+        try:
+            collection = Collection.objects.get(id=collection_id)
+        except (Collection.DoesNotExist, ValueError):
+            logger.warning(f"Collection not found: {collection_id}")
+            for resource_id in resource_ids:
+                errors.append(
+                    ResourceError(
+                        resource_id=resource_id,
+                        error="collection_not_found",
+                        message=f"Collection {collection_id} not found",
+                    )
+                )
+            return resolved, errors
+
+        # 3. Check ACL permissions on collection
+        if not self.acl_service.is_allowed(user, collection, mode="acl:Read"):
+            logger.info(
+                f"ACL denied for user {getattr(user, 'pk', 'anonymous')} on collection {collection_id}"
+            )
+            for resource_id in resource_ids:
+                errors.append(
+                    ResourceError(
+                        resource_id=resource_id,
+                        error="access_denied",
+                        message="Access denied to collection resources",
+                    )
+                )
+            return resolved, errors
+
+        # 4. Get all metadata file IDs belonging to this collection
+        collection_resource_ids = self._get_collection_resource_ids(collection)
+
+        # 5. Resolve each resource
+        for resource_id in resource_ids:
+            try:
+                result = self._resolve_single_collection_resource(
+                    resource_id=resource_id,
+                    collection=collection,
+                    collection_resource_ids=collection_resource_ids,
+                    user=user,
+                )
+                if isinstance(result, ResolvedResource):
+                    resolved.append(result)
+                else:
+                    errors.append(result)
+            except Exception as e:
+                logger.exception(f"Unexpected error resolving resource {resource_id}")
+                errors.append(
+                    ResourceError(
+                        resource_id=resource_id,
+                        error="internal_error",
+                        message=str(e),
+                    )
+                )
+
+        return resolved, errors
+
+    def _get_collection_resource_ids(self, collection: Collection) -> set[str]:
+        """Get all metadata file IDs that belong to a collection."""
+        resource_ids: set[str] = set()
+
+        try:
+            structural_info = collection.structural_info.first()
+            if not structural_info:
+                logger.debug(f"No structural_info found for collection {collection.id}")
+                return resource_ids
+
+            for metadata_file in structural_info.additional_metadata_files.all():
+                resource_ids.add(str(metadata_file.id))
+
+        except Exception as e:
+            logger.error(f"Error getting collection resource IDs: {e}")
+
+        return resource_ids
+
+    def _resolve_single_collection_resource(
+        self,
+        resource_id: str,
+        collection: Collection,
+        collection_resource_ids: set[str],
+        user,
+    ) -> ResolvedResource | ResourceError:
+        """Resolve a single collection metadata file to a presigned URL."""
+        # Verify resource belongs to collection
+        if resource_id not in collection_resource_ids:
+            return ResourceError(
+                resource_id=resource_id,
+                error="not_in_collection",
+                message=f"Resource {resource_id} does not belong to collection {collection.id}",
+            )
+
+        # Find the metadata file
+        try:
+            metadata_file = AdditionalMetadataFile.objects.get(id=resource_id)
+        except AdditionalMetadataFile.DoesNotExist:
+            return ResourceError(
+                resource_id=resource_id,
+                error="not_found",
+                message=f"Resource {resource_id} not found",
+            )
+
+        # Get S3 location
+        location = self._get_s3_location(metadata_file)
+        if location is None:
+            return ResourceError(
+                resource_id=resource_id,
+                error="no_location",
+                message=f"No S3 location found for resource {resource_id}",
+            )
+
+        # Generate presigned URL
+        filename = metadata_file.file_name or location.s3_key.split("/")[-1]
+        url_data = self.presigned_url_service.get_download_url(
+            bucket=location.s3_bucket,
+            key=location.s3_key,
+            filename=filename,
+            auth_context=self._build_auth_context(user),
+        )
+
+        size = location.size_bytes or 0
+
+        return ResolvedResource(
+            resource_id=resource_id,
+            bucket=location.s3_bucket,
+            key=location.s3_key,
+            filename=filename,
+            size=size,
+            checksum=None,
+            presigned_url=url_data["url"],
+        )
 
     def _get_bundle_resource_ids(self, bundle: Bundle) -> set[str]:
         """
@@ -175,6 +371,7 @@ class ResourceResolverService:
         resource_id: str,
         bundle: Bundle,
         bundle_resource_ids: set[str],
+        user,
     ) -> ResolvedResource | ResourceError:
         """
         Resolve a single resource ID to a presigned URL.
@@ -183,6 +380,7 @@ class ResourceResolverService:
             resource_id: The UUID of the resource
             bundle: The bundle object
             bundle_resource_ids: Set of resource IDs that belong to the bundle
+            user: The user requesting access (for cache scoping)
 
         Returns:
             ResolvedResource on success, ResourceError on failure
@@ -219,6 +417,7 @@ class ResourceResolverService:
             bucket=location.s3_bucket,
             key=location.s3_key,
             filename=filename,
+            auth_context=self._build_auth_context(user),
         )
 
         # Get size from location or default to 0
