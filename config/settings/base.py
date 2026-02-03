@@ -354,6 +354,12 @@ S3_PRODUCTION_BUCKET = env("S3_PRODUCTION_BUCKET", default="lacos-production")
 # Cache configuration for storage subsystems
 STORAGE_ACL_CACHE_TIMEOUT = env.int("STORAGE_ACL_CACHE_TIMEOUT", default=900)
 
+# Presigned URL Configuration
+# ------------------------------------------------------------------------------
+# Default expiration time for presigned download URLs (in seconds)
+# 3600 = 1 hour - provides enough time for users to download files
+PRESIGNED_URL_EXPIRATION = env.int("PRESIGNED_URL_EXPIRATION", default=3600)
+
 # ACL Configuration
 # ------------------------------------------------------------------------------
 ACL_ENFORCEMENT_ENABLED = env.bool("ACL_ENFORCEMENT_ENABLED", default=True)

@@ -690,9 +690,22 @@ class BucketService(BaseStorageService):
         self,
         bucket_name: str,
         object_path: str,
-        expires_in: int = 900,
+        expires_in: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """Create a presigned GET URL for streaming/downloading an object."""
+        """Create a presigned GET URL for streaming/downloading an object.
+
+        Args:
+            bucket_name: S3 bucket name
+            object_path: S3 object key
+            expires_in: URL expiration in seconds (default from settings.PRESIGNED_URL_EXPIRATION)
+
+        Returns:
+            Dict with 'success', 'url', and 'expires_in' on success,
+            or 'success' and 'error' on failure.
+        """
+        if expires_in is None:
+            expires_in = getattr(settings, 'PRESIGNED_URL_EXPIRATION', 3600)
+
         client = getattr(self, "presigned_client", self.s3_client)
 
         try:

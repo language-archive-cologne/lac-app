@@ -201,8 +201,21 @@ class ResourceMappingService(BaseStorageService):
             logger.info(f"register_s3_location: {'CREATED' if created else 'UPDATED'} S3ResourceLocation(id={location.id}) for content_type={ct}, object_id={obj.id}")
         return location
     
-    def generate_presigned_url(self, bucket, key, expires_in=3600, response_headers=None):
-        """Generate a presigned URL for temporary access"""
+    def generate_presigned_url(self, bucket, key, expires_in=None, response_headers=None):
+        """Generate a presigned URL for temporary access.
+
+        Args:
+            bucket: S3 bucket name
+            key: S3 object key
+            expires_in: URL expiration in seconds (default from settings.PRESIGNED_URL_EXPIRATION)
+            response_headers: Optional dict with response headers (Content-Disposition, etc.)
+
+        Returns:
+            str: Presigned URL for GET access to the object
+        """
+        if expires_in is None:
+            expires_in = getattr(settings, 'PRESIGNED_URL_EXPIRATION', 3600)
+
         params = {
             'Bucket': bucket,
             'Key': key
