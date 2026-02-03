@@ -258,16 +258,36 @@
       {% if additional_metadata_files %}
       <!-- Additional Metadata Files -->
       <div class="mt-8 pt-6 border-t border-base-300">
-        <h2 class="text-xl font-light text-base-content mb-4 tracking-tight flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          {% translate "Additional Metadata" %}
-        </h2>
-        <div class="space-y-3">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <h2 class="text-xl font-light text-base-content tracking-tight flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            {% translate "Additional Metadata" %}
+          </h2>
+          <div class="flex items-center gap-3">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" class="checkbox checkbox-sm collection-select-all" id="collection-select-all-checkbox" />
+              <span class="text-sm collection-select-all-label">{% translate "Select All" %}</span>
+            </label>
+            <button id="collection-download-selected" class="btn btn-primary btn-sm" disabled>
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              {% translate "Download Selected" %}
+            </button>
+          </div>
+        </div>
+        <div id="collection-metadata-container" class="space-y-3" data-select-all-id="collection-select-all-checkbox">
           {% for file in additional_metadata_files %}
-            <div class="flex items-center justify-between p-4 rounded-xl bg-gradient-to-br from-base-200/50 to-base-200 border border-base-300 hover:border-primary/30 transition-all duration-200">
+            <div class="resource-item flex items-center justify-between p-4 rounded-xl bg-gradient-to-br from-base-200/50 to-base-200 border border-base-300 hover:border-primary/30 transition-all duration-200"
+                 data-resource-id="{{ file.id }}"
+                 data-size="{{ file.size_bytes|default:0 }}"
+                 data-filename="{{ file.file_name }}"
+                 data-bucket="{{ file.s3_location.s3_bucket|default:'' }}"
+                 data-key="{{ file.s3_location.s3_key|default:'' }}">
               <div class="flex items-center gap-3 flex-1 min-w-0">
+                <input type="checkbox" class="checkbox checkbox-sm resource-checkbox" />
                 <div class="flex-shrink-0 p-2 rounded-lg bg-base-100">
                   {% if file.detected_media_type == 'audio' %}
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -301,14 +321,16 @@
               </div>
               <div class="flex items-center gap-2 flex-shrink-0 ml-4">
                 <!-- Download button -->
-                <a href="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=file.file_pid %}?action=download"
-                   class="btn btn-primary btn-sm"
-                   target="_blank">
+                <button type="button"
+                   class="btn btn-primary btn-sm single-download-btn"
+                   data-bucket="{{ file.s3_location.s3_bucket|default:'' }}"
+                   data-key="{{ file.s3_location.s3_key|default:'' }}"
+                   data-filename="{{ file.file_name }}">
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
                   <span class="hidden sm:inline ml-1">{% translate "Download" %}</span>
-                </a>
+                </button>
 
                 <!-- Play button for audio/video -->
                 {% if file|is_media_type:"audio" or file|is_media_type:"video" %}
@@ -369,6 +391,23 @@
           <a href="{{ request.path }}" class="btn btn-ghost btn-sm">{% translate "Clear" %}</a>
         {% endif %}
       </div>
+    </div>
+
+    <!-- Multi-select header for bundle files (outside swapped region to preserve event listeners) -->
+    <div id="bundles-multi-select-header" class="flex items-center justify-between mb-3 p-3 bg-base-200 rounded-lg {% if not bundle_contexts %}hidden{% endif %}">
+      <div class="flex items-center gap-3">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" class="checkbox checkbox-sm" id="bundles-select-all-checkbox" />
+          <span class="text-sm bundles-select-all-label">{% translate "Select All Files" %}</span>
+        </label>
+        <span id="bundles-selection-count" class="text-sm text-base-content/60"></span>
+      </div>
+      <button id="bundles-download-selected" class="btn btn-primary btn-sm" disabled>
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+        <span class="btn-text">{% translate "Download Selected" %}</span>
+      </button>
     </div>
 
     <div id="collection-bundles-table" hx-target="this" hx-swap="innerHTML">
@@ -562,4 +601,198 @@
       }
     });
   </script>
+
+  {% include "dashboard/partials/bundle_download_modal.html" %}
+  {% include "dashboard/partials/single_file_download_modal.html" %}
 {% endblock explorer_content %}
+
+{% block inline_javascript %}
+{{ block.super }}
+<script type="module">
+import { ResourceSelector, formatBytes } from '{% static "js/src/download/resource-selector.js" %}';
+
+document.addEventListener('DOMContentLoaded', () => {
+    {% if additional_metadata_files %}
+    // Collection metadata files multi-select
+    const metadataContainer = document.getElementById('collection-metadata-container');
+    if (metadataContainer) {
+        const metadataSelector = new ResourceSelector(metadataContainer, {
+            downloadButtonSelector: '#collection-download-selected',
+            selectAllSelector: '.collection-select-all',
+            itemSelector: '.resource-item',
+            checkboxSelector: '.resource-checkbox'
+        });
+
+        document.getElementById('collection-download-selected').addEventListener('click', () => {
+            const selectedIds = metadataSelector.getSelectedIds();
+            if (selectedIds.length > 0 && window.bundleDownloadModal) {
+                window.bundleDownloadModal.open(
+                    '{{ collection.pk }}',
+                    selectedIds,
+                    '{% if collection.get_general_info.display_title %}{{ collection.get_general_info.display_title|escapejs }}{% elif collection.get_general_info.title %}{{ collection.get_general_info.title|escapejs }}{% else %}{{ collection.identifier|escapejs }}{% endif %}',
+                    { isCollection: true }
+                );
+            }
+        });
+
+        // Single file download buttons
+        document.querySelectorAll('.single-download-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (window.singleFileDownloadModal) {
+                    window.singleFileDownloadModal.open({
+                        bucket: btn.dataset.bucket,
+                        key: btn.dataset.key,
+                        filename: btn.dataset.filename
+                    });
+                }
+            });
+        });
+    }
+    {% endif %}
+
+    // Bundles table multi-select
+    initBundlesTableSelector();
+});
+
+/**
+ * Initialize multi-select for bundle files in the collection table.
+ */
+function initBundlesTableSelector() {
+    const bundlesTable = document.getElementById('collection-bundles-table');
+    if (!bundlesTable) return;
+
+    const selectAllCheckbox = document.getElementById('bundles-select-all-checkbox');
+    const downloadBtn = document.getElementById('bundles-download-selected');
+    const selectionCount = document.getElementById('bundles-selection-count');
+
+    if (!selectAllCheckbox || !downloadBtn) return;
+
+    // Track selection state
+    const selectedResources = new Map(); // resourceId -> {bundleId, filename, size}
+
+    function updateUI() {
+        const count = selectedResources.size;
+        let totalSize = 0;
+        selectedResources.forEach(r => totalSize += r.size || 0);
+
+        downloadBtn.disabled = count === 0;
+        const btnText = downloadBtn.querySelector('.btn-text');
+        if (btnText) {
+            if (count === 0) {
+                btnText.textContent = 'Download Selected';
+            } else {
+                btnText.textContent = `Download Selected (${count}) - ${formatBytes(totalSize)}`;
+            }
+        }
+
+        // Update selection count
+        if (selectionCount) {
+            selectionCount.textContent = count > 0 ? `${count} files selected` : '';
+        }
+
+        // Update select all checkbox state
+        const allCheckboxes = bundlesTable.querySelectorAll('.bundle-resource-checkbox');
+        const checkedCount = bundlesTable.querySelectorAll('.bundle-resource-checkbox:checked').length;
+        if (checkedCount === 0) {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = false;
+        } else if (checkedCount === allCheckboxes.length) {
+            selectAllCheckbox.checked = true;
+            selectAllCheckbox.indeterminate = false;
+        } else {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = true;
+        }
+    }
+
+    // Handle individual checkbox changes
+    bundlesTable.addEventListener('change', (e) => {
+        if (!e.target.classList.contains('bundle-resource-checkbox')) return;
+
+        const item = e.target.closest('.bundle-resource-item');
+        if (!item) return;
+
+        const resourceId = item.dataset.resourceId;
+        const bundleId = item.dataset.bundleId;
+        const filename = item.dataset.filename;
+        const size = parseInt(item.dataset.size, 10) || 0;
+
+        if (e.target.checked) {
+            selectedResources.set(resourceId, { bundleId, filename, size });
+        } else {
+            selectedResources.delete(resourceId);
+        }
+
+        updateUI();
+    });
+
+    // Handle select all
+    selectAllCheckbox.addEventListener('change', () => {
+        const checkboxes = bundlesTable.querySelectorAll('.bundle-resource-checkbox');
+        checkboxes.forEach(cb => {
+            const item = cb.closest('.bundle-resource-item');
+            if (!item) return;
+
+            cb.checked = selectAllCheckbox.checked;
+
+            const resourceId = item.dataset.resourceId;
+            const bundleId = item.dataset.bundleId;
+            const filename = item.dataset.filename;
+            const size = parseInt(item.dataset.size, 10) || 0;
+
+            if (selectAllCheckbox.checked) {
+                selectedResources.set(resourceId, { bundleId, filename, size });
+            } else {
+                selectedResources.delete(resourceId);
+            }
+        });
+
+        updateUI();
+    });
+
+    // Handle download button click
+    downloadBtn.addEventListener('click', () => {
+        if (selectedResources.size === 0 || !window.bundleDownloadModal) return;
+
+        // Group resources by bundle
+        const bundleGroups = new Map();
+        selectedResources.forEach((data, resourceId) => {
+            if (!bundleGroups.has(data.bundleId)) {
+                bundleGroups.set(data.bundleId, []);
+            }
+            bundleGroups.get(data.bundleId).push(resourceId);
+        });
+
+        // Convert to array format for the modal
+        const bundlesData = Array.from(bundleGroups.entries()).map(([bundleId, resourceIds]) => ({
+            bundleId,
+            resourceIds
+        }));
+
+        window.bundleDownloadModal.openMultiBundles(
+            bundlesData,
+            '{% if collection.get_general_info.display_title %}{{ collection.get_general_info.display_title|escapejs }}{% elif collection.get_general_info.title %}{{ collection.get_general_info.title|escapejs }}{% else %}{{ collection.identifier|escapejs }}{% endif %}',
+            selectedResources.size
+        );
+    });
+
+    // Re-initialize after HTMX swaps (pagination)
+    document.body.addEventListener('htmx:afterSwap', (e) => {
+        if (e.detail.target.id === 'collection-bundles-table') {
+            // Clear selection after pagination
+            selectedResources.clear();
+            updateUI();
+
+            // Show/hide multi-select header based on whether there are bundles
+            const header = document.getElementById('bundles-multi-select-header');
+            const hasCheckboxes = bundlesTable.querySelectorAll('.bundle-resource-checkbox').length > 0;
+            if (header) {
+                header.classList.toggle('hidden', !hasCheckboxes);
+            }
+        }
+    });
+
+    updateUI();
+}
+</script>
+{% endblock inline_javascript %}

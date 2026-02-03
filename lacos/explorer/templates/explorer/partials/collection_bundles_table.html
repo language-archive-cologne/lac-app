@@ -144,7 +144,12 @@
                         <p class="text-xs font-semibold text-base-content/70 mb-2">{% translate "Media Files" %}</p>
                         <ul class="space-y-1.5">
                           {% for resource in bundle_info.media_resources %}
-                            <li class="text-xs flex items-center">
+                            <li class="bundle-resource-item text-xs flex items-center"
+                                data-resource-id="{{ resource.id }}"
+                                data-bundle-id="{{ bundle.pk }}"
+                                data-filename="{{ resource.file_name }}"
+                                data-size="{{ resource.size_bytes|default:0 }}">
+                              <input type="checkbox" class="checkbox checkbox-xs bundle-resource-checkbox mr-1.5" />
                               <span class="truncate max-w-[120px] mr-1 text-base-content" title="{{ resource.file_name }}">{{ resource.file_name }}</span>
                               {% if resource.mime_type %}
                                 <span class="inline-flex items-center text-base-content/40 hover:text-base-content/70 cursor-help" title="{{ resource.mime_type }}">
@@ -185,7 +190,12 @@
                         <p class="text-xs font-semibold text-base-content/70 mb-2">{% translate "Written Files" %}</p>
                         <ul class="space-y-1.5">
                           {% for resource in bundle_info.written_resources %}
-                            <li class="text-xs flex items-center">
+                            <li class="bundle-resource-item text-xs flex items-center"
+                                data-resource-id="{{ resource.id }}"
+                                data-bundle-id="{{ bundle.pk }}"
+                                data-filename="{{ resource.file_name }}"
+                                data-size="{{ resource.size_bytes|default:0 }}">
+                              <input type="checkbox" class="checkbox checkbox-xs bundle-resource-checkbox mr-1.5" />
                               <span class="truncate max-w-[120px] mr-1 text-base-content" title="{{ resource.file_name }}">{{ resource.file_name }}</span>
                               {% if resource.mime_type %}
                                 <span class="inline-flex items-center text-base-content/40 hover:text-base-content/70 cursor-help" title="{{ resource.mime_type }}">
@@ -239,7 +249,12 @@
                         <p class="text-xs font-semibold text-base-content/70 mb-2">{% translate "Other Files" %}</p>
                         <ul class="space-y-1.5">
                           {% for resource in bundle_info.other_resources %}
-                            <li class="text-xs flex items-center">
+                            <li class="bundle-resource-item text-xs flex items-center"
+                                data-resource-id="{{ resource.id }}"
+                                data-bundle-id="{{ bundle.pk }}"
+                                data-filename="{{ resource.file_name }}"
+                                data-size="{{ resource.size_bytes|default:0 }}">
+                              <input type="checkbox" class="checkbox checkbox-xs bundle-resource-checkbox mr-1.5" />
                               <span class="truncate max-w-[120px] mr-1 text-base-content" title="{{ resource.file_name }}">{{ resource.file_name }}</span>
                               {% if resource.mime_type %}
                                 <span class="inline-flex items-center text-base-content/40 hover:text-base-content/70 cursor-help" title="{{ resource.mime_type }}">
@@ -266,7 +281,12 @@
                         <p class="text-xs font-semibold text-base-content/70 mb-2">{% translate "Metadata Files" %}</p>
                         <ul class="space-y-1.5">
                           {% for resource in bundle_info.metadata_files %}
-                            <li class="text-xs flex items-center">
+                            <li class="bundle-resource-item text-xs flex items-center"
+                                data-resource-id="{{ resource.id }}"
+                                data-bundle-id="{{ bundle.pk }}"
+                                data-filename="{{ resource.file_name }}"
+                                data-size="{{ resource.size_bytes|default:0 }}">
+                              <input type="checkbox" class="checkbox checkbox-xs bundle-resource-checkbox mr-1.5" />
                               <span class="truncate max-w-[120px] mr-1 text-base-content" title="{{ resource.file_name }}">{{ resource.file_name }}</span>
                               {% if resource.mime_type %}
                                 <span class="inline-flex items-center text-base-content/40 hover:text-base-content/70 cursor-help" title="{{ resource.mime_type }}">
