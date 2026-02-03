@@ -3,6 +3,7 @@ from lacos.storage.models.s3_resource_location import S3ResourceLocation
 from lacos.storage.models.acl_permissions import ACLPermissions
 from .base_storage_service import BaseStorageService
 import boto3
+from botocore.exceptions import ClientError
 from django.conf import settings
 from datetime import datetime, timedelta
 import logging
@@ -145,7 +146,7 @@ class ResourceMappingService(BaseStorageService):
         except S3ResourceLocation.DoesNotExist:
             return None
     
-    def register_s3_location(self, obj, bucket, key=None, pid_url=None):
+    def register_s3_location(self, obj, bucket, key=None, pid_url=None, fetch_metadata=True):
         """
         Register S3 location for an object
 
@@ -154,6 +155,10 @@ class ResourceMappingService(BaseStorageService):
             bucket: S3 bucket name
             key: S3 object key (if None, will be constructed from the object)
             pid_url: PID URL (if None, will try to use obj.file_pid)
+            fetch_metadata: Controls S3 metadata fetching:
+                - True (default): Fetch size_bytes/mime_type if missing
+                - False: Skip metadata fetching entirely
+                - 'force': Always fetch and update metadata
 
         Returns:
             S3ResourceLocation: The created or updated location
@@ -172,6 +177,9 @@ class ResourceMappingService(BaseStorageService):
             pid_url = obj.file_pid
 
         logger.info(f"register_s3_location: obj={type(obj).__name__}(id={obj.id}), bucket={bucket}, key={key}, pid_url={pid_url}")
+
+        # Determine if this is a real file (resource) vs a prefix (collection/bundle)
+        is_file_resource = isinstance(obj, (MediaResource, WrittenResource, OtherResource))
 
         # Create or update S3 location
         # Use resource_pid as lookup key if available (since it has unique constraint)
@@ -199,7 +207,51 @@ class ResourceMappingService(BaseStorageService):
                 }
             )
             logger.info(f"register_s3_location: {'CREATED' if created else 'UPDATED'} S3ResourceLocation(id={location.id}) for content_type={ct}, object_id={obj.id}")
+
+        # Fetch S3 metadata (size_bytes, mime_type) for file resources
+        if fetch_metadata and is_file_resource:
+            should_fetch = (
+                fetch_metadata == 'force' or
+                location.size_bytes is None or
+                location.mime_type is None
+            )
+            if should_fetch:
+                self._fetch_and_update_s3_metadata(location, bucket, key)
+
         return location
+
+    def _fetch_and_update_s3_metadata(self, location, bucket, key):
+        """
+        Fetch size and content type from S3 and update the location record.
+
+        Only updates fields if head_object succeeds - does not wipe existing
+        metadata on failure.
+        """
+        try:
+            response = self.s3_client.head_object(Bucket=bucket, Key=key)
+            size_bytes = response.get('ContentLength')
+            mime_type = response.get('ContentType')
+
+            update_fields = []
+            if size_bytes is not None:
+                location.size_bytes = size_bytes
+                update_fields.append('size_bytes')
+            if mime_type:
+                location.mime_type = mime_type
+                update_fields.append('mime_type')
+
+            if update_fields:
+                location.save(update_fields=update_fields)
+                logger.debug(f"Updated S3 metadata for {key}: size={size_bytes}, mime={mime_type}")
+
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', '')
+            if error_code == '404':
+                logger.debug(f"S3 object not found for metadata: {bucket}/{key}")
+            else:
+                logger.warning(f"Failed to fetch S3 metadata for {bucket}/{key}: {e}")
+        except Exception as e:
+            logger.warning(f"Unexpected error fetching S3 metadata for {bucket}/{key}: {e}")
     
     def generate_presigned_url(self, bucket, key, expires_in=None, response_headers=None):
         """Generate a presigned URL for temporary access.
