@@ -107,28 +107,27 @@ class AltchaService:
             # Get signature for replay protection (handles base64, dict, or object)
             sig = self._extract_signature(payload)
 
-            # Check if this solution was already used (replay protection)
-            if sig:
-                solution_key = f"{self.CACHE_KEY_PREFIX}:used:{sig}"
-                if cache.get(solution_key):
-                    logger.warning("ALTCHA solution replay attempt detected")
-                    return False, "Solution already used"
-
-            # Verify the solution - altcha.verify_solution accepts dict, Payload, or base64 string
+            # Verify the solution first
             is_valid, error = altcha.verify_solution(
                 payload=payload,
                 hmac_key=self.hmac_key,
                 check_expires=True
             )
 
-            if is_valid and sig:
-                # Mark this solution as used (prevent replay)
-                cache.set(solution_key, True, timeout=self.expires_seconds)
-                logger.debug("ALTCHA solution verified successfully")
-            elif not is_valid:
+            if not is_valid:
                 logger.warning(f"ALTCHA verification failed: {error}")
+                return is_valid, error
 
-            return is_valid, error
+            # Atomically mark as used to prevent race condition replays.
+            # cache.add() returns False if key already exists, True if set.
+            if sig:
+                solution_key = f"{self.CACHE_KEY_PREFIX}:used:{sig}"
+                if not cache.add(solution_key, True, timeout=self.expires_seconds):
+                    logger.warning("ALTCHA solution replay attempt detected")
+                    return False, "Solution already used"
+
+            logger.debug("ALTCHA solution verified successfully")
+            return True, None
 
         except Exception as e:
             logger.error(f"ALTCHA verification error: {e}")

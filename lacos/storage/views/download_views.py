@@ -22,15 +22,31 @@ logger = logging.getLogger(__name__)
 
 
 def get_client_ip(request) -> str:
-    """Extract client IP from request for rate limiting."""
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-    if x_forwarded_for:
-        return x_forwarded_for.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR', 'unknown')
+    """Extract client IP from request for rate limiting.
+
+    Only trusts X-Forwarded-For header if the request came from a trusted proxy.
+    Configure TRUSTED_PROXY_IPS in Django settings as a list of IP addresses.
+    If not configured or empty, falls back to REMOTE_ADDR only (secure default).
+    """
+    remote_addr = request.META.get('REMOTE_ADDR', 'unknown')
+
+    # Get trusted proxy list from settings
+    trusted_proxies = getattr(settings, 'TRUSTED_PROXY_IPS', None)
+
+    # Only trust X-Forwarded-For if request came from a trusted proxy
+    if trusted_proxies and remote_addr in trusted_proxies:
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            # Return the first (client) IP from the chain
+            return x_forwarded_for.split(',')[0].strip()
+
+    return remote_addr
 
 
 def check_rate_limit(request, key_prefix: str, max_requests: int, window_seconds: int) -> bool:
     """Check if request is within rate limit.
+
+    Uses atomic cache operations to prevent race conditions under concurrent requests.
 
     Args:
         request: Django request object
@@ -44,13 +60,27 @@ def check_rate_limit(request, key_prefix: str, max_requests: int, window_seconds
     client_ip = get_client_ip(request)
     cache_key = f"ratelimit:{key_prefix}:{client_ip}"
 
-    current_count = cache.get(cache_key, 0)
-    if current_count >= max_requests:
-        return False
+    try:
+        # Try to increment existing key atomically
+        new_count = cache.incr(cache_key)
+    except ValueError:
+        # Key doesn't exist, create it atomically with add()
+        # add() only sets if key doesn't exist, preventing race conditions
+        added = cache.add(cache_key, 1, timeout=window_seconds)
+        if added:
+            new_count = 1
+        else:
+            # Another request created the key between our incr and add
+            # Try increment again
+            try:
+                new_count = cache.incr(cache_key)
+            except ValueError:
+                # Extremely rare: key expired between add failure and this incr
+                # Allow request but log for monitoring
+                logger.warning(f"Rate limit cache race for {cache_key}")
+                return True
 
-    # Increment counter
-    cache.set(cache_key, current_count + 1, timeout=window_seconds)
-    return True
+    return new_count <= max_requests
 
 
 def validate_bucket_key(bucket: str, key: str) -> Optional[str]:
@@ -91,8 +121,14 @@ def check_resource_authorization(request, bucket: str, key: str) -> Optional[str
 
     Returns:
         Error message if not authorized, None if authorized.
+
+    Security:
+        By default (REQUIRE_S3_LOCATION_FOR_DOWNLOAD=True), this function DENIES
+        access unless an S3ResourceLocation record exists for the bucket/key.
+        This prevents attackers from requesting presigned URLs for arbitrary S3 paths.
     """
-    # Try to find the resource and its parent bundle for ACL check
+    require_location = getattr(settings, 'REQUIRE_S3_LOCATION_FOR_DOWNLOAD', True)
+
     try:
         # Look up resource location to find associated bundle
         location = S3ResourceLocation.objects.filter(
@@ -100,11 +136,25 @@ def check_resource_authorization(request, bucket: str, key: str) -> Optional[str
             s3_key=key
         ).first()
 
-        if location and location.content_object:
-            # If it's a bundle resource, check bundle ACL
+        # If no location record exists, deny by default (security)
+        if not location:
+            if require_location:
+                logger.warning(
+                    f"Download denied: no S3ResourceLocation for {bucket}/{key}"
+                )
+                return "Resource not found"
+            # Legacy mode: allow unmapped resources (INSECURE)
+            logger.warning(
+                f"Allowing download of unmapped resource {bucket}/{key} "
+                "(REQUIRE_S3_LOCATION_FOR_DOWNLOAD=False)"
+            )
+            return None
+
+        # Location exists - check if it has a content object for ACL evaluation
+        if location.content_object:
             obj = location.content_object
 
-            # Try to get the parent bundle
+            # Try to get the parent bundle for ACL check
             bundle = None
             if isinstance(obj, Bundle):
                 bundle = obj
@@ -124,7 +174,7 @@ def check_resource_authorization(request, bucket: str, key: str) -> Optional[str
                     )
                     return "Access denied"
 
-        # If no ACL record found, allow access (resource might be public or unmapped)
+        # Location exists but no bundle association - resource is public
         return None
 
     except Exception as e:
@@ -453,7 +503,10 @@ class BundleScriptDownloadView(View):
         bundle_name = ''
         try:
             bundle = Bundle.objects.get(id=bundle_id)
-            bundle_name = bundle.name or str(bundle_id)
+            general_info = bundle.get_general_info
+            if general_info:
+                bundle_name = general_info.display_title or general_info.title or ''
+            bundle_name = bundle_name or bundle.identifier or str(bundle_id)
         except Bundle.DoesNotExist:
             bundle_name = str(bundle_id)
 

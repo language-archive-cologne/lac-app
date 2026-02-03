@@ -361,6 +361,10 @@ STORAGE_ACL_CACHE_TIMEOUT = env.int("STORAGE_ACL_CACHE_TIMEOUT", default=900)
 PRESIGNED_URL_EXPIRATION = env.int("PRESIGNED_URL_EXPIRATION", default=86400)
 # Buffer time to subtract from expiration when caching URLs (handles clock skew)
 PRESIGNED_URL_CACHE_BUFFER = env.int("PRESIGNED_URL_CACHE_BUFFER", default=300)
+# Require S3ResourceLocation record to exist for download authorization
+# When True (default), only resources tracked in the database can be downloaded
+# Set to False to allow downloads of unmapped resources (INSECURE - use with caution)
+REQUIRE_S3_LOCATION_FOR_DOWNLOAD = env.bool("REQUIRE_S3_LOCATION_FOR_DOWNLOAD", default=True)
 
 # ALTCHA Configuration (Proof-of-Work bot protection)
 # ------------------------------------------------------------------------------
