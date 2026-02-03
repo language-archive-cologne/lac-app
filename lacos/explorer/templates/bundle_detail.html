@@ -191,10 +191,29 @@
   {% if media_resources or written_resources or other_resources %}
     <div class="bg-base-100 shadow overflow-hidden sm:rounded-lg mb-8 border border-base-300">
       <div class="px-4 py-5 sm:px-6 border-b-2 border-base-300">
-        <h2 class="text-xl font-medium text-base-content">{% translate "Bundle Resources" %}</h2>
-        <p class="mt-1 text-sm text-base-content/60">{% translate "Access the files contained in this bundle" %}</p>
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 class="text-xl font-medium text-base-content">{% translate "Bundle Resources" %}</h2>
+            <p class="mt-1 text-sm text-base-content/60">{% translate "Access the files contained in this bundle" %}</p>
+          </div>
+          {% if can_read_bundle %}
+          <div class="flex items-center gap-3">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" class="checkbox checkbox-sm resource-select-all" />
+              <span class="text-sm">{% translate "Select All" %}</span>
+            </label>
+            <button id="download-selected" class="btn btn-primary btn-sm" disabled>
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              {% translate "Download Selected" %}
+            </button>
+          </div>
+          {% endif %}
+        </div>
       </div>
 
+      <div id="bundle-resources-container">
       <!-- Media Resources -->
       {% if media_resources %}
         <div class="px-4 py-5 sm:p-6">
@@ -206,13 +225,18 @@
           </h3>
           <div class="space-y-4">
             {% for resource in media_resources %}
-              <div class="flex items-center justify-between p-3 bg-base-200 rounded-lg">
-                <div class="flex-1">
-                  <div class="text-sm font-medium text-base-content">{{ resource.file_name }}</div>
-                  <div class="text-xs text-base-content/60">{{ resource.mime_type }}</div>
-                  {% if resource.file_description %}
-                    <div class="mt-1 text-sm text-base-content/70">{{ resource.file_description }}</div>
+              <div class="resource-item flex items-center justify-between p-3 bg-base-200 rounded-lg" data-resource-id="{{ resource.id }}" data-size="0" data-filename="{{ resource.file_name }}">
+                <div class="flex items-center gap-3 flex-1">
+                  {% if can_read_bundle %}
+                  <input type="checkbox" class="checkbox checkbox-sm resource-checkbox" />
                   {% endif %}
+                  <div class="flex-1">
+                    <div class="text-sm font-medium text-base-content">{{ resource.file_name }}</div>
+                    <div class="text-xs text-base-content/60">{{ resource.mime_type }}</div>
+                    {% if resource.file_description %}
+                      <div class="mt-1 text-sm text-base-content/70">{{ resource.file_description }}</div>
+                    {% endif %}
+                  </div>
                 </div>
                 <div>
                   {% if can_read_bundle %}
@@ -282,13 +306,18 @@
           </h3>
           <div class="space-y-4">
             {% for resource in written_resources %}
-              <div class="flex items-center justify-between p-3 bg-base-200 rounded-lg">
-                <div class="flex-1">
-                  <div class="text-sm font-medium text-base-content">{{ resource.file_name }}</div>
-                  <div class="text-xs text-base-content/60">{{ resource.mime_type }}</div>
-                  {% if resource.file_description %}
-                    <div class="mt-1 text-sm text-base-content/70">{{ resource.file_description }}</div>
+              <div class="resource-item flex items-center justify-between p-3 bg-base-200 rounded-lg" data-resource-id="{{ resource.id }}" data-size="0" data-filename="{{ resource.file_name }}">
+                <div class="flex items-center gap-3 flex-1">
+                  {% if can_read_bundle %}
+                  <input type="checkbox" class="checkbox checkbox-sm resource-checkbox" />
                   {% endif %}
+                  <div class="flex-1">
+                    <div class="text-sm font-medium text-base-content">{{ resource.file_name }}</div>
+                    <div class="text-xs text-base-content/60">{{ resource.mime_type }}</div>
+                    {% if resource.file_description %}
+                      <div class="mt-1 text-sm text-base-content/70">{{ resource.file_description }}</div>
+                    {% endif %}
+                  </div>
                 </div>
                 <div>
                   {% if can_read_bundle %}
@@ -362,13 +391,18 @@
           </h3>
           <div class="space-y-4">
             {% for resource in other_resources %}
-              <div class="flex items-center justify-between p-3 bg-base-200 rounded-lg">
-                <div class="flex-1">
-                  <div class="text-sm font-medium text-base-content">{{ resource.file_name }}</div>
-                  <div class="text-xs text-base-content/60">{{ resource.mime_type }}</div>
-                  {% if resource.file_description %}
-                    <div class="mt-1 text-sm text-base-content/70">{{ resource.file_description }}</div>
+              <div class="resource-item flex items-center justify-between p-3 bg-base-200 rounded-lg" data-resource-id="{{ resource.id }}" data-size="0" data-filename="{{ resource.file_name }}">
+                <div class="flex items-center gap-3 flex-1">
+                  {% if can_read_bundle %}
+                  <input type="checkbox" class="checkbox checkbox-sm resource-checkbox" />
                   {% endif %}
+                  <div class="flex-1">
+                    <div class="text-sm font-medium text-base-content">{{ resource.file_name }}</div>
+                    <div class="text-xs text-base-content/60">{{ resource.mime_type }}</div>
+                    {% if resource.file_description %}
+                      <div class="mt-1 text-sm text-base-content/70">{{ resource.file_description }}</div>
+                    {% endif %}
+                  </div>
                 </div>
                 <div>
                   {% if can_read_bundle %}
@@ -419,6 +453,7 @@
           </div>
         </div>
       {% endif %}
+      </div>{# End bundle-resources-container #}
     </div>
   {% endif %}
 
@@ -696,4 +731,45 @@
       }
     });
   </script>
+
+  {% if can_read_bundle %}
+    {% if media_resources or written_resources or other_resources %}
+      {% include "dashboard/partials/bundle_download_modal.html" %}
+    {% endif %}
+  {% endif %}
 {% endblock explorer_content %}
+
+{% block inline_javascript %}
+{{ block.super }}
+{% if can_read_bundle %}
+{% if media_resources or written_resources or other_resources %}
+<script type="module">
+import { ResourceSelector } from '{% static "js/src/download/resource-selector.js" %}';
+
+document.addEventListener('DOMContentLoaded', () => {
+    const container = document.getElementById('bundle-resources-container');
+    if (container) {
+        const selector = new ResourceSelector(container, {
+            downloadButtonSelector: '#download-selected',
+            selectAllSelector: '.resource-select-all',
+            itemSelector: '.resource-item',
+            checkboxSelector: '.resource-checkbox'
+        });
+
+        // Open modal when download button clicked
+        document.getElementById('download-selected').addEventListener('click', () => {
+            const selectedIds = selector.getSelectedIds();
+            if (selectedIds.length > 0 && window.bundleDownloadModal) {
+                window.bundleDownloadModal.open(
+                    '{{ bundle.pk }}',
+                    selectedIds,
+                    '{% if bundle.get_general_info.display_title %}{{ bundle.get_general_info.display_title|escapejs }}{% elif bundle.get_general_info.title %}{{ bundle.get_general_info.title|escapejs }}{% else %}{{ bundle.identifier|escapejs }}{% endif %}'
+                );
+            }
+        });
+    }
+});
+</script>
+{% endif %}
+{% endif %}
+{% endblock inline_javascript %}

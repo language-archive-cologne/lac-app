@@ -2,6 +2,7 @@
 
 import json
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from django.conf import settings
@@ -13,6 +14,8 @@ from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.storage.services.altcha_service import get_altcha_service
 from lacos.storage.services.presigned_url_cache_service import get_presigned_url_cache_service
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
+from lacos.storage.services.resource_resolver_service import ResourceResolverService, ResolvedResource
+from lacos.storage.services.download_script_service import DownloadScriptService, DownloadInfo
 from lacos.storage.models.s3_resource_location import S3ResourceLocation
 
 logger = logging.getLogger(__name__)
@@ -340,3 +343,180 @@ class BundleDownloadView(View):
             response_data['errors'] = errors
 
         return JsonResponse(response_data)
+
+
+class BundleScriptDownloadView(View):
+    """Generate download scripts for multiple bundle resources."""
+
+    MAX_RESOURCES = 100
+    RATE_LIMIT_MAX = 10  # 10 script generations per minute
+    RATE_LIMIT_WINDOW = 60
+
+    VALID_FORMATS = {"all", "bash", "powershell", "manifest"}
+
+    def post(self, request):
+        """Generate download scripts for bundle resources."""
+        # 1. Rate limit check
+        if not check_rate_limit(
+            request,
+            'bundle_script',
+            self.RATE_LIMIT_MAX,
+            self.RATE_LIMIT_WINDOW
+        ):
+            logger.warning(
+                f"Rate limit exceeded for script generation from {get_client_ip(request)}"
+            )
+            return JsonResponse(
+                {'error': 'Too many requests. Please try again later.'},
+                status=429
+            )
+
+        # 2. Parse JSON body
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+        altcha_payload = data.get('altcha')
+        bundle_id = data.get('bundle_id')
+        resource_ids = data.get('resource_ids', [])
+        script_format = data.get('format', 'all')
+
+        # 3. Validate format
+        if script_format not in self.VALID_FORMATS:
+            return JsonResponse({
+                'error': f'Invalid format. Must be one of: {", ".join(sorted(self.VALID_FORMATS))}'
+            }, status=400)
+
+        # Validate required fields
+        if not altcha_payload:
+            return JsonResponse({'error': 'Missing ALTCHA solution'}, status=400)
+
+        if not bundle_id:
+            return JsonResponse({'error': 'Missing bundle_id'}, status=400)
+
+        if not isinstance(resource_ids, list):
+            return JsonResponse({'error': 'resource_ids must be a list'}, status=400)
+
+        # 4. Verify ALTCHA solution
+        altcha_service = get_altcha_service()
+        is_valid, error = altcha_service.verify_solution_base64(altcha_payload)
+
+        if not is_valid:
+            logger.warning(f"ALTCHA verification failed for script generation: {error}")
+            return JsonResponse({
+                'error': 'Verification failed',
+                'detail': 'Please complete the verification again'
+            }, status=403)
+
+        # 5. Check resource count
+        if len(resource_ids) > self.MAX_RESOURCES:
+            return JsonResponse({
+                'error': f'Too many resources. Maximum is {self.MAX_RESOURCES}'
+            }, status=400)
+
+        # Handle empty resource_ids gracefully
+        if not resource_ids:
+            return JsonResponse({
+                'success': True,
+                'bundle_name': '',
+                'expires_at': None,
+                'scripts': {},
+                'file_count': 0,
+                'total_size': 0,
+                'errors': []
+            })
+
+        # 6. Call ResourceResolverService
+        resolver = ResourceResolverService()
+        resolved, errors = resolver.resolve_resources(
+            bundle_id=bundle_id,
+            resource_ids=resource_ids,
+            user=request.user,
+        )
+
+        # Check for bundle_not_found error (all errors will have this)
+        if errors and all(e.error == 'bundle_not_found' for e in errors):
+            return JsonResponse({
+                'success': False,
+                'error': f'Bundle {bundle_id} not found'
+            }, status=404)
+
+        # Check for access_denied error (all errors will have this)
+        if errors and all(e.error == 'access_denied' for e in errors):
+            return JsonResponse({
+                'success': False,
+                'error': 'Access denied to bundle resources'
+            }, status=403)
+
+        # Get bundle name
+        bundle_name = ''
+        try:
+            bundle = Bundle.objects.get(id=bundle_id)
+            bundle_name = bundle.name or str(bundle_id)
+        except Bundle.DoesNotExist:
+            bundle_name = str(bundle_id)
+
+        # 7. Convert ResolvedResource to DownloadInfo (sanitize filenames)
+        script_service = DownloadScriptService()
+        existing_filenames: set[str] = set()
+        download_infos: list[DownloadInfo] = []
+
+        for res in resolved:
+            sanitized_filename = script_service.sanitize_filename(
+                res.filename, existing_filenames
+            )
+            download_infos.append(DownloadInfo(
+                filename=sanitized_filename,
+                url=res.presigned_url,
+                size=res.size,
+                checksum=res.checksum,
+                original_key=res.key,
+            ))
+
+        # Calculate expires_at from settings
+        expiration_seconds = getattr(settings, 'PRESIGNED_URL_EXPIRATION', 86400)
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=expiration_seconds)
+
+        # 8. Generate scripts based on format
+        scripts = {}
+
+        if script_format in ('all', 'bash'):
+            scripts['bash'] = script_service.generate_bash_script(
+                download_infos, bundle_name, expires_at
+            )
+
+        if script_format in ('all', 'powershell'):
+            scripts['powershell'] = script_service.generate_powershell_script(
+                download_infos, bundle_name, expires_at
+            )
+
+        if script_format in ('all', 'manifest'):
+            scripts['manifest'] = script_service.generate_manifest(
+                download_infos, bundle_name, expires_at
+            )
+
+        # Calculate total size
+        total_size = sum(dl.size for dl in download_infos)
+
+        # Convert errors to serializable format
+        error_list = [
+            {'resource_id': e.resource_id, 'error': e.error, 'message': e.message}
+            for e in errors
+        ]
+
+        logger.info(
+            f"Script generation for bundle {bundle_id}: {len(resolved)} resolved, "
+            f"{len(errors)} errors, format={script_format}, user={request.user}"
+        )
+
+        # 9. Return JSON response
+        return JsonResponse({
+            'success': True,
+            'bundle_name': bundle_name,
+            'expires_at': expires_at.isoformat().replace('+00:00', 'Z'),
+            'scripts': scripts,
+            'file_count': len(download_infos),
+            'total_size': total_size,
+            'errors': error_list,
+        })

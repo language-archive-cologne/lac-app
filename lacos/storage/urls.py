@@ -8,6 +8,7 @@ from .views.download_views import (
     AltchaChallengeView,
     ProtectedDownloadView,
     BundleDownloadView,
+    BundleScriptDownloadView,
 )
 
 app_name = "storage"
@@ -98,4 +99,5 @@ urlpatterns = [
     path("altcha/challenge/", AltchaChallengeView.as_view(), name="altcha_challenge"),
     path("download/", csrf_exempt(ProtectedDownloadView.as_view()), name="protected_download"),
     path("download/bundle/", csrf_exempt(BundleDownloadView.as_view()), name="bundle_download"),
+    path("download/scripts/", csrf_exempt(BundleScriptDownloadView.as_view()), name="bundle_script_download"),
 ] 
