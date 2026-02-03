@@ -1,0 +1,94 @@
+{% load static i18n %}
+{# Single File Download Modal with ALTCHA Protection #}
+
+<dialog id="single-file-download-modal" class="modal">
+  <div class="modal-box max-w-lg">
+    <form method="dialog">
+      <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">X</button>
+    </form>
+
+    <h3 class="font-bold text-lg mb-4">{% translate "Download File" %}</h3>
+
+    {# Filename #}
+    <p class="mb-4 font-medium" id="single-download-filename"></p>
+
+    {# ALTCHA widget #}
+    <div id="single-altcha-container" class="mb-4">
+      <p class="text-sm mb-2">{% translate "Complete verification to download:" %}</p>
+      <altcha-widget
+        id="single-altcha-widget"
+        challengeurl="{% url 'storage:altcha_challenge' %}"
+        hidefooter
+        hidelogo
+      ></altcha-widget>
+    </div>
+
+    {# Loading state #}
+    <div id="single-download-loading" class="hidden text-center py-4">
+      <span class="loading loading-spinner loading-md"></span>
+      <p class="mt-2">{% translate "Preparing download..." %}</p>
+    </div>
+
+    {# Error state #}
+    <div id="single-download-error" class="hidden alert alert-error mb-4">
+      <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <span id="single-error-message"></span>
+    </div>
+
+    {# Success state #}
+    <div id="single-download-success" class="hidden space-y-4">
+      <div class="alert alert-success">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>{% translate "Ready to download!" %}</span>
+      </div>
+
+      <a id="single-download-link" href="#" class="btn btn-primary w-full" download>
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+        {% translate "Download Now" %}
+      </a>
+
+      <div class="divider text-sm">{% translate "Or use curl" %}</div>
+
+      <div class="bg-base-200 p-3 rounded-lg">
+        <code id="single-curl-command" class="text-xs break-all block"></code>
+      </div>
+
+      <button id="single-copy-curl" type="button" class="btn btn-outline btn-sm w-full">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+        {% translate "Copy" %}
+      </button>
+    </div>
+
+    <div class="modal-action">
+      <form method="dialog">
+        <button class="btn">{% translate "Close" %}</button>
+      </form>
+    </div>
+  </div>
+
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>
+
+<script type="module">
+import { SingleFileDownloadModal } from '{% static "js/src/download/single-file-download-modal.js" %}';
+
+document.addEventListener('DOMContentLoaded', () => {
+  const modal = document.getElementById('single-file-download-modal');
+  if (modal) {
+    window.singleFileDownloadModal = new SingleFileDownloadModal(modal, {
+      challengeUrl: '{% url "storage:altcha_challenge" %}',
+      downloadUrl: '{% url "storage:protected_download" %}'
+    });
+  }
+});
+</script>
