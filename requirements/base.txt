@@ -34,3 +34,5 @@ huey==2.5.3 # https://github.com/coleifer/huey
 geopy==2.4.1 # https://github.com/geopy/geopy
 #markdown
 markdown==3.7 # https://github.com/Python-Markdown/markdown
+#altcha - proof-of-work CAPTCHA for download protection
+altcha==0.1.1 # https://github.com/altcha-org/altcha-lib-py

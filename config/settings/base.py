@@ -362,6 +362,15 @@ PRESIGNED_URL_EXPIRATION = env.int("PRESIGNED_URL_EXPIRATION", default=86400)
 # Buffer time to subtract from expiration when caching URLs (handles clock skew)
 PRESIGNED_URL_CACHE_BUFFER = env.int("PRESIGNED_URL_CACHE_BUFFER", default=300)
 
+# ALTCHA Configuration (Proof-of-Work bot protection)
+# ------------------------------------------------------------------------------
+# Secret key for HMAC signing challenges (defaults to SECRET_KEY if not set)
+ALTCHA_HMAC_KEY = env("ALTCHA_HMAC_KEY", default=None)
+# Difficulty level: higher = more computation (50000 ~ 1-2 seconds)
+ALTCHA_MAX_NUMBER = env.int("ALTCHA_MAX_NUMBER", default=50000)
+# Challenge expiration in seconds
+ALTCHA_EXPIRES_SECONDS = env.int("ALTCHA_EXPIRES_SECONDS", default=300)
+
 # ACL Configuration
 # ------------------------------------------------------------------------------
 ACL_ENFORCEMENT_ENABLED = env.bool("ACL_ENFORCEMENT_ENABLED", default=True)

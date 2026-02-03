@@ -1,8 +1,15 @@
 from django.urls import path
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.views.generic import RedirectView
 
 from . import views
+from .views.download_views import (
+    AltchaChallengeView,
+    ProtectedDownloadView,
+    BundleDownloadView,
+)
+
 app_name = "storage"
 
 urlpatterns = [
@@ -84,4 +91,11 @@ urlpatterns = [
     # OCFL conversion operations
     path("ocfl/modal/<str:bucket_name>/<path:folder_path>/", views.ocfl_conversion_modal, name="ocfl_conversion_modal"),
     path("ocfl/convert/<str:bucket_name>/<path:folder_path>/", views.ConvertToOCFLView.as_view(), name="convert_to_ocfl"),
+
+    # ALTCHA and protected downloads
+    # Note: CSRF exempt because these endpoints use ALTCHA proof-of-work for protection
+    # and only return presigned URLs (no state modification)
+    path("altcha/challenge/", AltchaChallengeView.as_view(), name="altcha_challenge"),
+    path("download/", csrf_exempt(ProtectedDownloadView.as_view()), name="protected_download"),
+    path("download/bundle/", csrf_exempt(BundleDownloadView.as_view()), name="bundle_download"),
 ] 

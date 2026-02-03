@@ -1,0 +1,228 @@
+{% load static %}
+{# Download Modal with ALTCHA Protection #}
+{# Include this partial in pages that need download functionality #}
+
+<dialog id="download-modal" class="modal">
+  <div class="modal-box max-w-lg">
+    <form method="dialog">
+      <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">X</button>
+    </form>
+
+    <h3 class="font-bold text-lg mb-4" id="download-modal-title">Download File</h3>
+
+    {# ALTCHA Widget #}
+    <div id="altcha-container" class="mb-4">
+      <altcha-widget
+        id="altcha-widget"
+        challengeurl="{% url 'storage:altcha_challenge' %}"
+        hidefooter
+        hidelogo
+      ></altcha-widget>
+    </div>
+
+    {# Download Status #}
+    <div id="download-status" class="hidden mb-4">
+      <div class="flex items-center gap-2">
+        <span class="loading loading-spinner loading-sm"></span>
+        <span id="download-status-text">Verifying...</span>
+      </div>
+      <progress id="download-progress" class="progress progress-primary w-full mt-2" value="0" max="100"></progress>
+    </div>
+
+    {# Download Result #}
+    <div id="download-result" class="hidden">
+      <div class="alert alert-success mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        <span>Download link ready!</span>
+      </div>
+
+      {# curl command display #}
+      <div class="form-control mb-4">
+        <label class="label">
+          <span class="label-text font-medium">For large files, use curl (supports resume):</span>
+        </label>
+        <div class="join w-full">
+          <input type="text" id="curl-command" class="input input-bordered join-item flex-1 font-mono text-xs" readonly>
+          <button type="button" id="copy-curl-btn" class="btn btn-primary join-item">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            Copy
+          </button>
+        </div>
+        <label class="label">
+          <span class="label-text-alt text-base-content/60">Tip: curl -C - allows resuming interrupted downloads</span>
+        </label>
+      </div>
+    </div>
+
+    {# Error display #}
+    <div id="download-error" class="hidden">
+      <div class="alert alert-error mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        <span id="download-error-text">An error occurred</span>
+      </div>
+    </div>
+
+    {# Action buttons #}
+    <div class="modal-action">
+      <button type="button" id="download-browser-btn" class="btn btn-primary hidden">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+        Download in Browser
+      </button>
+      <form method="dialog">
+        <button class="btn">Close</button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const modal = document.getElementById('download-modal');
+  const widget = document.getElementById('altcha-widget');
+  const statusDiv = document.getElementById('download-status');
+  const statusText = document.getElementById('download-status-text');
+  const progressBar = document.getElementById('download-progress');
+  const resultDiv = document.getElementById('download-result');
+  const errorDiv = document.getElementById('download-error');
+  const errorText = document.getElementById('download-error-text');
+  const curlInput = document.getElementById('curl-command');
+  const copyCurlBtn = document.getElementById('copy-curl-btn');
+  const downloadBrowserBtn = document.getElementById('download-browser-btn');
+  const altchaContainer = document.getElementById('altcha-container');
+
+  let currentDownloadUrl = null;
+  let currentFilename = null;
+
+  // Handle copy curl command
+  copyCurlBtn.addEventListener('click', async function() {
+    try {
+      await navigator.clipboard.writeText(curlInput.value);
+      copyCurlBtn.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+        </svg>
+        Copied!
+      `;
+      setTimeout(() => {
+        copyCurlBtn.innerHTML = `
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+          Copy
+        `;
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  });
+
+  // Handle browser download button
+  downloadBrowserBtn.addEventListener('click', function() {
+    if (currentDownloadUrl) {
+      const link = document.createElement('a');
+      link.href = currentDownloadUrl;
+      link.download = currentFilename || 'download';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  });
+
+  // Reset modal state
+  function resetModal() {
+    altchaContainer.classList.remove('hidden');
+    statusDiv.classList.add('hidden');
+    resultDiv.classList.add('hidden');
+    errorDiv.classList.add('hidden');
+    downloadBrowserBtn.classList.add('hidden');
+    progressBar.value = 0;
+    currentDownloadUrl = null;
+    currentFilename = null;
+  }
+
+  // Show progress
+  function showProgress(message, percent) {
+    altchaContainer.classList.add('hidden');
+    statusDiv.classList.remove('hidden');
+    statusText.textContent = message;
+    progressBar.value = percent;
+  }
+
+  // Show result
+  function showResult(result) {
+    statusDiv.classList.add('hidden');
+    resultDiv.classList.remove('hidden');
+    downloadBrowserBtn.classList.remove('hidden');
+    curlInput.value = result.curl_command;
+    currentDownloadUrl = result.url;
+    currentFilename = result.filename;
+  }
+
+  // Show error
+  function showError(message) {
+    statusDiv.classList.add('hidden');
+    errorDiv.classList.remove('hidden');
+    errorText.textContent = message;
+  }
+
+  // Listen for ALTCHA verified event
+  widget.addEventListener('verified', async function(event) {
+    const payload = event.detail.payload;
+    const resourceData = modal.dataset;
+
+    showProgress('Generating download link...', 50);
+
+    try {
+      const response = await fetch('{% url "storage:protected_download" %}', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          altcha: payload,
+          bucket: resourceData.bucket,
+          key: resourceData.key,
+          filename: resourceData.filename,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || error.error || 'Download failed');
+      }
+
+      const result = await response.json();
+      showProgress('Ready!', 100);
+      setTimeout(() => showResult(result), 300);
+
+    } catch (error) {
+      showError(error.message);
+    }
+  });
+
+  // Listen for ALTCHA error
+  widget.addEventListener('error', function(event) {
+    showError(event.detail?.message || 'Verification failed');
+  });
+
+  // Reset when modal closes
+  modal.addEventListener('close', resetModal);
+
+  // Expose function to open modal with resource data
+  window.openDownloadModal = function(bucket, key, filename, title) {
+    resetModal();
+    modal.dataset.bucket = bucket;
+    modal.dataset.key = key;
+    modal.dataset.filename = filename || key.split('/').pop();
+    document.getElementById('download-modal-title').textContent = title || 'Download ' + (filename || key.split('/').pop());
+    modal.showModal();
+  };
+});
+</script>
