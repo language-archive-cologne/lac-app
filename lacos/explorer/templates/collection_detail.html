@@ -144,9 +144,10 @@
                   <div class="flex flex-wrap gap-1.5">
                     {% for language in collection.get_general_info.object_languages.all %}
                       {% if language.iso_639_3_code %}
-                        <a href="https://glottolog.org/resource/languoid/iso/{{ language.iso_639_3_code }}" target="_blank" rel="noopener" class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-base-200 text-base-content border border-base-300 hover:bg-primary hover:text-primary-content transition-colors">
-                          {{ language.name }}
-                          <span class="ml-1 text-base-content/60 text-xs">[{{ language.iso_639_3_code }}]</span>
+                        <a href="https://glottolog.org/resource/languoid/iso/{{ language.iso_639_3_code }}" target="_blank" rel="noopener" title="{% translate 'Open in Glottolog' %}" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-base-200 text-base-content border border-base-300 hover:bg-primary hover:text-primary-content transition-colors">
+                          <span>{{ language.name }}</span>
+                          <span class="text-base-content/60 text-xs">[{{ language.iso_639_3_code }}]</span>
+                          <img src="{% static 'images/glottolog_logo.png' %}" alt="{% translate 'Glottolog' %}" class="h-3.5 w-3.5 opacity-80" />
                         </a>
                       {% else %}
                         <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-base-200 text-base-content border border-base-300">
