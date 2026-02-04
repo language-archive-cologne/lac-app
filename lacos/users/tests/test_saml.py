@@ -15,8 +15,8 @@ from lacos.users.tests.factories import UserFactory
 @pytest.fixture(autouse=True)
 def enable_saml(settings):
     settings.SAML_LOGIN_ENABLED = True
-    settings.SAML_USE_NAME_ID_AS_USERNAME = True
-    settings.SAML_DJANGO_USER_MAIN_ATTRIBUTE = "saml_persistent_id"
+    settings.SAML_USE_NAME_ID_AS_USERNAME = False
+    settings.SAML_DJANGO_USER_MAIN_ATTRIBUTE = "username"
     settings.SAML_ATTRIBUTE_MAPPING = {
         "eduPersonPrincipalName": ("username",),
         "mail": ("email",),
@@ -101,7 +101,7 @@ def test_backend_creates_user_with_persistent_identifier(settings):
 
 
 @pytest.mark.django_db
-def test_backend_links_existing_user_by_persistent_identifier(settings):
+def test_backend_links_existing_user_by_username(settings):
     existing = UserFactory(
         username="existing-user",
         email="old@example.com",
@@ -110,7 +110,7 @@ def test_backend_links_existing_user_by_persistent_identifier(settings):
     )
     backend = LacosSaml2Backend()
     attributes = {
-        "eduPersonPrincipalName": ["new-saml-username"],
+        "eduPersonPrincipalName": ["existing-user"],
         "mail": ["updated@example.com"],
         "displayName": ["Updated Name"],
     }

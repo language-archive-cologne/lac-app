@@ -27,6 +27,8 @@ services:
       - ./.envs/.local/.storage
     environment:
       SAML_LOGIN_ENABLED: "true"
+      SAML_DJANGO_USER_MAIN_ATTRIBUTE: "username"
+      SAML_USE_NAME_ID_AS_USERNAME: "false"
       SAML_SP_BASE_URL: "http://localhost:8101"
       SAML_IDP_METADATA_LOCAL: "/app/shibboleth.xml"
     ports:
@@ -105,6 +107,8 @@ services:
       - ./.envs/.local/.storage
     environment:
       SAML_LOGIN_ENABLED: "true"
+      SAML_DJANGO_USER_MAIN_ATTRIBUTE: "username"
+      SAML_USE_NAME_ID_AS_USERNAME: "false"
       SAML_SP_BASE_URL: "http://localhost:8101"
       SAML_IDP_METADATA_LOCAL: "/app/shibboleth.xml"
     command: /bin/sh -c "python manage.py run_huey"

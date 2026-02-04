@@ -522,7 +522,7 @@ if SAML_LOGIN_ENABLED:
     )
     SAML_DJANGO_USER_MAIN_ATTRIBUTE = env(
         "SAML_DJANGO_USER_MAIN_ATTRIBUTE",
-        default="saml_persistent_id",
+        default="username",
     )
     SAML_METADATA_LOCAL = env.list(
         "SAML_IDP_METADATA_LOCAL",

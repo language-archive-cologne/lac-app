@@ -34,6 +34,8 @@ services:
       - ./.envs/.dev/.docker
     environment:
       SAML_LOGIN_ENABLED: "true"
+      SAML_DJANGO_USER_MAIN_ATTRIBUTE: "username"
+      SAML_USE_NAME_ID_AS_USERNAME: "false"
       GUIDELINES_REPO_URL: /app/lac-guidelines
     ports:
       - '127.0.0.1:8102:8000'
@@ -110,6 +112,8 @@ services:
       - ./.envs/.dev/.docker
     environment:
       SAML_LOGIN_ENABLED: "true"
+      SAML_DJANGO_USER_MAIN_ATTRIBUTE: "username"
+      SAML_USE_NAME_ID_AS_USERNAME: "false"
     command: /bin/sh -c "python manage.py run_huey"
     networks:
       - lacos_dev_network

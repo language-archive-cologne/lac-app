@@ -20,6 +20,8 @@ services:
       - ./.envs/.production/.postgres
     environment:
       SAML_LOGIN_ENABLED: ${SAML_LOGIN_ENABLED:-false}
+      SAML_DJANGO_USER_MAIN_ATTRIBUTE: "username"
+      SAML_USE_NAME_ID_AS_USERNAME: "false"
       SAML_SP_BASE_URL: ${SAML_SP_BASE_URL:-https://lacos.uni-koeln.de}
       SAML_IDP_METADATA_LOCAL: ${SAML_IDP_METADATA_LOCAL:-/app/shibboleth.xml}
       SAML_SP_CERT_FILE: ${SAML_SP_CERT_FILE:-}

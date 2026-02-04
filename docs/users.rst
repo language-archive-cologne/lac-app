@@ -22,8 +22,9 @@ Key settings
 
 * ``SAML_SP_BASE_URL`` – external HTTPS endpoint used to mint ACS and logout
   URLs.
-* ``SAML_DJANGO_USER_MAIN_ATTRIBUTE`` – defaults to ``saml_persistent_id`` so a
-  user is always looked up by the persistent NameID.
+* ``SAML_DJANGO_USER_MAIN_ATTRIBUTE`` – defaults to ``username`` so users are
+  looked up by ``eduPersonPrincipalName`` (ePPN); the persistent NameID is
+  still captured in ``User.saml_persistent_id`` when released.
 * ``SAML_IDP_METADATA_LOCAL`` / ``SAML_IDP_METADATA_REMOTE`` – IdP metadata
   sources. The repository ships a local fallback
   ``shibboleth.xml`` for development.
@@ -53,8 +54,9 @@ Troubleshooting
 
     Attribute mismatch
         Inspect ``session_info['ava']`` in the Django shell while reproducing
-        the login. Missing ``name_id`` values prevent account provisioning
-        because the persistent identifier drives lookups.
+        the login. Missing ``eduPersonPrincipalName`` values prevent account
+        provisioning because the ePPN drives lookups; ``name_id`` is only used
+        to populate ``User.saml_persistent_id``.
 
     Redirect loops
         Ensure Traefik forwards ``X-Forwarded-Proto=https`` and that
