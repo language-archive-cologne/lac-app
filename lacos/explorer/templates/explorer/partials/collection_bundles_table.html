@@ -121,30 +121,6 @@
                     </button>
                   </div>
                 {% endif %}
-                {% if bundle_info.primary_resources %}
-                  <div class="mt-2">
-                    {% if bundle_info.can_read_bundle %}
-                      <a href="{% url 'explorer:bundle_detail' pk=bundle.pk %}#bundle-resources" class="inline-flex items-center text-xs text-base-content/60 hover:text-base-content">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                        {% translate "Access files" %}
-                      </a>
-                    {% else %}
-                      {% if level == 'academic' %}
-                        <span class="inline-flex items-center text-xs text-warning">
-                          <span aria-hidden="true" class="mr-1">⛔</span>
-                          {% translate "Sign in required" %}
-                        </span>
-                      {% else %}
-                        <span class="inline-flex items-center text-xs text-amber-600">
-                          <span aria-hidden="true" class="mr-1">⛔</span>
-                          {% translate "Restricted" %}
-                        </span>
-                      {% endif %}
-                    {% endif %}
-                  </div>
-                {% endif %}
               </td>
               <td class="px-6 py-5 text-sm text-base-content/70 align-top">
                 {% if bundle.get_general_info.description %}
