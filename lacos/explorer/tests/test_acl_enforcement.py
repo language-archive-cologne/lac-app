@@ -82,18 +82,18 @@ def test_bundle_detail_allows_public_access(client):
 
 @pytest.mark.django_db
 @override_settings(ACL_ENFORCEMENT_ENABLED=True)
-def test_bundle_resources_denies_when_acl_restricts(client):
+def test_bundle_detail_denies_when_acl_restricts(client):
     collection = _create_collection("restricted-collection")
     bundle = _create_bundle(collection, "restricted-bundle")
     _store_acl(bundle, [{"agentClass": "foaf:Person", "agent": "http://example.org/users/allowed", "mode": ["acl:Read"]}])
 
-    response = client.get(reverse("explorer:bundle_resources", kwargs={"pk": bundle.pk}))
+    response = client.get(reverse("explorer:bundle_detail", kwargs={"pk": bundle.pk}))
     assert response.status_code == 403
 
 
 @pytest.mark.django_db
 @override_settings(ACL_ENFORCEMENT_ENABLED=True)
-def test_bundle_resources_allows_authenticated_agent(client):
+def test_bundle_detail_allows_authenticated_agent(client):
     collection = _create_collection("auth-collection")
     bundle = _create_bundle(collection, "auth-bundle")
     _store_acl(bundle, [{"agentClass": WAC_AUTHENTICATED_AGENT, "mode": ["acl:Read"]}])
@@ -101,7 +101,7 @@ def test_bundle_resources_allows_authenticated_agent(client):
     user = get_user_model().objects.create_user(username="viewer", password="pass")
     client.force_login(user)
 
-    response = client.get(reverse("explorer:bundle_resources", kwargs={"pk": bundle.pk}))
+    response = client.get(reverse("explorer:bundle_detail", kwargs={"pk": bundle.pk}))
     assert response.status_code == 200
 
 

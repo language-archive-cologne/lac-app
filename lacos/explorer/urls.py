@@ -27,16 +27,6 @@ urlpatterns = [
         name="bundle_detail",
     ),
     path(
-        "bundles/<uuid:pk>/resources/",
-        view=views.BundleResourcesView.as_view(),
-        name="bundle_resources",
-    ),
-    path(
-        "bundles/<uuid:pk>/resources/<str:resource_id>/",
-        view=views.BundleResourcesView.as_view(),
-        name="resource_direct_access",
-    ),
-    path(
         "resource/<uuid:bundle_id>/<uuid:resource_id>/",
         view=views.ResourceAccessView.as_view(),
         name="resource_access",
@@ -61,16 +51,6 @@ urlpatterns = [
         "collections/<path:handle>/",
         view=views.CollectionDetailView.as_view(),
         name="collection_detail_by_handle",
-    ),
-    path(
-        "bundles/<path:handle>/resources/<str:resource_id>/",
-        view=views.BundleResourcesView.as_view(),
-        name="resource_direct_access_by_handle",
-    ),
-    path(
-        "bundles/<path:handle>/resources/",
-        view=views.BundleResourcesView.as_view(),
-        name="bundle_resources_by_handle",
     ),
     path(
         "bundles/<path:handle>/metadata.jsonld",
