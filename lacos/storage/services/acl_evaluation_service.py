@@ -220,13 +220,24 @@ class ACLEvaluationService:
         if acl_agent_uri:
             uris.add(acl_agent_uri.strip())
 
-        # For Shibboleth users, also add the raw username (eppn) to match
-        # external ACLs that don't use our urn:lacos: prefix
+        username = getattr(user, "username", None)
         saml_persistent_id = getattr(user, "saml_persistent_id", None)
-        if saml_persistent_id:
-            username = getattr(user, "username", None)
-            if username:
-                uris.add(username.strip())
+        if username:
+            stripped = username.strip()
+            if stripped:
+                if saml_persistent_id:
+                    uris.add(stripped)
+                if "@" in stripped:
+                    uris.add(f"urn:lacos:eppn:{stripped}")
+
+        email = getattr(user, "email", None)
+        if email:
+            stripped = email.strip()
+            if stripped:
+                if saml_persistent_id:
+                    uris.add(stripped)
+                if "@" in stripped:
+                    uris.add(f"urn:lacos:eppn:{stripped}")
 
         return {uri for uri in uris if uri}
 

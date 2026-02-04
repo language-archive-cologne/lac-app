@@ -623,17 +623,26 @@ def acl_update_permission(request):
     elif access_level == ACL_LEVEL_RESTRICTED:
         user_ids = request.POST.getlist("user_ids")
         group_ids = request.POST.getlist("group_ids")
+        extra_user_agents_raw = request.POST.get("extra_user_agents", "")
+        extra_group_agents_raw = request.POST.get("extra_group_agents", "")
+
+        def _parse_agent_list(raw_value: str) -> list[str]:
+            if not raw_value:
+                return []
+            items: list[str] = []
+            for line in raw_value.splitlines():
+                parts = [part.strip() for part in line.split(",") if part.strip()]
+                items.extend(parts)
+            return [value for value in items if value]
+
+        person_agents: set[str] = set()
+        group_agents: set[str] = set()
 
         for user_id in user_ids:
             try:
                 user = User.objects.get(pk=user_id)
                 if user.acl_agent_uri:
-                    permissions_data.append({
-                        "agentClass": "foaf:Person",
-                        "agent": user.acl_agent_uri,
-                        "mode": ["acl:Read"]
-                    })
-                    read_agents.append(user.acl_agent_uri)
+                    person_agents.add(user.acl_agent_uri)
             except User.DoesNotExist:
                 pass
 
@@ -641,14 +650,31 @@ def acl_update_permission(request):
             try:
                 group_acl = GroupACL.objects.get(pk=group_id)
                 if group_acl.acl_agent_uri:
-                    permissions_data.append({
-                        "agentClass": "foaf:Group",
-                        "agent": group_acl.acl_agent_uri,
-                        "mode": ["acl:Read"]
-                    })
-                    read_agents.append(group_acl.acl_agent_uri)
+                    group_agents.add(group_acl.acl_agent_uri)
             except GroupACL.DoesNotExist:
                 pass
+
+        for agent in _parse_agent_list(extra_user_agents_raw):
+            person_agents.add(agent)
+
+        for agent in _parse_agent_list(extra_group_agents_raw):
+            group_agents.add(agent)
+
+        for agent in sorted(person_agents):
+            permissions_data.append({
+                "agentClass": "foaf:Person",
+                "agent": agent,
+                "mode": ["acl:Read"]
+            })
+            read_agents.append(agent)
+
+        for agent in sorted(group_agents):
+            permissions_data.append({
+                "agentClass": "foaf:Group",
+                "agent": agent,
+                "mode": ["acl:Read"]
+            })
+            read_agents.append(agent)
 
     # Update the DB record
     perm.access_level = access_level
@@ -700,6 +726,8 @@ def acl_edit_permission_form(request, object_type, object_id):
     # Get current read agents from permissions_data
     selected_user_ids = set()
     selected_group_ids = set()
+    external_user_agents = set()
+    external_group_agents = set()
     if perm and perm.permissions_data:
         for rule in perm.permissions_data:
             agent = rule.get("agent", "")
@@ -708,10 +736,14 @@ def acl_edit_permission_form(request, object_type, object_id):
                 user = User.objects.filter(acl_agent_uri=agent).first()
                 if user:
                     selected_user_ids.add(user.id)
+                else:
+                    external_user_agents.add(agent)
             elif agent_class == "foaf:Group" and agent:
                 group_acl = GroupACL.objects.filter(acl_agent_uri=agent).first()
                 if group_acl:
                     selected_group_ids.add(group_acl.id)
+                else:
+                    external_group_agents.add(agent)
 
     current_access_level = perm.access_level if perm else ACL_LEVEL_RESTRICTED
     if current_access_level not in {ACL_LEVEL_PUBLIC, ACL_LEVEL_ACADEMIC, ACL_LEVEL_RESTRICTED}:
@@ -729,6 +761,8 @@ def acl_edit_permission_form(request, object_type, object_id):
         "available_groups": GroupACL.objects.exclude(acl_agent_uri__isnull=True).exclude(acl_agent_uri="").select_related("group").order_by("group__name"),
         "selected_user_ids": selected_user_ids,
         "selected_group_ids": selected_group_ids,
+        "external_user_agents": sorted(external_user_agents),
+        "external_group_agents": sorted(external_group_agents),
         "next_url": request.GET.get("next", reverse("storage:acl_records_table", args=[object_type])),
     }
 

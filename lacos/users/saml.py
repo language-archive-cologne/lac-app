@@ -129,8 +129,12 @@ if pre_user_save is not None:  # pragma: no branch - guarded by import
             instance.saml_persistent_id = persistent_id
 
         # Auto-generate ACL agent URI if not already set
-        if not instance.acl_agent_uri and instance.username:
-            instance.acl_agent_uri = f"urn:lacos:eppn:{instance.username}"
+        if not instance.acl_agent_uri:
+            candidate = instance.username
+            if instance.email and "@" in instance.email:
+                candidate = instance.email
+            if candidate:
+                instance.acl_agent_uri = f"urn:lacos:eppn:{candidate}"
 
 
 if post_authenticated is not None:  # pragma: no branch - guarded by import
