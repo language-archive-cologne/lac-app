@@ -81,17 +81,17 @@
             <tr class="hover:bg-base-200 transition-colors">
               <td class="px-4 py-5 align-top text-sm">
                 {% if level == 'public' %}
-                  <span class="text-success" title="{% translate 'Anyone can read' %}">
-                    {% translate "Public" %}
-                  </span>
+                  <div class="tooltip tooltip-right" data-tip="{% translate 'Anyone can read' %}">
+                    <span class="badge badge-success badge-sm cursor-help">{% translate "Public" %}</span>
+                  </div>
                 {% elif level == 'academic' %}
-                  <span class="text-warning" title="{% translate 'Authenticated users only' %}">
-                    {% translate "Academic" %}
-                  </span>
+                  <div class="tooltip tooltip-right" data-tip="{% translate 'Authenticated users only' %}">
+                    <span class="badge badge-warning badge-sm cursor-help text-base-content">{% translate "Academic" %}</span>
+                  </div>
                 {% else %}
-                  <span class="text-amber-600" title="{% translate 'Authorized users only' %}">
-                    {% translate "Restricted" %}
-                  </span>
+                  <div class="tooltip tooltip-right" data-tip="{% translate 'Authorized users only' %}">
+                    <span class="badge bg-amber-600 text-white border-amber-600 badge-sm cursor-help">{% translate "Restricted" %}</span>
+                  </div>
                 {% endif %}
               </td>
               <td class="px-6 py-5 align-top">
