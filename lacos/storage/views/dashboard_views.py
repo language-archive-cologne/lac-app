@@ -359,9 +359,6 @@ def _build_acl_overview_context():
         "total_objects": collection_summary["total_objects"] + bundle_summary["total_objects"],
     }
 
-    collection_options = _get_acl_options(Collection)
-    bundle_options = _get_acl_options(Bundle)
-
     return {
         "acl_flags": acl_flags,
         "total": total,
@@ -370,8 +367,8 @@ def _build_acl_overview_context():
         "collection_summary": collection_summary,
         "bundle_summary": bundle_summary,
         "overall_summary": overall_summary,
-        "collection_options": collection_options,
-        "bundle_options": bundle_options,
+        "collection_options": [],
+        "bundle_options": [],
     }
 
 
@@ -658,8 +655,8 @@ def acl_sync_scope_fields(request):
     scope = request.GET.get("scope", "all")
     context = {
         "scope": scope,
-        "collection_options": _get_acl_options(Collection),
-        "bundle_options": _get_acl_options(Bundle),
+        "collection_options": _get_acl_options(Collection) if scope == "collection" else [],
+        "bundle_options": _get_acl_options(Bundle) if scope == "bundle" else [],
     }
     return render(
         request,
