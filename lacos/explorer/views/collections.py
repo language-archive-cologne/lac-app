@@ -398,7 +398,7 @@ class CollectionResourcesView(View):
         if not resource_id:
             raise Http404("Resource ID required")
 
-        action = request.GET.get('action', 'download')
+        action = request.GET.get('action', 'view')
 
         try:
             decoded_resource_id = unquote(resource_id)
@@ -447,6 +447,9 @@ class CollectionResourcesView(View):
 
             is_htmx = request.headers.get('HX-Request') == 'true'
 
+            if action == 'download':
+                raise Http404("Direct downloads are not available")
+
             if is_htmx and action in {'play', 'view'}:
                 return self._render_htmx_modal(
                     request, file_name, file_description, mime_type,
@@ -455,11 +458,13 @@ class CollectionResourcesView(View):
                     download_key=location.s3_key,
                 )
 
-            if action == 'download':
-                return redirect(download_url)
+            if action in {'play', 'view'}:
+                return redirect(
+                    'explorer:collection_detail_by_handle',
+                    handle=collection.identifier,
+                )
 
-            # Default: redirect to presigned URL
-            return redirect(presigned_url)
+            raise Http404("Unsupported action")
 
         except ValueError as e:
             logger.error(f"Resource mapping service error: {e}")

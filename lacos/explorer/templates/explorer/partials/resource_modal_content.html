@@ -116,13 +116,7 @@
         <p>{% translate "Your browser does not support the video element." %}</p>
       </video>
       <p class="mt-3 text-sm text-slate-600">
-        {% translate "If this video does not play, your browser may not support its codecs." %}
-        {% if download_url %}
-          <a href="{{ download_url }}" target="_blank" rel="noopener noreferrer" class="underline hover:text-slate-800">
-            {% translate "Download the file" %}
-          </a>
-          {% translate "or try a different browser." %}
-        {% endif %}
+        {% translate "If this video does not play, your browser may not support its codecs. Use the download button below or try a different browser." %}
       </p>
     {% elif media_type == 'image' %}
       <img src="{{ preview_url }}" alt="{{ resource_name }}" class="max-h-[70vh] mx-auto rounded-lg shadow" loading="lazy" />
@@ -247,10 +241,6 @@
       >
         {% translate "Download" %}
       </button>
-    {% elif download_url %}
-      <a href="{{ download_url }}" class="btn btn-primary btn-sm" target="_blank" rel="noopener noreferrer">
-        {% translate "Download" %}
-      </a>
     {% endif %}
     <button type="button" class="btn btn-ghost btn-sm" data-modal-close>
       {% translate "Close" %}

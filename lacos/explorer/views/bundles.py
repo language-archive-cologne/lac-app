@@ -289,7 +289,7 @@ class ResourceAccessView(View):
         collection_for_path = None
         if hasattr(bundle, 'structural_info') and bundle.structural_info.first():
             collection_for_path = bundle.structural_info.first().is_member_of_collection
-        action = request.GET.get('action', 'download')
+        action = request.GET.get('action', 'view')
         if action == 'analyze':
             action = 'play'
 
@@ -346,6 +346,9 @@ class ResourceAccessView(View):
 
             is_htmx = request.headers.get('HX-Request') == 'true'
 
+            if action == 'download':
+                raise Http404("Direct downloads are not available")
+
             if is_htmx and action in {'play', 'view'}:
                 return self._render_htmx_modal(
                     request, resource, mime_type, detected_media_type, source_mime_type,
@@ -354,29 +357,13 @@ class ResourceAccessView(View):
                     download_key=object_key,
                 )
 
-            if action == 'download':
-                return redirect(download_url)
+            if action in {'play', 'view'}:
+                return redirect(
+                    'explorer:bundle_detail_by_handle',
+                    handle=bundle.identifier,
+                )
 
-            if detected_media_type in {'audio', 'video'}:
-                if action == 'play':
-                    return render(
-                        request,
-                        'resource_player.html',
-                        {
-                            'resource_name': resource.file_name,
-                            'mime_type': mime_type,
-                            'media_type': detected_media_type,
-                            'source_mime_type': source_mime_type,
-                            'stream_url': presigned_url,
-                            'download_url': download_url,
-                        },
-                    )
-                return redirect(presigned_url)
-
-            elif detected_media_type in {'image', 'pdf'}:
-                return redirect(presigned_url)
-            else:
-                return redirect(download_url)
+            raise Http404("Unsupported action")
 
         except ValueError as e:
             logger.error(f"Resource mapping service error: {e}")
