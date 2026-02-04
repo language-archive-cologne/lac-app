@@ -233,6 +233,23 @@
                   <div class="flex-1">
                     <div class="text-sm font-medium text-base-content">{{ resource.file_name }}</div>
                     <div class="text-xs text-base-content/60">{{ resource.mime_type }}</div>
+                    {% if resource.file_pid %}
+                      <div class="text-xs text-base-content/60">
+                        {% translate "Handle" %}:
+                        {% if collection %}
+                          <a href="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=resource.file_pid %}?action=view"
+                             hx-get="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=resource.file_pid %}?action=view"
+                             hx-target="#resource-modal-content"
+                             hx-swap="innerHTML"
+                             hx-push-url="false"
+                             class="font-mono text-primary hover:underline break-all">
+                            {{ resource.file_pid }}
+                          </a>
+                        {% else %}
+                          <span class="font-mono break-all">{{ resource.file_pid }}</span>
+                        {% endif %}
+                      </div>
+                    {% endif %}
                     {% if resource.file_description %}
                       <div class="mt-1 text-sm text-base-content/70">{{ resource.file_description }}</div>
                     {% endif %}
@@ -316,6 +333,23 @@
                   <div class="flex-1">
                     <div class="text-sm font-medium text-base-content">{{ resource.file_name }}</div>
                     <div class="text-xs text-base-content/60">{{ resource.mime_type }}</div>
+                    {% if resource.file_pid %}
+                      <div class="text-xs text-base-content/60">
+                        {% translate "Handle" %}:
+                        {% if collection %}
+                          <a href="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=resource.file_pid %}?action=view"
+                             hx-get="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=resource.file_pid %}?action=view"
+                             hx-target="#resource-modal-content"
+                             hx-swap="innerHTML"
+                             hx-push-url="false"
+                             class="font-mono text-primary hover:underline break-all">
+                            {{ resource.file_pid }}
+                          </a>
+                        {% else %}
+                          <span class="font-mono break-all">{{ resource.file_pid }}</span>
+                        {% endif %}
+                      </div>
+                    {% endif %}
                     {% if resource.file_description %}
                       <div class="mt-1 text-sm text-base-content/70">{{ resource.file_description }}</div>
                     {% endif %}
@@ -403,6 +437,23 @@
                   <div class="flex-1">
                     <div class="text-sm font-medium text-base-content">{{ resource.file_name }}</div>
                     <div class="text-xs text-base-content/60">{{ resource.mime_type }}</div>
+                    {% if resource.file_pid %}
+                      <div class="text-xs text-base-content/60">
+                        {% translate "Handle" %}:
+                        {% if collection %}
+                          <a href="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=resource.file_pid %}?action=view"
+                             hx-get="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=resource.file_pid %}?action=view"
+                             hx-target="#resource-modal-content"
+                             hx-swap="innerHTML"
+                             hx-push-url="false"
+                             class="font-mono text-primary hover:underline break-all">
+                            {{ resource.file_pid }}
+                          </a>
+                        {% else %}
+                          <span class="font-mono break-all">{{ resource.file_pid }}</span>
+                        {% endif %}
+                      </div>
+                    {% endif %}
                     {% if resource.file_description %}
                       <div class="mt-1 text-sm text-base-content/70">{{ resource.file_description }}</div>
                     {% endif %}
@@ -478,6 +529,23 @@
               <div class="flex-1">
                 <div class="text-sm font-medium text-base-content">{{ metadata_file.file_name }}</div>
                 <div class="text-xs text-base-content/60">{{ metadata_file.mime_type }}</div>
+                {% if metadata_file.file_pid %}
+                  <div class="text-xs text-base-content/60">
+                    {% translate "Handle" %}:
+                    {% if collection %}
+                      <a href="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=metadata_file.file_pid %}?action=view"
+                         hx-get="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=metadata_file.file_pid %}?action=view"
+                         hx-target="#resource-modal-content"
+                         hx-swap="innerHTML"
+                         hx-push-url="false"
+                         class="font-mono text-primary hover:underline break-all">
+                        {{ metadata_file.file_pid }}
+                      </a>
+                    {% else %}
+                      <span class="font-mono break-all">{{ metadata_file.file_pid }}</span>
+                    {% endif %}
+                  </div>
+                {% endif %}
                 {% if metadata_file.file_description %}
                   <div class="mt-1 text-sm text-base-content/70">{{ metadata_file.file_description }}</div>
                 {% endif %}
