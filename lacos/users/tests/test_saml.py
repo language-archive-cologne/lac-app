@@ -131,6 +131,32 @@ def test_backend_links_existing_user_by_username(settings):
 
 
 @pytest.mark.django_db
+def test_backend_creates_user_without_name_id_when_using_eppn(settings):
+    backend = LacosSaml2Backend()
+    attributes = {
+        "eduPersonPrincipalName": ["eppn-user"],
+        "mail": ["eppn@example.com"],
+        "displayName": ["Eppn User"],
+    }
+    session_info = {
+        "issuer": "https://idp.test/shibboleth",
+        "name_id": None,
+        "ava": attributes,
+    }
+
+    user = backend.authenticate(
+        request=None,
+        session_info=session_info,
+        attribute_mapping=settings.SAML_ATTRIBUTE_MAPPING,
+        create_unknown_user=True,
+    )
+
+    assert isinstance(user, User)
+    assert user.username == "eppn-user"
+    assert user.saml_persistent_id in (None, "")
+
+
+@pytest.mark.django_db
 def test_saml_login_view_sets_session_marker(client, settings):
     settings.SAML_LOGIN_ENABLED = True
     response = client.get(reverse("users:saml_login"))
