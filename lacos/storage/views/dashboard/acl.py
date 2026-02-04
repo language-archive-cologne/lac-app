@@ -744,6 +744,14 @@ def acl_edit_permission_form(request, object_type, object_id):
                     selected_group_ids.add(group_acl.id)
                 else:
                     external_group_agents.add(agent)
+    elif perm and perm.read_agents:
+        for agent in perm.read_agents:
+            if not agent or agent in {"foaf:Agent", "acl:AuthenticatedAgent"}:
+                continue
+            if str(agent).startswith("urn:lacos:group:"):
+                external_group_agents.add(agent)
+            else:
+                external_user_agents.add(agent)
 
     current_access_level = perm.access_level if perm else ACL_LEVEL_RESTRICTED
     if current_access_level not in {ACL_LEVEL_PUBLIC, ACL_LEVEL_ACADEMIC, ACL_LEVEL_RESTRICTED}:
