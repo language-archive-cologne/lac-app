@@ -234,20 +234,19 @@
                     <div class="text-sm font-medium text-base-content">{{ resource.file_name }}</div>
                     <div class="text-xs text-base-content/60">{{ resource.mime_type }}</div>
                     {% if resource.file_pid %}
-                      <div class="text-xs text-base-content/60">
-                        {% translate "Handle" %}:
-                        {% if collection %}
-                          <a href="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=resource.file_pid %}?action=view"
-                             hx-get="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=resource.file_pid %}?action=view"
-                             hx-target="#resource-modal-content"
-                             hx-swap="innerHTML"
-                             hx-push-url="false"
-                             class="font-mono text-primary hover:underline break-all">
-                            {{ resource.file_pid }}
-                          </a>
-                        {% else %}
-                          <span class="font-mono break-all">{{ resource.file_pid }}</span>
-                        {% endif %}
+                      <div class="mt-1 flex items-center gap-2">
+                        <span class="text-xs font-medium text-base-content/60 uppercase tracking-wide">{% translate "Handle" %}:</span>
+                        <span class="text-xs font-mono text-base-content/80 break-all">{{ resource.file_pid }}</span>
+                        <button
+                          type="button"
+                          onclick="navigator.clipboard.writeText('{{ resource.file_pid|escapejs }}'); this.classList.add('text-success'); setTimeout(() => this.classList.remove('text-success'), 2000);"
+                          class="btn btn-xs btn-ghost btn-square text-base-content/60 hover:text-base-content"
+                          title="{% translate 'Copy handle' %}"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </button>
                       </div>
                     {% endif %}
                     {% if resource.file_description %}
@@ -334,20 +333,19 @@
                     <div class="text-sm font-medium text-base-content">{{ resource.file_name }}</div>
                     <div class="text-xs text-base-content/60">{{ resource.mime_type }}</div>
                     {% if resource.file_pid %}
-                      <div class="text-xs text-base-content/60">
-                        {% translate "Handle" %}:
-                        {% if collection %}
-                          <a href="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=resource.file_pid %}?action=view"
-                             hx-get="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=resource.file_pid %}?action=view"
-                             hx-target="#resource-modal-content"
-                             hx-swap="innerHTML"
-                             hx-push-url="false"
-                             class="font-mono text-primary hover:underline break-all">
-                            {{ resource.file_pid }}
-                          </a>
-                        {% else %}
-                          <span class="font-mono break-all">{{ resource.file_pid }}</span>
-                        {% endif %}
+                      <div class="mt-1 flex items-center gap-2">
+                        <span class="text-xs font-medium text-base-content/60 uppercase tracking-wide">{% translate "Handle" %}:</span>
+                        <span class="text-xs font-mono text-base-content/80 break-all">{{ resource.file_pid }}</span>
+                        <button
+                          type="button"
+                          onclick="navigator.clipboard.writeText('{{ resource.file_pid|escapejs }}'); this.classList.add('text-success'); setTimeout(() => this.classList.remove('text-success'), 2000);"
+                          class="btn btn-xs btn-ghost btn-square text-base-content/60 hover:text-base-content"
+                          title="{% translate 'Copy handle' %}"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </button>
                       </div>
                     {% endif %}
                     {% if resource.file_description %}
@@ -438,20 +436,19 @@
                     <div class="text-sm font-medium text-base-content">{{ resource.file_name }}</div>
                     <div class="text-xs text-base-content/60">{{ resource.mime_type }}</div>
                     {% if resource.file_pid %}
-                      <div class="text-xs text-base-content/60">
-                        {% translate "Handle" %}:
-                        {% if collection %}
-                          <a href="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=resource.file_pid %}?action=view"
-                             hx-get="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=resource.file_pid %}?action=view"
-                             hx-target="#resource-modal-content"
-                             hx-swap="innerHTML"
-                             hx-push-url="false"
-                             class="font-mono text-primary hover:underline break-all">
-                            {{ resource.file_pid }}
-                          </a>
-                        {% else %}
-                          <span class="font-mono break-all">{{ resource.file_pid }}</span>
-                        {% endif %}
+                      <div class="mt-1 flex items-center gap-2">
+                        <span class="text-xs font-medium text-base-content/60 uppercase tracking-wide">{% translate "Handle" %}:</span>
+                        <span class="text-xs font-mono text-base-content/80 break-all">{{ resource.file_pid }}</span>
+                        <button
+                          type="button"
+                          onclick="navigator.clipboard.writeText('{{ resource.file_pid|escapejs }}'); this.classList.add('text-success'); setTimeout(() => this.classList.remove('text-success'), 2000);"
+                          class="btn btn-xs btn-ghost btn-square text-base-content/60 hover:text-base-content"
+                          title="{% translate 'Copy handle' %}"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </button>
                       </div>
                     {% endif %}
                     {% if resource.file_description %}
@@ -530,20 +527,19 @@
                 <div class="text-sm font-medium text-base-content">{{ metadata_file.file_name }}</div>
                 <div class="text-xs text-base-content/60">{{ metadata_file.mime_type }}</div>
                 {% if metadata_file.file_pid %}
-                  <div class="text-xs text-base-content/60">
-                    {% translate "Handle" %}:
-                    {% if collection %}
-                      <a href="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=metadata_file.file_pid %}?action=view"
-                         hx-get="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=metadata_file.file_pid %}?action=view"
-                         hx-target="#resource-modal-content"
-                         hx-swap="innerHTML"
-                         hx-push-url="false"
-                         class="font-mono text-primary hover:underline break-all">
-                        {{ metadata_file.file_pid }}
-                      </a>
-                    {% else %}
-                      <span class="font-mono break-all">{{ metadata_file.file_pid }}</span>
-                    {% endif %}
+                  <div class="mt-1 flex items-center gap-2">
+                    <span class="text-xs font-medium text-base-content/60 uppercase tracking-wide">{% translate "Handle" %}:</span>
+                    <span class="text-xs font-mono text-base-content/80 break-all">{{ metadata_file.file_pid }}</span>
+                    <button
+                      type="button"
+                      onclick="navigator.clipboard.writeText('{{ metadata_file.file_pid|escapejs }}'); this.classList.add('text-success'); setTimeout(() => this.classList.remove('text-success'), 2000);"
+                      class="btn btn-xs btn-ghost btn-square text-base-content/60 hover:text-base-content"
+                      title="{% translate 'Copy handle' %}"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    </button>
                   </div>
                 {% endif %}
                 {% if metadata_file.file_description %}
