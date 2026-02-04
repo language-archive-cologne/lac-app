@@ -75,7 +75,7 @@
         class="textarea textarea-bordered w-full text-xs font-mono"
         rows="3"
         placeholder="urn:lacos:eppn:user@example.org"
-      >{% if external_user_agents %}{{ external_user_agents|join:"\n" }}{% endif %}</textarea>
+      >{{ external_user_agents }}</textarea>
       <label class="label">
         <span class="label-text-alt text-base-content/60">One URI per line. These will be preserved.</span>
       </label>
@@ -109,7 +109,7 @@
         class="textarea textarea-bordered w-full text-xs font-mono"
         rows="2"
         placeholder="urn:lacos:group:example"
-      >{% if external_group_agents %}{{ external_group_agents|join:"\n" }}{% endif %}</textarea>
+      >{{ external_group_agents }}</textarea>
       <label class="label">
         <span class="label-text-alt text-base-content/60">One URI per line. These will be preserved.</span>
       </label>

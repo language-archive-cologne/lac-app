@@ -5,6 +5,7 @@ Handles ACL configuration, sync operations, and permission management.
 """
 import json
 import logging
+import re
 from urllib.parse import quote_plus
 
 from django.conf import settings
@@ -630,7 +631,8 @@ def acl_update_permission(request):
             if not raw_value:
                 return []
             items: list[str] = []
-            for line in raw_value.splitlines():
+            normalized = re.sub(r"\\+n", "\n", raw_value)
+            for line in normalized.splitlines():
                 parts = [part.strip() for part in line.split(",") if part.strip()]
                 items.extend(parts)
             return [value for value in items if value]
@@ -728,6 +730,20 @@ def acl_edit_permission_form(request, object_type, object_id):
     selected_group_ids = set()
     external_user_agents = set()
     external_group_agents = set()
+    def _normalize_agent_values(values: set[str]) -> list[str]:
+        flattened: list[str] = []
+        for value in values:
+            if not value:
+                continue
+            text = re.sub(r"\\+n", "\n", str(value))
+            for line in text.splitlines():
+                for part in line.split(","):
+                    candidate = part.strip()
+                    if candidate:
+                        flattened.append(candidate)
+        # Preserve order while deduplicating
+        return list(dict.fromkeys(flattened))
+
     if perm and perm.permissions_data:
         for rule in perm.permissions_data:
             agent = rule.get("agent", "")
@@ -758,6 +774,9 @@ def acl_edit_permission_form(request, object_type, object_id):
             else:
                 external_user_agents.add(agent)
 
+    external_user_agents = set(_normalize_agent_values(external_user_agents))
+    external_group_agents = set(_normalize_agent_values(external_group_agents))
+
     current_access_level = perm.access_level if perm else ACL_LEVEL_RESTRICTED
     if current_access_level not in {ACL_LEVEL_PUBLIC, ACL_LEVEL_ACADEMIC, ACL_LEVEL_RESTRICTED}:
         current_access_level = ACL_LEVEL_RESTRICTED
@@ -774,8 +793,8 @@ def acl_edit_permission_form(request, object_type, object_id):
         "available_groups": GroupACL.objects.exclude(acl_agent_uri__isnull=True).exclude(acl_agent_uri="").select_related("group").order_by("group__name"),
         "selected_user_ids": selected_user_ids,
         "selected_group_ids": selected_group_ids,
-        "external_user_agents": sorted(external_user_agents),
-        "external_group_agents": sorted(external_group_agents),
+        "external_user_agents": "\n".join(sorted(external_user_agents)),
+        "external_group_agents": "\n".join(sorted(external_group_agents)),
         "next_url": request.GET.get("next", reverse("storage:acl_records_table", args=[object_type])),
     }
 
