@@ -195,8 +195,8 @@ def acl_admin_dashboard(request):
         "total_objects": collection_summary["total_objects"] + bundle_summary["total_objects"],
     }
 
-    collection_options = _get_acl_options(Collection)
-    bundle_options = _get_acl_options(Bundle)
+    collection_options = []
+    bundle_options = []
 
     active_tab = request.GET.get("tab", "records")
     if active_tab not in {"dashboard", "records"}:

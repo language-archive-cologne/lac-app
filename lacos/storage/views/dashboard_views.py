@@ -1,7 +1,6 @@
 import ast
 import json
 import logging
-from datetime import datetime
 from urllib.parse import quote_plus, urlencode
 
 from django.conf import settings
@@ -9,7 +8,7 @@ from lacos.storage.permissions import archivist_required, manager_or_archivist_r
 from django.contrib.contenttypes.models import ContentType
 from django.core.paginator import Paginator
 from django.db import models
-from django.db.models import CharField, Subquery
+from django.db.models import CharField, Exists, F, OuterRef, Q, Subquery
 from django.db.models.functions import Cast
 from django.http import HttpResponse, QueryDict
 from django.middleware.csrf import get_token
@@ -82,61 +81,6 @@ def _render_sync_summary_partial(request, summary=None, error_message=None):
     return HttpResponse(html)
 
 
-def _build_acl_table_rows(model, perms_qs, scope_type):
-    """Compose table rows for ACL managed objects."""
-    pk_field = model._meta.pk
-    permissions = list(perms_qs)
-    perm_map = {str(pk_field.to_python(perm.object_id)): perm for perm in permissions}
-
-    queryset = _get_acl_queryset(model).order_by("identifier")
-    rows = []
-    seen = set()
-
-    for obj in queryset:
-        object_key = str(pk_field.to_python(obj.pk))
-        perm = perm_map.get(object_key)
-
-        rows.append(
-            {
-                "scope": scope_type,
-                "object_id": object_key,
-                "identifier": getattr(obj, "identifier", object_key),
-                "name": _resolve_acl_display_name(obj),
-                "permission_id": perm.pk if perm else None,
-                "has_permission": perm is not None,
-                "object_exists": True,
-                "access_level": perm.access_level if perm else None,
-                "last_synced": perm.last_synced if perm else None,
-                "read_agents": (perm.read_agents or []) if perm else [],
-                "bucket": perm.ACL_file_bucket if perm else None,
-                "key": perm.ACL_file_key if perm else None,
-            }
-        )
-        seen.add(object_key)
-
-    # Surface ACL entries that reference missing objects for transparency
-    for object_key, perm in perm_map.items():
-        if object_key in seen:
-            continue
-        rows.append(
-            {
-                "scope": scope_type,
-                "object_id": perm.object_id,
-                "identifier": perm.object_id,
-                "name": None,
-                "permission_id": perm.pk,
-                "has_permission": True,
-                "object_exists": False,
-                "access_level": perm.access_level,
-                "last_synced": perm.last_synced,
-                "read_agents": perm.read_agents or [],
-                "bucket": perm.ACL_file_bucket,
-                "key": perm.ACL_file_key,
-            }
-        )
-
-    return rows
-
 
 def _redirect_with_message(target_url: str | None, message: str):
     destination = target_url or reverse("storage:acl_admin_dashboard")
@@ -155,37 +99,28 @@ def _get_acl_scope_model(scope: str):
 def _build_acl_table_context(request, scope: str) -> dict[str, object]:
     model = _get_acl_scope_model(scope)
     content_type = ContentType.objects.get_for_model(model)
-    perms = ACLPermissions.objects.filter(content_type=content_type).select_related("content_type")
-
-    rows = _build_acl_table_rows(model, perms, scope)
-    total_count = len(rows)
-    orphan_count = sum(1 for row in rows if not row["object_exists"])
-    missing_acl_count = sum(1 for row in rows if row["object_exists"] and not row["has_permission"])
-    missing_object_count = sum(1 for row in rows if not row["object_exists"])
-    has_acl_count = sum(1 for row in rows if row["has_permission"])
 
     search_term = (request.GET.get("q") or "").strip()
     status_filter = request.GET.get("status") or "all"
     access_filter = request.GET.get("access") or "all"
 
-    if search_term:
-        search_lower = search_term.lower()
-        rows = [
-            row for row in rows
-            if search_lower in (row["identifier"] or "").lower()
-            or search_lower in (row.get("name") or "").lower()
-            or search_lower in (row.get("object_id") or "").lower()
-        ]
+    existing_ids = model.objects.annotate(
+        pk_str=Cast("pk", output_field=CharField())
+    ).values("pk_str")
 
-    if status_filter == "missing_acl":
-        rows = [row for row in rows if row["object_exists"] and not row["has_permission"]]
-    elif status_filter == "missing_object":
-        rows = [row for row in rows if not row["object_exists"]]
-    elif status_filter == "has_acl":
-        rows = [row for row in rows if row["has_permission"]]
-
-    if access_filter != "all":
-        rows = [row for row in rows if row.get("access_level") == access_filter]
+    total_objects = model.objects.count()
+    has_acl_count = ACLPermissions.objects.filter(
+        content_type=content_type,
+        object_id__in=Subquery(existing_ids),
+    ).count()
+    missing_acl_count = max(total_objects - has_acl_count, 0)
+    missing_object_count = ACLPermissions.objects.filter(
+        content_type=content_type
+    ).exclude(
+        object_id__in=Subquery(existing_ids),
+    ).count()
+    orphan_count = missing_object_count
+    total_count = total_objects + missing_object_count
 
     sort = request.GET.get("sort", "identifier")
     direction = request.GET.get("dir", "asc")
@@ -195,25 +130,141 @@ def _build_acl_table_context(request, scope: str) -> dict[str, object]:
     if direction not in {"asc", "desc"}:
         direction = "asc"
 
-    def sort_key(row):
-        if sort == "access_level":
-            value = row["access_level"] or ""
-            return (value == "", value)
-        if sort == "last_synced":
-            stamp = row["last_synced"]
-            if stamp is None:
-                return (True, timezone.make_aware(datetime(1970, 1, 1)))
-            return (False, stamp)
-        identifier = row["identifier"] or ""
-        return (identifier == "", identifier)
-
-    rows.sort(key=sort_key, reverse=(direction == "desc"))
-
-    filtered_count = len(rows)
     page_size = getattr(settings, "STORAGE_ACL_TABLE_PAGE_SIZE", 25)
-    paginator = Paginator(rows, page_size)
     page_number = request.GET.get("page") or 1
-    page_obj = paginator.get_page(page_number)
+
+    if status_filter == "missing_object":
+        orphans = ACLPermissions.objects.filter(
+            content_type=content_type
+        ).exclude(
+            object_id__in=Subquery(existing_ids),
+        )
+
+        if search_term:
+            orphans = orphans.filter(object_id__icontains=search_term)
+
+        if access_filter != "all":
+            orphans = orphans.filter(access_level=access_filter)
+
+        if sort == "access_level":
+            order_expr = (
+                F("access_level").desc(nulls_last=True)
+                if direction == "desc"
+                else F("access_level").asc(nulls_last=True)
+            )
+        elif sort == "last_synced":
+            order_expr = (
+                F("last_synced").desc(nulls_last=True)
+                if direction == "desc"
+                else F("last_synced").asc(nulls_last=True)
+            )
+        else:
+            order_expr = (
+                F("object_id").desc(nulls_last=True)
+                if direction == "desc"
+                else F("object_id").asc(nulls_last=True)
+            )
+
+        orphans = orphans.order_by(order_expr)
+        filtered_count = orphans.count()
+        paginator = Paginator(orphans, page_size)
+        page_obj = paginator.get_page(page_number)
+
+        rows = [
+            {
+                "scope": scope,
+                "object_id": perm.object_id,
+                "identifier": perm.object_id,
+                "name": None,
+                "permission_id": perm.pk,
+                "has_permission": True,
+                "object_exists": False,
+                "access_level": perm.access_level,
+                "last_synced": perm.last_synced,
+                "read_agents": perm.read_agents or [],
+                "bucket": perm.ACL_file_bucket,
+                "key": perm.ACL_file_key,
+            }
+            for perm in page_obj.object_list
+        ]
+        page_obj.object_list = rows
+    else:
+        base_qs = _get_acl_queryset(model).annotate(
+            pk_str=Cast("pk", output_field=CharField())
+        )
+
+        perm_qs = ACLPermissions.objects.filter(
+            content_type=content_type,
+            object_id=OuterRef("pk_str"),
+        )
+
+        objects = base_qs.annotate(
+            has_permission=Exists(perm_qs),
+            access_level=Subquery(perm_qs.values("access_level")[:1]),
+            last_synced=Subquery(perm_qs.values("last_synced")[:1]),
+            read_agents=Subquery(perm_qs.values("read_agents")[:1]),
+            bucket=Subquery(perm_qs.values("ACL_file_bucket")[:1]),
+            key=Subquery(perm_qs.values("ACL_file_key")[:1]),
+            permission_id=Subquery(perm_qs.values("id")[:1]),
+        )
+
+        if search_term:
+            objects = objects.filter(
+                Q(identifier__icontains=search_term)
+                | Q(general_info__display_title__icontains=search_term)
+                | Q(pk_str__icontains=search_term)
+            ).distinct()
+
+        if status_filter == "missing_acl":
+            objects = objects.filter(has_permission=False)
+        elif status_filter == "has_acl":
+            objects = objects.filter(has_permission=True)
+
+        if access_filter != "all":
+            objects = objects.filter(access_level=access_filter)
+
+        if sort == "access_level":
+            order_expr = (
+                F("access_level").desc(nulls_last=True)
+                if direction == "desc"
+                else F("access_level").asc(nulls_last=True)
+            )
+        elif sort == "last_synced":
+            order_expr = (
+                F("last_synced").desc(nulls_last=True)
+                if direction == "desc"
+                else F("last_synced").asc(nulls_last=True)
+            )
+        else:
+            order_expr = (
+                F("identifier").desc(nulls_last=True)
+                if direction == "desc"
+                else F("identifier").asc(nulls_last=True)
+            )
+
+        objects = objects.order_by(order_expr)
+        filtered_count = objects.count()
+        paginator = Paginator(objects, page_size)
+        page_obj = paginator.get_page(page_number)
+
+        rows = [
+            {
+                "scope": scope,
+                "object_id": str(obj.pk),
+                "identifier": getattr(obj, "identifier", str(obj.pk)),
+                "name": _resolve_acl_display_name(obj),
+                "permission_id": obj.permission_id,
+                "has_permission": bool(obj.has_permission),
+                "object_exists": True,
+                "access_level": obj.access_level,
+                "last_synced": obj.last_synced,
+                "read_agents": obj.read_agents or [],
+                "bucket": obj.bucket,
+                "key": obj.key,
+            }
+            for obj in page_obj.object_list
+        ]
+        page_obj.object_list = rows
 
     base_url = reverse("storage:acl_admin_dashboard")
     filter_params = {}
