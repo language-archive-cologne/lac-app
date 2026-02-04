@@ -16,7 +16,9 @@ def is_valid_uuid(value: str) -> bool:
     except (ValueError, TypeError):
         return False
 
-from lacos.blam.models.base_structural_info import AdditionalMetadataFile
+from lacos.blam.models.collection.collection_structural_info import (
+    CollectionAdditionalMetadataFile,
+)
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import (
     BundleResources,
@@ -298,8 +300,8 @@ class ResourceResolverService:
 
         # Find the metadata file
         try:
-            metadata_file = AdditionalMetadataFile.objects.get(id=resource_id)
-        except AdditionalMetadataFile.DoesNotExist:
+            metadata_file = CollectionAdditionalMetadataFile.objects.get(id=resource_id)
+        except CollectionAdditionalMetadataFile.DoesNotExist:
             return ResourceError(
                 resource_id=resource_id,
                 error="not_found",
