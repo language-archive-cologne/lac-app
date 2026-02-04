@@ -635,20 +635,25 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Single file download buttons
-        document.querySelectorAll('.single-download-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                if (window.singleFileDownloadModal) {
-                    window.singleFileDownloadModal.open({
-                        bucket: btn.dataset.bucket,
-                        key: btn.dataset.key,
-                        filename: btn.dataset.filename
-                    });
-                }
-            });
-        });
     }
     {% endif %}
+
+    // Single file download buttons - open modal with ALTCHA (delegated for HTMX content)
+    document.addEventListener('click', (event) => {
+        const btn = event.target.closest('.single-download-btn');
+        if (!btn) return;
+
+        event.preventDefault();
+
+        if (!window.singleFileDownloadModal) return;
+
+        const bucket = btn.dataset.bucket;
+        const key = btn.dataset.key;
+        if (!bucket || !key) return;
+
+        const filename = btn.dataset.filename || key.split('/').pop() || 'download';
+        window.singleFileDownloadModal.open({ bucket, key, filename });
+    });
 
     // Bundles table multi-select
     initBundlesTableSelector();

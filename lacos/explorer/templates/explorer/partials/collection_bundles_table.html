@@ -157,13 +157,17 @@
                                 </span>
                               {% endif %}
                               <div class="flex space-x-1">
-                                <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}"
-                                   class="btn btn-xs btn-ghost"
-                                   title="Download" target="_blank">
+                                <button
+                                   type="button"
+                                   class="btn btn-xs btn-ghost single-download-btn"
+                                   title="{% translate 'Download' %}"
+                                   data-bucket="{{ resource.s3_location.s3_bucket|default:'' }}"
+                                   data-key="{{ resource.s3_location.s3_key|default:'' }}"
+                                   data-filename="{{ resource.file_name }}">
                                   <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                   </svg>
-                                </a>
+                                </button>
                                 {% if resource|is_media_type:"audio" or resource|is_media_type:"video" %}
                                   <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play"
                                      hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play"
@@ -203,13 +207,17 @@
                                 </span>
                               {% endif %}
                               <div class="flex space-x-1">
-                                <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}"
-                                   class="btn btn-xs btn-ghost"
-                                   title="Download" target="_blank">
+                                <button
+                                   type="button"
+                                   class="btn btn-xs btn-ghost single-download-btn"
+                                   title="{% translate 'Download' %}"
+                                   data-bucket="{{ resource.s3_location.s3_bucket|default:'' }}"
+                                   data-key="{{ resource.s3_location.s3_key|default:'' }}"
+                                   data-filename="{{ resource.file_name }}">
                                   <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                   </svg>
-                                </a>
+                                </button>
                                 {% if resource.mime_type == "text/x-eaf+xml" or resource.file_name|lower|slice:"-4:" == ".eaf" or resource.file_name|lower|slice:"-5:" == ".elan" %}
                                   <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play"
                                      hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play"
@@ -262,13 +270,17 @@
                                 </span>
                               {% endif %}
                               <div class="flex space-x-1">
-                                <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}"
-                                   class="btn btn-xs btn-ghost"
-                                   title="Download" target="_blank">
+                                <button
+                                   type="button"
+                                   class="btn btn-xs btn-ghost single-download-btn"
+                                   title="{% translate 'Download' %}"
+                                   data-bucket="{{ resource.s3_location.s3_bucket|default:'' }}"
+                                   data-key="{{ resource.s3_location.s3_key|default:'' }}"
+                                   data-filename="{{ resource.file_name }}">
                                   <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                   </svg>
-                                </a>
+                                </button>
                               </div>
                             </li>
                           {% endfor %}
@@ -294,13 +306,17 @@
                                 </span>
                               {% endif %}
                               <div class="flex space-x-1">
-                                <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}"
-                                   class="btn btn-xs btn-ghost"
-                                   title="Download" target="_blank">
+                                <button
+                                   type="button"
+                                   class="btn btn-xs btn-ghost single-download-btn"
+                                   title="{% translate 'Download' %}"
+                                   data-bucket="{{ resource.s3_location.s3_bucket|default:'' }}"
+                                   data-key="{{ resource.s3_location.s3_key|default:'' }}"
+                                   data-filename="{{ resource.file_name }}">
                                   <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                   </svg>
-                                </a>
+                                </button>
                                 {% if resource|is_media_type:"image" or resource|is_media_type:"pdf" %}
                                   <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view"
                                      hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view"

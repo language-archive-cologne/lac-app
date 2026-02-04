@@ -349,7 +349,9 @@ class ResourceAccessView(View):
             if is_htmx and action in {'play', 'view'}:
                 return self._render_htmx_modal(
                     request, resource, mime_type, detected_media_type, source_mime_type,
-                    presigned_url, download_url, elan_context, is_elan
+                    presigned_url, download_url, elan_context, is_elan,
+                    download_bucket=bucket_name,
+                    download_key=object_key,
                 )
 
             if action == 'download':
@@ -423,7 +425,8 @@ class ResourceAccessView(View):
 
     def _render_htmx_modal(
         self, request, resource, mime_type, detected_media_type, source_mime_type,
-        presigned_url, download_url, elan_context, is_elan
+        presigned_url, download_url, elan_context, is_elan,
+        download_bucket=None, download_key=None
     ):
         """Render the HTMX modal response for play/view actions."""
         media_type = 'elan' if is_elan else detected_media_type
@@ -437,6 +440,9 @@ class ResourceAccessView(View):
             'stream_url': presigned_url if media_type in {'audio', 'video'} else None,
             'preview_url': presigned_url,
             'download_url': download_url,
+            'download_bucket': download_bucket,
+            'download_key': download_key,
+            'download_filename': getattr(resource, 'file_name', None),
             'elan_context': elan_context,
         }
 

@@ -450,7 +450,9 @@ class CollectionResourcesView(View):
             if is_htmx and action in {'play', 'view'}:
                 return self._render_htmx_modal(
                     request, file_name, file_description, mime_type,
-                    detected_media_type, source_mime_type, presigned_url, download_url
+                    detected_media_type, source_mime_type, presigned_url, download_url,
+                    download_bucket=location.s3_bucket,
+                    download_key=location.s3_key,
                 )
 
             if action == 'download':
@@ -468,7 +470,8 @@ class CollectionResourcesView(View):
 
     def _render_htmx_modal(
         self, request, file_name, file_description, mime_type,
-        detected_media_type, source_mime_type, presigned_url, download_url
+        detected_media_type, source_mime_type, presigned_url, download_url,
+        download_bucket=None, download_key=None
     ):
         """Render the HTMX modal response for play/view actions."""
         modal_context = {
@@ -480,6 +483,9 @@ class CollectionResourcesView(View):
             'stream_url': presigned_url if detected_media_type in {'audio', 'video'} else None,
             'preview_url': presigned_url,
             'download_url': download_url,
+            'download_bucket': download_bucket,
+            'download_key': download_key,
+            'download_filename': file_name,
             'elan_context': None,
         }
 

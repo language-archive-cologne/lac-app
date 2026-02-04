@@ -237,7 +237,17 @@
   </div>
 
   <div class="flex flex-wrap gap-2">
-    {% if download_url %}
+    {% if download_bucket and download_key %}
+      <button
+        type="button"
+        class="btn btn-primary btn-sm single-download-btn"
+        data-bucket="{{ download_bucket }}"
+        data-key="{{ download_key }}"
+        data-filename="{{ download_filename|default:resource_name }}"
+      >
+        {% translate "Download" %}
+      </button>
+    {% elif download_url %}
       <a href="{{ download_url }}" class="btn btn-primary btn-sm" target="_blank" rel="noopener noreferrer">
         {% translate "Download" %}
       </a>
