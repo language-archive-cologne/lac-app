@@ -518,7 +518,7 @@ if SAML_LOGIN_ENABLED:
     )
     SAML_USE_NAME_ID_AS_USERNAME = env.bool(
         "SAML_USE_NAME_ID_AS_USERNAME",
-        default=True,
+        default=False,
     )
     SAML_DJANGO_USER_MAIN_ATTRIBUTE = env(
         "SAML_DJANGO_USER_MAIN_ATTRIBUTE",

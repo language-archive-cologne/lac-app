@@ -109,8 +109,8 @@ if pre_user_save is not None:  # pragma: no branch - guarded by import
 
         username = _extract_first(attributes, USERNAME_ATTR_KEYS)
         if username:
-            if created or not instance.username:
-                instance.username = username
+            # Always prefer the IdP-provided eppn/uid over NameID for consistency.
+            instance.username = username
 
         email = _extract_first(attributes, EMAIL_ATTR_KEYS)
         if email:
@@ -128,13 +128,12 @@ if pre_user_save is not None:  # pragma: no branch - guarded by import
         if persistent_id:
             instance.saml_persistent_id = persistent_id
 
-        # Auto-generate ACL agent URI if not already set
-        if not instance.acl_agent_uri:
-            candidate = instance.username
-            if instance.email and "@" in instance.email:
-                candidate = instance.email
-            if candidate:
-                instance.acl_agent_uri = f"urn:lacos:eppn:{candidate}"
+        # Auto-generate ACL agent URI from eppn/email for ACL matching.
+        candidate = instance.username
+        if instance.email and "@" in instance.email:
+            candidate = instance.email
+        if candidate and "@" in candidate:
+            instance.acl_agent_uri = f"urn:lacos:eppn:{candidate}"
 
 
 if post_authenticated is not None:  # pragma: no branch - guarded by import
