@@ -138,7 +138,7 @@
                 data-acl-scope="{{ scope }}"
               >
             </th>
-            <th class="w-1/3">
+            <th class="w-1/2">
               <button
                 type="button"
                 class="flex items-center gap-1 font-medium text-left"
@@ -153,7 +153,7 @@
                 {% endif %}
               </button>
             </th>
-            <th class="w-1/3">
+            <th class="w-24">
               <button
                 type="button"
                 class="flex items-center gap-1 font-medium text-left"
@@ -183,7 +183,7 @@
                 {% endif %}
               </button>
             </th>
-            <th>Read agents</th>
+            <th class="w-1/3">Read agents</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -217,7 +217,7 @@
               </div>
               {% endif %}
             </td>
-            <td>
+            <td class="w-24">
               <span class="badge badge-sm {% if row.access_level == 'public' %}badge-success{% elif row.access_level == 'academic' %}badge-warning{% else %}bg-amber-500 text-white{% endif %}">
                 {% if row.access_level == 'public' %}
                   Public
@@ -231,11 +231,13 @@
             <td class="text-sm text-base-content/70">
               {{ row.last_synced|date:"Y-m-d H:i"|default:"—" }}
             </td>
-            <td class="text-sm text-base-content/70">
+            <td class="text-sm text-base-content/70 w-1/3">
               {% if row.read_agents %}
-                <span class="truncate block max-w-xs">
-                  {{ row.read_agents|join:", " }}
-                </span>
+                <div class="space-y-1 max-w-xs">
+                  {% for agent in row.read_agents %}
+                    <div class="text-xs break-all">{{ agent }}</div>
+                  {% endfor %}
+                </div>
               {% else %}
                 —
               {% endif %}

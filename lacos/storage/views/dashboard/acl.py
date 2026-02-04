@@ -744,9 +744,14 @@ def acl_edit_permission_form(request, object_type, object_id):
                     selected_group_ids.add(group_acl.id)
                 else:
                     external_group_agents.add(agent)
-    elif perm and perm.read_agents:
+    if perm and perm.read_agents:
+        skip_agents = {"foaf:Agent", "acl:AuthenticatedAgent", "foaf:Person", "foaf:Group"}
         for agent in perm.read_agents:
-            if not agent or agent in {"foaf:Agent", "acl:AuthenticatedAgent"}:
+            if not agent or agent in skip_agents:
+                continue
+            if User.objects.filter(acl_agent_uri=agent).exists():
+                continue
+            if GroupACL.objects.filter(acl_agent_uri=agent).exists():
                 continue
             if str(agent).startswith("urn:lacos:group:"):
                 external_group_agents.add(agent)
