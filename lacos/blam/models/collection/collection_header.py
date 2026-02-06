@@ -19,6 +19,17 @@ class CollectionHeader(MdHeader):
         blank=True,
         help_text="Display name for the collection this metadata belongs to"
     )
+    md_license = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="Metadata document license (MDLicense value)",
+    )
+    md_license_uri = models.URLField(
+        null=True,
+        blank=True,
+        help_text="Metadata document license URI (MDLicense URI)",
+    )
     
     class Meta:
         verbose_name = "Collection Header"

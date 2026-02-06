@@ -7,5 +7,6 @@ set -o nounset
 # Run migrations
 python manage.py migrate
 
-# Start the Django development server
-exec uvicorn config.asgi:application --host 0.0.0.0 --reload --reload-include '*.html'
+# Start the Django development server.
+# Access logs are disabled to avoid very noisy HTMX polling output in local dev.
+exec uvicorn config.asgi:application --host 0.0.0.0 --reload --reload-include '*.html' --no-access-log

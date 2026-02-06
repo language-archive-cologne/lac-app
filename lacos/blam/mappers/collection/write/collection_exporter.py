@@ -78,8 +78,8 @@ class CollectionExporter:
         if admin_info:
             export_administrative_info(admin_info, repo)
 
-        # Set MD license (from admin info if available)
-        repo.mdlicense = self._create_md_license(admin_info)
+        # Set MD license (prefer persisted header value, fallback to admin license)
+        repo.mdlicense = self._create_md_license(header, admin_info)
 
         # Structural info with collection members (bundles)
         repo.collection_structural_info = self._create_structural_info(collection)
@@ -94,9 +94,15 @@ class CollectionExporter:
         resources.resource_relation_list = Cmd.Resources.ResourceRelationList()
         return resources
 
-    def _create_md_license(self, admin_info) -> Cmd.Components.BlamCollectionRepositoryV12.Mdlicense:
+    def _create_md_license(self, header, admin_info) -> Cmd.Components.BlamCollectionRepositoryV12.Mdlicense:
         """Create MD license from administrative info."""
         md_license = Cmd.Components.BlamCollectionRepositoryV12.Mdlicense()
+        if header and getattr(header, "md_license", None):
+            md_license.value = header.md_license
+            if getattr(header, "md_license_uri", None):
+                md_license.uri = header.md_license_uri
+            return md_license
+
         if admin_info and admin_info.licenses.exists():
             first_license = admin_info.licenses.first()
             md_license.value = first_license.license_name

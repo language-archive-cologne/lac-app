@@ -58,11 +58,17 @@
               </svg>
             </div>
           {% endif %}
-          {% for license in licenses %}
-            <a href="{{ license.license_identifier }}" target="_blank" rel="noopener" class="badge badge-outline hover:badge-primary transition-colors">
-              {{ license.license_name }}
-            </a>
-          {% endfor %}
+          {% if metadata_license %}
+            {% if metadata_license_uri %}
+              <a href="{{ metadata_license_uri }}" target="_blank" rel="noopener" class="badge badge-primary badge-outline transition-colors">
+                {% translate "License" %}: {{ metadata_license }}
+              </a>
+            {% else %}
+              <span class="badge badge-primary badge-outline">
+                {% translate "License" %}: {{ metadata_license }}
+              </span>
+            {% endif %}
+          {% endif %}
         </div>
       {% endwith %}
 

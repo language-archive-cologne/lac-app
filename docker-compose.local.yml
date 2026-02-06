@@ -33,7 +33,7 @@ services:
       SAML_IDP_METADATA_LOCAL: "/app/shibboleth.xml"
     ports:
       - '127.0.0.1:8101:8000'
-    command: /start
+    command: /bin/bash -lc "python manage.py migrate && uvicorn config.asgi:application --host 0.0.0.0 --reload --reload-include '*.html' --no-access-log"
     networks:
       - lacos_network_ws
 

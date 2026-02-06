@@ -2,6 +2,7 @@ import uuid
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.core.exceptions import ValidationError
 
 from lacos.ingest.services.reindex_service import (
     reindex_bundle_xml,
@@ -68,3 +69,39 @@ def test_reindex_bundle_xml_updates_import_fields():
     )
     assert bundle.import_bucket == "test-bucket"
     assert bundle.import_object_key == "bundle.xml"
+
+
+@pytest.mark.django_db
+def test_reindex_collection_xml_returns_none_on_import_error():
+    discovery_service = MagicMock()
+    discovery_service.read_s3_object.return_value = b"<xml></xml>"
+
+    with patch(
+        "lacos.ingest.services.reindex_service.CollectionImporter.import_from_xml",
+        side_effect=ValidationError("Invalid BLAM collection XML"),
+    ):
+        result = reindex_collection_xml(
+            bucket="test-bucket",
+            s3_key="bad-collection.xml",
+            discovery_service=discovery_service,
+        )
+
+    assert result is None
+
+
+@pytest.mark.django_db
+def test_reindex_bundle_xml_returns_none_on_import_error():
+    discovery_service = MagicMock()
+    discovery_service.read_s3_object.return_value = b"<xml></xml>"
+
+    with patch(
+        "lacos.ingest.services.reindex_service.BundleImporter.import_from_xml",
+        side_effect=ValidationError("Invalid BLAM bundle XML"),
+    ):
+        result = reindex_bundle_xml(
+            bucket="test-bucket",
+            s3_key="bad-bundle.xml",
+            discovery_service=discovery_service,
+        )
+
+    assert result is None

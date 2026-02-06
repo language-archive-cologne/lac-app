@@ -176,3 +176,53 @@ def test_export_to_element_returns_element(sample_collection):
 
     assert isinstance(element, ET.Element)
     assert "CMD" in element.tag
+
+
+def _find_mdlicense_element(xml_output: str) -> ET.Element:
+    root = ET.fromstring(xml_output)
+    for element in root.iter():
+        if element.tag.split("}")[-1].lower() == "mdlicense":
+            return element
+    raise AssertionError("MdLicense element not found in exported XML")
+
+
+@pytest.mark.django_db
+def test_export_prefers_header_md_license(sample_collection):
+    header = sample_collection.header.first()
+    header.md_license = "CC0"
+    header.md_license_uri = "https://creativecommons.org/public-domain/cc0/"
+    header.save(update_fields=["md_license", "md_license_uri"])
+
+    admin_info = sample_collection.administrative_info.first()
+    license_obj = admin_info.licenses.first()
+    license_obj.license_name = "Copyright"
+    license_obj.license_identifier = "https://en.wikipedia.org/wiki/Copyright"
+    license_obj.save(update_fields=["license_name", "license_identifier"])
+
+    exporter = CollectionExporter()
+    xml_output = exporter.export(sample_collection)
+    mdlicense = _find_mdlicense_element(xml_output)
+
+    assert (mdlicense.text or "").strip() == "CC0"
+    assert (mdlicense.get("URI") or mdlicense.get("uri")) == "https://creativecommons.org/public-domain/cc0/"
+
+
+@pytest.mark.django_db
+def test_export_falls_back_to_administrative_license(sample_collection):
+    header = sample_collection.header.first()
+    header.md_license = None
+    header.md_license_uri = None
+    header.save(update_fields=["md_license", "md_license_uri"])
+
+    admin_info = sample_collection.administrative_info.first()
+    license_obj = admin_info.licenses.first()
+    license_obj.license_name = "Copyright"
+    license_obj.license_identifier = "https://en.wikipedia.org/wiki/Copyright"
+    license_obj.save(update_fields=["license_name", "license_identifier"])
+
+    exporter = CollectionExporter()
+    xml_output = exporter.export(sample_collection)
+    mdlicense = _find_mdlicense_element(xml_output)
+
+    assert (mdlicense.text or "").strip() == "Copyright"
+    assert (mdlicense.get("URI") or mdlicense.get("uri")) == "https://en.wikipedia.org/wiki/Copyright"

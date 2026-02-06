@@ -1,9 +1,8 @@
 from django.db import transaction
-from enum import Enum
 from typing import Dict, Any, Optional, List
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
 from blam_schemas.bundle.blam_bundle_repository_v1_1 import (
-    Cmd, BundleIdIdentifierType
+    Cmd
 )
 from lacos.blam.models.bundle.bundle_general_info import (
     BundleGeneralInfo,
@@ -68,9 +67,8 @@ def create_bundle_general_info(bundle_info: Any, location: BundleLocation, bundl
     
     general_info, created = BundleGeneralInfo.objects.get_or_create(
         id_value=id_value,
-        id_type=id_type,
-        bundle=bundle,
         defaults={
+            'id_type': id_type,
             'display_title': bundle_info.bundle_display_title,
             'description': bundle_info.bundle_description,
             'version': bundle_info.bundle_version,
@@ -80,11 +78,13 @@ def create_bundle_general_info(bundle_info: Any, location: BundleLocation, bundl
         }
     )
     if not created:
+        general_info.id_type = id_type
         general_info.display_title = bundle_info.bundle_display_title
         general_info.description = bundle_info.bundle_description
         general_info.version = bundle_info.bundle_version
         general_info.recording_date = parse_recording_date(bundle_info.bundle_recording_date.value)
         general_info.location = location
+        general_info.bundle = bundle
         general_info.save()
     return general_info
 
@@ -116,7 +116,7 @@ def extract_id_type(bundle_info: Any) -> str:
     return map_identifier_type(bundle_info.bundle_id[0].identifier_type)
 
 
-def map_identifier_type(id_type: Optional[BundleIdIdentifierType]) -> str:
+def map_identifier_type(id_type: Optional[Any]) -> str:
     """
     Map schema identifier type to model choices.
     
@@ -128,22 +128,20 @@ def map_identifier_type(id_type: Optional[BundleIdIdentifierType]) -> str:
     """
     if id_type is None:
         return IdentifierTypeChoices.DOI.value
-    
+
+    # Accept v1.0 enums, v1.1 enums, and plain strings by normalizing to one token.
+    token = getattr(id_type, "name", None) or getattr(id_type, "value", None) or str(id_type)
+    token = str(token).strip().upper().replace("-", "_").replace(" ", "_")
+    if "." in token:
+        token = token.split(".")[-1]
+
     mapping = {
-        BundleIdIdentifierType.DOI: IdentifierTypeChoices.DOI.value,
-        BundleIdIdentifierType.HANDLE: IdentifierTypeChoices.HANDLE.value,
-        BundleIdIdentifierType.URN: IdentifierTypeChoices.URN.value,
-        BundleIdIdentifierType.OTHER: IdentifierTypeChoices.OTHER.value,
+        "DOI": IdentifierTypeChoices.DOI.value,
+        "HANDLE": IdentifierTypeChoices.HANDLE.value,
+        "URN": IdentifierTypeChoices.URN.value,
+        "OTHER": IdentifierTypeChoices.OTHER.value,
     }
-    
-    # Convert string to enum if needed
-    if isinstance(id_type, str):
-        try:
-            id_type = BundleIdIdentifierType(id_type)
-        except ValueError:
-            return IdentifierTypeChoices.DOI.value
-    
-    return mapping.get(id_type, IdentifierTypeChoices.DOI.value)
+    return mapping.get(token, IdentifierTypeChoices.DOI.value)
 
 
 def parse_recording_date(date_str: str) -> Optional[str]:

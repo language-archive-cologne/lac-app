@@ -50,6 +50,23 @@ def test_dashboard_task_enqueue_creates_tracked_reindex_task(mock_task, staff_cl
 
 
 @pytest.mark.django_db
+@patch("lacos.blam.views.dashboard_task_views.reindex_collections_task")
+def test_dashboard_task_enqueue_creates_tracked_collection_reindex_task(mock_task, staff_client):
+    mock_task.return_value = SimpleNamespace(id="huey-456")
+
+    response = staff_client.post(
+        reverse("blam:dashboard_task_enqueue", kwargs={"action": "reindex-collections"}),
+        HTTP_HX_REQUEST="true",
+    )
+
+    task = BackgroundTask.objects.get(task_name="blam_reindex_collections")
+    assert response.status_code == 200
+    assert task.metadata["action"] == "reindex-collections"
+    assert task.metadata["task_id"] == "huey-456"
+    assert f"blam-task-{task.id}" in response.content.decode()
+
+
+@pytest.mark.django_db
 def test_dashboard_task_enqueue_rejects_unknown_action(staff_client):
     response = staff_client.post(
         reverse("blam:dashboard_task_enqueue", kwargs={"action": "unknown"}),

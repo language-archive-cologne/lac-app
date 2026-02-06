@@ -30,6 +30,8 @@ class CollectionHeaderForm(DaisyFormMixin, forms.ModelForm):
             "md_self_link",
             "md_profile",
             "md_collection_display_name",
+            "md_license",
+            "md_license_uri",
         ]
         widgets = {
             "md_creation_date": forms.DateInput(attrs={"type": "date"}),

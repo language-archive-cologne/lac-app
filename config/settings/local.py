@@ -88,3 +88,59 @@ GUIDELINES_REPO_URL = "/lac-guidelines"
 # ------------------------------------------------------------------------------
 # Uncomment this to use immediate mode during development
 # HUEY = {**HUEY, 'immediate': True}  # Use immediate mode in development
+
+# Logging
+# ------------------------------------------------------------------------------
+# Reduce high-volume queue/access logs in local development.
+LOGGING = {
+    **LOGGING,
+    "root": {"level": "WARNING", "handlers": ["console"]},
+    "loggers": {
+        **LOGGING.get("loggers", {}),
+        "api": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "consumer": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "django.server": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "uvicorn.access": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "huey": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "huey.consumer": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "huey.api": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "lacos.ingest.tasks": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "lacos.ingest.services.reindex_service": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+    },
+}

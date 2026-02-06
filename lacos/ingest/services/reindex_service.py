@@ -25,7 +25,6 @@ def reindex_collection_xml(
             bucket,
             s3_key,
             exc,
-            exc_info=True,
         )
         return None
 
@@ -44,10 +43,19 @@ def reindex_collection_xml(
         )
         return None
 
-    collection = CollectionImporter.import_from_xml(
-        xml_content,
-        update_existing=update_existing,
-    )
+    try:
+        collection = CollectionImporter.import_from_xml(
+            xml_content,
+            update_existing=update_existing,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Collection reindex skipped for %s/%s: %s",
+            bucket,
+            s3_key,
+            exc,
+        )
+        return None
 
     fields_to_update = []
     if getattr(collection, "import_bucket", None) != bucket:
@@ -78,7 +86,6 @@ def reindex_bundle_xml(
             bucket,
             s3_key,
             exc,
-            exc_info=True,
         )
         return None
 
@@ -97,10 +104,19 @@ def reindex_bundle_xml(
         )
         return None
 
-    importer_result = BundleImporter.import_from_xml(
-        xml_content,
-        update_existing=update_existing,
-    )
+    try:
+        importer_result = BundleImporter.import_from_xml(
+            xml_content,
+            update_existing=update_existing,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Bundle reindex skipped for %s/%s: %s",
+            bucket,
+            s3_key,
+            exc,
+        )
+        return None
 
     if not importer_result:
         logger.error("Bundle reindex failed: importer returned no result for %s/%s", bucket, s3_key)

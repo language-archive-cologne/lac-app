@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from io import StringIO
 from unittest.mock import patch
 
 import pytest
 
 from lacos.blam.tasks import backup_database_task
+from lacos.blam.tasks import reindex_collections_task
 from lacos.blam.tasks import reindex_search_vectors_task
 from lacos.storage.models import BackgroundTask
 from lacos.storage.services.background_task_service import BackgroundTaskService
@@ -78,3 +80,47 @@ def test_backup_database_task_marks_failure(mock_backup_service):
     assert result["success"] is False
     assert task_record.status == BackgroundTask.Status.FAILED
     assert "backup_command_failed" in task_record.error
+
+
+@pytest.mark.django_db
+@patch("lacos.blam.tasks.call_command")
+def test_reindex_collections_task_marks_success(mock_call_command):
+    def fake_call_command(*args, **kwargs):
+        out: StringIO = kwargs["stdout"]
+        out.write("Reindexed collection 1 from bucket/key\n")
+        out.write("Reindexed bundle 10 (resources 11)\n")
+        out.write("Reindexed bundle 12 (resources 13)\n")
+
+    mock_call_command.side_effect = fake_call_command
+    task_record = BackgroundTaskService.create(task_name="blam_reindex_collections")
+
+    runner = getattr(reindex_collections_task, "call_local", reindex_collections_task)
+    result = runner(str(task_record.id))
+    task_record.refresh_from_db()
+
+    assert result["success"] is True
+    assert result["collections_reindexed"] == 1
+    assert result["bundles_reindexed"] == 2
+    assert result["collection_failures"] == 0
+    assert result["bundle_failures"] == 0
+    assert task_record.status == BackgroundTask.Status.SUCCESS
+
+
+@pytest.mark.django_db
+@patch("lacos.blam.tasks.call_command")
+def test_reindex_collections_task_marks_failure_when_command_has_errors(mock_call_command):
+    def fake_call_command(*args, **kwargs):
+        out: StringIO = kwargs["stdout"]
+        out.write("Reindexed collection 1 from bucket/key\n")
+        out.write("Failed to reindex bundle from bucket/key\n")
+
+    mock_call_command.side_effect = fake_call_command
+    task_record = BackgroundTaskService.create(task_name="blam_reindex_collections")
+
+    runner = getattr(reindex_collections_task, "call_local", reindex_collections_task)
+    result = runner(str(task_record.id))
+    task_record.refresh_from_db()
+
+    assert result["success"] is False
+    assert result["bundle_failures"] == 1
+    assert task_record.status == BackgroundTask.Status.FAILED

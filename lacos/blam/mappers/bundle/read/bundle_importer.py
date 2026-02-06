@@ -1,14 +1,17 @@
-from dataclasses import asdict
-from typing import Any, Optional, List, Tuple
-from django.db import transaction
-from django.core.exceptions import ValidationError
+import io
 import logging
 import unicodedata
 import uuid
+from typing import Any, Optional, Tuple
+import xml.etree.ElementTree as ET
 
+from django.core.exceptions import ValidationError
+from django.db import transaction
+
+from blam_schemas.bundle.blam_bundle_repository_v1_0 import Cmd as CmdV10
+from blam_schemas.bundle.blam_bundle_repository_v1_1 import Cmd as CmdV11
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo, BundleResources
-from blam_schemas.bundle.blam_bundle_repository_v1_1 import Cmd
 from xsdata.formats.dataclass.parsers import XmlParser
 
 # Import the standalone import functions
@@ -19,13 +22,18 @@ from lacos.blam.mappers.bundle.read.import_bundle_administrative_info import imp
 from lacos.blam.mappers.bundle.read.import_bundle_header import import_bundle_header
 
 logger = logging.getLogger(__name__)
+
+BLAM_VERSION_1_0 = "1.0"
+BLAM_VERSION_1_1 = "1.1"
+
+
 class BundleImporter:
     """
     Handles importing BLAM Bundle XML into Django models.
     """
     
     @staticmethod
-    def validate_xml(xml_content: str) -> Cmd:
+    def validate_xml(xml_content: str) -> Any:
         """
         Validates XML against schema and parses into dataclass
         Returns parsed Cmd object if valid, raises ValidationError if invalid
@@ -33,13 +41,12 @@ class BundleImporter:
         # Normalize to Unicode NFC for consistent character representation
         xml_content = unicodedata.normalize("NFC", xml_content)
 
-        try:
-            # Using xsdata parser to parse XML into Cmd dataclass
-            parser = XmlParser()
-            cmd_data = parser.from_string(xml_content, Cmd)
-            return cmd_data
-        except Exception as e:
-            raise ValidationError(f"Invalid BLAM bundle XML: {str(e)}")
+        version = BundleImporter._detect_version(xml_content)
+        if version == BLAM_VERSION_1_1:
+            return BundleImporter._parse_v11(xml_content)
+        if version == BLAM_VERSION_1_0:
+            return BundleImporter._parse_v10(xml_content)
+        raise ValidationError(f"Unsupported BLAM bundle version: {version}")
     
     @classmethod
     @transaction.atomic
@@ -119,7 +126,7 @@ class BundleImporter:
     def _update_existing_bundle(
         cls,
         bundle: Bundle,
-        cmd_data: Cmd,
+        cmd_data: Any,
         md_self_link: Optional[str],
         existing_bundle_resources_id: Optional[uuid.UUID],
     ) -> Tuple[Bundle, Optional[uuid.UUID]]:
@@ -149,11 +156,15 @@ class BundleImporter:
             )
             return (bundle, bundle_resources_id)
         except Exception as exc:
-            logger.error("Error during bundle update: %s", exc, exc_info=True)
+            logger.warning(
+                "Bundle update failed for '%s': %s",
+                md_self_link or bundle.identifier,
+                exc,
+            )
             raise
     
     @classmethod
-    def _create_bundle(cls, cmd_data: Cmd) -> Bundle:
+    def _create_bundle(cls, cmd_data: Any) -> Bundle:
         """
         Create a new Bundle for the import process
         
@@ -170,7 +181,7 @@ class BundleImporter:
         return bundle
 
     @classmethod
-    def _import_cmd_to_models(cls, cmd_data: Cmd) -> Tuple[Bundle, Optional[uuid.UUID]]:
+    def _import_cmd_to_models(cls, cmd_data: Any) -> Tuple[Bundle, Optional[uuid.UUID]]:
         """
         Converts Cmd object to Django models
         
@@ -215,28 +226,28 @@ class BundleImporter:
             return (bundle, bundle_resources_id)
             
         except Exception as e:
-            logger.error(f"Error during bundle import: {e}", exc_info=True)
+            logger.warning("Bundle import failed: %s", e)
             # Reraise to ensure transaction rollback
             raise e
     
     @classmethod
-    def _import_general_info(cls, cmd_data: Cmd, bundle: Bundle):
+    def _import_general_info(cls, cmd_data: Any, bundle: Bundle):
         """Import general info from CMD data"""
         return import_general_info(cmd_data, bundle)
     
     @classmethod
-    def _import_publication_info(cls, cmd_data: Cmd, bundle: Bundle):
+    def _import_publication_info(cls, cmd_data: Any, bundle: Bundle):
         """Import publication info from CMD data"""
         return import_publication_info(cmd_data, bundle)
     
     @classmethod
-    def _import_administrative_info(cls, cmd_data: Cmd, bundle: Bundle):
+    def _import_administrative_info(cls, cmd_data: Any, bundle: Bundle):
         """Import administrative info from CMD data"""
         return import_administrative_info(cmd_data, bundle)
 
     
     @classmethod
-    def _import_structural_info(cls, cmd_data: Cmd, bundle: Bundle) -> Optional['BundleStructuralInfo']:
+    def _import_structural_info(cls, cmd_data: Any, bundle: Bundle) -> Optional['BundleStructuralInfo']:
         """Import structural info from CMD data. Returns the BundleStructuralInfo object."""
         try:
             # Navigate through parsed XML data
@@ -289,3 +300,43 @@ class BundleImporter:
         except Exception as e:
             logger.error(f"Unexpected error during structural info import: {e}", exc_info=True)
             return None
+
+    @staticmethod
+    def _detect_version(xml_content: str) -> str:
+        try:
+            for _, element in ET.iterparse(io.StringIO(xml_content), events=("start",)):
+                local = element.tag.split("}")[-1]
+                if local.startswith("BLAM-bundle-repository"):
+                    if "v1.1" in local or "v1_1" in local:
+                        return BLAM_VERSION_1_1
+                    return BLAM_VERSION_1_0
+                element.clear()
+        except ET.ParseError as exc:
+            raise ValidationError(f"Invalid BLAM bundle XML: {exc}") from exc
+        return BLAM_VERSION_1_0
+
+    @staticmethod
+    def _parse_v10(xml_content: str) -> Any:
+        parser = XmlParser()
+        try:
+            cmd = parser.from_string(xml_content, CmdV10)
+        except Exception as exc:
+            raise ValidationError(f"Invalid BLAM bundle XML: {exc}") from exc
+
+        repository = getattr(cmd.components, "blam_bundle_repository_v1_0", None)
+        if repository is not None and not hasattr(cmd.components, "blam_bundle_repository_v1_1"):
+            cmd.components.blam_bundle_repository_v1_1 = repository
+        return cmd
+
+    @staticmethod
+    def _parse_v11(xml_content: str) -> Any:
+        parser = XmlParser()
+        try:
+            cmd = parser.from_string(xml_content, CmdV11)
+        except Exception as exc:
+            raise ValidationError(f"Invalid BLAM bundle XML: {exc}") from exc
+
+        repository = getattr(cmd.components, "blam_bundle_repository_v1_1", None)
+        if repository is not None and not hasattr(cmd.components, "blam_bundle_repository_v1_0"):
+            cmd.components.blam_bundle_repository_v1_0 = repository
+        return cmd

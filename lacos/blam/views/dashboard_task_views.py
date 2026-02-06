@@ -12,6 +12,7 @@ from django.template.loader import render_to_string
 from django.views import View
 
 from lacos.blam.tasks import backup_database_task
+from lacos.blam.tasks import reindex_collections_task
 from lacos.blam.tasks import reindex_search_vectors_task
 from lacos.storage.models import BackgroundTask
 from lacos.storage.services.background_task_service import BackgroundTaskService
@@ -45,6 +46,12 @@ class DashboardTaskEnqueueView(DashboardTaskPermissionsMixin, View):
             description="Create DB backup and upload to S3",
             start_message="Database backup queued.",
             enqueue_name="backup_database_task",
+        ),
+        "reindex-collections": DashboardTaskAction(
+            task_name="blam_reindex_collections",
+            description="Reindex all collections and bundles from S3 XML",
+            start_message="Collection reindex queued.",
+            enqueue_name="reindex_collections_task",
         ),
     }
 

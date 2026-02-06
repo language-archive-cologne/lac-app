@@ -378,7 +378,11 @@ class ArchivistDashboardView(HtmxTemplateHelperMixin, LoginRequiredMixin, UserPa
         # Add any other context data needed for the dashboard
         context['title'] = 'BLAM Control Panel'
         context['dashboard_tasks'] = BackgroundTask.objects.filter(
-            task_name__in=["blam_reindex_search_vectors", "blam_database_backup"]
+            task_name__in=[
+                "blam_reindex_search_vectors",
+                "blam_database_backup",
+                "blam_reindex_collections",
+            ]
         )[:10]
         
         return context 

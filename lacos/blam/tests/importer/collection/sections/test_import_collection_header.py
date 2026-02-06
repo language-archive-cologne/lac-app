@@ -151,4 +151,31 @@ def test_multiple_creators_handling(test_collection):
     # Import should use first creator
     header_model = import_collection_header(cmd, test_collection)
     assert header_model.md_creator == "Creator 1"
-    assert header_model.collection == test_collection 
+    assert header_model.collection == test_collection
+
+
+@pytest.mark.django_db
+def test_imports_md_license_from_repository_component(test_collection):
+    cmd = type("obj", (object,), {})()
+    cmd.header = type("obj", (object,), {})()
+    cmd.header.md_creator = [type("obj", (object,), {"value": "Test Creator"})]
+    cmd.header.md_creation_date = type("obj", (object,), {"value": datetime(2022, 10, 26).date()})
+    cmd.header.md_self_link = type("obj", (object,), {"value": "http://example.com/test-license"})
+    cmd.header.md_profile = type("obj", (object,), {"value": "http://example.com/profile"})
+    cmd.header.md_collection_display_name = type("obj", (object,), {"value": "Test Collection"})
+
+    cmd.components = type("obj", (object,), {})()
+    cmd.components.blam_collection_repository_v1_2 = type("obj", (object,), {})()
+    cmd.components.blam_collection_repository_v1_2.mdlicense = type(
+        "obj",
+        (object,),
+        {
+            "value": "CC0",
+            "uri": "https://creativecommons.org/public-domain/cc0/",
+        },
+    )
+
+    header = import_collection_header(cmd, test_collection)
+
+    assert header.md_license == "CC0"
+    assert header.md_license_uri == "https://creativecommons.org/public-domain/cc0/"

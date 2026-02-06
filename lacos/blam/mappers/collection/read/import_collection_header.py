@@ -18,25 +18,25 @@ def import_collection_header(cmd_data: Any, collection: Collection) -> Collectio
     Returns:
         The created CollectionHeader instance
     """
-    header_data = cmd_data.header
-    
     # Create the collection header record
-    header = create_collection_header(header_data, collection)
+    header = create_collection_header(cmd_data, collection)
     
     return header
 
 
-def create_collection_header(header_data: Any, collection: Collection) -> CollectionHeader:
+def create_collection_header(cmd_data: Any, collection: Collection) -> CollectionHeader:
     """
     Create a CollectionHeader instance from schema data.
     
     Args:
-        header_data: The header data from the schema
+        cmd_data: The parsed schema data
         collection: The Collection instance to attach this header to
         
     Returns:
         The created CollectionHeader instance
     """
+    header_data = cmd_data.header
+
     # Extract creator (use first one if multiple are present)
     creator = extract_creator(header_data)
     
@@ -51,6 +51,8 @@ def create_collection_header(header_data: Any, collection: Collection) -> Collec
     
     # Extract collection display name
     collection_display_name = extract_collection_display_name(header_data)
+    # Extract metadata license data from repository mdlicense tag
+    md_license, md_license_uri = extract_md_license_fields(cmd_data, header_data)
     
     # Create or update the header
     header, created = CollectionHeader.objects.get_or_create(
@@ -60,7 +62,9 @@ def create_collection_header(header_data: Any, collection: Collection) -> Collec
             'md_creator': creator,
             'md_creation_date': creation_date,
             'md_profile': profile,
-            'md_collection_display_name': collection_display_name
+            'md_collection_display_name': collection_display_name,
+            'md_license': md_license,
+            'md_license_uri': md_license_uri,
         }
     )
     
@@ -71,9 +75,51 @@ def create_collection_header(header_data: Any, collection: Collection) -> Collec
         header.md_creation_date = creation_date
         header.md_profile = profile
         header.md_collection_display_name = collection_display_name
+        header.md_license = md_license
+        header.md_license_uri = md_license_uri
         header.save()
     
     return header
+
+
+def extract_md_license_fields(cmd_data: Any, header_data: Any) -> tuple[Optional[str], Optional[str]]:
+    """
+    Extract MDLicense fields from parsed repository data.
+
+    The BLAM mdlicense tag lives on the repository component, not in header.
+    For backward compatibility in tests/mocks that only provide header data, this
+    function also accepts mdlicense-like attributes on header_data.
+    """
+    components = getattr(cmd_data, "components", None)
+    if components:
+        for repo_attr in (
+            "blam_collection_repository_v1_2",
+            "blam_collection_repository_v1_1",
+            "blam_collection_repository_v1_0",
+        ):
+            repository = getattr(components, repo_attr, None)
+            mdlicense = getattr(repository, "mdlicense", None) if repository else None
+            if mdlicense:
+                return _normalize_optional(getattr(mdlicense, "value", None)), _normalize_optional(
+                    getattr(mdlicense, "uri", None)
+                )
+
+    # Compatibility path for lightweight test stubs.
+    md_license = getattr(header_data, "md_license", None)
+    md_license_uri = getattr(header_data, "md_license_uri", None)
+    if md_license is not None or md_license_uri is not None:
+        return _normalize_optional(getattr(md_license, "value", md_license)), _normalize_optional(
+            getattr(md_license_uri, "value", md_license_uri)
+        )
+
+    return None, None
+
+
+def _normalize_optional(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
 
 
 def extract_creator(header_data: Any) -> str:

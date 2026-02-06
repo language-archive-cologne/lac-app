@@ -202,6 +202,15 @@
                             >
                                 Backup database to S3
                             </button>
+                            <button
+                                hx-post="{% url 'blam:dashboard_task_enqueue' 'reindex-collections' %}"
+                                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                                hx-target="#blam-task-list"
+                                hx-swap="afterbegin"
+                                class="w-full px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-opacity-50 transition"
+                            >
+                                Reindex all collections from S3 XML
+                            </button>
                         </div>
                     </div>
                 </div>

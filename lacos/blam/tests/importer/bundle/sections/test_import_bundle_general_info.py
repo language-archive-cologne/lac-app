@@ -2,7 +2,14 @@ import pytest
 from unittest.mock import patch
 
 from blam_schemas.bundle.blam_bundle_repository_v1_0 import Cmd, BundleIdIdentifierType
-from lacos.blam.mappers.bundle.read.import_bundle_general_info import import_general_info
+from blam_schemas.bundle.blam_bundle_repository_v1_1 import (
+    BundleIdIdentifierType as BundleIdIdentifierTypeV11,
+)
+from lacos.blam.mappers.bundle.read.import_bundle_general_info import (
+    create_bundle_general_info,
+    import_general_info,
+    map_identifier_type,
+)
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_general_info import (
     BundleGeneralInfo,
@@ -10,6 +17,7 @@ from lacos.blam.models.bundle.bundle_general_info import (
     BundleLocation,
     BundleObjectLanguage,
 )
+from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
 
 
 @pytest.fixture
@@ -266,6 +274,59 @@ def test_get_or_create_behavior(real_cmd_data, test_bundle):
     assert count == 1
     # Add check for canonical language count
     assert BundleObjectLanguage.objects.count() == 1 # Only one 'zag' language should exist
+
+
+def test_map_identifier_type_handles_v10_enum():
+    assert map_identifier_type(BundleIdIdentifierType.HANDLE) == IdentifierTypeChoices.HANDLE.value
+    assert map_identifier_type(BundleIdIdentifierType.DOI) == IdentifierTypeChoices.DOI.value
+
+
+def test_map_identifier_type_handles_v11_enum():
+    assert map_identifier_type(BundleIdIdentifierTypeV11.HANDLE) == IdentifierTypeChoices.HANDLE.value
+    assert map_identifier_type(BundleIdIdentifierTypeV11.URN) == IdentifierTypeChoices.URN.value
+
+
+def test_map_identifier_type_handles_strings():
+    assert map_identifier_type("Handle") == IdentifierTypeChoices.HANDLE.value
+    assert map_identifier_type("URN") == IdentifierTypeChoices.URN.value
+    assert map_identifier_type("unknown") == IdentifierTypeChoices.DOI.value
+
+
+@pytest.mark.django_db
+def test_create_bundle_general_info_updates_existing_wrong_id_type(test_bundle):
+    location = BundleLocation.objects.create(
+        region_name="NRW",
+        country_name="Germany",
+        country_code="DE",
+    )
+    existing = BundleGeneralInfo.objects.create(
+        id_value="hdl:11341/0000-0000-0000-3DC4",
+        id_type=IdentifierTypeChoices.DOI.value,
+        display_title="old",
+        description="old",
+        version="1",
+        location=location,
+        bundle=test_bundle,
+    )
+
+    bundle_id = type("obj", (), {"value": existing.id_value, "identifier_type": "Handle"})
+    recording_date = type("obj", (), {"value": "2014-10-09"})
+    bundle_info = type(
+        "obj",
+        (),
+        {
+            "bundle_id": [bundle_id],
+            "bundle_display_title": "new title",
+            "bundle_description": "new description",
+            "bundle_version": "2",
+            "bundle_recording_date": recording_date,
+        },
+    )
+
+    updated = create_bundle_general_info(bundle_info, location, test_bundle)
+    assert updated.pk == existing.pk
+    assert updated.id_type == IdentifierTypeChoices.HANDLE.value
+    assert BundleGeneralInfo.objects.filter(id_value=existing.id_value).count() == 1
 
 
 @pytest.mark.django_db
