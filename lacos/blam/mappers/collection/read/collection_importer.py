@@ -12,6 +12,7 @@ from xsdata.formats.dataclass.models.generics import AnyElement
 from xsdata.formats.dataclass.parsers import XmlParser
 
 from blam_schemas.collection.blam_collection_repository_v1_0 import Cmd as CmdV10
+from blam_schemas.collection.blam_collection_repository_v1_2 import Cmd as CmdV12
 from blam_schemas.collection.blam_collection_repository_v1_1 import (
     BlamCollectionRepositoryV11,
 )
@@ -43,6 +44,7 @@ logger = logging.getLogger(__name__)
 
 BLAM_VERSION_1_0 = "1.0"
 BLAM_VERSION_1_1 = "1.1"
+BLAM_VERSION_1_2 = "1.2"
 
 
 @dataclass
@@ -82,6 +84,8 @@ class CollectionImporter:
 
         version = CollectionImporter._detect_version(xml_content)
         logger.debug("Detected BLAM collection version %s", version)
+        if version == BLAM_VERSION_1_2:
+            return CollectionImporter._parse_v12(xml_content)
         if version == BLAM_VERSION_1_0:
             return CollectionImporter._parse_v10(xml_content)
         if version == BLAM_VERSION_1_1:
@@ -261,6 +265,8 @@ class CollectionImporter:
             for _, element in ET.iterparse(io.StringIO(xml_content), events=("start",)):
                 local = element.tag.split("}")[-1]
                 if local.startswith("BLAM-collection-repository"):
+                    if "v1.2" in local or "v1_2" in local:
+                        return BLAM_VERSION_1_2
                     if "v1.1" in local or "v1_1" in local:
                         return BLAM_VERSION_1_1
                     return BLAM_VERSION_1_0
@@ -280,6 +286,18 @@ class CollectionImporter:
         repository = getattr(cmd.components, "blam_collection_repository_v1_0", None)
         components = CollectionComponentsAdapter(repository=repository, version=BLAM_VERSION_1_0)
         return CollectionCmdAdapter(header=cmd.header, components=components, version=BLAM_VERSION_1_0)
+
+    @staticmethod
+    def _parse_v12(xml_content: str) -> CollectionCmdAdapter:
+        try:
+            parser = XmlParser()
+            cmd = parser.from_string(xml_content, CmdV12)
+        except Exception as exc:  # pragma: no cover - xsdata validation
+            raise ValidationError(f"Invalid BLAM collection XML: {exc}") from exc
+
+        repository = getattr(cmd.components, "blam_collection_repository_v1_2", None)
+        components = CollectionComponentsAdapter(repository=repository, version=BLAM_VERSION_1_2)
+        return CollectionCmdAdapter(header=cmd.header, components=components, version=BLAM_VERSION_1_2)
 
     @staticmethod
     def _parse_v11(xml_content: str) -> CollectionCmdAdapter:
