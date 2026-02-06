@@ -303,6 +303,7 @@ LOGGING = {
 
 REDIS_URL = env("REDIS_URL", default="redis://redis:6379/0")
 REDIS_SSL = REDIS_URL.startswith("rediss://")
+HUEY_IMMEDIATE = env.bool("HUEY_IMMEDIATE", default=DEBUG)
 
 # Huey (Task Queue) Configuration
 # ------------------------------------------------------------------------------
@@ -311,7 +312,7 @@ HUEY = {
     'name': 'lacos',
     'results': True,
     'store_none': False,
-    'immediate': DEBUG,  # If DEBUG=True, run synchronously
+    'immediate': HUEY_IMMEDIATE,
     'utc': True,
     'blocking': True,
     'connection': {
@@ -424,6 +425,19 @@ UPLOAD_VERIFICATION_SCHEDULE_MINUTES = env.int(
     "UPLOAD_VERIFICATION_SCHEDULE_MINUTES",
     default=15,
 )
+
+# Database backup configuration
+# ------------------------------------------------------------------------------
+DB_BACKUP_ENABLED = env.bool("DB_BACKUP_ENABLED", default=False)
+DB_BACKUP_COMPOSE_FILE = env("DB_BACKUP_COMPOSE_FILE", default="docker-compose.dev.yml")
+DB_BACKUP_COMPOSE_PROJECT_DIR = env("DB_BACKUP_COMPOSE_PROJECT_DIR", default=str(BASE_DIR))
+DB_BACKUP_COMPOSE_PROJECT_NAME = env("DB_BACKUP_COMPOSE_PROJECT_NAME", default="")
+DB_BACKUP_BACKUP_DIR = env("DB_BACKUP_BACKUP_DIR", default="/backups")
+DB_BACKUP_S3_BUCKET = env("DB_BACKUP_S3_BUCKET", default="backups")
+DB_BACKUP_S3_PREFIX = env("DB_BACKUP_S3_PREFIX", default="db-backups")
+DB_BACKUP_RETENTION_DAYS = env.int("DB_BACKUP_RETENTION_DAYS", default=7)
+DB_BACKUP_CRON_HOUR = env.int("DB_BACKUP_CRON_HOUR", default=2)
+DB_BACKUP_CRON_MINUTE = env.int("DB_BACKUP_CRON_MINUTE", default=0)
 
 # django-allauth
 # ------------------------------------------------------------------------------

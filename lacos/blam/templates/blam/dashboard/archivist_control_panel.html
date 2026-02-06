@@ -174,6 +174,54 @@
                 </div>
             </div>
 
+            <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 mt-8">
+                <div class="lg:col-span-2">
+                    <div class="bg-base-100 rounded-lg shadow overflow-hidden">
+                        <div class="bg-emerald-600 text-white px-4 py-3">
+                            <h5 class="font-medium text-lg">Background tasks</h5>
+                        </div>
+                        <div class="p-4 space-y-3">
+                            <p class="text-sm text-base-content/70">
+                                Queue long-running actions and monitor them live.
+                            </p>
+                            <button
+                                hx-post="{% url 'blam:dashboard_task_enqueue' 'reindex' %}"
+                                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                                hx-target="#blam-task-list"
+                                hx-swap="afterbegin"
+                                class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition"
+                            >
+                                Reindex search vectors
+                            </button>
+                            <button
+                                hx-post="{% url 'blam:dashboard_task_enqueue' 'backup' %}"
+                                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                                hx-target="#blam-task-list"
+                                hx-swap="afterbegin"
+                                class="w-full px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-opacity-50 transition"
+                            >
+                                Backup database to S3
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-3">
+                    <div class="bg-base-100 rounded-lg shadow overflow-hidden">
+                        <div class="bg-base-300/70 px-4 py-3">
+                            <h5 class="font-medium text-lg">Recent task activity</h5>
+                        </div>
+                        <div id="blam-task-list" class="p-4 space-y-3">
+                            {% for task in dashboard_tasks %}
+                                {% include "blam/dashboard/partials/task_status.html" with task=task %}
+                            {% empty %}
+                                <p class="text-sm text-base-content/60">No task activity yet.</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
         <!-- Database Maintenance Card -->
         <div>

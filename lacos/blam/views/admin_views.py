@@ -12,6 +12,7 @@ from lacos.blam.services.cleanup_service import CleanupService
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.common.mixins import HtmxTemplateHelperMixin
+from lacos.storage.models import BackgroundTask
 
 class DatabaseCleanupView(LoginRequiredMixin, UserPassesTestMixin, View):
     """
@@ -376,5 +377,8 @@ class ArchivistDashboardView(HtmxTemplateHelperMixin, LoginRequiredMixin, UserPa
         
         # Add any other context data needed for the dashboard
         context['title'] = 'BLAM Control Panel'
+        context['dashboard_tasks'] = BackgroundTask.objects.filter(
+            task_name__in=["blam_reindex_search_vectors", "blam_database_backup"]
+        )[:10]
         
         return context 

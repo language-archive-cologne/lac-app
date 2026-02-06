@@ -11,6 +11,10 @@ from .views.admin_views import (
     DatabaseDeleteCollectionsConfirmView,
     DatabaseDeleteBundlesConfirmView
 )
+from .views.dashboard_task_views import (
+    DashboardTaskEnqueueView,
+    DashboardTaskStatusView,
+)
 from .views.crud import delete_blam_model
 from .views.export import CollectionJsonLdExportView
 from .views.metadata import (
@@ -106,6 +110,16 @@ urlpatterns = [
     # Dashboard
     path('dashboard/archivist/', ArchivistDashboardView.as_view(), name='blam_archivist_dashboard'),
     path('dashboard/archivist/metadata-panel/', ArchivistMetadataPanelView.as_view(), name='blam_metadata_panel'),
+    path(
+        'dashboard/archivist/tasks/<slug:action>/',
+        DashboardTaskEnqueueView.as_view(),
+        name='dashboard_task_enqueue',
+    ),
+    path(
+        'dashboard/archivist/tasks/<uuid:task_id>/status/',
+        DashboardTaskStatusView.as_view(),
+        name='dashboard_task_status',
+    ),
     
     # Database operations
     path('admin/cleanup/', DatabaseCleanupView.as_view(), name='database_cleanup'),

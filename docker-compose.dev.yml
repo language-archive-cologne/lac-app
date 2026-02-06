@@ -105,6 +105,8 @@ services:
     volumes:
       - .:/app:z
       - /etc/shibboleth:/etc/shibboleth:ro
+      - lacos_dev_postgres_data_backups:/backups
+      - /var/run/docker.sock:/var/run/docker.sock
     env_file:
       - ./.envs/.dev/.django
       - ./.envs/.dev/.postgres

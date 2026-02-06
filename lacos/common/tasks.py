@@ -211,3 +211,10 @@ def sync_guidelines() -> dict:
         "errors": result["errors"],
         "output_dir": str(output_dir),
     }
+
+
+# Ensure DB backup tasks are registered with Huey.
+from lacos.common.db_backup_tasks import (  # noqa: E402,F401
+    backup_database_to_s3,
+    backup_database_to_s3_periodic,
+)

@@ -47,6 +47,9 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     # psycopg dependencies
     libpq-dev \
     wait-for-it \
+    # Required to run docker compose backup command from Huey tasks
+    docker.io \
+    docker-compose \
     # Translations dependencies
     gettext \
     # XML Security tooling for SAML assertions
