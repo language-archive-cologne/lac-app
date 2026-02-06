@@ -92,7 +92,7 @@ def test_collection_detail_uses_md_license_for_metadata_badge(client):
 
 
 @pytest.mark.django_db
-def test_collection_detail_keeps_metadata_license_empty_when_not_present(client):
+def test_collection_detail_falls_back_to_administrative_license_when_md_missing(client):
     collection = _create_collection_with_licenses(
         identifier="hdl:11341/test-collection-no-md-license",
         md_license=None,
@@ -102,9 +102,12 @@ def test_collection_detail_keeps_metadata_license_empty_when_not_present(client)
     response = client.get(reverse("explorer:collection_detail", kwargs={"pk": collection.pk}))
 
     assert response.status_code == 200
-    assert response.context["metadata_license"] is None
-    assert response.context["metadata_license_uri"] is None
+    assert response.context["metadata_license"] == "Copyright"
+    assert response.context["metadata_license_uri"] == "https://en.wikipedia.org/wiki/Copyright"
     content_licenses = list(response.context["content_licenses"])
     assert len(content_licenses) == 1
     assert content_licenses[0].license_name == "Copyright"
-    assert "Rights: Copyright" not in response.content.decode("utf-8")
+    page = response.content.decode("utf-8")
+    assert "License: Copyright" in page
+    assert "https://en.wikipedia.org/wiki/Copyright" in page
+    assert "Rights: Copyright" not in page
