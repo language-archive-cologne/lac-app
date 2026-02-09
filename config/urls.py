@@ -7,18 +7,19 @@ from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from django.urls import include
 from django.urls import path
 from django.views import defaults as default_views
-from django.views.generic import RedirectView, TemplateView
+from django.views.generic import TemplateView
 from drf_spectacular.views import SpectacularAPIView
 from drf_spectacular.views import SpectacularSwaggerView
 from rest_framework.authtoken.views import obtain_auth_token
 from lacos.oaipmh.views import OAIPMHOverviewView
 from lacos.sitemaps import sitemaps
 from lacos.common.views import guideline_view
+from lacos.explorer.views import CollectionListView
 
 urlpatterns = [
     path(
         "",
-        RedirectView.as_view(pattern_name="explorer:collection_list"),
+        CollectionListView.as_view(),
         name="home",
     ),
     # Crawler control files
