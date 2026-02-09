@@ -56,7 +56,7 @@
       >
         {% for user in available_users %}
         <option value="{{ user.id }}" {% if user.id in selected_user_ids %}selected{% endif %} title="{{ user.acl_agent_uri }}">
-          {{ user.username }}{% if user.name %} ({{ user.name }}){% endif %} - {{ user.acl_agent_uri }}
+          {{ user.username }}{% if user.name %} ({{ user.name }}){% endif %}
         </option>
         {% empty %}
         <option disabled>No users with ACL URIs configured</option>
@@ -74,10 +74,10 @@
         name="extra_user_agents"
         class="textarea textarea-bordered w-full text-xs font-mono"
         rows="3"
-        placeholder="urn:lacos:eppn:user@example.org"
+        placeholder="user@example.org"
       >{{ external_user_agents }}</textarea>
       <label class="label">
-        <span class="label-text-alt text-base-content/60">One URI per line. These will be preserved.</span>
+        <span class="label-text-alt text-base-content/60">One per line. Enter email addresses or full URIs — they will be normalized automatically.</span>
       </label>
     </div>
 

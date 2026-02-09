@@ -24,6 +24,7 @@ from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.storage.models.acl_config import ACLConfig
 from lacos.storage.models.acl_permissions import ACLPermissions
 from lacos.storage.constants import ACL_LEVEL_PUBLIC, ACL_LEVEL_ACADEMIC, ACL_LEVEL_RESTRICTED
+from lacos.storage.utils.acl import normalize_agent_uri
 
 logger = logging.getLogger(__name__)
 
@@ -657,10 +658,14 @@ def acl_update_permission(request):
                 pass
 
         for agent in _parse_agent_list(extra_user_agents_raw):
-            person_agents.add(agent)
+            normalized = normalize_agent_uri(agent)
+            if normalized:
+                person_agents.add(normalized)
 
         for agent in _parse_agent_list(extra_group_agents_raw):
-            group_agents.add(agent)
+            normalized = normalize_agent_uri(agent)
+            if normalized:
+                group_agents.add(normalized)
 
         for agent in sorted(person_agents):
             permissions_data.append({

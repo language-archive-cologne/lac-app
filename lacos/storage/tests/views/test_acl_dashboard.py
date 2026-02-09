@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import pytest
 
 from urllib.parse import parse_qs, urlparse
@@ -156,3 +158,103 @@ def test_acl_admin_dashboard_requires_archivist(client, django_user_model):
 
     response = client.get(reverse("storage:acl_admin_dashboard"))
     assert response.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Integration tests: ACL save pipeline normalization
+# ---------------------------------------------------------------------------
+
+
+def _mock_save_permission(perm):
+    """Return a successful ACLResult without touching S3."""
+    from lacos.storage.services.acl_service import ACLResult
+
+    return ACLResult(
+        obj=perm.content_object,
+        bucket="mock-bucket",
+        key="mock-key",
+        success=True,
+    )
+
+
+@pytest.mark.django_db
+@patch(
+    "lacos.storage.services.acl_service.ACLService.save_permission",
+    side_effect=_mock_save_permission,
+)
+def test_acl_update_permission_normalizes_bare_email(
+    _mock_save, client, django_user_model
+):
+    """A bare email in extra_user_agents is stored as urn:lacos:eppn:<email>."""
+    user = django_user_model.objects.create_user("norm1", "norm1@example.com", "pass")
+    _make_archivist(user)
+    client.force_login(user)
+
+    collection = Collection.objects.create(identifier="norm-col-1")
+
+    response = client.post(
+        reverse("storage:acl_update_permission"),
+        data={
+            "object_type": "collection",
+            "object_id": str(collection.pk),
+            "access_level": ACL_LEVEL_RESTRICTED,
+            "extra_user_agents": "alice@uni.org",
+            "next": reverse("storage:acl_admin_dashboard"),
+        },
+    )
+
+    assert response.status_code == 302
+
+    ct = ContentType.objects.get_for_model(Collection)
+    record = ACLPermissions.objects.get(content_type=ct, object_id=str(collection.pk))
+
+    assert record.access_level == ACL_LEVEL_RESTRICTED
+    assert record.permissions_data is not None
+
+    stored_agents = [
+        entry["agent"] for entry in record.permissions_data if "agent" in entry
+    ]
+    assert "urn:lacos:eppn:alice@uni.org" in stored_agents
+    assert "alice@uni.org" not in stored_agents
+
+
+@pytest.mark.django_db
+@patch(
+    "lacos.storage.services.acl_service.ACLService.save_permission",
+    side_effect=_mock_save_permission,
+)
+def test_acl_update_permission_preserves_full_uri(
+    _mock_save, client, django_user_model
+):
+    """A URI already in urn:lacos:eppn: form is preserved, not double-normalized."""
+    user = django_user_model.objects.create_user("norm2", "norm2@example.com", "pass")
+    _make_archivist(user)
+    client.force_login(user)
+
+    collection = Collection.objects.create(identifier="norm-col-2")
+
+    response = client.post(
+        reverse("storage:acl_update_permission"),
+        data={
+            "object_type": "collection",
+            "object_id": str(collection.pk),
+            "access_level": ACL_LEVEL_RESTRICTED,
+            "extra_user_agents": "urn:lacos:eppn:bob@uni.org",
+            "next": reverse("storage:acl_admin_dashboard"),
+        },
+    )
+
+    assert response.status_code == 302
+
+    ct = ContentType.objects.get_for_model(Collection)
+    record = ACLPermissions.objects.get(content_type=ct, object_id=str(collection.pk))
+
+    assert record.access_level == ACL_LEVEL_RESTRICTED
+    assert record.permissions_data is not None
+
+    stored_agents = [
+        entry["agent"] for entry in record.permissions_data if "agent" in entry
+    ]
+    assert "urn:lacos:eppn:bob@uni.org" in stored_agents
+    # Ensure no double-prefixing occurred
+    assert "urn:lacos:eppn:urn:lacos:eppn:bob@uni.org" not in stored_agents

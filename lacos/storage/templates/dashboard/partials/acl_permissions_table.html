@@ -1,3 +1,4 @@
+{% load acl_extras %}
 {% with rows=page_obj.object_list %}
 <div class="card bg-base-100 shadow-sm h-full">
   <div class="card-body space-y-4">
@@ -235,7 +236,7 @@
               {% if row.read_agents %}
                 <div class="space-y-1 max-w-xs">
                   {% for agent in row.read_agents %}
-                    <div class="text-xs break-all">{{ agent }}</div>
+                    <div class="text-xs break-all" title="{{ agent }}">{{ agent|acl_agent_display }}</div>
                   {% endfor %}
                 </div>
               {% else %}
