@@ -4,6 +4,7 @@ from django.utils.html import mark_safe
 from django.utils.safestring import SafeString
 from django.template.defaultfilters import stringfilter
 
+from lacos.explorer.identifier_display import format_identifier_html
 from lacos.explorer.media_utils import (
     determine_media_type,
     is_media_type as media_utils_is_media_type,
@@ -67,6 +68,17 @@ def media_type(resource):
         getattr(resource, "file_name", None),
     )
     return detected or ""
+
+
+@register.filter
+def creator_identifier_display(creator):
+    """Return formatted HTML for a creator's name identifier."""
+    return mark_safe(
+        format_identifier_html(
+            getattr(creator, "name_identifier", None),
+            getattr(creator, "name_identifier_type", None),
+        )
+    )
 
 
 @register.filter
