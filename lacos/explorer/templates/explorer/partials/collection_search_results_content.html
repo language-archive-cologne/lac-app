@@ -1,14 +1,14 @@
 {% load i18n %}
-<p class="text-sm text-slate-600">
+<p class="text-sm text-base-content/70">
   {% translate "Showing results for" %}
-  <span class="font-medium text-slate-800">“{{ search_query }}”</span>
+  <span class="font-medium text-base-content">"{{ search_query }}"</span>
 </p>
 
 {% include "explorer/partials/collection_search_results.html" %}
 {% include "explorer/partials/bundle_search_results.html" %}
 
 {% if not collection_search_results and not bundle_search_results %}
-  <div class="bg-white border border-slate-200 rounded-xl shadow-sm px-6 py-8 text-center">
-    <p class="text-sm text-slate-600">{% translate "No results found." %}</p>
+  <div class="bg-base-100 border border-base-300 rounded-xl shadow-sm px-6 py-8 text-center">
+    <p class="text-sm text-base-content/70">{% translate "No results found." %}</p>
   </div>
 {% endif %}
