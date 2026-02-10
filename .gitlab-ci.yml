@@ -30,7 +30,7 @@ deploy_dev_full:
         - "compose/**/*"
         - "**/migrations/**/*"
   script:
-    - ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd /opt/lacos/lac-app && git pull origin dev && docker compose -f docker-compose.dev.yml up -d --build django"
+    - ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd /opt/lacos/lac-app && git pull origin dev && docker compose -f docker-compose.dev.yml --profile build run --rm --no-deps theme && docker compose -f docker-compose.dev.yml up -d --build django"
 
 deploy_dev_fast:
   extends: .deploy_base
@@ -43,4 +43,4 @@ deploy_dev_fast:
       when: never
     - if: '$CI_COMMIT_BRANCH == "dev"'
   script:
-    - ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd /opt/lacos/lac-app && git pull origin dev && docker compose -f docker-compose.dev.yml restart django"
+    - ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd /opt/lacos/lac-app && git pull origin dev && docker compose -f docker-compose.dev.yml --profile build run --rm --no-deps theme && docker compose -f docker-compose.dev.yml restart django"
