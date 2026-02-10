@@ -8,6 +8,7 @@ from xsdata.formats.dataclass.serializers.config import SerializerConfig
 from blam_schemas.collection.blam_collection_repository_v1_2 import (
     Cmd,
     CollectionHasCollectionMemberIdentifierType,
+    ResourcetypeSimple,
 )
 from lacos.blam.models.collection.collection_repository import Collection
 
@@ -50,7 +51,7 @@ class CollectionExporter:
 
         # Initialize required structures
         cmd.header = Cmd.Header()
-        cmd.resources = self._create_empty_resources()
+        cmd.resources = self._create_resources(collection)
         cmd.components = Cmd.Components()
         cmd.components.blam_collection_repository_v1_2 = (
             Cmd.Components.BlamCollectionRepositoryV12()
@@ -86,12 +87,37 @@ class CollectionExporter:
 
         return cmd
 
-    def _create_empty_resources(self) -> Cmd.Resources:
-        """Create empty resources section."""
+    def _create_resources(self, collection: Collection) -> Cmd.Resources:
+        """Create resources section with ResourceProxy entries for each bundle."""
         resources = Cmd.Resources()
         resources.resource_proxy_list = Cmd.Resources.ResourceProxyList()
         resources.journal_file_proxy_list = Cmd.Resources.JournalFileProxyList()
         resources.resource_relation_list = Cmd.Resources.ResourceRelationList()
+
+        ResourceProxy = Cmd.Resources.ResourceProxyList.ResourceProxy
+        ResourceType = ResourceProxy.ResourceType
+        ResourceRef = ResourceProxy.ResourceRef
+
+        bundle_structural_infos = collection.bundle_collection.select_related(
+            "bundle",
+        ).prefetch_related(
+            "bundle__general_info",
+        ).all()
+
+        for idx, bundle_info in enumerate(bundle_structural_infos, start=1):
+            bundle = bundle_info.bundle
+            ref_value = bundle.identifier or ""
+            if not ref_value:
+                general_info = bundle.general_info.first() if hasattr(bundle, "general_info") else None
+                ref_value = (general_info.id_value if general_info and general_info.id_value else str(bundle.id))
+
+            proxy = ResourceProxy(
+                resource_type=ResourceType(value=ResourcetypeSimple.METADATA),
+                resource_ref=ResourceRef(value=ref_value),
+                id=f"rp{idx}",
+            )
+            resources.resource_proxy_list.resource_proxy.append(proxy)
+
         return resources
 
     def _create_md_license(self, header, admin_info) -> Cmd.Components.BlamCollectionRepositoryV12.Mdlicense:

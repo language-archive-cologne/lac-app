@@ -227,6 +227,7 @@ class CollectionDetailView(HandleLookupMixin, DetailView):
         return Collection.objects.prefetch_related(
             "general_info",
             "general_info__object_languages",
+            "general_info__keywords",
             "publication_info",
             "publication_info__creators",
             "structural_info",

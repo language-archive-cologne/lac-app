@@ -203,12 +203,13 @@ def import_keywords(general_info: CollectionGeneralInfo, keywords_schema) -> Non
         general_info: The CollectionGeneralInfo instance to add keywords to.
         keywords_schema: The keywords section of the BLAM collection repository schema.
     """
-    if keywords_schema and isinstance(keywords_schema, dict):
-        for keyword_value in keywords_schema.get('collection_keyword', []):
-            # Skip empty keywords
-            if keyword_value and keyword_value.strip():
-                keyword, created = CollectionKeyword.objects.get_or_create(value=keyword_value)
-                general_info.keywords.add(keyword)
+    if not keywords_schema:
+        return
+    keyword_values = getattr(keywords_schema, "collection_keyword", None) or []
+    for keyword_value in keyword_values:
+        if keyword_value and keyword_value.strip():
+            keyword, _ = CollectionKeyword.objects.get_or_create(value=keyword_value)
+            general_info.keywords.add(keyword)
 
 
 def import_object_languages(general_info: CollectionGeneralInfo, object_languages_schema) -> None:

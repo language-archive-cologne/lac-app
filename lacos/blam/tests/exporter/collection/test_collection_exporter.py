@@ -9,6 +9,7 @@ from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.collection.collection_header import CollectionHeader
 from lacos.blam.models.collection.collection_general_info import (
     CollectionGeneralInfo,
+    CollectionKeyword,
     CollectionLocation,
     CollectionObjectLanguage,
 )
@@ -21,6 +22,8 @@ from lacos.blam.models.collection.collection_administrative_info import (
     CollectionLicense,
     CollectionRightsHolder,
 )
+from lacos.blam.models.bundle.bundle_repository import Bundle
+from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
 
 
 @pytest.fixture
@@ -226,3 +229,87 @@ def test_export_falls_back_to_administrative_license(sample_collection):
 
     assert (mdlicense.text or "").strip() == "Copyright"
     assert (mdlicense.get("URI") or mdlicense.get("uri")) == "https://en.wikipedia.org/wiki/Copyright"
+
+
+# ---------------------------------------------------------------------------
+# ResourceProxyList
+# ---------------------------------------------------------------------------
+
+CMD_NS = "http://www.clarin.eu/cmd/"
+
+
+def _find_resource_proxies(xml_output: str) -> list[ET.Element]:
+    root = ET.fromstring(xml_output)
+    return root.findall(f".//{{{CMD_NS}}}ResourceProxy")
+
+
+@pytest.mark.django_db
+def test_export_resource_proxy_list_with_bundles(sample_collection):
+    """Bundles appear as ResourceProxy entries with Metadata type."""
+    bundle = Bundle.objects.create(identifier="hdl:test/bundle-001")
+    BundleStructuralInfo.objects.create(
+        bundle=bundle, is_member_of_collection=sample_collection,
+    )
+
+    exporter = CollectionExporter()
+    xml_output = exporter.export(sample_collection)
+    proxies = _find_resource_proxies(xml_output)
+
+    assert len(proxies) == 1
+    proxy = proxies[0]
+    assert proxy.get("id") == "rp1"
+
+    rt = proxy.find(f"{{{CMD_NS}}}ResourceType")
+    assert rt is not None
+    assert rt.text.strip() == "Metadata"
+
+    rr = proxy.find(f"{{{CMD_NS}}}ResourceRef")
+    assert rr is not None
+    assert rr.text.strip() == "hdl:test/bundle-001"
+
+
+@pytest.mark.django_db
+def test_export_resource_proxy_list_multiple_bundles(sample_collection):
+    """Multiple bundles produce sequentially numbered ResourceProxy entries."""
+    for i in range(3):
+        bundle = Bundle.objects.create(identifier=f"hdl:test/bundle-{i:03d}")
+        BundleStructuralInfo.objects.create(
+            bundle=bundle, is_member_of_collection=sample_collection,
+        )
+
+    exporter = CollectionExporter()
+    xml_output = exporter.export(sample_collection)
+    proxies = _find_resource_proxies(xml_output)
+
+    assert len(proxies) == 3
+    ids = [p.get("id") for p in proxies]
+    assert ids == ["rp1", "rp2", "rp3"]
+
+
+@pytest.mark.django_db
+def test_export_resource_proxy_list_empty_when_no_bundles(sample_collection):
+    """ResourceProxyList should be empty when there are no bundles."""
+    exporter = CollectionExporter()
+    xml_output = exporter.export(sample_collection)
+    proxies = _find_resource_proxies(xml_output)
+
+    assert len(proxies) == 0
+
+
+# ---------------------------------------------------------------------------
+# Keywords export
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_export_contains_keywords(sample_collection):
+    """Keywords on general info should appear in exported XML."""
+    general_info = sample_collection.general_info.first()
+    kw1 = CollectionKeyword.objects.create(value="linguistics")
+    kw2 = CollectionKeyword.objects.create(value="fieldwork")
+    general_info.keywords.add(kw1, kw2)
+
+    exporter = CollectionExporter()
+    xml_output = exporter.export(sample_collection)
+
+    assert "linguistics" in xml_output
+    assert "fieldwork" in xml_output
