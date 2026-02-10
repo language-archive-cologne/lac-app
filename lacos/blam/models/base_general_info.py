@@ -89,13 +89,12 @@ class ObjectLanguage(BaseModel):
     """
     display_name = models.CharField(max_length=255, null=False)
     name = models.CharField(max_length=255, null=False, blank=False)
-    iso_639_3_code = models.CharField(max_length=3, null=False, blank=False, unique=True)
-    glottolog_code = models.CharField(max_length=10, null=False, blank=False, unique=True)
+    iso_639_3_code = models.CharField(max_length=3, null=False, blank=False)
+    glottolog_code = models.CharField(max_length=10, null=False, blank=False)
     alternative_names = models.ManyToManyField('ObjectLanguageAlternativeName', blank=True)
-    
+
     class Meta:
         abstract = True
-        unique_together = [('name', 'iso_639_3_code', 'glottolog_code')]
 
     def __str__(self) -> str:
         return f"{self.display_name} ({self.iso_639_3_code})"

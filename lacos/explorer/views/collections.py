@@ -128,14 +128,17 @@ class CollectionListView(ListView):
         context['map_markers_json'] = get_collection_map_markers(context['collection_list'])
 
         # Cache language count as it rarely changes unless filtered.
+        # Deduplicate by iso_639_3_code since languages are now per-collection.
         if language_filter:
-            languages_count = CollectionObjectLanguage.objects.filter(
-                collectiongeneralinfo__collection__in=context['collection_list']
-            ).distinct().count()
+            languages_count = (
+                CollectionObjectLanguage.objects.filter(
+                    collectiongeneralinfo__collection__in=context['collection_list']
+                ).values('iso_639_3_code').distinct().count()
+            )
         else:
             languages_count = cache.get(LANGUAGE_COUNT_CACHE_KEY)
             if languages_count is None:
-                languages_count = CollectionObjectLanguage.objects.values('name').distinct().count()
+                languages_count = CollectionObjectLanguage.objects.values('iso_639_3_code').distinct().count()
                 cache.set(LANGUAGE_COUNT_CACHE_KEY, languages_count, LANGUAGE_COUNT_CACHE_TIMEOUT)
 
         context['stats'] = {
@@ -148,22 +151,34 @@ class CollectionListView(ListView):
         }
 
         if not search_query:
-            languages_qs = (
+            # Compute per-ISO-code collection counts
+            iso_counts = dict(
+                CollectionObjectLanguage.objects.filter(
+                    collectiongeneralinfo__collection__in=context['collection_list']
+                ).values('iso_639_3_code')
+                .annotate(cnt=Count('collectiongeneralinfo__collection', distinct=True))
+                .values_list('iso_639_3_code', 'cnt')
+            )
+
+            # Get one representative language per ISO code using DISTINCT ON
+            languages_list = list(
                 CollectionObjectLanguage.objects.filter(
                     collectiongeneralinfo__collection__in=context['collection_list']
                 )
                 .exclude(name__isnull=True)
                 .exclude(name__exact="")
-                .distinct()
-                .annotate(collections_count=Count('collectiongeneralinfo', distinct=True))
-                .filter(collections_count__gt=0)
+                .order_by('iso_639_3_code', '-pk')
+                .distinct('iso_639_3_code')
             )
-            language_spotlight = list(languages_qs.order_by(
-                '-collections_count',
-                'name',
-            ))
-            language_index = list(languages_qs.order_by('name'))
-            for language in language_spotlight + language_index:
+            for lang in languages_list:
+                lang.collections_count = iso_counts.get(lang.iso_639_3_code, 0)
+
+            language_spotlight = sorted(
+                languages_list,
+                key=lambda l: (-l.collections_count, l.name or ""),
+            )
+            language_index = sorted(languages_list, key=lambda l: (l.name or ""))
+            for language in languages_list:
                 entry = lookup_glottolog_entry(
                     glottocode=language.glottolog_code,
                     iso_code=language.iso_639_3_code,
@@ -175,18 +190,22 @@ class CollectionListView(ListView):
             context['language_spotlight'] = language_spotlight
             context['language_index'] = language_index
             if language_filter:
-                context['selected_language'] = languages_qs.filter(
+                filtered = CollectionObjectLanguage.objects.filter(
+                    collectiongeneralinfo__collection__in=context['collection_list']
+                ).filter(
                     Q(name__iexact=language_filter)
                     | Q(display_name__iexact=language_filter)
                     | Q(iso_639_3_code__iexact=language_filter)
-                ).first()
-                if context['selected_language']:
+                ).order_by('iso_639_3_code', '-pk').distinct('iso_639_3_code')
+                selected = filtered.first()
+                if selected:
                     entry = lookup_glottolog_entry(
-                        glottocode=context['selected_language'].glottolog_code,
-                        iso_code=context['selected_language'].iso_639_3_code,
+                        glottocode=selected.glottolog_code,
+                        iso_code=selected.iso_639_3_code,
                     )
                     if entry:
-                        context['selected_language'].glottolog_macroarea = entry.get("macroarea")
+                        selected.glottolog_macroarea = entry.get("macroarea")
+                context['selected_language'] = selected
 
         context['current_sort'] = self.request.GET.get('sort', 'name')
         context['current_order'] = self.request.GET.get('order', 'asc')

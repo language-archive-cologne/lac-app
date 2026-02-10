@@ -46,7 +46,7 @@ def import_general_info(cmd_data: Any, collection: Collection) -> CollectionGene
     
     # Reset related objects to keep updates idempotent
     general_info.keywords.clear()
-    general_info.object_languages.clear()
+    general_info.object_languages.all().delete()
 
     # Import related objects
     import_keywords(general_info, general_info_schema.collection_keywords)
@@ -232,22 +232,15 @@ def import_object_languages(general_info: CollectionGeneralInfo, object_language
                 logger.warning(f"Skipping language import: Missing ISO 639-3 code in schema for language name '{language_schema.object_language_name}'")
                 continue # Skip this language if it lacks the unique key
 
-            # Prepare data for defaults dictionary
-            defaults = {
-                'display_name': language_schema.object_language_display_name[0] if language_schema.object_language_display_name else None,
-                'name': language_schema.object_language_name,
-                'glottolog_code': getattr(language_schema.object_language_glottolog_code, 'value', None)
-            }
-            # Remove None values to avoid overwriting existing data with None
-            defaults = {k: v for k, v in defaults.items() if v is not None}
-
-            # Get or create the canonical language object based on ISO code
-            language, created = CollectionObjectLanguage.objects.update_or_create(
-                iso_639_3_code=iso_code, # Use ISO code for lookup
-                defaults=defaults
+            # Create a new per-collection language object
+            language = CollectionObjectLanguage.objects.create(
+                iso_639_3_code=iso_code,
+                display_name=language_schema.object_language_display_name[0] if language_schema.object_language_display_name else '',
+                name=language_schema.object_language_name or '',
+                glottolog_code=getattr(language_schema.object_language_glottolog_code, 'value', None) or '',
             )
-            
-            # Link the canonical language to the current general_info
+
+            # Link the language to the current general_info
             general_info.object_languages.add(language)
 
             # Import alternative names if they exist
@@ -260,8 +253,7 @@ def import_object_languages(general_info: CollectionGeneralInfo, object_language
             
             # Import language taxonomy if it exists
             if hasattr(language_schema, 'object_language_taxonomy') and language_schema.object_language_taxonomy:
-                # Try to get existing taxonomy or create a new one
-                taxonomy, created = CollectionObjectLanguageTaxonomy.objects.get_or_create(
+                taxonomy = CollectionObjectLanguageTaxonomy.objects.create(
                     object_language=language
                 )
                 

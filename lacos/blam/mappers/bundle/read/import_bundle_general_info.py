@@ -38,7 +38,7 @@ def import_general_info(cmd_data: Cmd, bundle: 'Bundle') -> BundleGeneralInfo:
     
     # Reset related objects to keep updates idempotent
     general_info.keywords.clear()
-    general_info.object_languages.clear()
+    general_info.object_languages.all().delete()
 
     # Import keywords if present
     if bundle_info.bundle_keywords:
@@ -222,8 +222,7 @@ def import_object_languages(general_info: BundleGeneralInfo, languages: List[Any
         languages: List of language data objects from the schema
     """
     for lang_data in languages:
-        # Get or create the canonical language object based on unique codes
-        language = create_or_update_object_language(lang_data)
+        language = create_object_language(lang_data)
 
         # If language object was successfully obtained/created, link it
         if language:
@@ -238,35 +237,24 @@ def import_object_languages(general_info: BundleGeneralInfo, languages: List[Any
                 create_language_taxonomy(language, lang_data.object_language_taxonomy)
 
 
-def create_or_update_object_language(lang_data: Any) -> Optional[BundleObjectLanguage]:
-    """Get or create a canonical BundleObjectLanguage based on unique identifiers.
-
-    Uses iso_639_3_code as the primary unique identifier for lookup.
-    Updates other fields if the object already exists.
+def create_object_language(lang_data: Any) -> Optional[BundleObjectLanguage]:
+    """Create a per-bundle BundleObjectLanguage instance.
 
     Args:
         lang_data: The language data from the schema
 
     Returns:
-        The created or updated BundleObjectLanguage instance, or None if no ISO code.
+        The created BundleObjectLanguage instance, or None if no ISO code.
     """
     iso_code = getattr(lang_data.object_language_iso639_3_code, 'value', None)
     if not iso_code:
-        # Cannot uniquely identify language without ISO code
-        # Log a warning or error? Depending on requirements.
-        return None 
+        return None
 
-    defaults = {
-        'display_name': lang_data.object_language_display_name,
-        'name': lang_data.object_language_name,
-        'glottolog_code': getattr(lang_data.object_language_glottolog_code, 'value', None)
-    }
-    # Remove None values from defaults to avoid overwriting existing data with None
-    defaults = {k: v for k, v in defaults.items() if v is not None}
-
-    language, created = BundleObjectLanguage.objects.update_or_create(
-        iso_639_3_code=iso_code, # Use ISO code for lookup
-        defaults=defaults
+    language = BundleObjectLanguage.objects.create(
+        iso_639_3_code=iso_code,
+        display_name=lang_data.object_language_display_name or '',
+        name=lang_data.object_language_name or '',
+        glottolog_code=getattr(lang_data.object_language_glottolog_code, 'value', None) or '',
     )
     return language
 
@@ -295,7 +283,7 @@ def create_language_taxonomy(language: BundleObjectLanguage, taxonomy_data: Any)
     Returns:
         The created BundleObjectLanguageTaxonomy instance
     """
-    taxonomy, created = BundleObjectLanguageTaxonomy.objects.get_or_create(object_language=language)
+    taxonomy = BundleObjectLanguageTaxonomy.objects.create(object_language=language)
     
     for family_name in taxonomy_data.object_language_language_family:
         family, created = BundleObjectLanguageLanguageFamily.objects.get_or_create(value=family_name)
