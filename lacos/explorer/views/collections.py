@@ -59,7 +59,7 @@ class CollectionListView(ListView):
             'publication_info',
             'publication_info__creators',
         ).annotate(
-            bundles_count=Count('bundle_collection'),
+            bundles_count=Count('bundle_collection', distinct=True),
             first_language=Min('general_info__object_languages__name'),
         )
 
