@@ -523,7 +523,13 @@ class BaseStorageService:
             bucket_name = self.ingest_bucket
         
         logger.info(f"Checking CORS configuration for bucket: {bucket_name}")
-        
+
+        # MinIO does not implement PutBucketCors / GetBucketCors.
+        # Skip entirely to avoid noisy ERROR logs on every startup.
+        if self.is_minio:
+            logger.debug("Skipping CORS configuration for MinIO (not supported)")
+            return {"success": True, "message": "CORS configuration skipped for MinIO", "updated": False}
+
         try:
             # Define the required CORS rule for uploads and video streaming with range requests
             required_rule = {
@@ -591,13 +597,6 @@ class BaseStorageService:
         
         except Exception as e:
             logger.error(f"❌ Error ensuring CORS configuration: {str(e)}")
-            
-            # For MinIO, CORS might not be fully supported, but uploads might still work
-            if self.is_minio:
-                logger.warning("⚠️ CORS configuration failed, but this is expected with some MinIO versions")
-                logger.warning("⚠️ Browser uploads may still work despite this error")
-                return {"success": True, "message": "CORS configuration skipped for MinIO", "updated": False}
-            
             return {"success": False, "error": str(e)}
 
     def _is_running_in_container(self):
