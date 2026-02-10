@@ -133,7 +133,7 @@
       window.collectionsMap = map;
       window.collectionMarkers = markers.map(function(m) {
         const popup = new maplibregl.Popup({ offset: 25 })
-          .setHTML('<a href="' + m.url + '" class="font-medium hover:underline">' + m.title + '</a>');
+          .setHTML('<a href="' + m.url + '" class="font-medium text-base-content hover:underline">' + m.title + '</a>');
 
         const element = document.createElement('div');
         element.className = 'collection-marker';

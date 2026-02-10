@@ -40,3 +40,41 @@
       sans-serif;
   }
 }
+
+/* MapLibre dark mode overrides (#64) */
+[data-theme="dark"] .maplibregl-ctrl-group {
+  background: var(--color-base-100);
+  border-color: var(--color-base-300);
+}
+[data-theme="dark"] .maplibregl-ctrl-group button + button {
+  border-color: var(--color-base-300);
+}
+[data-theme="dark"] .maplibregl-ctrl-group button span {
+  filter: invert(1);
+}
+[data-theme="dark"] .maplibregl-popup-content {
+  background: var(--color-base-100);
+  color: var(--color-base-content);
+}
+[data-theme="dark"] .maplibregl-popup-close-button {
+  color: var(--color-base-content);
+}
+[data-theme="dark"] .maplibregl-popup-anchor-bottom .maplibregl-popup-tip {
+  border-top-color: var(--color-base-100);
+}
+[data-theme="dark"] .maplibregl-popup-anchor-top .maplibregl-popup-tip {
+  border-bottom-color: var(--color-base-100);
+}
+[data-theme="dark"] .maplibregl-popup-anchor-left .maplibregl-popup-tip {
+  border-right-color: var(--color-base-100);
+}
+[data-theme="dark"] .maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  border-left-color: var(--color-base-100);
+}
+[data-theme="dark"] .maplibregl-ctrl-attrib {
+  background-color: color-mix(in oklab, var(--color-base-100) 70%, transparent);
+  color: color-mix(in oklab, var(--color-base-content) 60%, transparent);
+}
+[data-theme="dark"] .maplibregl-ctrl-attrib a {
+  color: color-mix(in oklab, var(--color-base-content) 70%, transparent);
+}
