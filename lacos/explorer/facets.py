@@ -15,6 +15,7 @@ from django.http import QueryDict
 logger = logging.getLogger(__name__)
 
 FACET_CACHE_KEY = "explorer:facets:base"
+BUNDLE_FACET_CACHE_KEY = "explorer:facets:bundles:base"
 FACET_CACHE_TIMEOUT = 60 * 10  # 10 minutes
 
 
@@ -81,6 +82,81 @@ FACET_DEFINITIONS: list[FacetDefinition] = [
         value_field="general_info__object_languages__iso_639_3_code",
         label_field="general_info__object_languages__name",
         filter_lookup="general_info__object_languages__iso_639_3_code__in",
+    ),
+    FacetDefinition(
+        name="year",
+        label="Year",
+        value_field="publication_info__publication_year",
+        label_field="publication_info__publication_year",
+        filter_lookup="publication_info__publication_year__in",
+    ),
+    FacetDefinition(
+        name="country",
+        label="Country",
+        value_field="general_info__location__country_facet",
+        label_field="general_info__location__country_facet",
+        filter_lookup="general_info__location__country_facet__in",
+    ),
+    FacetDefinition(
+        name="region",
+        label="Region",
+        value_field="general_info__location__region_facet",
+        label_field="general_info__location__region_facet",
+        filter_lookup="general_info__location__region_facet__in",
+    ),
+    FacetDefinition(
+        name="provider",
+        label="Data Provider",
+        value_field="publication_info__data_provider",
+        label_field="publication_info__data_provider",
+        filter_lookup="publication_info__data_provider__in",
+    ),
+    FacetDefinition(
+        name="access",
+        label="Access Level",
+        value_field="administrative_info__access_level",
+        label_field="administrative_info__access_level",
+        filter_lookup="administrative_info__access_level__in",
+    ),
+    FacetDefinition(
+        name="license",
+        label="License",
+        value_field="administrative_info__licenses__access",
+        label_field="administrative_info__licenses__access",
+        filter_lookup="administrative_info__licenses__access__in",
+    ),
+]
+
+
+BUNDLE_FACET_DEFINITIONS: list[FacetDefinition] = [
+    # Ordered from highest to lowest cardinality
+    FacetDefinition(
+        name="keyword",
+        label="Keyword",
+        value_field="general_info__keywords__value",
+        label_field="general_info__keywords__value",
+        filter_lookup="general_info__keywords__value__in",
+    ),
+    FacetDefinition(
+        name="language",
+        label="Language",
+        value_field="general_info__object_languages__iso_639_3_code",
+        label_field="general_info__object_languages__name",
+        filter_lookup="general_info__object_languages__iso_639_3_code__in",
+    ),
+    FacetDefinition(
+        name="topic",
+        label="Topic",
+        value_field="structural_info__bundle_topics__name",
+        label_field="structural_info__bundle_topics__name",
+        filter_lookup="structural_info__bundle_topics__name__in",
+    ),
+    FacetDefinition(
+        name="collection",
+        label="Collection",
+        value_field="structural_info__is_member_of_collection__identifier",
+        label_field="structural_info__is_member_of_collection__identifier",
+        filter_lookup="structural_info__is_member_of_collection__identifier__in",
     ),
     FacetDefinition(
         name="year",
@@ -348,8 +424,9 @@ class FacetService:
 
     @staticmethod
     def invalidate_cache() -> None:
-        """Clear cached base facet counts. Call after collection data changes."""
+        """Clear cached base facet counts for collections and bundles."""
         django_cache.delete(FACET_CACHE_KEY)
+        django_cache.delete(BUNDLE_FACET_CACHE_KEY)
 
     def _build_active_filters(
         self,

@@ -1,0 +1,97 @@
+{% extends "explorer_base.html" %}
+{% load i18n %}
+{% load explorer_extras %}
+
+{% block title %}{% translate "Search Bundles" %} - {{ block.super }}{% endblock title %}
+
+{% block explorer_content %}
+  <style>
+    /* Dim content + show spinner while HTMX request is in flight */
+    .facet-loading .facet-dimmable { opacity: .4; pointer-events: none; transition: opacity 80ms ease; }
+    .facet-loading .facet-spinner  { display: flex; }
+    .facet-spinner { display: none; }
+  </style>
+  <script>
+    // Toggle loading state on the faceted search wrapper
+    document.addEventListener('htmx:beforeRequest', function(e) {
+      var t = e.detail.target;
+      if (t && t.id === 'faceted-results') {
+        document.getElementById('faceted-search-root').classList.add('facet-loading');
+      }
+    });
+    document.addEventListener('htmx:afterSwap', function(e) {
+      var t = e.detail.target;
+      if (t && t.id === 'faceted-results') {
+        document.getElementById('faceted-search-root').classList.remove('facet-loading');
+      }
+    });
+  </script>
+
+  <!-- Search bar -->
+  <form method="get" action="{% url 'bundle_faceted_search' %}" class="mb-6">
+    {# Preserve facet params as hidden inputs #}
+    {% for key, values in current_params.lists %}
+      {% if key != "q" and key != "page" %}
+        {% for val in values %}
+          <input type="hidden" name="{{ key }}" value="{{ val }}">
+        {% endfor %}
+      {% endif %}
+    {% endfor %}
+    <label for="faceted-search-query" class="sr-only">{% translate "Search" %}</label>
+    <div class="join w-full">
+      <input
+        id="faceted-search-query"
+        type="search"
+        name="q"
+        value="{{ search_query }}"
+        placeholder="{% translate 'Search bundles...' %}"
+        class="input input-bordered join-item w-full"
+      >
+      <button type="submit" class="btn btn-primary join-item">{% translate "Search" %}</button>
+      {% if search_query or has_active_filters %}
+        {% clear_all_filters_url as clear_url %}
+        <a href="{{ clear_url }}" class="btn btn-ghost join-item">{% translate "Clear" %}</a>
+      {% endif %}
+    </div>
+  </form>
+
+  <!-- Active filter chips -->
+  <div id="active-filters-wrapper">
+    {% include "explorer/partials/active_filters.html" %}
+  </div>
+
+  <!-- Main layout: sidebar + results -->
+  <div id="faceted-search-root" class="flex flex-col lg:flex-row gap-4">
+    <!-- Mobile filter toggle -->
+    <button
+      id="mobile-filter-toggle"
+      class="btn btn-outline btn-sm lg:hidden mb-2"
+      onclick="document.getElementById('facet-sidebar').classList.toggle('hidden')"
+    >
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
+      </svg>
+      {% translate "Filters" %}
+      {% if has_active_filters %}
+        <span class="badge badge-primary badge-sm">{{ active_filters|length }}</span>
+      {% endif %}
+    </button>
+
+    <!-- Facet sidebar -->
+    <div id="facet-sidebar" class="hidden lg:block lg:w-72 lg:shrink-0 facet-dimmable">
+      <div id="facet-sidebar-inner">
+        {% include "explorer/partials/facet_sidebar.html" %}
+      </div>
+    </div>
+
+    <!-- Results area -->
+    <div id="faceted-results" class="flex-1 min-w-0 relative">
+      <div class="facet-spinner absolute inset-0 z-20 items-center justify-center pt-24">
+        <span class="loading loading-spinner loading-md text-primary"></span>
+      </div>
+      <div class="facet-dimmable">
+        {% include "explorer/partials/bundle_faceted_search_table.html" %}
+      </div>
+    </div>
+  </div>
+{% endblock explorer_content %}

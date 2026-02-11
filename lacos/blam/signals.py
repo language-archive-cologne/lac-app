@@ -1,7 +1,10 @@
 import logging
-from django.db.models.signals import pre_delete, post_delete, post_save
+from django.db.models.signals import m2m_changed, pre_delete, post_delete, post_save
 from django.dispatch import receiver
 # Import the necessary models
+from .models.bundle.bundle_administrative_info import BundleAdministrativeInfo
+from .models.bundle.bundle_general_info import BundleGeneralInfo, BundleLocation
+from .models.bundle.bundle_publication_info import BundlePublicationInfo
 from .models.bundle.bundle_structural_info import BundleStructuralInfo, MediaResource, WrittenResource, OtherResource
 from .models.bundle.bundle_repository import Bundle
 from .models.collection.collection_repository import Collection
@@ -233,3 +236,62 @@ def log_bundle_deletion(sender, instance, **kwargs):
     security_logger.warning(
         f"BUNDLE_DELETED: name={bundle_name} pid={bundle_pid} pk={instance.pk}"
     )
+    _invalidate_explorer_caches()
+
+
+@receiver(post_save, sender=Bundle)
+def invalidate_cache_on_bundle_save(sender, instance, **kwargs):
+    """Invalidate explorer caches when a bundle is created or updated."""
+    _invalidate_explorer_caches()
+
+
+@receiver(post_save, sender=BundleGeneralInfo)
+def invalidate_cache_on_bundle_general_info_save(sender, instance, **kwargs):
+    """Invalidate explorer caches when bundle general info changes."""
+    _invalidate_explorer_caches()
+
+
+@receiver(post_save, sender=BundleLocation)
+@receiver(post_delete, sender=BundleLocation)
+def invalidate_cache_on_bundle_location_change(sender, instance, **kwargs):
+    """Invalidate explorer caches when bundle location changes."""
+    _invalidate_explorer_caches()
+
+
+@receiver(post_save, sender=BundleStructuralInfo)
+def invalidate_cache_on_bundle_structural_info_save(sender, instance, **kwargs):
+    """Invalidate explorer caches when bundle structural info changes."""
+    _invalidate_explorer_caches()
+
+
+@receiver(post_save, sender=BundlePublicationInfo)
+@receiver(post_delete, sender=BundlePublicationInfo)
+def invalidate_cache_on_bundle_publication_info_change(sender, instance, **kwargs):
+    """Invalidate explorer caches when bundle publication info changes."""
+    _invalidate_explorer_caches()
+
+
+@receiver(post_save, sender=BundleAdministrativeInfo)
+@receiver(post_delete, sender=BundleAdministrativeInfo)
+def invalidate_cache_on_bundle_admin_info_change(sender, instance, **kwargs):
+    """Invalidate explorer caches when bundle administrative info changes."""
+    _invalidate_explorer_caches()
+
+
+@receiver(m2m_changed, sender=BundleGeneralInfo.keywords.through)
+@receiver(m2m_changed, sender=BundleGeneralInfo.object_languages.through)
+def invalidate_cache_on_bundle_general_info_m2m_change(sender, instance, **kwargs):
+    """Invalidate explorer caches when bundle keywords or languages change."""
+    _invalidate_explorer_caches()
+
+
+@receiver(m2m_changed, sender=BundleStructuralInfo.bundle_topics.through)
+def invalidate_cache_on_bundle_topics_change(sender, instance, **kwargs):
+    """Invalidate explorer caches when bundle topics change."""
+    _invalidate_explorer_caches()
+
+
+@receiver(m2m_changed, sender=BundleAdministrativeInfo.licenses.through)
+def invalidate_cache_on_bundle_licenses_change(sender, instance, **kwargs):
+    """Invalidate explorer caches when bundle licenses change."""
+    _invalidate_explorer_caches()

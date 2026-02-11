@@ -14,6 +14,7 @@ register = template.Library()
 
 FACET_PARAM_NAMES = {
     "keyword", "language", "year", "country", "region", "provider", "access", "license",
+    "topic", "collection",
 }
 
 
