@@ -5,6 +5,7 @@ Re-exports all views for backwards compatibility with existing URL patterns.
 
 from .bundles import BundleDetailView, BundleJsonLdView, BundleResourcesView, BundleXmlView, ResourceAccessView
 from .collections import CollectionDetailView, CollectionJsonLdView, CollectionListView, CollectionResourcesView, CollectionXmlView
+from .faceted_search import FacetedSearchView
 from .utils import map_popup_view
 
 
@@ -15,6 +16,8 @@ __all__ = [
     "CollectionJsonLdView",
     "CollectionXmlView",
     "CollectionResourcesView",
+    # Faceted search
+    "FacetedSearchView",
     # Bundle views
     "BundleDetailView",
     "BundleJsonLdView",

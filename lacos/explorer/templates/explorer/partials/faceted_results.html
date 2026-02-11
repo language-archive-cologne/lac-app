@@ -1,0 +1,18 @@
+{% load i18n %}
+{# OOB swaps for sidebar and chips #}
+<div id="facet-sidebar-inner" hx-swap-oob="true">
+  {% include "explorer/partials/facet_sidebar.html" %}
+</div>
+<div id="active-filters-wrapper" hx-swap-oob="true">
+  {% include "explorer/partials/active_filters.html" %}
+</div>
+
+{# Main content target #}
+<div id="faceted-results" class="flex-1 min-w-0 relative">
+  <div class="facet-spinner absolute inset-0 z-20 items-center justify-center pt-24">
+    <span class="loading loading-spinner loading-md text-primary"></span>
+  </div>
+  <div class="facet-dimmable">
+    {% include "explorer/partials/faceted_search_table.html" %}
+  </div>
+</div>

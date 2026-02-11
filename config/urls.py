@@ -14,13 +14,18 @@ from rest_framework.authtoken.views import obtain_auth_token
 from lacos.oaipmh.views import OAIPMHOverviewView
 from lacos.sitemaps import sitemaps
 from lacos.common.views import guideline_view
-from lacos.explorer.views import CollectionListView
+from lacos.explorer.views import CollectionListView, FacetedSearchView
 
 urlpatterns = [
     path(
         "",
         CollectionListView.as_view(),
         name="home",
+    ),
+    path(
+        "search/",
+        FacetedSearchView.as_view(),
+        name="faceted_search",
     ),
     # Crawler control files
     path(

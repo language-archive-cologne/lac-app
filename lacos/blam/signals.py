@@ -16,9 +16,11 @@ security_logger = logging.getLogger("lacos.security")
 def _invalidate_explorer_caches():
     """Invalidate explorer caches when collection data changes."""
     from lacos.explorer.map_utils import invalidate_map_markers_cache
+    from lacos.explorer.facets import FacetService
     from django.core.cache import cache
     invalidate_map_markers_cache()
     cache.delete("explorer:language_count")
+    FacetService.invalidate_cache()
     logger.debug("Explorer caches invalidated")
 
 

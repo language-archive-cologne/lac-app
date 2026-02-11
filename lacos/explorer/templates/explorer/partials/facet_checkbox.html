@@ -1,0 +1,37 @@
+{% load i18n %}
+{% load explorer_extras %}
+<details class="collapse collapse-arrow" {% if facet.has_selection %}open{% endif %}>
+  <summary class="collapse-title px-4 py-3 min-h-0 text-xs font-semibold uppercase tracking-widest text-base-content/60 cursor-pointer hover:bg-base-200 transition-colors">
+    <span class="flex items-center gap-2">
+      {{ facet.label }}
+      {% if facet.has_selection %}
+        <span class="badge badge-primary badge-xs">{{ facet.selected_values|length }}</span>
+      {% elif facet.values %}
+        <span class="text-base-content/40 font-normal normal-case tracking-normal">{{ facet.values|length }}</span>
+      {% endif %}
+    </span>
+  </summary>
+  <div class="collapse-content px-0 pb-0">
+    <div class="overflow-y-auto max-h-48 divide-y divide-base-200">
+      {% for fv in facet.values %}
+        {% facet_toggle_url facet.name fv.value as toggle_url %}
+        <a href="{{ toggle_url }}"
+           hx-get="{{ toggle_url }}"
+           hx-target="#faceted-results"
+           hx-swap="outerHTML"
+           hx-push-url="true"
+           class="flex items-center gap-2 px-4 py-1.5 text-sm hover:bg-base-200 transition-colors {% if fv.selected %}bg-primary/10 font-medium{% else %}text-base-content/70{% endif %}">
+          <input type="checkbox"
+                 class="checkbox checkbox-xs checkbox-primary pointer-events-none"
+                 {% if fv.selected %}checked{% endif %}
+                 tabindex="-1"
+                 aria-hidden="true">
+          <span class="truncate flex-1">{{ fv.label }}</span>
+          <span class="rounded-full {% if fv.selected %}bg-primary/20 text-primary{% else %}bg-base-200 text-base-content/70{% endif %} px-2 py-0.5 text-xs font-semibold shrink-0">{{ fv.count }}</span>
+        </a>
+      {% empty %}
+        <p class="px-4 py-2 text-sm text-base-content/40">{% translate "None" %}</p>
+      {% endfor %}
+    </div>
+  </div>
+</details>

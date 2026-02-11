@@ -1,0 +1,149 @@
+{% load i18n %}
+{% load explorer_extras %}
+<div class="rounded-2xl border border-base-300 bg-base-100 shadow-sm overflow-hidden">
+  <!-- Header bar -->
+  <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-base-300 bg-base-200">
+    <div class="flex items-center gap-3 text-xs text-base-content/60">
+      <span class="font-semibold uppercase tracking-widest">{{ total_count }} {% translate "collections" %}</span>
+      {% if search_query %}
+        <span class="text-base-content/40">&middot;</span>
+        <span class="text-base-content/70">&ldquo;{{ search_query }}&rdquo;</span>
+      {% endif %}
+    </div>
+    <div class="flex items-center gap-2 text-xs text-base-content/60">
+      <span class="uppercase tracking-widest">{% translate "Sort" %}</span>
+      <span class="rounded-full border border-base-300 bg-base-100 px-2 py-0.5 text-base-content/70">
+        {% if current_sort == 'language' %}{% translate "Language" %}{% elif current_sort == 'bundles' %}{% translate "Bundles" %}{% else %}{% translate "Collection" %}{% endif %}
+        {% if current_order == 'asc' %}&uarr;{% else %}&darr;{% endif %}
+      </span>
+    </div>
+  </div>
+  <!-- Table -->
+  <div class="overflow-x-auto">
+    <table class="min-w-full text-sm">
+      <thead class="bg-base-200 sticky top-0 z-10">
+        <tr class="text-left">
+          <th scope="col" class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">
+            {% facet_sort_url "name" as sort_name_url %}
+            <a href="{{ sort_name_url }}"
+               hx-get="{{ sort_name_url }}"
+               hx-target="#faceted-results"
+               hx-swap="outerHTML"
+               hx-push-url="true"
+               class="hover:text-primary cursor-pointer inline-flex items-center gap-2 uppercase tracking-widest">
+              {% translate "Collection" %}
+              {% if current_sort == 'name' %}
+                <span class="text-primary">{% if current_order == 'asc' %}&#9650;{% else %}&#9660;{% endif %}</span>
+              {% endif %}
+            </a>
+          </th>
+          <th scope="col" class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">
+            {% facet_sort_url "language" as sort_lang_url %}
+            <a href="{{ sort_lang_url }}"
+               hx-get="{{ sort_lang_url }}"
+               hx-target="#faceted-results"
+               hx-swap="outerHTML"
+               hx-push-url="true"
+               class="hover:text-primary cursor-pointer inline-flex items-center gap-2 uppercase tracking-widest">
+              {% translate "Languages" %}
+              {% if current_sort == 'language' %}
+                <span class="text-primary">{% if current_order == 'asc' %}&#9650;{% else %}&#9660;{% endif %}</span>
+              {% endif %}
+            </a>
+          </th>
+          <th scope="col" class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">{% translate "Description" %}</th>
+          <th scope="col" class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">{% translate "Location" %}</th>
+          <th scope="col" class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">{% translate "Bundles" %}</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-base-200">
+        {% for collection in collections %}
+          <tr class="hover:bg-base-200 transition-colors">
+            <td class="px-6 py-5 align-top">
+              <div class="space-y-1">
+                <a href="{% url 'explorer:collection_detail_by_handle' handle=collection.identifier %}"
+                   class="text-base-content hover:text-primary font-semibold">
+                  {% if collection.get_general_info.display_title %}
+                    {{ collection.get_general_info.display_title }}
+                  {% else %}
+                    {{ collection.identifier }}
+                  {% endif %}
+                </a>
+                <div class="text-xs text-base-content/50 font-mono">{{ collection.identifier }}</div>
+              </div>
+            </td>
+            <td class="px-6 py-5 align-top">
+              {% if collection.get_general_info and collection.get_general_info.object_languages.all %}
+                <div class="flex flex-wrap gap-1.5">
+                  {% for language in collection.get_general_info.object_languages.all %}
+                    <span class="inline-flex items-center gap-1 rounded-full border border-base-300 bg-base-200 px-2.5 py-0.5 text-xs font-medium text-base-content/70">
+                      {{ language.name }}
+                      {% if language.iso_639_3_code %}<span class="text-base-content/50">[{{ language.iso_639_3_code }}]</span>{% endif %}
+                    </span>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </td>
+            <td class="px-6 py-5 align-top text-sm text-base-content/70 max-w-xs">
+              {% if collection.get_general_info and collection.get_general_info.description %}
+                <span class="cursor-help" title="{{ collection.get_general_info.description }}">{{ collection.get_general_info.description|truncatewords:12 }}</span>
+              {% endif %}
+            </td>
+            <td class="px-6 py-5 align-top text-sm text-base-content/70">
+              {% with gi=collection.get_general_info %}
+                {% if gi and gi.location %}
+                  {% if gi.location.region_facet %}{{ gi.location.region_facet }}{% endif %}{% if gi.location.region_facet and gi.location.country_facet %}, {% endif %}{% if gi.location.country_facet %}{{ gi.location.country_facet }}{% endif %}
+                {% endif %}
+              {% endwith %}
+            </td>
+            <td class="px-6 py-5 align-top text-sm text-base-content/70">
+              <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-xs font-semibold text-base-content/70">
+                {{ collection.bundles_count }}
+              </span>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="5" class="px-6 py-12 text-center text-base-content/50">
+              {% translate "No collections match the current filters." %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  {% if is_paginated %}
+    <div class="flex items-center justify-between px-4 py-3 border-t border-base-300 bg-base-200">
+      <div class="text-xs text-base-content/60">
+        {% blocktranslate with start=page_obj.start_index end=page_obj.end_index total=total_count %}
+          Showing {{ start }}&ndash;{{ end }} of {{ total }}
+        {% endblocktranslate %}
+      </div>
+      <div class="join">
+        {% if page_obj.has_previous %}
+          {% with p=page_obj.previous_page_number %}
+            <a href="?{% for key, values in current_params.lists %}{% if key != 'page' %}{% for val in values %}{{ key }}={{ val|urlencode }}&{% endfor %}{% endif %}{% endfor %}page={{ p }}"
+               hx-get="?{% for key, values in current_params.lists %}{% if key != 'page' %}{% for val in values %}{{ key }}={{ val|urlencode }}&{% endfor %}{% endif %}{% endfor %}page={{ p }}"
+               hx-target="#faceted-results"
+               hx-swap="outerHTML"
+               hx-push-url="true"
+               class="join-item btn btn-sm">&#8592;</a>
+          {% endwith %}
+        {% endif %}
+        <span class="join-item btn btn-sm btn-active">{{ page_obj.number }}</span>
+        {% if page_obj.has_next %}
+          {% with p=page_obj.next_page_number %}
+            <a href="?{% for key, values in current_params.lists %}{% if key != 'page' %}{% for val in values %}{{ key }}={{ val|urlencode }}&{% endfor %}{% endif %}{% endfor %}page={{ p }}"
+               hx-get="?{% for key, values in current_params.lists %}{% if key != 'page' %}{% for val in values %}{{ key }}={{ val|urlencode }}&{% endfor %}{% endif %}{% endfor %}page={{ p }}"
+               hx-target="#faceted-results"
+               hx-swap="outerHTML"
+               hx-push-url="true"
+               class="join-item btn btn-sm">&#8594;</a>
+          {% endwith %}
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+</div>

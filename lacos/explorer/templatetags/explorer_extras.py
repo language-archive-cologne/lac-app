@@ -12,6 +12,77 @@ from lacos.explorer.media_utils import (
 
 register = template.Library()
 
+FACET_PARAM_NAMES = {
+    "keyword", "language", "year", "country", "region", "provider", "access", "license",
+}
+
+
+@register.simple_tag(takes_context=True)
+def facet_toggle_url(context, facet_name, value):
+    """Toggle a facet value on/off in the current URL. Resets page param."""
+    request = context["request"]
+    params = request.GET.copy()
+
+    current = params.getlist(facet_name)
+    if value in current:
+        current.remove(value)
+    else:
+        current.append(value)
+
+    params.setlist(facet_name, current)
+    params.pop("page", None)
+
+    return f"?{params.urlencode()}" if params else "?"
+
+
+@register.simple_tag(takes_context=True)
+def facet_remove_url(context, facet_name, value):
+    """Remove a specific facet value from the current URL. Resets page param."""
+    request = context["request"]
+    params = request.GET.copy()
+
+    current = params.getlist(facet_name)
+    if value in current:
+        current.remove(value)
+    params.setlist(facet_name, current)
+    params.pop("page", None)
+
+    return f"?{params.urlencode()}" if params else "?"
+
+
+@register.simple_tag(takes_context=True)
+def clear_all_filters_url(context):
+    """Remove all facet params and q, keep sort/order only."""
+    request = context["request"]
+    params = request.GET.copy()
+
+    for key in list(params.keys()):
+        if key in FACET_PARAM_NAMES or key in ("q", "page"):
+            del params[key]
+
+    return f"?{params.urlencode()}" if params else "?"
+
+
+@register.simple_tag(takes_context=True)
+def facet_sort_url(context, sort_field):
+    """Build sort URL preserving all facet/search params. Toggles order."""
+    request = context["request"]
+    params = request.GET.copy()
+
+    current_sort = params.get("sort", "name")
+    current_order = params.get("order", "asc")
+
+    if current_sort == sort_field:
+        new_order = "desc" if current_order == "asc" else "asc"
+    else:
+        new_order = "asc"
+
+    params["sort"] = sort_field
+    params["order"] = new_order
+    params.pop("page", None)
+
+    return f"?{params.urlencode()}"
+
 @register.filter
 @stringfilter
 def urlize_text(text):
