@@ -290,19 +290,129 @@ def test_bundle_htmx_returns_partial(client):
 
 
 @pytest.mark.django_db
-def test_text_search_combined_with_facets(client):
+def test_text_search_filters_results(client):
+    """Verify q= actually removes non-matching bundles from results."""
+    coll = _create_collection("C1", "Test Collection")
+    _create_bundle("B1", "Senufo Stories", coll, languages=[("Senufo", "sef")], country="Mali")
+    _create_bundle("B2", "Akan Archive", coll, languages=[("Akan", "aka")], country="Ghana")
+    _create_bundle("B3", "Bambara Tales", coll, languages=[("Bambara", "bam")], country="Mali")
+
+    response = client.get("/search/bundles/", {"q": "Senufo"})
+    assert response.status_code == 200
+    bundles = list(response.context["bundles"])
+    identifiers = {b.identifier for b in bundles}
+    assert "B1" in identifiers
+    assert "B2" not in identifiers
+    assert "B3" not in identifiers
+
+
+@pytest.mark.django_db
+def test_text_search_with_facet_filter(client):
+    """Verify q= AND language= together narrow results correctly."""
     coll = _create_collection("C1", "Test Collection")
     _create_bundle(
         "B1", "Senufo Stories", coll,
         languages=[("Senufo", "sef")], country="Mali", topics=["narrative"],
     )
     _create_bundle(
-        "B2", "Akan Archive", coll,
+        "B2", "Senufo Proverbs", coll,
+        languages=[("Akan", "aka")], country="Ghana",
+    )
+    _create_bundle(
+        "B3", "Akan Archive", coll,
         languages=[("Akan", "aka")], country="Ghana",
     )
 
-    response = client.get("/search/bundles/", {"q": "Senufo", "country": "Mali"})
+    response = client.get("/search/bundles/", {"q": "Senufo", "language": "aka"})
     assert response.status_code == 200
+    bundles = list(response.context["bundles"])
+    identifiers = {b.identifier for b in bundles}
+    # Only B2 matches both "Senufo" in title AND language=aka
+    assert "B2" in identifiers
+    assert "B1" not in identifiers  # matches text but wrong language
+    assert "B3" not in identifiers  # matches language but not text
+
+
+@pytest.mark.django_db
+def test_text_search_by_description(client):
+    """Verify searching by description text works."""
+    coll = _create_collection("C1", "Test Collection")
+    # _create_bundle sets description to "Description for {title}"
+    _create_bundle("B1", "Alpha Bundle", coll)
+    _create_bundle("B2", "Beta Bundle", coll)
+
+    # Search for "Alpha" which appears in B1's description ("Description for Alpha Bundle")
+    response = client.get("/search/bundles/", {"q": "Alpha"})
+    assert response.status_code == 200
+    bundles = list(response.context["bundles"])
+    identifiers = {b.identifier for b in bundles}
+    assert "B1" in identifiers
+    assert "B2" not in identifiers
+
+
+@pytest.mark.django_db
+def test_text_search_by_language_name(client):
+    """Verify searching by language name works."""
+    coll = _create_collection("C1", "Test Collection")
+    _create_bundle("B1", "Bundle One", coll, languages=[("Senufo", "sef")])
+    _create_bundle("B2", "Bundle Two", coll, languages=[("Akan", "aka")])
+
+    response = client.get("/search/bundles/", {"q": "Senufo"})
+    assert response.status_code == 200
+    bundles = list(response.context["bundles"])
+    identifiers = {b.identifier for b in bundles}
+    assert "B1" in identifiers
+    assert "B2" not in identifiers
+
+
+@pytest.mark.django_db
+def test_text_search_facets_update(client):
+    """Verify facet counts update when text search is active."""
+    coll = _create_collection("C1", "Test Collection")
+    _create_bundle("B1", "Senufo Stories", coll, languages=[("Senufo", "sef")], country="Mali")
+    _create_bundle("B2", "Senufo Proverbs", coll, languages=[("Akan", "aka")], country="Ghana")
+    _create_bundle("B3", "Bambara Tales", coll, languages=[("Bambara", "bam")], country="Mali")
+
+    # Without text search, Mali should have count=2 (B1 + B3)
+    response_all = client.get("/search/bundles/")
+    country_facet_all = next(f for f in response_all.context["facets"] if f.name == "country")
+    mali_all = next((fv for fv in country_facet_all.values if fv.value == "Mali"), None)
+    assert mali_all is not None
+    assert mali_all.count == 2
+
+    # With text search for "Senufo", only B1 and B2 match, so Mali count=1 (only B1)
+    response_search = client.get("/search/bundles/", {"q": "Senufo"})
+    country_facet_search = next(f for f in response_search.context["facets"] if f.name == "country")
+    mali_search = next((fv for fv in country_facet_search.values if fv.value == "Mali"), None)
+    assert mali_search is not None
+    assert mali_search.count == 1
+
+
+@pytest.mark.django_db
+def test_text_search_empty_query(client):
+    """Verify empty q= returns all results."""
+    coll = _create_collection("C1", "Test Collection")
+    _create_bundle("B1", "Alpha", coll)
+    _create_bundle("B2", "Beta", coll)
+    _create_bundle("B3", "Gamma", coll)
+
+    response = client.get("/search/bundles/", {"q": ""})
+    assert response.status_code == 200
+    bundles = list(response.context["bundles"])
+    assert len(bundles) == 3
+
+
+@pytest.mark.django_db
+def test_text_search_no_results(client):
+    """Verify q= with non-matching term returns empty."""
+    coll = _create_collection("C1", "Test Collection")
+    _create_bundle("B1", "Alpha", coll)
+    _create_bundle("B2", "Beta", coll)
+
+    response = client.get("/search/bundles/", {"q": "xyznonexistent"})
+    assert response.status_code == 200
+    bundles = list(response.context["bundles"])
+    assert len(bundles) == 0
 
 
 @pytest.mark.django_db
