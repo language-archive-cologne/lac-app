@@ -38,14 +38,20 @@ class FacetedSearchView(ListView):
         )
         qs = self._faceted_result.queryset
 
-        # Add display annotations after facet filtering is done
+        # bundles_count is always needed for display in the table
         qs = qs.annotate(
             bundles_count=Count("bundle_collection", distinct=True),
-            first_language=Min("general_info__object_languages__name"),
         )
 
         sort_key = self.request.GET.get("sort", "name")
         order = self.request.GET.get("order", "asc")
+
+        # Only add expensive Min() annotation when sorting by language
+        if sort_key == "language":
+            qs = qs.annotate(
+                first_language=Min("general_info__object_languages__name"),
+            )
+
         sort_field = SORT_ALLOWLIST.get(sort_key, "general_info__display_title")
         prefix = "-" if order == "desc" else ""
         qs = qs.order_by(f"{prefix}{sort_field}", "general_info__display_title")

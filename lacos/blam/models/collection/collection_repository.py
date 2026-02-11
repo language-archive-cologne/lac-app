@@ -38,32 +38,32 @@ class Collection(Repository):
     @property
     def base_header(self):
         """Get the collection header"""
-        return self.header.first()
+        return self._first_related("header")
     
     @property
     def get_general_info(self):
         """Get the collection general info"""
-        return self.general_info.first()
+        return self._first_related("general_info")
     
     @property
     def get_publication_info(self):
         """Get the collection publication info"""
-        return self.publication_info.first()
+        return self._first_related("publication_info")
     
     @property
     def get_administrative_info(self):
         """Get the collection administrative info"""
-        return self.administrative_info.first()
+        return self._first_related("administrative_info")
     
     @property
     def get_structural_info(self):
         """Get the collection structural info"""
-        return self.structural_info.first()
+        return self._first_related("structural_info")
     
     @property
     def get_project_info(self):
         """Get the collection project info"""
-        return self.project_infos.first()
+        return self._first_related("project_infos")
 
     class Meta:
         verbose_name = "Collection"

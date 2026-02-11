@@ -34,27 +34,27 @@ class Bundle(Repository):
     @property
     def base_header(self):
         """Get the bundle header"""
-        return self.header.first()
+        return self._first_related("header")
     
     @property
     def get_general_info(self):
         """Get the bundle general info"""
-        return self.general_info.first()
+        return self._first_related("general_info")
     
     @property
     def get_publication_info(self):
         """Get the bundle publication info"""
-        return self.publication_info.first()
+        return self._first_related("publication_info")
     
     @property
     def get_administrative_info(self):
         """Get the bundle administrative info"""
-        return self.administrative_info.first()
+        return self._first_related("administrative_info")
     
     @property
     def get_structural_info(self):
         """Get the bundle structural info"""
-        return self.structural_info.first()
+        return self._first_related("structural_info")
 
     class Meta:
         verbose_name = "Bundle"

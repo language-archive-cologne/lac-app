@@ -1,11 +1,20 @@
-from lacos.blam.models.base_model import BaseModel
 from django.db import models
+
+from lacos.blam.models.base_model import BaseModel
+
 
 class Repository(BaseModel):
     """
     Abstract base model for repositories.
     """
     identifier = models.CharField(max_length=255, null=False, unique=True)
+
+    def _first_related(self, related_name: str):
+        """Return the first related object, using the prefetch cache when available."""
+        cache = getattr(self, "_prefetched_objects_cache", None)
+        if cache and related_name in cache:
+            return next(iter(cache[related_name]), None)
+        return getattr(self, related_name).first()
 
     class Meta:
         abstract = True

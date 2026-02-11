@@ -40,15 +40,21 @@ class BundleFacetedSearchView(ListView):
         ).search(self.request.GET, base_qs, cache_key=facet_cache_key)
         qs = self._faceted_result.queryset
 
-        qs = qs.annotate(
-            first_language=Min("general_info__object_languages__name"),
-            collection_identifier=Min(
-                "structural_info__is_member_of_collection__identifier"
-            ),
-        )
-
         sort_key = self.request.GET.get("sort", "name")
         order = self.request.GET.get("order", "asc")
+
+        # Only add expensive Min() annotations when actually sorting by them
+        if sort_key == "language":
+            qs = qs.annotate(
+                first_language=Min("general_info__object_languages__name"),
+            )
+        elif sort_key == "collection":
+            qs = qs.annotate(
+                collection_identifier=Min(
+                    "structural_info__is_member_of_collection__identifier"
+                ),
+            )
+
         sort_field = BUNDLE_SORT_ALLOWLIST.get(
             sort_key, "general_info__display_title"
         )

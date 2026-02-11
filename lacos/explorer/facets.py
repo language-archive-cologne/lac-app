@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 FACET_CACHE_KEY = "explorer:facets:base"
 BUNDLE_FACET_CACHE_KEY = "explorer:facets:bundles:base"
 FACET_CACHE_TIMEOUT = 60 * 10  # 10 minutes
+FACET_MAX_VALUES = 30  # Max values shown per facet (selected values always included)
 
 
 @dataclass(frozen=True)
@@ -36,6 +37,7 @@ class Facet:
     name: str
     label: str
     values: list[FacetValue] = field(default_factory=list)
+    truncated: bool = False
 
     @property
     def has_selection(self) -> bool:
@@ -301,7 +303,20 @@ class FacetService:
                 grouped.get(defn.name, []),
                 selections.get(defn.name, []),
             )
-            facets.append(Facet(name=defn.name, label=defn.label, values=facet_values))
+            truncated = len(facet_values) > FACET_MAX_VALUES
+            if truncated:
+                # Keep selected values + top N by count
+                selected = [fv for fv in facet_values if fv.selected]
+                unselected = [fv for fv in facet_values if not fv.selected]
+                facet_values = selected + unselected[: FACET_MAX_VALUES - len(selected)]
+            facets.append(
+                Facet(
+                    name=defn.name,
+                    label=defn.label,
+                    values=facet_values,
+                    truncated=truncated,
+                )
+            )
         return facets
 
     # ------------------------------------------------------------------
