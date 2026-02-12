@@ -202,11 +202,11 @@
                 {% if not row.object_exists %}disabled{% endif %}
               >
             </td>
-            <td class="space-y-1">
-              <div class="font-medium text-base-content/80">{{ row.identifier }}</div>
+            <td class="space-y-0.5">
               {% if row.name %}
-              <div class="text-xs text-base-content/60 truncate">{{ row.name }}</div>
+              <div class="font-semibold">{{ row.name }}</div>
               {% endif %}
+              <div class="text-xs font-mono text-base-content/50">{{ row.identifier }}</div>
               {% if not row.object_exists %}
               <div class="badge badge-error badge-outline badge-xs">Object missing</div>
               {% elif not row.has_permission %}
