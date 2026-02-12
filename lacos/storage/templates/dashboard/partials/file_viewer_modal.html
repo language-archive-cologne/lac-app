@@ -1,87 +1,59 @@
 {% load humanize %}
-<div class="flex items-center justify-between mb-4">
+<!-- OOB header update -->
+<div id="file-viewer-header" hx-swap-oob="true" class="flex items-center justify-between px-6 py-4 border-b border-base-300 shrink-0">
     <div>
         <h3 class="font-bold text-lg">{{ filename }}</h3>
-        <p class="text-sm text-base-content/60">{{ content_type }}</p>
+        <p class="text-sm text-base-content/60">{{ content_type }}{% if file_size_formatted %} · {{ file_size_formatted }}{% endif %}</p>
         {% if last_modified %}
             <p class="text-xs text-base-content/40">Updated {{ last_modified|date:"Y-m-d H:i" }}</p>
         {% endif %}
     </div>
     <div class="flex items-center gap-2">
         <a href="{{ download_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-primary">Open in new tab</a>
-        <button type="button" class="btn btn-sm btn-ghost" onclick="document.getElementById('file-viewer-modal').close()">✕</button>
+        <button type="button" class="btn btn-sm btn-ghost" onclick="closeFileViewer()">✕</button>
     </div>
 </div>
 
-<div class="divider my-2"></div>
-
-<div class="file-viewer-content space-y-4">
-    {% if viewer_type == "image" %}
-        <div class="flex justify-center">
-            <img src="{{ download_url }}" alt="{{ filename }}" class="max-h-[70vh] object-contain rounded-lg shadow" />
-        </div>
-    {% elif viewer_type == "video" %}
-        <video id="videoPlayer" class="w-full max-h-[70vh] rounded-lg shadow" controls preload="metadata">
-            <source src="{{ download_url }}" type="{{ content_type }}">
-            Your browser does not support HTML5 video.
-        </video>
-    {% elif viewer_type == "audio" %}
-        <div class="space-y-3">
-            <div id="waveform" class="hidden md:block h-20 rounded-lg bg-base-200"></div>
-            <audio id="audioPlayer" class="w-full" controls src="{{ download_url }}">
-                Your browser does not support the audio element.
-            </audio>
-            <div class="flex justify-center">
-                <button id="playButton" class="btn btn-sm btn-circle btn-primary" type="button">
-                    <svg class="play-icon h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M8 5v14l11-7z" />
-                    </svg>
-                    <svg class="pause-icon h-4 w-4 hidden" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-                    </svg>
-                </button>
-            </div>
-        </div>
-    {% elif viewer_type == "pdf" %}
-        <iframe src="{{ download_url }}" class="w-full h-[70vh] rounded-lg border" title="{{ filename }}"></iframe>
-    {% elif viewer_type == "text" %}
-        <iframe src="{{ download_url }}" class="w-full h-[70vh] rounded-lg border bg-base-100" title="{{ filename }}"></iframe>
-    {% elif viewer_type == "elan" %}
-        <div class="alert alert-info flex items-start gap-3">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>ELAN previews are not yet supported. Use the download button above to open the file locally.</span>
-        </div>
+<!-- Main content (swapped into #file-viewer-content) -->
+{% if viewer_type == "image" %}
+    <div class="flex justify-center h-full">
+        <img src="{{ download_url }}" alt="{{ filename }}" class="max-h-full object-contain rounded-lg shadow" />
+    </div>
+{% elif viewer_type == "video" %}
+    <video id="videoPlayer" class="w-full max-h-full rounded-lg shadow" controls preload="metadata">
+        <source src="{{ download_url }}" type="{{ content_type }}">
+        Your browser does not support HTML5 video.
+    </video>
+{% elif viewer_type == "audio" %}
+    <div class="space-y-3">
+        <div id="waveform" class="hidden md:block h-20 rounded-lg bg-base-200"></div>
+        <audio id="audioPlayer" class="w-full" controls src="{{ download_url }}">
+            Your browser does not support the audio element.
+        </audio>
+    </div>
+{% elif viewer_type == "json" or viewer_type == "xml" %}
+    {% if file_content %}
+        <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-auto h-full leading-relaxed"><code id="file-viewer-code" class="{{ language_class }}">{{ file_content }}</code></pre>
+        <script>if (window.Prism) { Prism.highlightElement(document.getElementById('file-viewer-code')); }</script>
     {% else %}
-        <div class="alert alert-info flex items-start gap-3">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>This file type is not previewable. Use the button above to download.</span>
-        </div>
+        <iframe src="{{ download_url }}" class="w-full h-full rounded-lg border bg-base-100" title="{{ filename }}"></iframe>
     {% endif %}
-</div>
-
-<dl class="grid gap-2 text-sm text-base-content/70 mt-4">
-    {% if file_size_formatted %}
-        <div class="flex justify-between">
-            <dt>Size</dt>
-            <dd>{{ file_size_formatted }}</dd>
-        </div>
-    {% endif %}
-    <div class="flex justify-between">
-        <dt>Expires In</dt>
-        <dd>{{ expires_in }}s</dd>
+{% elif viewer_type == "pdf" %}
+    <iframe src="{{ download_url }}" class="w-full h-full rounded-lg border" title="{{ filename }}"></iframe>
+{% elif viewer_type == "text" %}
+    <iframe src="{{ download_url }}" class="w-full h-full rounded-lg border bg-base-100" title="{{ filename }}"></iframe>
+{% elif viewer_type == "elan" %}
+    <div class="alert alert-info flex items-start gap-3">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>ELAN previews are not yet supported. Use the download button above to open the file locally.</span>
     </div>
-    {% if etag %}
-        <div class="flex justify-between">
-            <dt>ETag</dt>
-            <dd class="font-mono text-xs text-base-content/60">{{ etag }}</dd>
-        </div>
-    {% endif %}
-</dl>
-
-<div class="modal-action">
-    <button type="button" class="btn btn-sm" onclick="document.getElementById('file-viewer-modal').close()">Close</button>
-</div>
+{% else %}
+    <div class="alert alert-info flex items-start gap-3">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>This file type is not previewable. Use the button above to download.</span>
+    </div>
+{% endif %}

@@ -129,6 +129,9 @@ def file_viewer_htmx(request, bucket_type, object_path):
         "viewer_type": viewer_type,
     }
 
+    if viewer_type in ("json", "xml"):
+        context.update(_fetch_pretty_content(bucket_service, bucket_name, object_path, viewer_type))
+
     html = render_to_string(
         "dashboard/partials/file_viewer_modal.html",
         context,
@@ -155,9 +158,66 @@ def _determine_viewer_type(content_type: str, file_name: str) -> str:
         return "elan"
     if lowered_type == "application/pdf" or extension == "pdf":
         return "pdf"
-    if lowered_type.startswith("text/") or extension in {"txt", "json", "xml", "html", "csv", "md"}:
+    if extension == "json" or lowered_type in {"application/json", "application/ld+json"}:
+        return "json"
+    if extension == "xml" or lowered_type in {"application/xml", "text/xml"}:
+        return "xml"
+    if lowered_type.startswith("text/") or extension in {"txt", "html", "csv", "md"}:
         return "text"
     return "download"
+
+
+def _strip_whitespace_nodes(node):
+    """Remove whitespace-only text nodes so minidom doesn't double-indent."""
+    remove = []
+    for child in node.childNodes:
+        if child.nodeType == child.TEXT_NODE and not child.data.strip():
+            remove.append(child)
+        elif child.hasChildNodes():
+            _strip_whitespace_nodes(child)
+    for child in remove:
+        node.removeChild(child)
+
+
+def _fetch_pretty_content(bucket_service, bucket_name, object_path, viewer_type):
+    """Fetch file content from S3 and pretty-print JSON/XML for in-modal display."""
+    import xml.dom.minidom
+
+    MAX_PREVIEW_BYTES = 2 * 1024 * 1024  # 2 MB cap for in-modal rendering
+
+    try:
+        result = bucket_service.get_file_content(bucket_name, object_path)
+        raw = result.get("content", b"")
+        if len(raw) > MAX_PREVIEW_BYTES:
+            return {"file_content": None, "language_class": ""}
+
+        text = raw.decode("utf-8", errors="replace")
+
+        if viewer_type == "json":
+            parsed = json.loads(text)
+            return {
+                "file_content": json.dumps(parsed, indent=2, ensure_ascii=False),
+                "language_class": "language-json",
+            }
+
+        if viewer_type == "xml":
+            doc = xml.dom.minidom.parseString(text)
+            _strip_whitespace_nodes(doc)
+            pretty = doc.toprettyxml(indent="  ")
+            # Remove the XML declaration that minidom adds
+            lines = pretty.split("\n")
+            if lines and lines[0].startswith("<?xml"):
+                lines = lines[1:]
+            # Remove blank lines
+            pretty = "\n".join(line for line in lines if line.strip())
+            return {
+                "file_content": pretty,
+                "language_class": "language-xml",
+            }
+    except Exception:
+        logger.debug("Could not pretty-print %s for preview", object_path, exc_info=True)
+
+    return {"file_content": None, "language_class": ""}
 
 
 @method_decorator(login_required, name='dispatch')
