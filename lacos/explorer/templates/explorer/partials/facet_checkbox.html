@@ -12,6 +12,14 @@
     </span>
   </summary>
   <div class="collapse-content px-0 pb-0">
+    {% if facet.filterable %}
+      <div class="px-4 py-2 border-b border-base-200">
+        <input type="text"
+               placeholder="{% translate 'Filter' %}…"
+               class="input input-xs input-bordered w-full"
+               hx-on:input="let q = this.value.toLowerCase(); this.closest('.collapse-content').querySelectorAll('[data-facet-label]').forEach(el => { el.style.display = el.dataset.facetLabel.toLowerCase().includes(q) ? '' : 'none'; })">
+      </div>
+    {% endif %}
     <div class="overflow-y-auto max-h-48 divide-y divide-base-200">
       {% for fv in facet.values %}
         {% facet_toggle_url facet.name fv.value as toggle_url %}
@@ -20,6 +28,7 @@
            hx-target="#faceted-results"
            hx-swap="outerHTML"
            hx-push-url="true"
+           data-facet-label="{{ fv.label }}"
            class="flex items-center gap-2 px-4 py-1.5 text-sm hover:bg-base-200 transition-colors {% if fv.selected %}bg-primary/10 font-medium{% else %}text-base-content/70{% endif %}">
           <input type="checkbox"
                  class="checkbox checkbox-xs checkbox-primary pointer-events-none"

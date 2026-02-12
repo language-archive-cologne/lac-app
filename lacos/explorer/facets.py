@@ -38,6 +38,7 @@ class Facet:
     label: str
     values: list[FacetValue] = field(default_factory=list)
     truncated: bool = False
+    filterable: bool = False
 
     @property
     def has_selection(self) -> bool:
@@ -69,6 +70,7 @@ class FacetDefinition:
     filter_lookup: str
     label_map: dict[str, str] | None = None
     sort_alphabetically: bool = False
+    show_all: bool = False
 
 
 FACET_DEFINITIONS: list[FacetDefinition] = [
@@ -131,6 +133,7 @@ BUNDLE_FACET_DEFINITIONS: list[FacetDefinition] = [
         label_field="general_info__keywords__value",
         filter_lookup="general_info__keywords__value__in",
         sort_alphabetically=True,
+        show_all=True,
     ),
     FacetDefinition(
         name="language",
@@ -296,7 +299,7 @@ class FacetService:
                 label_map=defn.label_map,
                 sort_alphabetically=defn.sort_alphabetically,
             )
-            truncated = len(facet_values) > FACET_MAX_VALUES
+            truncated = not defn.show_all and len(facet_values) > FACET_MAX_VALUES
             if truncated:
                 # Keep selected values + top N by count
                 selected = [fv for fv in facet_values if fv.selected]
@@ -308,6 +311,7 @@ class FacetService:
                     label=defn.label,
                     values=facet_values,
                     truncated=truncated,
+                    filterable=defn.show_all,
                 )
             )
         return facets
