@@ -8,6 +8,7 @@ from .collection import (
     CollectionAdministrativeInfoView,
     CollectionStructuralInfoView,
     CollectionProjectInfoView,
+    CollectionBundlesView,
 )
 from .bundle import (
     BundleListView,

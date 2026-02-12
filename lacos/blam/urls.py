@@ -27,6 +27,7 @@ from .views.metadata import (
     CollectionAdministrativeInfoView,
     CollectionStructuralInfoView,
     CollectionProjectInfoView,
+    CollectionBundlesView,
     BundleListView,
     BundleCreateView,
     BundleOverviewView,
@@ -264,6 +265,8 @@ urlpatterns = [
         CollectionProjectReferenceRemoveView.as_view(),
         name='collection_projects_reference_remove',
     ),
+
+    path('metadata/collections/<uuid:collection_id>/bundles/', CollectionBundlesView.as_view(), name='collection_bundles'),
 
     path('metadata/bundles/', BundleListView.as_view(), name='bundle_metadata_list'),
     path('metadata/bundles/new/', BundleCreateView.as_view(), name='bundle_metadata_create'),

@@ -1,5 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.paginator import Paginator
 from django.http import HttpResponseForbidden
 from django.forms import inlineformset_factory
 from django.shortcuts import get_object_or_404, redirect, render
@@ -101,7 +102,7 @@ class BundleListView(View):
         from django.db.models import Q
 
         search_query = request.GET.get("q", "").strip()
-        bundles = Bundle.objects.all().order_by("identifier")
+        bundles = Bundle.objects.prefetch_related("general_info").order_by("identifier")
         if not is_archivist(request.user):
             bundles = bundles.filter(
                 structural_info__is_member_of_collection__collection_manager_assignments__user=request.user
@@ -114,7 +115,9 @@ class BundleListView(View):
                 Q(general_info__description__icontains=search_query)
             ).distinct()
 
-        context = {"bundles": bundles, "search_query": search_query}
+        paginator = Paginator(bundles, 50)
+        page_obj = paginator.get_page(request.GET.get("page"))
+        context = {"bundles": page_obj, "page_obj": page_obj, "search_query": search_query}
 
         if request.headers.get("HX-Request") and "q" in request.GET:
             return render(request, "blam/metadata/partials/bundle_table.html", context)

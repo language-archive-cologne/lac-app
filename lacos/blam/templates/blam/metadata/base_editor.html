@@ -29,8 +29,17 @@
           {% endfor %}
         </ul>
         <div class="mt-4">
-          <a href="{% url 'blam:collection_metadata_list' %}" class="btn btn-sm btn-outline w-full">Collections</a>
-          <a href="{% url 'blam:bundle_metadata_list' %}" class="btn btn-sm btn-outline w-full mt-2">Bundles</a>
+          {% if collection %}
+            <a href="{% url 'blam:collection_metadata_list' %}" class="btn btn-sm btn-outline w-full">All Collections</a>
+          {% elif bundle %}
+            {% with bundle.get_structural_info as si %}
+              {% if si and si.is_member_of_collection %}
+                <a href="{% url 'blam:collection_metadata_overview' si.is_member_of_collection.pk %}" class="btn btn-sm btn-outline w-full">Back to Collection</a>
+              {% else %}
+                <a href="{% url 'blam:collection_metadata_list' %}" class="btn btn-sm btn-outline w-full">Collections</a>
+              {% endif %}
+            {% endwith %}
+          {% endif %}
         </div>
       </div>
     </div>

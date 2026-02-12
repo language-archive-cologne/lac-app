@@ -1,0 +1,17 @@
+{% if page_obj.has_other_pages %}
+<div class="flex justify-center mt-4">
+  <div class="join">
+    {% if page_obj.has_previous %}
+      <a class="join-item btn btn-sm" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}">Previous</a>
+    {% else %}
+      <button class="join-item btn btn-sm btn-disabled">Previous</button>
+    {% endif %}
+    <button class="join-item btn btn-sm btn-active">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</button>
+    {% if page_obj.has_next %}
+      <a class="join-item btn btn-sm" href="?page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}">Next</a>
+    {% else %}
+      <button class="join-item btn btn-sm btn-disabled">Next</button>
+    {% endif %}
+  </div>
+</div>
+{% endif %}

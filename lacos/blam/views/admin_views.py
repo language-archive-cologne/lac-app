@@ -1,4 +1,5 @@
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.core.paginator import Paginator
 from django.http import JsonResponse, HttpResponse
 from django.views import View
 from django.views.generic import TemplateView
@@ -300,9 +301,10 @@ class ArchivistMetadataPanelView(LoginRequiredMixin, UserPassesTestMixin, HtmxTe
             return self.htmx_error_response("Unknown metadata type.", status=400)
 
         search_query = request.GET.get("q", "").strip()
+        page_number = request.GET.get("page", "1")
 
         if kind == "collections":
-            base_qs = Collection.objects.all().order_by("identifier")
+            base_qs = Collection.objects.prefetch_related("general_info").order_by("identifier")
             total_count = base_qs.count()
             if search_query:
                 base_qs = base_qs.filter(
@@ -311,17 +313,20 @@ class ArchivistMetadataPanelView(LoginRequiredMixin, UserPassesTestMixin, HtmxTe
                     | Q(general_info__description__icontains=search_query)
                 ).distinct()
             result_count = base_qs.count()
+            paginator = Paginator(base_qs, 50)
+            page_obj = paginator.get_page(page_number)
             context = {
                 "kind": kind,
                 "kind_label": "Collections",
-                "collections": base_qs,
+                "collections": page_obj,
+                "page_obj": page_obj,
                 "search_query": search_query,
                 "total_count": total_count,
                 "result_count": result_count,
-                "editor_target_id": "metadata-editor-shell",
+                "editor_target_id": "metadata-editor-modal-content",
             }
         else:
-            base_qs = Bundle.objects.all().order_by("identifier")
+            base_qs = Bundle.objects.prefetch_related("general_info").order_by("identifier")
             total_count = base_qs.count()
             if search_query:
                 base_qs = base_qs.filter(
@@ -330,14 +335,17 @@ class ArchivistMetadataPanelView(LoginRequiredMixin, UserPassesTestMixin, HtmxTe
                     | Q(general_info__description__icontains=search_query)
                 ).distinct()
             result_count = base_qs.count()
+            paginator = Paginator(base_qs, 50)
+            page_obj = paginator.get_page(page_number)
             context = {
                 "kind": kind,
                 "kind_label": "Bundles",
-                "bundles": base_qs,
+                "bundles": page_obj,
+                "page_obj": page_obj,
                 "search_query": search_query,
                 "total_count": total_count,
                 "result_count": result_count,
-                "editor_target_id": "metadata-editor-shell",
+                "editor_target_id": "metadata-editor-modal-content",
             }
 
         panel_html = render_to_string(

@@ -73,4 +73,39 @@
       {% include "blam/metadata/partials/bundle_table.html" with bundles=bundles editor_target_id=editor_target_id %}
     {% endif %}
   </div>
+
+  {% if page_obj and page_obj.paginator.num_pages > 1 %}
+    <div class="flex items-center justify-between pt-4">
+      <span class="text-sm text-base-content/60">
+        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+      </span>
+      <div class="join">
+        {% if page_obj.has_previous %}
+          <button
+            class="join-item btn btn-sm"
+            hx-get="{% url 'blam:blam_metadata_panel' %}?kind={{ kind }}&page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}"
+            hx-target="#metadata-panel"
+            hx-swap="outerHTML"
+          >
+            Previous
+          </button>
+        {% else %}
+          <button class="join-item btn btn-sm btn-disabled" disabled>Previous</button>
+        {% endif %}
+
+        {% if page_obj.has_next %}
+          <button
+            class="join-item btn btn-sm"
+            hx-get="{% url 'blam:blam_metadata_panel' %}?kind={{ kind }}&page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}"
+            hx-target="#metadata-panel"
+            hx-swap="outerHTML"
+          >
+            Next
+          </button>
+        {% else %}
+          <button class="join-item btn btn-sm btn-disabled" disabled>Next</button>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
 </div>

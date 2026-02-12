@@ -1,5 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.paginator import Paginator
 from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -15,6 +16,7 @@ from lacos.blam.forms.metadata import (
     CollectionStructuralInfoForm,
     CollectionProjectInfoForm,
 )
+from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.collection.collection_header import CollectionHeader
 from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo
@@ -66,6 +68,11 @@ def collection_nav_items(collection: Collection) -> list[dict]:
             "label": "Projects",
             "url": reverse("blam:collection_metadata_projects", args=[collection.pk]),
         },
+        {
+            "slug": "bundles",
+            "label": "Bundles",
+            "url": reverse("blam:collection_bundles", args=[collection.pk]),
+        },
     ]
 
 
@@ -87,7 +94,7 @@ class CollectionListView(View):
         from django.db.models import Q
 
         search_query = request.GET.get("q", "").strip()
-        collections = Collection.objects.all().order_by("identifier")
+        collections = Collection.objects.prefetch_related("general_info").order_by("identifier")
         if not is_archivist(request.user):
             collections = collections.filter(
                 collection_manager_assignments__user=request.user
@@ -100,7 +107,9 @@ class CollectionListView(View):
                 Q(general_info__description__icontains=search_query)
             ).distinct()
 
-        context = {"collections": collections, "search_query": search_query}
+        paginator = Paginator(collections, 50)
+        page_obj = paginator.get_page(request.GET.get("page"))
+        context = {"collections": page_obj, "page_obj": page_obj, "search_query": search_query}
 
         if request.headers.get("HX-Request") and "q" in request.GET:
             return render(request, "blam/metadata/partials/collection_table.html", context)
@@ -406,3 +415,40 @@ class CollectionProjectInfoView(LoginRequiredMixin, View):
             "blam/metadata/collection_projects.html",
             {"form": form},
         )
+
+
+class CollectionBundlesView(LoginRequiredMixin, View):
+    def get(self, request, collection_id):
+        collection = get_object_or_404(Collection, pk=collection_id)
+        if not can_manage_collection(request.user, collection):
+            return HttpResponseForbidden("Collection manager access required.")
+
+        from django.db.models import Q
+
+        search_query = request.GET.get("q", "").strip()
+        bundles = Bundle.objects.filter(
+            structural_info__is_member_of_collection=collection
+        ).prefetch_related("general_info").order_by("identifier")
+
+        if search_query:
+            bundles = bundles.filter(
+                Q(identifier__icontains=search_query) |
+                Q(general_info__display_title__icontains=search_query) |
+                Q(general_info__description__icontains=search_query)
+            ).distinct()
+
+        paginator = Paginator(bundles, 50)
+        page_obj = paginator.get_page(request.GET.get("page"))
+        context = {
+            "bundles": page_obj,
+            "page_obj": page_obj,
+            "search_query": search_query,
+            "collection": collection,
+            "nav_items": collection_nav_items(collection),
+            "active_section": "bundles",
+        }
+
+        if request.headers.get("HX-Request") and "q" in request.GET:
+            return render(request, "blam/metadata/partials/bundle_table.html", context)
+
+        return render(request, "blam/metadata/collection_bundles.html", context)

@@ -1,0 +1,26 @@
+{% extends "blam/metadata/base_editor.html" %}
+
+{% block editor_content %}
+<div class="flex items-center justify-between mb-4">
+  <h2 class="text-xl font-semibold">Bundles in this Collection</h2>
+</div>
+
+<form method="get" class="mb-4">
+  <input
+    type="search"
+    name="q"
+    value="{{ search_query }}"
+    placeholder="Search by title, handle or description..."
+    class="input input-bordered w-full max-w-md"
+    hx-get="{% url 'blam:collection_bundles' collection.pk %}"
+    hx-target="#bundle-table-container"
+    hx-swap="innerHTML"
+    hx-trigger="change, keyup delay:400ms"
+  >
+</form>
+
+<div id="bundle-table-container" class="overflow-x-auto">
+  {% include "blam/metadata/partials/bundle_table.html" %}
+  {% include "blam/metadata/partials/pagination.html" %}
+</div>
+{% endblock %}
