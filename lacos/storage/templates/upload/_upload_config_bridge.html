@@ -1,7 +1,3 @@
-{#
-    Bridge Django settings into the front-end uploader so we stay in sync with arkumu-app defaults.
-    Injects a global UPLOAD_CONFIG object with both camelCase and snake_case keys for compatibility.
-#}
 {{ UPLOAD_CLIENT_CONFIG|json_script:"upload-config-data" }}
 <script>
     (function() {
