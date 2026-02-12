@@ -545,18 +545,15 @@ class BundleXmlView(View):
         exporter = BundleExporter()
         try:
             xml_content = exporter.export(bundle)
-        except Exception:
+        except Exception as e:
             logger.exception("Failed to export bundle %s as XML", bundle.identifier)
+            msg = f"Error generating XML for bundle {bundle.identifier}: {e}"
             if request.headers.get("HX-Request") == "true":
                 return render(request, "explorer/partials/metadata_preview.html", {
-                    "content": f"Error generating XML for bundle {bundle.identifier}",
+                    "content": msg,
                     "language_class": "language-plain",
                 })
-            return HttpResponse(
-                f"Error generating XML for bundle {bundle.identifier}",
-                content_type="text/plain",
-                status=500,
-            )
+            return HttpResponse(msg, content_type="text/plain", status=500)
 
         if request.headers.get("HX-Request") == "true":
             return render(request, "explorer/partials/metadata_preview.html", {
