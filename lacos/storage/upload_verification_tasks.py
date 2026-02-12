@@ -6,7 +6,8 @@ from django.utils import timezone
 from huey.contrib.djhuey import db_task
 
 try:
-    from huey.contrib.djhuey import db_periodic_task, crontab
+    from huey import crontab
+    from huey.contrib.djhuey import db_periodic_task
     HUEY_PERIODIC_AVAILABLE = True
 except ImportError:  # pragma: no cover - optional dependency
     HUEY_PERIODIC_AVAILABLE = False

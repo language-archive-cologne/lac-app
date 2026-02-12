@@ -116,6 +116,14 @@ services:
       SAML_LOGIN_ENABLED: "true"
       SAML_DJANGO_USER_MAIN_ATTRIBUTE: "username"
       SAML_USE_NAME_ID_AS_USERNAME: "false"
+      DB_BACKUP_ENABLED: "true"
+      DB_BACKUP_COMPOSE_FILE: "docker-compose.dev.yml"
+      DB_BACKUP_COMPOSE_PROJECT_DIR: /app
+      DB_BACKUP_COMPOSE_PROJECT_NAME: ""
+      DB_BACKUP_BACKUP_DIR: /backups
+      DB_BACKUP_CRON_HOUR: "2"
+      DB_BACKUP_CRON_MINUTE: "0"
+      HUEY_IMMEDIATE: "false"
     command: /bin/sh -c "python manage.py run_huey"
     networks:
       - lacos_dev_network

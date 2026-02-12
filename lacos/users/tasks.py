@@ -12,7 +12,8 @@ from django.conf import settings
 from huey.contrib.djhuey import task
 
 try:
-    from huey.contrib.djhuey import db_periodic_task, crontab
+    from huey import crontab
+    from huey.contrib.djhuey import db_periodic_task
     HUEY_PERIODIC_AVAILABLE = True
 except ImportError:  # pragma: no cover - optional dependency guard
     HUEY_PERIODIC_AVAILABLE = False
