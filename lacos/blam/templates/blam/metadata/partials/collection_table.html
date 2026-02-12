@@ -23,9 +23,9 @@
         <td>
           <div class="flex items-center gap-2">
             {% if editor_target_id %}
-              <a
+              <button
+                type="button"
                 class="btn btn-ghost btn-xs"
-                href="{% url 'blam:collection_metadata_overview' collection.pk %}"
                 hx-get="{% url 'blam:collection_metadata_overview' collection.pk %}"
                 hx-target="#{{ editor_target_id }}"
                 hx-select="#metadata-editor"
@@ -36,7 +36,7 @@
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5h6m-6 0l-7 7v6h6l7-7M11 5l6 6" />
                 </svg>
-              </a>
+              </button>
             {% else %}
               <a class="btn btn-ghost btn-xs" href="{% url 'blam:collection_metadata_overview' collection.pk %}" aria-label="Edit collection" title="Edit collection">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

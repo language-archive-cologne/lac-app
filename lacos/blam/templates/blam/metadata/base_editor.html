@@ -6,6 +6,30 @@
     <div class="card bg-base-100 shadow">
       <div class="card-body">
         {% if collection %}
+          <a href="{% url 'blam:collection_metadata_list' %}" class="btn btn-ghost btn-sm gap-1 self-start -mt-1 -ml-1 mb-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+            Collections
+          </a>
+        {% elif bundle %}
+          {% if parent_collection %}
+            <a href="{% url 'blam:collection_bundles' parent_collection.pk %}" class="btn btn-ghost btn-sm gap-1 self-start -mt-1 -ml-1 mb-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+              </svg>
+              {{ parent_collection.get_general_info.display_title|default:"Collection" }} Bundles
+            </a>
+          {% else %}
+            <a href="{% url 'blam:bundle_metadata_list' %}" class="btn btn-ghost btn-sm gap-1 self-start -mt-1 -ml-1 mb-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+              </svg>
+              Bundles
+            </a>
+          {% endif %}
+        {% endif %}
+        {% if collection %}
           <h2 class="card-title text-lg">{{ collection.get_general_info.display_title|default:"Untitled Collection" }}</h2>
           <p class="text-xs font-mono text-base-content/50">{{ collection.identifier }}</p>
         {% elif bundle %}
@@ -27,19 +51,6 @@
             </li>
           {% endfor %}
         </ul>
-        <div class="mt-4">
-          {% if collection %}
-            <a href="{% url 'blam:collection_metadata_list' %}" class="btn btn-sm btn-outline w-full">All Collections</a>
-          {% elif bundle %}
-            {% with bundle.get_structural_info as si %}
-              {% if si and si.is_member_of_collection %}
-                <a href="{% url 'blam:collection_metadata_overview' si.is_member_of_collection.pk %}" class="btn btn-sm btn-outline w-full">Back to Collection</a>
-              {% else %}
-                <a href="{% url 'blam:collection_metadata_list' %}" class="btn btn-sm btn-outline w-full">Collections</a>
-              {% endif %}
-            {% endwith %}
-          {% endif %}
-        </div>
       </div>
     </div>
   </aside>

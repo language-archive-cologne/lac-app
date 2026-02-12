@@ -84,9 +84,15 @@ def bundle_nav_items(bundle: Bundle) -> list[dict]:
     ]
 
 
+def _get_parent_collection(bundle: Bundle):
+    struct = bundle.structural_info.select_related("is_member_of_collection").first()
+    return struct.is_member_of_collection if struct else None
+
+
 def render_bundle_section(request, bundle: Bundle, section_slug: str, template_name: str, context: dict):
     base_context = {
         "bundle": bundle,
+        "parent_collection": _get_parent_collection(bundle),
         "nav_items": bundle_nav_items(bundle),
         "active_section": section_slug,
     }
