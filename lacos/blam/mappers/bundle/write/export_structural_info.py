@@ -188,7 +188,7 @@ def export_written_resource(resource: Any) -> WrittenResourceType:
     # Set annotation references if present
     if hasattr(resource, 'annotations') and resource.annotations.exists():
         resource_data.is_annotation_of = [
-            annotation.reference for annotation in resource.annotations.all()
+            annotation.is_annotation_of for annotation in resource.annotations.all()
         ]
     
     return resource_data
