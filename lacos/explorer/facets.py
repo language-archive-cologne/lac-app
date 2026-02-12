@@ -68,6 +68,7 @@ class FacetDefinition:
     label_field: str
     filter_lookup: str
     label_map: dict[str, str] | None = None
+    sort_alphabetically: bool = False
 
 
 FACET_DEFINITIONS: list[FacetDefinition] = [
@@ -78,6 +79,7 @@ FACET_DEFINITIONS: list[FacetDefinition] = [
         value_field="general_info__keywords__value",
         label_field="general_info__keywords__value",
         filter_lookup="general_info__keywords__value__in",
+        sort_alphabetically=True,
     ),
     FacetDefinition(
         name="language",
@@ -144,6 +146,7 @@ BUNDLE_FACET_DEFINITIONS: list[FacetDefinition] = [
         value_field="general_info__keywords__value",
         label_field="general_info__keywords__value",
         filter_lookup="general_info__keywords__value__in",
+        sort_alphabetically=True,
     ),
     FacetDefinition(
         name="language",
@@ -314,6 +317,7 @@ class FacetService:
                 grouped.get(defn.name, []),
                 selections.get(defn.name, []),
                 label_map=defn.label_map,
+                sort_alphabetically=defn.sort_alphabetically,
             )
             truncated = len(facet_values) > FACET_MAX_VALUES
             if truncated:
@@ -417,6 +421,7 @@ class FacetService:
         selected_list: list[str],
         *,
         label_map: dict[str, str] | None = None,
+        sort_alphabetically: bool = False,
     ) -> list[FacetValue]:
         """Convert raw DB rows into sorted FacetValue list."""
         counts: dict[str, dict[str, Any]] = {}
@@ -448,7 +453,10 @@ class FacetService:
                     FacetValue(value=sel_val, label=sel_val, count=0, selected=True)
                 )
 
-        facet_values.sort(key=lambda fv: (not fv.selected, -fv.count, fv.label))
+        if sort_alphabetically:
+            facet_values.sort(key=lambda fv: (not fv.selected, fv.label.lower()))
+        else:
+            facet_values.sort(key=lambda fv: (not fv.selected, -fv.count, fv.label))
         return facet_values
 
     @staticmethod
