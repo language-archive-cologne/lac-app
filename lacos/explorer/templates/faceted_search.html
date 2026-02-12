@@ -11,6 +11,7 @@
     .facet-loading .facet-spinner  { display: flex; }
     .facet-spinner { display: none; }
   </style>
+  <meta name="htmx-config" content='{"refreshOnHistoryMiss":true}'>
   <script>
     // Toggle loading state on the faceted search wrapper
     document.addEventListener('htmx:beforeRequest', function(e) {
