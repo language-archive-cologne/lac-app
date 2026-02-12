@@ -138,7 +138,9 @@ class CollectionListView(ListView):
         else:
             languages_count = cache.get(LANGUAGE_COUNT_CACHE_KEY)
             if languages_count is None:
-                languages_count = CollectionObjectLanguage.objects.values('iso_639_3_code').distinct().count()
+                languages_count = CollectionObjectLanguage.objects.filter(
+                    collectiongeneralinfo__isnull=False
+                ).values('iso_639_3_code').distinct().count()
                 cache.set(LANGUAGE_COUNT_CACHE_KEY, languages_count, LANGUAGE_COUNT_CACHE_TIMEOUT)
 
         context['stats'] = {
