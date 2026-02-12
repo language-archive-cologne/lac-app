@@ -43,7 +43,8 @@ def export_administrative_info(admin_info: CollectionAdministrativeInfo, repo) -
     info.access = _export_access(admin_info.access_level)
 
     # Availability date
-    info.availability_date = XmlDate.from_date(admin_info.availability_date)
+    if admin_info.availability_date:
+        info.availability_date = XmlDate.from_date(admin_info.availability_date)
 
     # Licenses
     info.license = [_export_license(lic) for lic in admin_info.licenses.all()]

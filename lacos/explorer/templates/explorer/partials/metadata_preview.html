@@ -1,0 +1,6 @@
+{% load i18n %}
+{% load static %}
+<pre class="bg-base-200 p-4 rounded-lg text-sm overflow-auto h-full max-h-[60vh] leading-relaxed"><code id="metadata-content" class="{{ language_class }}">{{ content }}</code></pre>
+<script>
+  if (window.Prism) { Prism.highlightElement(document.getElementById('metadata-content')); }
+</script>

@@ -478,20 +478,29 @@
             <button
               type="button"
               id="btn-jsonld"
-              onclick="switchFormat('jsonld')"
-              class="btn btn-sm join-item btn-active">
+              class="btn btn-sm join-item btn-active"
+              hx-get="{% url 'explorer:collection_jsonld_by_handle' handle=collection.identifier %}"
+              hx-target="#metadata-preview-container"
+              hx-swap="innerHTML"
+              hx-indicator="#metadata-loading"
+              hx-on::after-request="updateMetadataUI('jsonld')">
               JSON-LD
             </button>
             <button
               type="button"
               id="btn-xml"
-              onclick="switchFormat('xml')"
-              class="btn btn-sm join-item">
+              class="btn btn-sm join-item"
+              hx-get="{% url 'explorer:collection_xml_by_handle' handle=collection.identifier %}"
+              hx-target="#metadata-preview-container"
+              hx-swap="innerHTML"
+              hx-indicator="#metadata-loading"
+              hx-on::after-request="updateMetadataUI('xml')">
               XML
             </button>
           </div>
         </div>
         <div class="flex items-center gap-2">
+          <span id="metadata-loading" class="htmx-indicator loading loading-spinner loading-sm"></span>
           <button
             type="button"
             onclick="copyMetadata()"
@@ -524,7 +533,7 @@
         </div>
       </div>
       <!-- Content -->
-      <div class="flex-1 overflow-hidden p-6">
+      <div id="metadata-preview-container" class="flex-1 overflow-hidden p-6">
         <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-auto h-full max-h-[60vh] leading-relaxed"><code id="metadata-content" class="language-json"></code></pre>
       </div>
     </div>
@@ -535,71 +544,26 @@
   <script src="{% static 'vendor/js/prism.js' %}"></script>
 
   <script>
-    let metadataCache = { jsonld: null, xml: null };
-    let currentFormat = 'jsonld';
-
-    const urls = {
+    const metadataUrls = {
       jsonld: '{% url "explorer:collection_jsonld_by_handle" handle=collection.identifier %}',
       xml: '{% url "explorer:collection_xml_by_handle" handle=collection.identifier %}'
     };
+    let currentFormat = 'jsonld';
 
-    async function openMetadataModal(format = 'jsonld') {
+    function openMetadataModal(format) {
       currentFormat = format;
       const modal = document.getElementById('metadata-modal');
-      const content = document.getElementById('metadata-content');
-
       modal.classList.remove('hidden');
       document.body.classList.add('overflow-hidden');
-      content.textContent = 'Loading...';
-      content.className = format === 'xml' ? 'language-xml' : 'language-json';
-
-      updateFormatButtons();
-      updateDownloadLink();
-
-      await loadMetadata(format);
+      updateMetadataUI(format);
+      htmx.trigger(document.getElementById('btn-' + format), 'click');
     }
 
-    async function loadMetadata(format) {
-      const content = document.getElementById('metadata-content');
-
-      if (metadataCache[format]) {
-        content.textContent = metadataCache[format];
-        Prism.highlightElement(content);
-        return;
-      }
-
-      try {
-        const response = await fetch(urls[format]);
-        if (format === 'jsonld') {
-          const data = await response.json();
-          metadataCache[format] = JSON.stringify(data, null, 2);
-        } else {
-          metadataCache[format] = await response.text();
-        }
-        content.textContent = metadataCache[format];
-        Prism.highlightElement(content);
-      } catch (error) {
-        content.textContent = 'Error loading metadata: ' + error.message;
-      }
-    }
-
-    function switchFormat(format) {
+    function updateMetadataUI(format) {
       currentFormat = format;
-      const content = document.getElementById('metadata-content');
-      content.className = format === 'xml' ? 'language-xml' : 'language-json';
-
-      updateFormatButtons();
-      updateDownloadLink();
-      loadMetadata(format);
-    }
-
-    function updateFormatButtons() {
-      document.getElementById('btn-jsonld').classList.toggle('btn-active', currentFormat === 'jsonld');
-      document.getElementById('btn-xml').classList.toggle('btn-active', currentFormat === 'xml');
-    }
-
-    function updateDownloadLink() {
-      document.getElementById('download-link').href = urls[currentFormat];
+      document.getElementById('btn-jsonld').classList.toggle('btn-active', format === 'jsonld');
+      document.getElementById('btn-xml').classList.toggle('btn-active', format === 'xml');
+      document.getElementById('download-link').href = metadataUrls[format];
     }
 
     function closeMetadataModal() {
@@ -608,10 +572,9 @@
     }
 
     function copyMetadata() {
-      const text = metadataCache[currentFormat];
-      if (!text) return;
-
-      navigator.clipboard.writeText(text).then(() => {
+      const el = document.getElementById('metadata-content');
+      if (!el || !el.textContent) return;
+      navigator.clipboard.writeText(el.textContent).then(() => {
         const btn = document.getElementById('copy-btn-text');
         btn.textContent = '{% translate "Copied!" %}';
         setTimeout(() => btn.textContent = '{% translate "Copy" %}', 2000);

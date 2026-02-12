@@ -485,20 +485,23 @@ class BundleJsonLdView(View):
         serializer = BundleJsonLdSerializer(bundle)
         data = serializer.serialize()
 
+        if request.headers.get("HX-Request") == "true":
+            from django.core.serializers.json import DjangoJSONEncoder
+            content = json.dumps(data, indent=2, ensure_ascii=False, cls=DjangoJSONEncoder)
+            return render(request, "explorer/partials/metadata_preview.html", {
+                "content": content,
+                "language_class": "language-json",
+            })
+
         response = JsonResponse(data, json_dumps_params={"indent": 2, "ensure_ascii": False})
         response["Content-Type"] = "application/ld+json"
 
-        # Only force download if explicitly requested (not AJAX/fetch)
-        is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
-        is_fetch = "fetch" in request.headers.get("Sec-Fetch-Mode", "")
-
-        if not is_ajax and not is_fetch:
-            general_info = bundle.general_info.first()
-            if general_info and general_info.display_title:
-                filename = general_info.display_title.replace(" ", "_")[:50]
-            else:
-                filename = str(bundle.id)[:8]
-            response["Content-Disposition"] = f'attachment; filename="{filename}.jsonld"'
+        general_info = bundle.general_info.first()
+        if general_info and general_info.display_title:
+            filename = general_info.display_title.replace(" ", "_")[:50]
+        else:
+            filename = str(bundle.id)[:8]
+        response["Content-Disposition"] = f'attachment; filename="{filename}.jsonld"'
 
         return response
 
@@ -540,7 +543,26 @@ class BundleXmlView(View):
             raise Http404("Bundle not found")
 
         exporter = BundleExporter()
-        xml_content = exporter.export(bundle)
+        try:
+            xml_content = exporter.export(bundle)
+        except Exception:
+            logger.exception("Failed to export bundle %s as XML", bundle.identifier)
+            if request.headers.get("HX-Request") == "true":
+                return render(request, "explorer/partials/metadata_preview.html", {
+                    "content": f"Error generating XML for bundle {bundle.identifier}",
+                    "language_class": "language-plain",
+                })
+            return HttpResponse(
+                f"Error generating XML for bundle {bundle.identifier}",
+                content_type="text/plain",
+                status=500,
+            )
+
+        if request.headers.get("HX-Request") == "true":
+            return render(request, "explorer/partials/metadata_preview.html", {
+                "content": xml_content,
+                "language_class": "language-xml",
+            })
 
         general_info = bundle.general_info.first()
         if general_info and general_info.display_title:

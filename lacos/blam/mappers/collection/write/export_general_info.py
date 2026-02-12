@@ -43,7 +43,8 @@ def export_general_info(general_info: CollectionGeneralInfo, repo) -> None:
     info.collection_object_languages = _export_object_languages(
         general_info.object_languages.all()
     )
-    info.collection_location = _export_location(general_info.location)
+    if general_info.location:
+        info.collection_location = _export_location(general_info.location)
 
     repo.collection_general_info = info
 

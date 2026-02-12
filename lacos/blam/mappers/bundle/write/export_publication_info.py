@@ -32,7 +32,8 @@ def export_publication_info(publication_info: BundlePublicationInfo, cmd_data: C
     """Export bundle publication information from Django models to BLAM schema."""
     bundle_info = BundlePublicationInfoType()
 
-    bundle_info.bundle_publication_year = XmlPeriod(str(publication_info.publication_year))
+    if publication_info.publication_year is not None:
+        bundle_info.bundle_publication_year = XmlPeriod(str(publication_info.publication_year))
     bundle_info.bundle_data_provider = publication_info.data_provider
     bundle_info.bundle_creators = export_creators(publication_info.creators.all())
 

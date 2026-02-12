@@ -33,7 +33,8 @@ def export_publication_info(pub_info: CollectionPublicationInfo, repo) -> None:
     """Export collection publication info to BLAM schema."""
     info = PubInfoType()
 
-    info.collection_publication_year = XmlPeriod(f"{pub_info.publication_year}")
+    if pub_info.publication_year is not None:
+        info.collection_publication_year = XmlPeriod(f"{pub_info.publication_year}")
     info.collection_data_provider = pub_info.data_provider
     info.collection_creators = _export_creators(pub_info.creators.all())
 

@@ -6,7 +6,7 @@ from urllib.parse import unquote
 
 from django.core.cache import cache
 from django.db.models import Count, Min, Prefetch, Q
-from django.http import Http404, HttpResponseForbidden
+from django.http import Http404, HttpResponse, HttpResponseForbidden
 from django.shortcuts import redirect, render
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -583,20 +583,23 @@ class CollectionJsonLdView(View):
         serializer = CollectionJsonLdSerializer(collection)
         data = serializer.serialize()
 
+        if request.headers.get("HX-Request") == "true":
+            from django.core.serializers.json import DjangoJSONEncoder
+            content = json.dumps(data, indent=2, ensure_ascii=False, cls=DjangoJSONEncoder)
+            return render(request, "explorer/partials/metadata_preview.html", {
+                "content": content,
+                "language_class": "language-json",
+            })
+
         response = JsonResponse(data, json_dumps_params={"indent": 2, "ensure_ascii": False})
         response["Content-Type"] = "application/ld+json"
 
-        # Only force download if explicitly requested (not AJAX/fetch)
-        is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
-        is_fetch = "fetch" in request.headers.get("Sec-Fetch-Mode", "")
-
-        if not is_ajax and not is_fetch:
-            general_info = collection.general_info.first()
-            if general_info and general_info.display_title:
-                filename = general_info.display_title.replace(" ", "_")[:50]
-            else:
-                filename = str(collection.id)[:8]
-            response["Content-Disposition"] = f'attachment; filename="{filename}.jsonld"'
+        general_info = collection.general_info.first()
+        if general_info and general_info.display_title:
+            filename = general_info.display_title.replace(" ", "_")[:50]
+        else:
+            filename = str(collection.id)[:8]
+        response["Content-Disposition"] = f'attachment; filename="{filename}.jsonld"'
 
         return response
 
@@ -605,8 +608,6 @@ class CollectionXmlView(View):
     """Export collection metadata as BLAM XML."""
 
     def get(self, request, pk=None, handle=None):
-        from django.http import HttpResponse
-
         queryset = Collection.objects.prefetch_related(
             "header",
             "general_info",
@@ -642,7 +643,26 @@ class CollectionXmlView(View):
             raise Http404("Collection not found")
 
         exporter = CollectionExporter()
-        xml_content = exporter.export(collection)
+        try:
+            xml_content = exporter.export(collection)
+        except Exception:
+            logger.exception("Failed to export collection %s as XML", collection.identifier)
+            if request.headers.get("HX-Request") == "true":
+                return render(request, "explorer/partials/metadata_preview.html", {
+                    "content": f"Error generating XML for collection {collection.identifier}",
+                    "language_class": "language-plain",
+                })
+            return HttpResponse(
+                f"Error generating XML for collection {collection.identifier}",
+                content_type="text/plain",
+                status=500,
+            )
+
+        if request.headers.get("HX-Request") == "true":
+            return render(request, "explorer/partials/metadata_preview.html", {
+                "content": xml_content,
+                "language_class": "language-xml",
+            })
 
         general_info = collection.general_info.first()
         if general_info and general_info.display_title:

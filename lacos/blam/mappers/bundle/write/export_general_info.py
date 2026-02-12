@@ -43,7 +43,8 @@ def export_general_info(general_info: BundleGeneralInfo, cmd_data: Cmd) -> None:
     bundle_info.bundle_recording_date = create_recording_date(general_info.recording_date)
 
     # Set location
-    bundle_info.bundle_location = export_bundle_location(general_info.location)
+    if general_info.location:
+        bundle_info.bundle_location = export_bundle_location(general_info.location)
 
     # Set keywords if present
     if general_info.keywords.exists():
