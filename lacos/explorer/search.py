@@ -6,12 +6,14 @@ from typing import Literal
 from django.contrib.postgres.search import SearchQuery
 from django.contrib.postgres.search import SearchRank
 from django.contrib.postgres.search import SearchVector
+from django.contrib.postgres.search import TrigramWordSimilarity
 from django.db.models import OuterRef
 from django.db.models import Subquery
 from django.db.models import Value
 from django.db.models import F
 from django.db.models import Q
 from django.db.models.functions import Coalesce
+from django.db.models.functions import Greatest
 from django.urls import reverse
 
 from lacos.blam.models import Bundle
@@ -55,6 +57,11 @@ def search_archives(term: str, *, limit: int | None = None, use_stored_vectors: 
 
     collection_results = _search_collections(query, use_stored_vectors)
     bundle_results = _search_bundles(query, use_stored_vectors)
+
+    # Trigram fallback when FTS returns nothing
+    if not collection_results and not bundle_results and len(normalized) >= 3:
+        collection_results = _trigram_search_collections(normalized)
+        bundle_results = _trigram_search_bundles(normalized)
 
     combined: list[SearchResult] = [*collection_results, *bundle_results]
     combined.sort(key=lambda result: result.rank, reverse=True)
@@ -211,6 +218,78 @@ def _search_bundles(query: SearchQuery, use_stored_vectors: bool = True) -> list
                 description=description,
                 url=reverse("explorer:bundle_detail", kwargs={"pk": bundle.pk}),
                 rank=bundle.search_rank or 0.0,
+            )
+        )
+    return results
+
+
+def _trigram_search_collections(search_term: str) -> list[SearchResult]:
+    general_info = CollectionGeneralInfo.objects.filter(collection=OuterRef("pk"))
+
+    collections = (
+        Collection.objects.annotate(
+            collection_display_title=Subquery(general_info.values("display_title")[:1]),
+            collection_description=Subquery(general_info.values("description")[:1]),
+            similarity=Greatest(
+                TrigramWordSimilarity(search_term, "general_info__display_title"),
+                TrigramWordSimilarity(search_term, "identifier"),
+            ),
+        )
+        .filter(similarity__gt=0.3)
+        .distinct()
+        .order_by("-similarity", "identifier")
+    )[:50]
+
+    results: list[SearchResult] = []
+    for collection in collections:
+        title = collection.collection_display_title or collection.identifier
+        description = collection.collection_description or ""
+        results.append(
+            SearchResult(
+                kind="collection",
+                object_id=str(collection.pk),
+                identifier=collection.identifier,
+                title=title,
+                description=description,
+                url=reverse("explorer:collection_detail", kwargs={"pk": collection.pk}),
+                rank=collection.similarity or 0.0,
+            )
+        )
+    return results
+
+
+def _trigram_search_bundles(search_term: str) -> list[SearchResult]:
+    general_info = BundleGeneralInfo.objects.filter(bundle=OuterRef("pk"))
+    structural_info = BundleStructuralInfo.objects.filter(bundle=OuterRef("pk"))
+
+    bundles = (
+        Bundle.objects.annotate(
+            bundle_display_title=Subquery(general_info.values("display_title")[:1]),
+            bundle_description=Subquery(general_info.values("description")[:1]),
+            parent_collection_identifier=Subquery(structural_info.values("is_member_of_collection__identifier")[:1]),
+            similarity=Greatest(
+                TrigramWordSimilarity(search_term, "general_info__display_title"),
+                TrigramWordSimilarity(search_term, "identifier"),
+            ),
+        )
+        .filter(similarity__gt=0.3)
+        .distinct()
+        .order_by("-similarity", "identifier")
+    )[:50]
+
+    results: list[SearchResult] = []
+    for bundle in bundles:
+        title = bundle.bundle_display_title or bundle.identifier
+        description = bundle.bundle_description or ""
+        results.append(
+            SearchResult(
+                kind="bundle",
+                object_id=str(bundle.pk),
+                identifier=bundle.identifier,
+                title=title,
+                description=description,
+                url=reverse("explorer:bundle_detail", kwargs={"pk": bundle.pk}),
+                rank=bundle.similarity or 0.0,
             )
         )
     return results

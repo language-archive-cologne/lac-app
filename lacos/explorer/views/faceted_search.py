@@ -1,7 +1,6 @@
 """Faceted search view for collection discovery."""
 
 from django.contrib.contenttypes.models import ContentType
-from django.contrib.postgres.search import SearchQuery
 from django.db.models import CharField, Count, Min, OuterRef, Subquery
 from django.db.models.functions import Cast
 from django.shortcuts import render
@@ -9,6 +8,7 @@ from django.views.generic import ListView
 
 from lacos.blam.models import Collection
 from lacos.explorer.facets import FACET_CACHE_KEY, FacetService, FacetedSearchResult
+from lacos.explorer.text_search import apply_text_search
 from lacos.storage.models.acl_permissions import ACLPermissions
 
 SORT_ALLOWLIST = {
@@ -40,7 +40,7 @@ class FacetedSearchView(ListView):
 
         search_query = self.request.GET.get("q", "").strip()
         if search_query:
-            base_qs = self._apply_text_search(base_qs, search_query)
+            base_qs = apply_text_search(base_qs, search_query)
 
         # Cache facet counts when there is no text search (base case).
         facet_cache_key = FACET_CACHE_KEY if not search_query else None
@@ -76,12 +76,6 @@ class FacetedSearchView(ListView):
         )
 
         return qs
-
-    def _apply_text_search(self, qs, search_term):
-        """Apply full-text search using the stored search_vector field."""
-        prefix_terms = " & ".join(f"{word}:*" for word in search_term.split())
-        query = SearchQuery(prefix_terms, config="simple", search_type="raw")
-        return qs.filter(search_vector=query)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

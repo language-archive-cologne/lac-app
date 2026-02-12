@@ -1,7 +1,6 @@
 """Faceted search view for bundle discovery."""
 
 from django.contrib.contenttypes.models import ContentType
-from django.contrib.postgres.search import SearchQuery
 from django.db.models import CharField, Min, OuterRef, Subquery
 from django.db.models.functions import Cast
 from django.shortcuts import render
@@ -14,6 +13,7 @@ from lacos.explorer.facets import (
     FacetedSearchResult,
     FacetService,
 )
+from lacos.explorer.text_search import apply_text_search
 from lacos.storage.models.acl_permissions import ACLPermissions
 
 BUNDLE_SORT_ALLOWLIST = {
@@ -43,7 +43,7 @@ class BundleFacetedSearchView(ListView):
 
         search_query = self.request.GET.get("q", "").strip()
         if search_query:
-            base_qs = self._apply_text_search(base_qs, search_query)
+            base_qs = apply_text_search(base_qs, search_query)
 
         facet_cache_key = BUNDLE_FACET_CACHE_KEY if not search_query else None
         self._faceted_result = FacetService(
@@ -84,12 +84,6 @@ class BundleFacetedSearchView(ListView):
         )
 
         return qs
-
-    def _apply_text_search(self, qs, search_term):
-        """Apply full-text search using the stored search_vector field."""
-        prefix_terms = " & ".join(f"{word}:*" for word in search_term.split())
-        query = SearchQuery(prefix_terms, config="simple", search_type="raw")
-        return qs.filter(search_vector=query)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
