@@ -30,7 +30,7 @@
 
   <!-- Search type tabs -->
   <div role="tablist" class="tabs tabs-border mb-6">
-    <a role="tab" class="tab" href="{% url 'faceted_search' %}">{% translate "Collections" %}</a>
+    <a role="tab" class="tab" href="{% url 'faceted_search' %}{% if search_query %}?q={{ search_query|urlencode }}{% endif %}">{% translate "Collections" %}</a>
     <a role="tab" class="tab tab-active font-semibold">{% translate "Bundles" %}</a>
   </div>
 
