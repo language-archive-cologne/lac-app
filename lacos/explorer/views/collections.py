@@ -319,24 +319,17 @@ class CollectionDetailView(HandleLookupMixin, DetailView):
             bundle_info['access_level'] = bundle_acl.access_level
             bundle_info['can_read_bundle'] = bundle_acl.allowed or not acl_service.enforcement_enabled
 
-        # Metadata license (MDLicense) from collection header.
-        # Fallback for older collection versions: use first administrative license.
+        # Content license from administrative info (license_name).
         context["metadata_license"] = None
         context["metadata_license_uri"] = None
-        header = self.object.base_header
-        if header and header.md_license:
-            context["metadata_license"] = header.md_license
-            context["metadata_license_uri"] = header.md_license_uri
-
-        # Administrative/content rights licenses.
         context["content_licenses"] = []
         if hasattr(self.object, "administrative_info") and self.object.administrative_info.first():
             context["content_licenses"] = self.object.administrative_info.first().licenses.all()
-            if not context["metadata_license"] and context["content_licenses"]:
-                fallback_license = context["content_licenses"].first()
-                if fallback_license:
-                    context["metadata_license"] = fallback_license.license_name
-                    context["metadata_license_uri"] = fallback_license.license_identifier
+            if context["content_licenses"]:
+                first_license = context["content_licenses"].first()
+                if first_license:
+                    context["metadata_license"] = first_license.license_name
+                    context["metadata_license_uri"] = first_license.license_identifier
 
         # Citation
         context['citation'] = self._format_citation()
