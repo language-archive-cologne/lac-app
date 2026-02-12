@@ -5,6 +5,7 @@ from typing import Any, Callable, Optional
 
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponseForbidden
+from django.template.loader import render_to_string
 from django.utils.translation import gettext_lazy as _
 
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService, ACLCheckResult
@@ -64,7 +65,8 @@ class ACLPermissionMixin:
         return obj
 
     def handle_no_permission(self, result: ACLCheckResult):
-        return HttpResponseForbidden(self.permission_denied_message)
+        html = render_to_string("403.html", {"exception": self.permission_denied_message}, request=getattr(self, "request", None))
+        return HttpResponseForbidden(html)
 
 
 def require_acl_permission(
@@ -95,7 +97,8 @@ def require_acl_permission(
 
             if service.enforcement_enabled and not result.allowed:
                 message = denial_message or _("You do not have permission to access this resource.")
-                return HttpResponseForbidden(message)
+                html = render_to_string("403.html", {"exception": message}, request=request)
+                return HttpResponseForbidden(html)
 
             request.acl_result = result  # type: ignore[attr-defined]
             return view_func(request, *args, **kwargs)

@@ -7,6 +7,7 @@ from typing import Optional
 from urllib.parse import unquote
 
 from django.http import Http404, HttpResponse, HttpResponseForbidden, JsonResponse
+from django.template.loader import render_to_string
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -281,7 +282,8 @@ class ResourceAccessView(View):
             acl_service = ACLEvaluationService()
             acl_result = acl_service.evaluate(request.user, bundle, mode="acl:Read")
             if acl_service.enforcement_enabled and not acl_result.allowed:
-                return HttpResponseForbidden(self.permission_denied_message)
+                html = render_to_string("403.html", {"exception": self.permission_denied_message}, request=request)
+                return HttpResponseForbidden(html)
 
         if not resource:
             raise Http404(f"Resource with id {resource_id} not found in bundle {bundle_id}")

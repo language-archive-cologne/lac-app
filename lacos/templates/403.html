@@ -1,13 +1,29 @@
 {% extends "base.html" %}
 
-{% block title %}Forbidden (403){% endblock title %}
+{% block title %}Access Denied{% endblock title %}
+
+{% block seo_meta %}{% endblock seo_meta %}
+
 {% block content %}
-  <h1>Forbidden (403)</h1>
-  <p>
-    {% if exception %}
-      {{ exception }}
-    {% else %}
-      You're not allowed to access this page.
-    {% endif %}
-  </p>
+<div class="flex items-center justify-center min-h-[60vh]">
+  <div class="text-center max-w-md px-6">
+    <div class="text-base-content/20 mb-6">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-24 w-24 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M12 15v.01M12 12a1.5 1.5 0 011.5-1.5c.83 0 1.5.67 1.5 1.5a1.5 1.5 0 01-1.13 1.45c-.24.06-.37.26-.37.51V15M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+      </svg>
+    </div>
+    <h1 class="text-3xl font-bold mb-3">Access Denied</h1>
+    <p class="text-base-content/60 mb-8">
+      {% if exception %}
+        {{ exception }}
+      {% else %}
+        You don't have permission to view this page. If you believe this is an error, please contact <a href="mailto:lac-helpdesk@uni-koeln.de" class="link link-primary">lac-helpdesk@uni-koeln.de</a>.
+      {% endif %}
+    </p>
+    <div class="flex flex-col sm:flex-row gap-3 justify-center">
+      <a href="/" class="btn btn-primary">Go to Homepage</a>
+      <button onclick="history.back()" class="btn btn-ghost">Go Back</button>
+    </div>
+  </div>
+</div>
 {% endblock content %}
