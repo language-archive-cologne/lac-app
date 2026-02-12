@@ -1,12 +1,15 @@
 """Faceted search view for collection discovery."""
 
+from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.search import SearchQuery
-from django.db.models import Count, Min
+from django.db.models import CharField, Count, Min, OuterRef, Subquery
+from django.db.models.functions import Cast
 from django.shortcuts import render
 from django.views.generic import ListView
 
 from lacos.blam.models import Collection
 from lacos.explorer.facets import FACET_CACHE_KEY, FacetService, FacetedSearchResult
+from lacos.storage.models.acl_permissions import ACLPermissions
 
 SORT_ALLOWLIST = {
     "name": "general_info__display_title",
@@ -25,7 +28,15 @@ class FacetedSearchView(ListView):
     def get_queryset(self):
         # Clean base queryset for facet counting — no extra JOINs that inflate counts.
         # Annotations like bundles_count/first_language are added AFTER filtering.
-        base_qs = Collection.objects.all()
+        collection_ct = ContentType.objects.get_for_model(Collection)
+        base_qs = Collection.objects.annotate(
+            acl_access_level=Subquery(
+                ACLPermissions.objects.filter(
+                    content_type=collection_ct,
+                    object_id=Cast(OuterRef("pk"), output_field=CharField()),
+                ).values("access_level")[:1]
+            )
+        )
 
         search_query = self.request.GET.get("q", "").strip()
         if search_query:

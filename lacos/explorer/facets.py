@@ -117,9 +117,9 @@ FACET_DEFINITIONS: list[FacetDefinition] = [
     FacetDefinition(
         name="access",
         label="Access Level",
-        value_field="administrative_info__access_level",
-        label_field="administrative_info__access_level",
-        filter_lookup="administrative_info__access_level__in",
+        value_field="acl_access_level",
+        label_field="acl_access_level",
+        filter_lookup="acl_access_level__in",
         label_map={
             "public": "Public",
             "academic": "Academic",
@@ -197,9 +197,9 @@ BUNDLE_FACET_DEFINITIONS: list[FacetDefinition] = [
     FacetDefinition(
         name="access",
         label="Access Level",
-        value_field="administrative_info__access_level",
-        label_field="administrative_info__access_level",
-        filter_lookup="administrative_info__access_level__in",
+        value_field="acl_access_level",
+        label_field="acl_access_level",
+        filter_lookup="acl_access_level__in",
         label_map={
             "public": "Public",
             "academic": "Academic",

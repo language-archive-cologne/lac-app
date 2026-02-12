@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import pytest
+from django.contrib.contenttypes.models import ContentType
+from django.db.models import CharField, OuterRef, Subquery
+from django.db.models.functions import Cast
 from django.http import QueryDict
 from django.test import RequestFactory
 
@@ -18,6 +21,7 @@ from lacos.blam.models.collection.collection_publication_info import (
 )
 from lacos.explorer.facets import FacetService
 from lacos.explorer.search_indexing import update_collection_search_vector
+from lacos.storage.models.acl_permissions import ACLPermissions
 
 
 def _create_collection(
@@ -59,6 +63,19 @@ def _create_collection(
     return collection
 
 
+def _collection_qs():
+    """Return a Collection queryset annotated with acl_access_level (mirrors the view)."""
+    collection_ct = ContentType.objects.get_for_model(Collection)
+    return Collection.objects.annotate(
+        acl_access_level=Subquery(
+            ACLPermissions.objects.filter(
+                content_type=collection_ct,
+                object_id=Cast(OuterRef("pk"), output_field=CharField()),
+            ).values("access_level")[:1]
+        )
+    )
+
+
 def _make_params(**kwargs) -> QueryDict:
     """Build a QueryDict from keyword arguments (supports lists)."""
     qd = QueryDict(mutable=True)
@@ -76,7 +93,7 @@ def test_no_filters_returns_all_collections():
     _create_collection("C2", "Beta", languages=[("Senufo", "sef")], country="Germany")
 
     service = FacetService()
-    result = service.search(_make_params(), Collection.objects.all())
+    result = service.search(_make_params(), _collection_qs())
 
     assert result.queryset.count() == 2
     assert len(result.active_filters) == 0
@@ -88,7 +105,7 @@ def test_single_language_filter():
     _create_collection("C2", "Beta", languages=[("Senufo", "sef")], country="Germany")
 
     service = FacetService()
-    result = service.search(_make_params(language=["aka"]), Collection.objects.all())
+    result = service.search(_make_params(language=["aka"]), _collection_qs())
 
     assert result.queryset.count() == 1
     pks = list(result.queryset.values_list("pk", flat=True))
@@ -103,7 +120,7 @@ def test_multi_language_filter_or_logic():
 
     service = FacetService()
     result = service.search(
-        _make_params(language=["aka", "sef"]), Collection.objects.all()
+        _make_params(language=["aka", "sef"]), _collection_qs()
     )
 
     assert result.queryset.count() == 2
@@ -118,7 +135,7 @@ def test_country_filter():
 
     service = FacetService()
     result = service.search(
-        _make_params(country=["Germany"]), Collection.objects.all()
+        _make_params(country=["Germany"]), _collection_qs()
     )
 
     assert result.queryset.count() == 1
@@ -134,7 +151,7 @@ def test_cross_facet_and_logic():
 
     service = FacetService()
     result = service.search(
-        _make_params(language=["aka"], country=["Ghana"]), Collection.objects.all()
+        _make_params(language=["aka"], country=["Ghana"]), _collection_qs()
     )
 
     assert result.queryset.count() == 1
@@ -151,7 +168,7 @@ def test_cross_facet_counts_exclude_own_facet():
 
     service = FacetService()
     result = service.search(
-        _make_params(language=["aka"]), Collection.objects.all()
+        _make_params(language=["aka"]), _collection_qs()
     )
 
     # Language facet should count against base_qs (no language filter applied)
@@ -179,7 +196,7 @@ def test_selected_value_with_zero_count_preserved():
     # Select language=aka AND country=Germany -> 0 results for the combo,
     # but both values should still appear so user can deselect
     result = service.search(
-        _make_params(language=["aka"], country=["Germany"]), Collection.objects.all()
+        _make_params(language=["aka"], country=["Germany"]), _collection_qs()
     )
 
     lang_facet = next(f for f in result.facets if f.name == "language")
@@ -191,7 +208,7 @@ def test_selected_value_with_zero_count_preserved():
 @pytest.mark.django_db
 def test_empty_database():
     service = FacetService()
-    result = service.search(_make_params(), Collection.objects.all())
+    result = service.search(_make_params(), _collection_qs())
 
     assert result.queryset.count() == 0
     for facet in result.facets:
@@ -206,7 +223,7 @@ def test_null_facet_values_excluded():
     _create_collection("C2", "Beta", languages=[("Senufo", "sef")], country="Ghana")
 
     service = FacetService()
-    result = service.search(_make_params(), Collection.objects.all())
+    result = service.search(_make_params(), _collection_qs())
 
     country_facet = next(f for f in result.facets if f.name == "country")
     values = [fv.value for fv in country_facet.values]
@@ -223,7 +240,7 @@ def test_duplicate_params_deduplicated():
     qd.setlist("language", ["aka", "aka", " aka "])
 
     service = FacetService()
-    result = service.search(qd, Collection.objects.all())
+    result = service.search(qd, _collection_qs())
 
     assert result.queryset.count() == 1
     # Only one chip should be generated despite duplicates
@@ -237,7 +254,7 @@ def test_active_filter_chips_generated():
 
     service = FacetService()
     result = service.search(
-        _make_params(language=["aka"], country=["Ghana"]), Collection.objects.all()
+        _make_params(language=["aka"], country=["Ghana"]), _collection_qs()
     )
 
     assert len(result.active_filters) == 2
@@ -250,20 +267,17 @@ def test_active_filter_chips_generated():
 
 @pytest.mark.django_db
 def test_access_level_facet_shows_human_readable_labels():
-    """Access level facet should display human-readable labels, not raw DB values."""
-    from lacos.blam.models.collection.collection_administrative_info import (
-        CollectionAdministrativeInfo,
-    )
-
+    """Access level facet should display human-readable labels from ACL, not BLAM metadata."""
     c1 = _create_collection("C1", "Alpha", languages=[("Akan", "aka")], country="Ghana")
-    CollectionAdministrativeInfo.objects.create(
-        collection=c1,
+    collection_ct = ContentType.objects.get_for_model(Collection)
+    ACLPermissions.objects.create(
+        content_type=collection_ct,
+        object_id=str(c1.pk),
         access_level="public",
-        availability_date="2024-01-01",
     )
 
     service = FacetService()
-    result = service.search(_make_params(), Collection.objects.all())
+    result = service.search(_make_params(), _collection_qs())
 
     access_facet = next(f for f in result.facets if f.name == "access")
     public_fv = next((fv for fv in access_facet.values if fv.value == "public"), None)

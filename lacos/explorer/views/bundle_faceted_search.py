@@ -1,7 +1,9 @@
 """Faceted search view for bundle discovery."""
 
+from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.search import SearchQuery
-from django.db.models import Min
+from django.db.models import CharField, Min, OuterRef, Subquery
+from django.db.models.functions import Cast
 from django.shortcuts import render
 from django.views.generic import ListView
 
@@ -12,6 +14,7 @@ from lacos.explorer.facets import (
     FacetedSearchResult,
     FacetService,
 )
+from lacos.storage.models.acl_permissions import ACLPermissions
 
 BUNDLE_SORT_ALLOWLIST = {
     "name": "general_info__display_title",
@@ -28,7 +31,15 @@ class BundleFacetedSearchView(ListView):
     _faceted_result: FacetedSearchResult | None = None
 
     def get_queryset(self):
-        base_qs = Bundle.objects.all()
+        bundle_ct = ContentType.objects.get_for_model(Bundle)
+        base_qs = Bundle.objects.annotate(
+            acl_access_level=Subquery(
+                ACLPermissions.objects.filter(
+                    content_type=bundle_ct,
+                    object_id=Cast(OuterRef("pk"), output_field=CharField()),
+                ).values("access_level")[:1]
+            )
+        )
 
         search_query = self.request.GET.get("q", "").strip()
         if search_query:
