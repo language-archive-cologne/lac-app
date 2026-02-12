@@ -72,15 +72,6 @@ class FacetDefinition:
 
 
 FACET_DEFINITIONS: list[FacetDefinition] = [
-    # Ordered from highest to lowest cardinality
-    FacetDefinition(
-        name="keyword",
-        label="Keyword",
-        value_field="general_info__keywords__value",
-        label_field="general_info__keywords__value",
-        filter_lookup="general_info__keywords__value__in",
-        sort_alphabetically=True,
-    ),
     FacetDefinition(
         name="language",
         label="Language",
@@ -108,13 +99,6 @@ FACET_DEFINITIONS: list[FacetDefinition] = [
         value_field="general_info__location__region_facet",
         label_field="general_info__location__region_facet",
         filter_lookup="general_info__location__region_facet__in",
-    ),
-    FacetDefinition(
-        name="provider",
-        label="Data Provider",
-        value_field="publication_info__data_provider",
-        label_field="publication_info__data_provider",
-        filter_lookup="publication_info__data_provider__in",
     ),
     FacetDefinition(
         name="access",
@@ -189,13 +173,6 @@ BUNDLE_FACET_DEFINITIONS: list[FacetDefinition] = [
         value_field="general_info__location__region_facet",
         label_field="general_info__location__region_facet",
         filter_lookup="general_info__location__region_facet__in",
-    ),
-    FacetDefinition(
-        name="provider",
-        label="Data Provider",
-        value_field="publication_info__data_provider",
-        label_field="publication_info__data_provider",
-        filter_lookup="publication_info__data_provider__in",
     ),
     FacetDefinition(
         name="access",
