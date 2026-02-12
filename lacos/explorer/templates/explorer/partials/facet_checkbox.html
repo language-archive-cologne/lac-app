@@ -35,7 +35,7 @@
                  {% if fv.selected %}checked{% endif %}
                  tabindex="-1"
                  aria-hidden="true">
-          <span class="truncate flex-1">{{ fv.label }}</span>
+          <span class="truncate flex-1" title="{{ fv.label }}">{{ fv.label }}</span>
           <span class="rounded-full {% if fv.selected %}bg-primary/20 text-primary{% else %}bg-base-200 text-base-content/70{% endif %} px-2 py-0.5 text-xs font-semibold shrink-0">{{ fv.count }}</span>
         </a>
       {% empty %}
