@@ -117,9 +117,9 @@ FACET_DEFINITIONS: list[FacetDefinition] = [
     FacetDefinition(
         name="license",
         label="License",
-        value_field="administrative_info__licenses__license_name",
-        label_field="administrative_info__licenses__license_name",
-        filter_lookup="administrative_info__licenses__license_name__in",
+        value_field="header__md_license",
+        label_field="header__md_license",
+        filter_lookup="header__md_license__in",
     ),
 ]
 
