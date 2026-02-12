@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from blam_schemas.bundle.blam_bundle_repository_v1_1 import Cmd
 from lacos.blam.models.bundle.bundle_header import BundleHeader
@@ -40,14 +40,17 @@ def import_bundle_header(cmd_data: Cmd, bundle: 'Bundle') -> Optional[BundleHead
 
     md_profile = header_data.md_profile.value if header_data.md_profile else None
 
+    # Extract metadata license from repository mdlicense tag
+    md_license, md_license_uri = _extract_md_license_fields(cmd_data)
+
     # Prepare data for update_or_create
     header_defaults = {
         'md_creator': md_creator,
-        'md_creation_date': python_date_obj, # Use the converted date object
+        'md_creation_date': python_date_obj,
         'md_profile': md_profile,
-        'bundle': bundle,  # Add the bundle reference
-        # Add other fields from MdHeader if they exist in cmd_data.header
-        # Currently, md_license fields are handled separately or ignored
+        'bundle': bundle,
+        'md_license': md_license,
+        'md_license_uri': md_license_uri,
     }
 
     # Remove None values to avoid overriding existing fields with None during update
@@ -65,3 +68,22 @@ def import_bundle_header(cmd_data: Cmd, bundle: 'Bundle') -> Optional[BundleHead
     except Exception as e:
         logger.error(f"Failed to create or update BundleHeader with self-link '{md_self_link}': {e}", exc_info=True)
         return None
+
+
+def _extract_md_license_fields(cmd_data: Any) -> tuple[Optional[str], Optional[str]]:
+    """Extract MDLicense value and URI from the bundle repository component."""
+    components = getattr(cmd_data, "components", None)
+    if not components:
+        return None, None
+
+    repository = getattr(components, "blam_bundle_repository_v1_1", None)
+    mdlicense = getattr(repository, "mdlicense", None) if repository else None
+    if mdlicense:
+        value = getattr(mdlicense, "value", None)
+        uri = getattr(mdlicense, "uri", None)
+        return (
+            str(value).strip() or None if value else None,
+            str(uri).strip() or None if uri else None,
+        )
+
+    return None, None
