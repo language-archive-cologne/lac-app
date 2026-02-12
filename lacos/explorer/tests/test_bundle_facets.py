@@ -252,6 +252,21 @@ def test_empty_database():
 
 
 @pytest.mark.django_db
+def test_collection_facet_shows_display_title():
+    """Collection facet should show display titles, not identifiers."""
+    coll = _create_collection("C1", "Senufo Language Archive")
+    _create_bundle("B1", "Alpha", coll)
+
+    result = _service().search(_make_params(), Bundle.objects.all())
+
+    coll_facet = next(f for f in result.facets if f.name == "collection")
+    assert len(coll_facet.values) == 1
+    fv = coll_facet.values[0]
+    assert fv.value == "C1"
+    assert fv.label == "Senufo Language Archive"
+
+
+@pytest.mark.django_db
 def test_active_filter_chips_generated():
     coll = _create_collection("C1", "Test Collection")
     _create_bundle("B1", "Alpha", coll, languages=[("Akan", "aka")], country="Ghana")

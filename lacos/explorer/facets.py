@@ -163,7 +163,7 @@ BUNDLE_FACET_DEFINITIONS: list[FacetDefinition] = [
         name="collection",
         label="Collection",
         value_field="structural_info__is_member_of_collection__identifier",
-        label_field="structural_info__is_member_of_collection__identifier",
+        label_field="structural_info__is_member_of_collection__general_info__display_title",
         filter_lookup="structural_info__is_member_of_collection__identifier__in",
     ),
     FacetDefinition(
