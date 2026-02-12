@@ -1,6 +1,6 @@
 """Faceted search view for collection discovery."""
 
-from django.contrib.postgres.search import SearchQuery, SearchVector
+from django.contrib.postgres.search import SearchQuery
 from django.db.models import Count, Min
 from django.shortcuts import render
 from django.views.generic import ListView
@@ -67,30 +67,10 @@ class FacetedSearchView(ListView):
         return qs
 
     def _apply_text_search(self, qs, search_term):
-        """Apply full-text search using a subquery to avoid duplicate rows.
-
-        SearchVector joins across M2M tables (keywords, languages) which
-        multiplies rows.  Using a subquery keeps the outer queryset clean.
-        """
+        """Apply full-text search using the stored search_vector field."""
         prefix_terms = " & ".join(f"{word}:*" for word in search_term.split())
         query = SearchQuery(prefix_terms, config="simple", search_type="raw")
-
-        matching_pks = (
-            Collection.objects.annotate(
-                computed_search_vector=(
-                    SearchVector("identifier", weight="A", config="simple")
-                    + SearchVector("general_info__display_title", weight="A", config="simple")
-                    + SearchVector("general_info__description", weight="B", config="simple")
-                    + SearchVector("general_info__keywords__value", weight="B", config="simple")
-                    + SearchVector("general_info__object_languages__name", weight="C", config="simple")
-                    + SearchVector("general_info__location__country_facet", weight="D", config="simple")
-                ),
-            )
-            .filter(computed_search_vector=query)
-            .values("pk")
-        )
-
-        return qs.filter(pk__in=matching_pks)
+        return qs.filter(search_vector=query)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

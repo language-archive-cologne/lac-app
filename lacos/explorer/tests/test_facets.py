@@ -17,6 +17,7 @@ from lacos.blam.models.collection.collection_publication_info import (
     CollectionPublicationInfo,
 )
 from lacos.explorer.facets import FacetService
+from lacos.explorer.search_indexing import update_collection_search_vector
 
 
 def _create_collection(
@@ -272,8 +273,10 @@ def test_access_level_facet_shows_human_readable_labels():
 
 @pytest.mark.django_db
 def test_text_search_combined_with_facets(client):
-    _create_collection("C1", "Senufo Archive", languages=[("Senufo", "sef")], country="Mali")
-    _create_collection("C2", "Akan Archive", languages=[("Akan", "aka")], country="Ghana")
+    c1 = _create_collection("C1", "Senufo Archive", languages=[("Senufo", "sef")], country="Mali")
+    c2 = _create_collection("C2", "Akan Archive", languages=[("Akan", "aka")], country="Ghana")
+    update_collection_search_vector(c1)
+    update_collection_search_vector(c2)
 
     response = client.get("/search/", {"q": "Senufo", "country": "Mali"})
     assert response.status_code == 200

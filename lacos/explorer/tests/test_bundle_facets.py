@@ -23,6 +23,7 @@ from lacos.blam.models.collection.collection_general_info import (
     CollectionLocation,
 )
 from lacos.explorer.facets import BUNDLE_FACET_DEFINITIONS, FacetService
+from lacos.explorer.search_indexing import update_bundle_search_vector
 
 
 def _create_collection(identifier: str, title: str) -> Collection:
@@ -308,9 +309,11 @@ def test_bundle_htmx_returns_partial(client):
 def test_text_search_filters_results(client):
     """Verify q= actually removes non-matching bundles from results."""
     coll = _create_collection("C1", "Test Collection")
-    _create_bundle("B1", "Senufo Stories", coll, languages=[("Senufo", "sef")], country="Mali")
-    _create_bundle("B2", "Akan Archive", coll, languages=[("Akan", "aka")], country="Ghana")
-    _create_bundle("B3", "Bambara Tales", coll, languages=[("Bambara", "bam")], country="Mali")
+    b1 = _create_bundle("B1", "Senufo Stories", coll, languages=[("Senufo", "sef")], country="Mali")
+    b2 = _create_bundle("B2", "Akan Archive", coll, languages=[("Akan", "aka")], country="Ghana")
+    b3 = _create_bundle("B3", "Bambara Tales", coll, languages=[("Bambara", "bam")], country="Mali")
+    for b in (b1, b2, b3):
+        update_bundle_search_vector(b)
 
     response = client.get("/search/bundles/", {"q": "Senufo"})
     assert response.status_code == 200
@@ -325,18 +328,20 @@ def test_text_search_filters_results(client):
 def test_text_search_with_facet_filter(client):
     """Verify q= AND language= together narrow results correctly."""
     coll = _create_collection("C1", "Test Collection")
-    _create_bundle(
+    b1 = _create_bundle(
         "B1", "Senufo Stories", coll,
         languages=[("Senufo", "sef")], country="Mali", topics=["narrative"],
     )
-    _create_bundle(
+    b2 = _create_bundle(
         "B2", "Senufo Proverbs", coll,
         languages=[("Akan", "aka")], country="Ghana",
     )
-    _create_bundle(
+    b3 = _create_bundle(
         "B3", "Akan Archive", coll,
         languages=[("Akan", "aka")], country="Ghana",
     )
+    for b in (b1, b2, b3):
+        update_bundle_search_vector(b)
 
     response = client.get("/search/bundles/", {"q": "Senufo", "language": "aka"})
     assert response.status_code == 200
@@ -353,8 +358,10 @@ def test_text_search_by_description(client):
     """Verify searching by description text works."""
     coll = _create_collection("C1", "Test Collection")
     # _create_bundle sets description to "Description for {title}"
-    _create_bundle("B1", "Alpha Bundle", coll)
-    _create_bundle("B2", "Beta Bundle", coll)
+    b1 = _create_bundle("B1", "Alpha Bundle", coll)
+    b2 = _create_bundle("B2", "Beta Bundle", coll)
+    update_bundle_search_vector(b1)
+    update_bundle_search_vector(b2)
 
     # Search for "Alpha" which appears in B1's description ("Description for Alpha Bundle")
     response = client.get("/search/bundles/", {"q": "Alpha"})
@@ -369,8 +376,10 @@ def test_text_search_by_description(client):
 def test_text_search_by_language_name(client):
     """Verify searching by language name works."""
     coll = _create_collection("C1", "Test Collection")
-    _create_bundle("B1", "Bundle One", coll, languages=[("Senufo", "sef")])
-    _create_bundle("B2", "Bundle Two", coll, languages=[("Akan", "aka")])
+    b1 = _create_bundle("B1", "Bundle One", coll, languages=[("Senufo", "sef")])
+    b2 = _create_bundle("B2", "Bundle Two", coll, languages=[("Akan", "aka")])
+    update_bundle_search_vector(b1)
+    update_bundle_search_vector(b2)
 
     response = client.get("/search/bundles/", {"q": "Senufo"})
     assert response.status_code == 200
@@ -384,9 +393,11 @@ def test_text_search_by_language_name(client):
 def test_text_search_facets_update(client):
     """Verify facet counts update when text search is active."""
     coll = _create_collection("C1", "Test Collection")
-    _create_bundle("B1", "Senufo Stories", coll, languages=[("Senufo", "sef")], country="Mali")
-    _create_bundle("B2", "Senufo Proverbs", coll, languages=[("Akan", "aka")], country="Ghana")
-    _create_bundle("B3", "Bambara Tales", coll, languages=[("Bambara", "bam")], country="Mali")
+    b1 = _create_bundle("B1", "Senufo Stories", coll, languages=[("Senufo", "sef")], country="Mali")
+    b2 = _create_bundle("B2", "Senufo Proverbs", coll, languages=[("Akan", "aka")], country="Ghana")
+    b3 = _create_bundle("B3", "Bambara Tales", coll, languages=[("Bambara", "bam")], country="Mali")
+    for b in (b1, b2, b3):
+        update_bundle_search_vector(b)
 
     # Without text search, Mali should have count=2 (B1 + B3)
     response_all = client.get("/search/bundles/")
@@ -407,9 +418,11 @@ def test_text_search_facets_update(client):
 def test_text_search_empty_query(client):
     """Verify empty q= returns all results."""
     coll = _create_collection("C1", "Test Collection")
-    _create_bundle("B1", "Alpha", coll)
-    _create_bundle("B2", "Beta", coll)
-    _create_bundle("B3", "Gamma", coll)
+    b1 = _create_bundle("B1", "Alpha", coll)
+    b2 = _create_bundle("B2", "Beta", coll)
+    b3 = _create_bundle("B3", "Gamma", coll)
+    for b in (b1, b2, b3):
+        update_bundle_search_vector(b)
 
     response = client.get("/search/bundles/", {"q": ""})
     assert response.status_code == 200
@@ -421,8 +434,10 @@ def test_text_search_empty_query(client):
 def test_text_search_no_results(client):
     """Verify q= with non-matching term returns empty."""
     coll = _create_collection("C1", "Test Collection")
-    _create_bundle("B1", "Alpha", coll)
-    _create_bundle("B2", "Beta", coll)
+    b1 = _create_bundle("B1", "Alpha", coll)
+    b2 = _create_bundle("B2", "Beta", coll)
+    update_bundle_search_vector(b1)
+    update_bundle_search_vector(b2)
 
     response = client.get("/search/bundles/", {"q": "xyznonexistent"})
     assert response.status_code == 200
