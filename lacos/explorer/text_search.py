@@ -1,9 +1,9 @@
-"""Shared text-search helpers: FTS first, trigram fallback."""
+"""Shared text-search helpers: FTS combined with trigram similarity."""
 
 from __future__ import annotations
 
 from django.contrib.postgres.search import SearchQuery, TrigramWordSimilarity
-from django.db.models import QuerySet
+from django.db.models import Q, QuerySet
 from django.db.models.functions import Greatest
 
 
@@ -14,22 +14,16 @@ def build_fts_query(search_term: str) -> SearchQuery:
 
 
 def apply_text_search(qs: QuerySet, search_term: str) -> QuerySet:
-    """Apply FTS first; fall back to trigram if FTS returns nothing.
+    """Apply FTS combined with trigram similarity for typo tolerance.
 
-    Expects the queryset's model to have:
-      - ``search_vector`` field (for FTS)
-      - ``general_info__display_title`` (via FK)
-      - ``identifier`` (from Repository base)
+    For queries < 3 chars: FTS only (trigrams need at least 3 chars).
+    For queries >= 3 chars: FTS OR trigram match, so both exact prefix
+    matches and fuzzy matches are returned together.
     """
     query = build_fts_query(search_term)
-    fts_qs = qs.filter(search_vector=query)
 
-    if fts_qs.exists():
-        return fts_qs
-
-    # Trigrams need at least 3 characters to be useful
     if len(search_term) < 3:
-        return fts_qs  # empty
+        return qs.filter(search_vector=query)
 
     return (
         qs.annotate(
@@ -38,6 +32,6 @@ def apply_text_search(qs: QuerySet, search_term: str) -> QuerySet:
                 TrigramWordSimilarity(search_term, "identifier"),
             )
         )
-        .filter(similarity__gt=0.3)
+        .filter(Q(search_vector=query) | Q(similarity__gt=0.3))
         .distinct()
     )

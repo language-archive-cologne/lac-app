@@ -58,10 +58,10 @@ def search_archives(term: str, *, limit: int | None = None, use_stored_vectors: 
     collection_results = _search_collections(query, use_stored_vectors)
     bundle_results = _search_bundles(query, use_stored_vectors)
 
-    # Trigram fallback when FTS returns nothing
-    if not collection_results and not bundle_results and len(normalized) >= 3:
-        collection_results = _trigram_search_collections(normalized)
-        bundle_results = _trigram_search_bundles(normalized)
+    # Supplement with trigram results for typo tolerance (>= 3 chars)
+    if len(normalized) >= 3:
+        collection_results = [*collection_results, *_trigram_search_collections(normalized)]
+        bundle_results = [*bundle_results, *_trigram_search_bundles(normalized)]
 
     combined: list[SearchResult] = [*collection_results, *bundle_results]
     combined.sort(key=lambda result: result.rank, reverse=True)
