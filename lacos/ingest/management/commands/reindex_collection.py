@@ -1,5 +1,6 @@
 import logging
 
+from django.db import close_old_connections, connection
 from django.core.management.base import BaseCommand
 
 from lacos.blam.models.collection.collection_repository import Collection
@@ -124,8 +125,9 @@ class Command(BaseCommand):
             return 0
 
         if options.get("all"):
-            collections = Collection.objects.all()
+            collections = list(Collection.objects.all())
             for collection in collections:
+                close_old_connections()
                 s3_key = collection.import_object_key
                 bucket_to_use = options.get("bucket") or collection.import_bucket or bucket
                 if not s3_key:
@@ -149,6 +151,7 @@ class Command(BaseCommand):
                 # Update S3 resource locations
                 if collection_id:
                     self._update_s3_resource_locations(collection_id, bundle_results, dry_run=dry_run)
+                connection.close()
             return 0
 
         return 0
@@ -233,6 +236,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING("No bundle XML keys to reindex"))
             return results
         for bundle_key in bundle_keys:
+            close_old_connections()
             if dry_run:
                 self.stdout.write(
                     f"DRY RUN: would reindex bundle {bucket}/{bundle_key}"
