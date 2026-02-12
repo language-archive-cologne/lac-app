@@ -248,6 +248,29 @@ def test_active_filter_chips_generated():
 
 
 @pytest.mark.django_db
+def test_access_level_facet_shows_human_readable_labels():
+    """Access level facet should display human-readable labels, not raw DB values."""
+    from lacos.blam.models.collection.collection_administrative_info import (
+        CollectionAdministrativeInfo,
+    )
+
+    c1 = _create_collection("C1", "Alpha", languages=[("Akan", "aka")], country="Ghana")
+    CollectionAdministrativeInfo.objects.create(
+        collection=c1,
+        access_level="public",
+        availability_date="2024-01-01",
+    )
+
+    service = FacetService()
+    result = service.search(_make_params(), Collection.objects.all())
+
+    access_facet = next(f for f in result.facets if f.name == "access")
+    public_fv = next((fv for fv in access_facet.values if fv.value == "public"), None)
+    assert public_fv is not None
+    assert public_fv.label == "Public"
+
+
+@pytest.mark.django_db
 def test_text_search_combined_with_facets(client):
     _create_collection("C1", "Senufo Archive", languages=[("Senufo", "sef")], country="Mali")
     _create_collection("C2", "Akan Archive", languages=[("Akan", "aka")], country="Ghana")

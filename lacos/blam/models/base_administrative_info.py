@@ -9,12 +9,11 @@ class AdministrativeInfo(BaseModel):
     especially in regard to metacatalogues and user interfaces.
     """
     ACCESS_LEVELS = [
-        ('embargo', _('Embargo - No access')),
-        ('private', _('Private - Specific users only')),
-        ('protected', _('Protected - All authenticated users')),
-        ('public', _('Public - Everyone')),
+        ('public', _('Public')),
+        ('academic', _('Academic')),
+        ('restricted', _('Restricted')),
     ]
-    
+
     access_level = models.CharField(
         max_length=10,
         choices=ACCESS_LEVELS,

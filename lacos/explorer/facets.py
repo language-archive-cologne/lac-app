@@ -67,6 +67,7 @@ class FacetDefinition:
     value_field: str
     label_field: str
     filter_lookup: str
+    label_map: dict[str, str] | None = None
 
 
 FACET_DEFINITIONS: list[FacetDefinition] = [
@@ -119,13 +120,18 @@ FACET_DEFINITIONS: list[FacetDefinition] = [
         value_field="administrative_info__access_level",
         label_field="administrative_info__access_level",
         filter_lookup="administrative_info__access_level__in",
+        label_map={
+            "public": "Public",
+            "academic": "Academic",
+            "restricted": "Restricted",
+        },
     ),
     FacetDefinition(
         name="license",
         label="License",
-        value_field="administrative_info__licenses__access",
-        label_field="administrative_info__licenses__access",
-        filter_lookup="administrative_info__licenses__access__in",
+        value_field="administrative_info__licenses__license_name",
+        label_field="administrative_info__licenses__license_name",
+        filter_lookup="administrative_info__licenses__license_name__in",
     ),
 ]
 
@@ -194,13 +200,18 @@ BUNDLE_FACET_DEFINITIONS: list[FacetDefinition] = [
         value_field="administrative_info__access_level",
         label_field="administrative_info__access_level",
         filter_lookup="administrative_info__access_level__in",
+        label_map={
+            "public": "Public",
+            "academic": "Academic",
+            "restricted": "Restricted",
+        },
     ),
     FacetDefinition(
         name="license",
         label="License",
-        value_field="administrative_info__licenses__access",
-        label_field="administrative_info__licenses__access",
-        filter_lookup="administrative_info__licenses__access__in",
+        value_field="administrative_info__licenses__license_name",
+        label_field="administrative_info__licenses__license_name",
+        filter_lookup="administrative_info__licenses__license_name__in",
     ),
 ]
 
@@ -302,6 +313,7 @@ class FacetService:
             facet_values = self._rows_to_facet_values(
                 grouped.get(defn.name, []),
                 selections.get(defn.name, []),
+                label_map=defn.label_map,
             )
             truncated = len(facet_values) > FACET_MAX_VALUES
             if truncated:
@@ -403,12 +415,14 @@ class FacetService:
         self,
         rows: list[dict[str, Any]],
         selected_list: list[str],
+        *,
+        label_map: dict[str, str] | None = None,
     ) -> list[FacetValue]:
         """Convert raw DB rows into sorted FacetValue list."""
         counts: dict[str, dict[str, Any]] = {}
         for row in rows:
             val = row["facet_value"]
-            label = row["facet_label"] or val
+            label = (label_map or {}).get(val) or row["facet_label"] or val
             count = row["facet_count"]
             if val not in counts:
                 counts[val] = {"label": label, "count": count}
