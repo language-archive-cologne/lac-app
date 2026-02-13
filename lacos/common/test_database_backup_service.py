@@ -201,6 +201,63 @@ def test_database_backup_service_falls_back_when_compose_f_flag_is_old_docker(se
     assert calls[1][0] == "docker-compose"
 
 
+def test_database_backup_service_falls_back_to_docker_exec_when_legacy_compose_has_dns_error(settings, tmp_path):
+    settings.DB_BACKUP_COMPOSE_FILE = "docker-compose.dev.yml"
+    settings.DB_BACKUP_COMPOSE_PROJECT_DIR = str(tmp_path)
+    settings.DB_BACKUP_BACKUP_DIR = str(tmp_path / "backups")
+    settings.DB_BACKUP_S3_BUCKET = "backups"
+    settings.DB_BACKUP_S3_PREFIX = "db-backups"
+
+    backup_dir = tmp_path / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    dump_file = backup_dir / "backup_2026_02_06T02_00_00.sql.gz"
+
+    calls = []
+
+    def _runner_with_dns_failure(command, **kwargs):
+        calls.append(command)
+        if command[:2] == ["docker", "compose"]:
+            return subprocess.CompletedProcess(
+                command,
+                125,
+                stdout="",
+                stderr="unknown shorthand flag: 'f' in -f",
+            )
+        if command and command[0] == "docker-compose":
+            return subprocess.CompletedProcess(
+                command,
+                1,
+                stdout="",
+                stderr=(
+                    "Creating app_postgres_run ... done\n"
+                    "pg_dump: error: could not translate host name \"postgres\" to address: "
+                    "Name or service not known"
+                ),
+            )
+        if command[:2] == ["docker", "ps"]:
+            return subprocess.CompletedProcess(command, 0, stdout="lacos_dev_postgres-1\n", stderr="")
+        if command[:2] == ["docker", "exec"]:
+            dump_file.write_bytes(b"dump")
+            return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+        return subprocess.CompletedProcess(command, 1, stdout="", stderr="unexpected")
+
+    paginator = Mock()
+    paginator.paginate.return_value = [{"Contents": []}]
+    s3_client = Mock()
+    s3_client.get_paginator.return_value = paginator
+
+    service = DatabaseBackupService(
+        s3_client=s3_client,
+        command_runner=_runner_with_dns_failure,
+        now_fn=timezone.now,
+    )
+
+    result = service.run()
+
+    assert result["success"] is True
+    assert any(command[:2] == ["docker", "exec"] for command in calls)
+
+
 def test_database_backup_service_falls_back_to_docker_exec(settings, tmp_path):
     settings.DB_BACKUP_COMPOSE_FILE = "docker-compose.local.yml"
     settings.DB_BACKUP_COMPOSE_PROJECT_DIR = str(tmp_path)

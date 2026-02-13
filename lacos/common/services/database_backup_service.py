@@ -98,8 +98,6 @@ class DatabaseBackupService:
         legacy_result = self._run_command(self._legacy_backup_command(), "legacy compose")
         if legacy_result.returncode == 0:
             return legacy_result
-        if not self._is_compose_tooling_error(legacy_result):
-            return legacy_result
         if self._docker_cli_missing(result, legacy_result):
             return CompletedProcess(
                 self._legacy_backup_command(),
@@ -107,6 +105,8 @@ class DatabaseBackupService:
                 stdout="",
                 stderr="Command not found: docker and docker-compose",
             )
+        if not self._should_try_exec_fallback(legacy_result):
+            return legacy_result
 
         exec_result = self._run_command(self._exec_backup_command(), "docker exec fallback")
         return exec_result
@@ -230,6 +230,20 @@ class DatabaseBackupService:
                 "unknown shorthand flag: 'p' in -p",
                 "client version",
                 "command not found",
+            )
+        )
+
+    def _should_try_exec_fallback(self, result: CompletedProcess[str]) -> bool:
+        if self._is_compose_tooling_error(result):
+            return True
+        stderr = (result.stderr or "").lower()
+        return any(
+            marker in stderr
+            for marker in (
+                "could not translate host name",
+                "name or service not known",
+                "temporary failure in name resolution",
+                "no such host",
             )
         )
 
