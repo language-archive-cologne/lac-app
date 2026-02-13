@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.mixins import UserPassesTestMixin
+from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
@@ -68,12 +69,34 @@ class DashboardTaskEnqueueView(DashboardTaskPermissionsMixin, View):
 
         try:
             enqueue_callable = globals()[task_action.enqueue_name]
-            task_result = enqueue_callable(tracking_id=str(task_record.id))
-            huey_task_id = getattr(task_result, "id", None)
-            if huey_task_id:
-                BackgroundTaskService.attach_huey_id(task_record, huey_task_id)
-                task_record.metadata["task_id"] = str(huey_task_id)
-                task_record.save(update_fields=["metadata", "updated_at"])
+
+            def _enqueue_after_commit() -> None:
+                try:
+                    task_result = enqueue_callable(tracking_id=str(task_record.id))
+                    huey_task_id = getattr(task_result, "id", None)
+                    if huey_task_id:
+                        task = BackgroundTask.objects.filter(pk=task_record.id).first()
+                        if not task:
+                            return
+                        metadata = task.metadata.copy() if task.metadata else {}
+                        metadata["task_id"] = str(huey_task_id)
+                        task.metadata = metadata
+                        task.save(update_fields=["metadata", "updated_at"])
+                        BackgroundTaskService.attach_huey_id(task, huey_task_id)
+                except Exception as exc:
+                    logger.error(
+                        "Failed to enqueue dashboard task %s after commit: %s",
+                        action,
+                        exc,
+                        exc_info=True,
+                    )
+                    BackgroundTaskService.mark_failed(
+                        str(task_record.id),
+                        error_message=str(exc),
+                        result={"success": False, "error": str(exc)},
+                    )
+
+            transaction.on_commit(_enqueue_after_commit)
 
             status_html = render_to_string(
                 "blam/dashboard/partials/task_status.html",

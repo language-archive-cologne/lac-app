@@ -226,6 +226,7 @@ class DatabaseBackupService:
             for marker in (
                 "not a docker command",
                 "unknown command \"compose\"",
+                "unknown shorthand flag: 'f' in -f",
                 "unknown shorthand flag: 'p' in -p",
                 "client version",
                 "command not found",

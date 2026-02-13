@@ -156,6 +156,51 @@ def test_database_backup_service_falls_back_to_docker_compose(settings, tmp_path
     assert calls[1][0] == "docker-compose"
 
 
+def test_database_backup_service_falls_back_when_compose_f_flag_is_old_docker(settings, tmp_path):
+    settings.DB_BACKUP_COMPOSE_FILE = "docker-compose.dev.yml"
+    settings.DB_BACKUP_COMPOSE_PROJECT_DIR = str(tmp_path)
+    settings.DB_BACKUP_COMPOSE_PROJECT_NAME = "lac-app"
+    settings.DB_BACKUP_BACKUP_DIR = str(tmp_path / "backups")
+    settings.DB_BACKUP_S3_BUCKET = "backups"
+    settings.DB_BACKUP_S3_PREFIX = "db-backups"
+
+    backup_dir = tmp_path / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    dump_file = backup_dir / "backup_2026_02_06T02_00_00.sql.gz"
+
+    calls = []
+
+    def _runner_with_old_docker(command, **kwargs):
+        calls.append(command)
+        if command[:2] == ["docker", "compose"]:
+            return subprocess.CompletedProcess(
+                command,
+                125,
+                stdout="",
+                stderr="unknown shorthand flag: 'f' in -f",
+            )
+        dump_file.write_bytes(b"dump")
+        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+
+    paginator = Mock()
+    paginator.paginate.return_value = [{"Contents": []}]
+    s3_client = Mock()
+    s3_client.get_paginator.return_value = paginator
+
+    service = DatabaseBackupService(
+        s3_client=s3_client,
+        command_runner=_runner_with_old_docker,
+        now_fn=timezone.now,
+    )
+
+    result = service.run()
+
+    assert result["success"] is True
+    assert len(calls) == 2
+    assert calls[0][:2] == ["docker", "compose"]
+    assert calls[1][0] == "docker-compose"
+
+
 def test_database_backup_service_falls_back_to_docker_exec(settings, tmp_path):
     settings.DB_BACKUP_COMPOSE_FILE = "docker-compose.local.yml"
     settings.DB_BACKUP_COMPOSE_PROJECT_DIR = str(tmp_path)
