@@ -62,6 +62,14 @@ def backup_database_task(tracking_id: str) -> dict:
             )
         else:
             error_message = result.get("detail") or result.get("error") or "Database backup failed."
+            return_code = result.get("returncode")
+            stderr = result.get("stderr")
+            if return_code is not None:
+                error_message = f"{error_message} (returncode={return_code})"
+            if stderr:
+                trimmed_stderr = str(stderr).strip()
+                if trimmed_stderr:
+                    error_message = f"{error_message} stderr={trimmed_stderr}"
             BackgroundTaskService.mark_failed(
                 tracking_id,
                 error_message=error_message,
