@@ -9,6 +9,7 @@ from django.shortcuts import render
 from django.urls import reverse
 
 from lacos.common.mixins import BucketCoordinatorMixin
+from lacos.common.mixins.htmx_template_helpers import ROOT_FOLDER_SENTINEL
 from lacos.storage.services.bucket_service import BucketService
 from lacos.storage.observability import profiling_scope
 from lacos.storage.permissions import manager_or_archivist_required
@@ -81,14 +82,52 @@ def load_folder_contents(request, bucket_type, folder_path):
     ) as session:
         bucket_service = BucketService(skip_bucket_check=True)
 
-        # Use bucket_type from URL parameter directly
-        bucket_name = bucket_type
+        workspace_buckets = set(bucket_service.get_all_accessible_buckets())
+        if bucket_type in workspace_buckets:
+            bucket_name = bucket_type
+        elif bucket_type == "ingest":
+            bucket_name = bucket_service.ingest_bucket
+        elif bucket_type == "production":
+            bucket_name = bucket_service.production_bucket
+        else:
+            bucket_name = bucket_type
 
         session.metadata["bucket_name"] = bucket_name
+        session.metadata["resolved_bucket"] = bucket_name
 
         try:
+            sanitized_path = ROOT_FOLDER_SENTINEL if folder_path == ROOT_FOLDER_SENTINEL else folder_path
+            if sanitized_path == ROOT_FOLDER_SENTINEL:
+                sanitized_path = ""
+            sanitized_path = sanitized_path.replace("//", "/")
+
+            force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
+            session.metadata["force_fresh"] = force_fresh
+
+            try:
+                requested_max_keys = int(request.GET.get("max_keys", "") or 0)
+            except ValueError:
+                requested_max_keys = 0
+            pagination_enabled = getattr(bucket_service, "dashboard_pagination_enabled", True)
+            if requested_max_keys <= 0:
+                requested_max_keys = bucket_service.dashboard_page_size if pagination_enabled else 0
+            continuation_token = request.GET.get("continuation_token") or None
+
+            session.metadata["max_keys"] = requested_max_keys
+            session.metadata["continuation_token"] = continuation_token
+
             # Get folder contents
-            contents = bucket_service.get_folder_contents(bucket_name, folder_path)
+            contents = bucket_service.get_folder_contents(
+                bucket_name,
+                sanitized_path,
+                max_keys=requested_max_keys if pagination_enabled else None,
+                continuation_token=continuation_token,
+                force_fresh=force_fresh,
+            )
+            session.metadata["items_loaded"] = len(contents)
+            session.metadata["has_more"] = contents.has_more
+            session.metadata["next_token"] = contents.next_token
+
             session.metadata["items_loaded"] = len(contents)
 
             return render(
@@ -96,14 +135,24 @@ def load_folder_contents(request, bucket_type, folder_path):
                 "dashboard/folder_contents_partial.html",
                 {
                     "listing": contents,
-                    "folder_path": folder_path,
+                    "folder_path": sanitized_path,
                     "folder_path_param": folder_path,
                     "bucket_type": bucket_name,
+                    "max_keys": requested_max_keys,
+                    "is_root": sanitized_path in ("", None),
+                    "root_folder_sentinel": ROOT_FOLDER_SENTINEL,
                 },
             )
         except Exception as e:
             logger.error(f"Error loading folder contents for {folder_path}: {str(e)}")
             session.metadata["error"] = str(e)
+
+            requested_max_keys = locals().get("requested_max_keys", 0)
+            continuation_token = locals().get("continuation_token", None)
+            sanitized_path = locals().get("sanitized_path", folder_path)
+            if sanitized_path == ROOT_FOLDER_SENTINEL:
+                sanitized_path = ""
+
             return render(
                 request,
                 "dashboard/partials/folder_contents_error.html",
@@ -131,8 +180,23 @@ def dashboard_content(request, bucket_type):
         bucket_state = BucketCoordinatorMixin()
 
         workspace_buckets = bucket_service.get_all_accessible_buckets()
+        pagination_enabled = getattr(bucket_service, "dashboard_pagination_enabled", True)
+        page_size = bucket_service.dashboard_page_size if pagination_enabled else None
 
-        if bucket_type not in workspace_buckets:
+        if bucket_type in workspace_buckets:
+            resolved_bucket = bucket_type
+        elif bucket_type == "ingest":
+            resolved_bucket = bucket_service.ingest_bucket
+        elif bucket_type == "production":
+            resolved_bucket = bucket_service.production_bucket
+        else:
+            return render(
+                request,
+                "dashboard/partials/error.html",
+                {"error": f"Bucket '{bucket_type}' not found"},
+            )
+
+        if resolved_bucket not in workspace_buckets:
             return render(
                 request,
                 "dashboard/partials/error.html",
@@ -140,25 +204,34 @@ def dashboard_content(request, bucket_type):
             )
 
         # Set active bucket in session
-        bucket_state.set_active_bucket(request, bucket_type)
+        bucket_state.set_active_bucket(request, resolved_bucket)
         session.metadata["bucket_type"] = bucket_type
+        session.metadata["resolved_bucket"] = resolved_bucket
+        session.metadata["page_size"] = page_size
 
         force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
 
         try:
-            # Get root level items
-            root_data = bucket_service.get_root_level_items(bucket_type, force_fresh=force_fresh)
-            children = root_data.get("children", [])
+            listing = bucket_service.get_folder_contents(
+                resolved_bucket,
+                "",
+                max_keys=page_size if pagination_enabled else None,
+                force_fresh=force_fresh,
+            )
 
-            session.metadata["items_loaded"] = len(children)
+            session.metadata["items_loaded"] = len(listing)
+            session.metadata["has_more"] = listing.has_more
+            session.metadata["next_token"] = listing.next_token
 
             return render(
                 request,
                 "dashboard/bucket_content_partial.html",
                 {
-                    "bucket_name": bucket_type,
-                    "items": children,
+                    "bucket_name": resolved_bucket,
+                    "listing": listing,
                     "force_fresh": force_fresh,
+                    "page_size": page_size,
+                    "root_folder_sentinel": ROOT_FOLDER_SENTINEL,
                 },
             )
         except Exception as e:

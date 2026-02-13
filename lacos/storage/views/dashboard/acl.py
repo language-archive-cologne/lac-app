@@ -86,7 +86,7 @@ def _render_load_summary_partial(request, summary=None, error_message=None):
     return HttpResponse(html)
 
 
-# Backwards compatibility alias
+# Route alias for legacy callers
 _render_sync_summary_partial = _render_load_summary_partial
 
 
@@ -449,7 +449,8 @@ def acl_load_single(request, object_type, object_id):
             message = f"Failed to load: {result.error}"
 
         if request.headers.get("HX-Request"):
-            html = f'<span class="text-xs {'text-success' if result.success else 'text-error'}">{message}</span>'
+            status_class = "text-success" if result.success else "text-error"
+            html = f'<span class="text-xs {status_class}">{message}</span>'
             return HttpResponse(html)
         return redirect(f"{reverse('storage:acl_admin_dashboard')}?message={message}")
 
@@ -489,7 +490,8 @@ def acl_save_single(request, object_type, object_id):
             message = f"Failed to save: {result.error}"
 
         if request.headers.get("HX-Request"):
-            html = f'<span class="text-xs {'text-success' if result.success else 'text-error'}">{message}</span>'
+            status_class = "text-success" if result.success else "text-error"
+            html = f'<span class="text-xs {status_class}">{message}</span>'
             return HttpResponse(html)
         return redirect(f"{reverse('storage:acl_admin_dashboard')}?message={message}")
 

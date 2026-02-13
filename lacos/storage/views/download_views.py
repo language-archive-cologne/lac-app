@@ -239,5 +239,5 @@ class BundleDownloadView(View):
         return JsonResponse(response_data)
 
 
-# Re-export for backwards compatibility
+# Re-export for legacy import path compatibility
 from lacos.storage.views.script_download_views import BundleScriptDownloadView  # noqa: E402, F401
