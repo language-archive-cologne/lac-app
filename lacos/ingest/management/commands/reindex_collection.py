@@ -1,4 +1,5 @@
 import logging
+from typing import Dict, List, Optional
 
 from django.db import close_old_connections, connection
 from django.core.management.base import BaseCommand
@@ -84,6 +85,7 @@ class Command(BaseCommand):
                 bucket_to_use,
                 s3_key,
                 dry_run=dry_run,
+                discovery_service=discovery_service,
             )
 
             bundle_results = []
@@ -92,6 +94,7 @@ class Command(BaseCommand):
                     collection,
                     bucket_to_use,
                     dry_run=dry_run,
+                    discovery_service=discovery_service,
                 )
 
             # Update S3 resource locations
@@ -106,6 +109,7 @@ class Command(BaseCommand):
             )
             collection_keys = candidates.get("potential_collection_xmls", [])
             bundle_keys = candidates.get("potential_bundle_xmls", [])
+            bundle_keys_by_collection = self._group_bundle_keys_by_collection(bundle_keys)
             if not collection_keys:
                 self.stdout.write(
                     self.style.ERROR(
@@ -115,17 +119,34 @@ class Command(BaseCommand):
                 return 1
 
             for collection_key in collection_keys:
-                collection_id = self._reindex_collection(bucket, collection_key, dry_run=dry_run)
+                collection_id = self._reindex_collection(
+                    bucket,
+                    collection_key,
+                    dry_run=dry_run,
+                    discovery_service=discovery_service,
+                )
                 bundle_results = []
                 if update_bundles:
-                    bundle_results = self._reindex_bundle_keys(bucket, bundle_keys, dry_run=dry_run)
+                    collection_identifier = self._infer_collection_identifier(collection_key)
+                    scoped_bundle_keys = bundle_keys
+                    if collection_identifier:
+                        scoped_bundle_keys = bundle_keys_by_collection.get(
+                            collection_identifier,
+                            [],
+                        )
+                    bundle_results = self._reindex_bundle_keys(
+                        bucket,
+                        scoped_bundle_keys,
+                        dry_run=dry_run,
+                        discovery_service=discovery_service,
+                    )
                 # Update S3 resource locations
                 if collection_id:
                     self._update_s3_resource_locations(collection_id, bundle_results, dry_run=dry_run)
             return 0
 
         if options.get("all"):
-            collections = list(Collection.objects.all())
+            collections = Collection.objects.all().iterator()
             for collection in collections:
                 close_old_connections()
                 s3_key = collection.import_object_key
@@ -140,6 +161,7 @@ class Command(BaseCommand):
                     bucket_to_use,
                     s3_key,
                     dry_run=dry_run,
+                    discovery_service=discovery_service,
                 )
                 bundle_results = []
                 if update_bundles:
@@ -147,6 +169,7 @@ class Command(BaseCommand):
                         collection,
                         bucket_to_use,
                         dry_run=dry_run,
+                        discovery_service=discovery_service,
                     )
                 # Update S3 resource locations
                 if collection_id:
@@ -156,11 +179,42 @@ class Command(BaseCommand):
 
         return 0
 
-    def _reindex_collection(self, bucket: str, s3_key: str, dry_run: bool = False):
+    @staticmethod
+    def _infer_collection_identifier(s3_key: str) -> Optional[str]:
+        if not s3_key:
+            return None
+        parts = [part for part in s3_key.split("/") if part]
+        if not parts:
+            return None
+        return parts[0]
+
+    def _group_bundle_keys_by_collection(
+        self,
+        bundle_keys: List[str],
+    ) -> Dict[str, List[str]]:
+        grouped_keys: Dict[str, List[str]] = {}
+        for bundle_key in bundle_keys:
+            collection_identifier = self._infer_collection_identifier(bundle_key)
+            if not collection_identifier:
+                continue
+            grouped_keys.setdefault(collection_identifier, []).append(bundle_key)
+        return grouped_keys
+
+    def _reindex_collection(
+        self,
+        bucket: str,
+        s3_key: str,
+        dry_run: bool = False,
+        discovery_service: Optional[FileDiscoveryService] = None,
+    ):
         if dry_run:
             self.stdout.write(f"DRY RUN: would reindex collection {bucket}/{s3_key}")
             return None
-        collection_id = reindex_collection_xml(bucket=bucket, s3_key=s3_key)
+        collection_id = reindex_collection_xml(
+            bucket=bucket,
+            s3_key=s3_key,
+            discovery_service=discovery_service,
+        )
         if collection_id:
             self.stdout.write(
                 self.style.SUCCESS(
@@ -206,7 +260,11 @@ class Command(BaseCommand):
             )
 
     def _reindex_bundles_for_collection(
-        self, collection: Collection, bucket: str, dry_run: bool = False
+        self,
+        collection: Collection,
+        bucket: str,
+        dry_run: bool = False,
+        discovery_service: Optional[FileDiscoveryService] = None,
     ) -> list:
         """Reindex bundles for collection and return results."""
         bundle_qs = Bundle.objects.filter(
@@ -219,30 +277,48 @@ class Command(BaseCommand):
         ]
         if not bundle_keys and collection.import_object_key:
             prefix = f"{collection.import_object_key.split('/')[0]}/"
-            candidates = FileDiscoveryService().find_collection_and_bundle_xmls_s3(
+            service = discovery_service or FileDiscoveryService()
+            candidates = service.find_collection_and_bundle_xmls_s3(
                 bucket,
                 prefix,
             )
             bundle_keys = candidates.get("potential_bundle_xmls", [])
 
-        return self._reindex_bundle_keys(bucket, bundle_keys, dry_run=dry_run)
+        return self._reindex_bundle_keys(
+            bucket,
+            bundle_keys,
+            dry_run=dry_run,
+            discovery_service=discovery_service,
+        )
 
     def _reindex_bundle_keys(
-        self, bucket: str, bundle_keys: list[str], dry_run: bool = False
+        self,
+        bucket: str,
+        bundle_keys: List[str],
+        dry_run: bool = False,
+        discovery_service: Optional[FileDiscoveryService] = None,
     ) -> list:
         """Reindex bundles and return list of (bundle_id, bundle_resources_id) tuples."""
         results = []
         if not bundle_keys:
             self.stdout.write(self.style.WARNING("No bundle XML keys to reindex"))
             return results
+        seen_bundle_keys = set()
         for bundle_key in bundle_keys:
+            if not bundle_key or bundle_key in seen_bundle_keys:
+                continue
+            seen_bundle_keys.add(bundle_key)
             close_old_connections()
             if dry_run:
                 self.stdout.write(
                     f"DRY RUN: would reindex bundle {bucket}/{bundle_key}"
                 )
                 continue
-            result = reindex_bundle_xml(bucket=bucket, s3_key=bundle_key)
+            result = reindex_bundle_xml(
+                bucket=bucket,
+                s3_key=bundle_key,
+                discovery_service=discovery_service,
+            )
             if result:
                 bundle_id, bundle_resources_id = result
                 results.append((bundle_id, bundle_resources_id))

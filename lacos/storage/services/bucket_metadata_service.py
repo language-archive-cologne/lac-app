@@ -62,9 +62,13 @@ class BucketMetadataService:
         collection_dir_names: Set[str] = set()
         collection_paths: Dict[str, str] = {}
         bundle_dir_names: Set[str] = set()
+        parsed_folder_items: List[Dict[str, Any]] = []
 
-        # First pass: identify potential BLAM objects by path structure
+        # First pass: parse paths once and identify collection/bundle candidates
         for item in folder_items:
+            if not item.get("is_dir", True):
+                continue
+
             path = item.get("path")
             if not path:
                 continue
@@ -73,23 +77,34 @@ class BucketMetadataService:
             if not normalized_path:
                 continue
 
+            parts = normalized_path.split("/")
+            dir_name = parts[-1]
+            if not dir_name:
+                continue
+
+            parsed_folder_items.append(
+                {
+                    "path": path,
+                    "normalized_path": normalized_path,
+                    "dir_name": dir_name,
+                    "depth": len(parts),
+                }
+            )
+
             try:
                 # Check if this looks like a collection path
                 if self.collection_service.is_collection_path(path):
-                    candidate_name = normalized_path.split("/")[-1]
-                    if candidate_name:
-                        collection_dir_names.add(candidate_name)
-                        collection_paths[path] = candidate_name
+                    collection_dir_names.add(dir_name)
+                    collection_paths[normalized_path] = dir_name
             except Exception as exc:
                 logger.debug("Failed to evaluate collection path %s: %s", path, exc)
 
             # Any nested folder could be a bundle
-            parts = normalized_path.split("/")
-            if len(parts) >= 2 and parts[-1]:
-                bundle_dir_names.add(parts[-1])
+            if len(parts) >= 2:
+                bundle_dir_names.add(dir_name)
 
         metadata: Dict[str, Dict[str, Any]] = {}
-        if not collection_dir_names and not bundle_dir_names:
+        if not parsed_folder_items:
             return metadata
 
         # Bulk load collection metadata
@@ -105,17 +120,12 @@ class BucketMetadataService:
             except Exception as exc:
                 logger.warning("Failed to bulk load collection metadata: %s", exc)
 
-        # Bulk load bundle metadata (excluding names that matched collections)
-        bundle_lookup_names = {
-            name
-            for name in bundle_dir_names
-            if name and name not in collections_by_name
-        }
+        # Bulk load bundle metadata
         bundles_by_name: Dict[str, str] = {}
-        if bundle_lookup_names:
+        if bundle_dir_names:
             try:
                 bundle_rows = Bundle.objects.filter(
-                    general_info__directory_name__in=bundle_lookup_names
+                    general_info__directory_name__in=bundle_dir_names
                 ).values_list("general_info__directory_name", "pk")
                 bundles_by_name = {
                     dir_name: str(pk) for dir_name, pk in bundle_rows if dir_name
@@ -124,21 +134,13 @@ class BucketMetadataService:
                 logger.warning("Failed to bulk load bundle metadata: %s", exc)
 
         # Second pass: build metadata index
-        for item in folder_items:
-            path = item.get("path")
-            if not path:
-                continue
-
-            normalized_path = path.rstrip("/")
-            if not normalized_path:
-                continue
-
-            dir_name = normalized_path.split("/")[-1]
-            if not dir_name:
-                continue
+        for item_data in parsed_folder_items:
+            path = item_data["path"]
+            normalized_path = item_data["normalized_path"]
+            dir_name = item_data["dir_name"]
 
             # Check if this is a collection
-            collection_name = collection_paths.get(path)
+            collection_name = collection_paths.get(normalized_path)
             if collection_name:
                 collection_id = collections_by_name.get(collection_name)
                 if collection_id:
@@ -150,8 +152,7 @@ class BucketMetadataService:
                     continue
 
             # Check if this is a bundle
-            parts = normalized_path.split("/")
-            if len(parts) >= 2:
+            if item_data["depth"] >= 2:
                 bundle_id = bundles_by_name.get(dir_name)
                 if bundle_id:
                     metadata[path] = {

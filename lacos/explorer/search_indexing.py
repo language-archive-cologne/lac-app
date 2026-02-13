@@ -153,8 +153,6 @@ def update_collection_search_vector(collection: Collection) -> None:
     """Update the search vector for a collection and save it."""
     from django.db import connection
 
-    vector = build_collection_search_vector(collection)
-
     # We need to execute this as a raw SQL update because Django's ORM
     # doesn't handle SearchVector assignment directly
     with connection.cursor() as cursor:

@@ -54,6 +54,38 @@ class BucketMetadataServiceTest(TestCase):
         self.assertTrue(result["col1/"]["is_blam_object"])
         self.assertEqual(result["col1/"]["blam_type"], "collection")
 
+    @patch('lacos.storage.services.bucket_metadata_service.Bundle')
+    @patch('lacos.storage.services.bucket_metadata_service.Collection')
+    def test_build_blam_metadata_index_handles_shared_collection_bundle_names(
+        self,
+        mock_collection,
+        mock_bundle,
+    ):
+        """Collection and bundle names can overlap; collection path still takes precedence."""
+        self.mock_collection_service.is_collection_path.side_effect = (
+            lambda path: path == "same/same/"
+        )
+
+        mock_collection_qs = Mock()
+        mock_collection_qs.filter.return_value.values_list.return_value = [("same", 101)]
+        mock_collection.objects = mock_collection_qs
+
+        mock_bundle_qs = Mock()
+        mock_bundle_qs.filter.return_value.values_list.return_value = [("same", 202)]
+        mock_bundle.objects = mock_bundle_qs
+
+        items = [
+            {"path": "same/same/", "is_dir": True, "name": "same"},
+            {"path": "other/same/", "is_dir": True, "name": "same"},
+        ]
+
+        result = self.service.build_blam_metadata_index("production", items)
+
+        self.assertEqual(result["same/same/"]["blam_type"], "collection")
+        self.assertEqual(result["same/same/"]["blam_id"], "101")
+        self.assertEqual(result["other/same/"]["blam_type"], "bundle")
+        self.assertEqual(result["other/same/"]["blam_id"], "202")
+
     def test_is_blam_object_non_production(self):
         """Test is_blam_object returns False for non-production bucket."""
         result = self.service.is_blam_object("ingest", "test/path")
