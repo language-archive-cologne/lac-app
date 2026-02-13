@@ -10,7 +10,8 @@ from lacos.storage.permissions import (
     manager_or_archivist_required,
     resolve_collection_from_path,
 )
-from django.http import JsonResponse, HttpResponseForbidden
+from django.core.exceptions import PermissionDenied
+from django.http import JsonResponse
 from lacos.storage.services.upload_service import UploadService
 from lacos.storage.services.upload_verification_service import UploadVerificationService
 from lacos.storage.models import UploadSession, S3FileObject
@@ -30,7 +31,7 @@ def _ensure_collection_access(request, *, path_hint: str | None = None, s3_keys:
     if path_hint is not None:
         collection = resolve_collection_from_path(path_hint)
         if not can_manage_collection(request.user, collection):
-            return HttpResponseForbidden("Collection manager access required.")
+            raise PermissionDenied("Collection manager access required.")
         return None
     if s3_keys:
         if isinstance(s3_keys, (str, bytes)):
@@ -38,7 +39,7 @@ def _ensure_collection_access(request, *, path_hint: str | None = None, s3_keys:
         for key in s3_keys:
             collection = resolve_collection_from_path(key)
             if not can_manage_collection(request.user, collection):
-                return HttpResponseForbidden("Collection manager access required.")
+                raise PermissionDenied("Collection manager access required.")
     return None
 
 

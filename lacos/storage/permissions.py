@@ -6,7 +6,7 @@ import uuid
 
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
-from django.http import HttpResponseForbidden
+from django.core.exceptions import PermissionDenied
 from django.utils.decorators import method_decorator
 
 ARCHIVIST_GROUP_NAME = "archivists"
@@ -137,7 +137,7 @@ def manager_or_archivist_required(view_func):
     def _wrapped(request, *args, **kwargs):
         if is_archivist(request.user) or is_collection_manager(request.user):
             return view_func(request, *args, **kwargs)
-        return HttpResponseForbidden("Archivist or collection manager access required.")
+        raise PermissionDenied("Archivist or collection manager access required.")
 
     return _wrapped
 
@@ -147,7 +147,7 @@ def archivist_required(view_func):
     @wraps(view_func)
     def _wrapped(request, *args, **kwargs):
         if not is_archivist(request.user):
-            return HttpResponseForbidden("Archivist access required.")
+            raise PermissionDenied("Archivist access required.")
         return view_func(request, *args, **kwargs)
 
     return _wrapped

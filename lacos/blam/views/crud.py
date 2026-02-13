@@ -1,5 +1,6 @@
 from django.shortcuts import get_object_or_404
-from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
+from django.core.exceptions import PermissionDenied
+from django.http import HttpResponse, HttpResponseBadRequest
 from django.views.decorators.http import require_POST
 from django.db import transaction
 import json
@@ -31,12 +32,12 @@ def delete_blam_model(request, model_type, object_id):
             model = get_object_or_404(Collection, pk=object_id)
             model_name = "Collection"
             if not can_manage_collection(request.user, model):
-                return HttpResponseForbidden("Collection manager access required.")
+                raise PermissionDenied("Collection manager access required.")
         elif model_type.lower() == 'bundle':
             model = get_object_or_404(Bundle, pk=object_id)
             model_name = "Bundle"
             if not can_manage_bundle(request.user, model):
-                return HttpResponseForbidden("Collection manager access required.")
+                raise PermissionDenied("Collection manager access required.")
         else:
             return HttpResponseBadRequest(f"Invalid model type: {model_type}")
         

@@ -1,7 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
-from django.http import HttpResponseForbidden
+from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
@@ -89,7 +89,7 @@ def render_collection_section(request, collection: Collection, section_slug: str
 class CollectionListView(View):
     def get(self, request):
         if not (is_archivist(request.user) or is_collection_manager(request.user)):
-            return HttpResponseForbidden("Archivist or collection manager access required.")
+            raise PermissionDenied("Archivist or collection manager access required.")
 
         from django.db.models import Q
 
@@ -120,13 +120,13 @@ class CollectionListView(View):
 class CollectionCreateView(LoginRequiredMixin, View):
     def get(self, request):
         if not is_archivist(request.user):
-            return HttpResponseForbidden("Archivist access required.")
+            raise PermissionDenied("Archivist access required.")
         form = CollectionForm()
         return render(request, "blam/metadata/collection_create.html", {"form": form})
 
     def post(self, request):
         if not is_archivist(request.user):
-            return HttpResponseForbidden("Archivist access required.")
+            raise PermissionDenied("Archivist access required.")
         form = CollectionForm(request.POST)
         if form.is_valid():
             collection = form.save(commit=False)
@@ -143,7 +143,7 @@ class CollectionOverviewView(LoginRequiredMixin, View):
     def get(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
         if not can_manage_collection(request.user, collection):
-            return HttpResponseForbidden("Collection manager access required.")
+            raise PermissionDenied("Collection manager access required.")
         form = CollectionForm(instance=collection)
         return render_collection_section(
             request,
@@ -156,7 +156,7 @@ class CollectionOverviewView(LoginRequiredMixin, View):
     def post(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
         if not can_manage_collection(request.user, collection):
-            return HttpResponseForbidden("Collection manager access required.")
+            raise PermissionDenied("Collection manager access required.")
         form = CollectionForm(request.POST, instance=collection)
         if form.is_valid():
             collection = form.save(commit=False)
@@ -179,7 +179,7 @@ class CollectionHeaderView(LoginRequiredMixin, View):
     def get(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
         if not can_manage_collection(request.user, collection):
-            return HttpResponseForbidden("Collection manager access required.")
+            raise PermissionDenied("Collection manager access required.")
         instance = CollectionHeader.objects.filter(collection=collection).first()
         form = CollectionHeaderForm(instance=instance)
         return render_collection_section(
@@ -193,7 +193,7 @@ class CollectionHeaderView(LoginRequiredMixin, View):
     def post(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
         if not can_manage_collection(request.user, collection):
-            return HttpResponseForbidden("Collection manager access required.")
+            raise PermissionDenied("Collection manager access required.")
         instance = CollectionHeader.objects.filter(collection=collection).first()
         form = CollectionHeaderForm(request.POST, instance=instance)
         if form.is_valid():
@@ -218,7 +218,7 @@ class CollectionGeneralInfoView(LoginRequiredMixin, View):
     def get(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
         if not can_manage_collection(request.user, collection):
-            return HttpResponseForbidden("Collection manager access required.")
+            raise PermissionDenied("Collection manager access required.")
         instance = CollectionGeneralInfo.objects.filter(collection=collection).first()
         location_instance = instance.location if instance else None
         form = CollectionGeneralInfoForm(instance=instance)
@@ -234,7 +234,7 @@ class CollectionGeneralInfoView(LoginRequiredMixin, View):
     def post(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
         if not can_manage_collection(request.user, collection):
-            return HttpResponseForbidden("Collection manager access required.")
+            raise PermissionDenied("Collection manager access required.")
         instance = CollectionGeneralInfo.objects.filter(collection=collection).first()
         location_instance = instance.location if instance else None
         form = CollectionGeneralInfoForm(request.POST, instance=instance)
@@ -268,7 +268,7 @@ class CollectionPublicationInfoView(LoginRequiredMixin, View):
     def get(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
         if not can_manage_collection(request.user, collection):
-            return HttpResponseForbidden("Collection manager access required.")
+            raise PermissionDenied("Collection manager access required.")
         instance = CollectionPublicationInfo.objects.filter(collection=collection).first()
         form = CollectionPublicationInfoForm(instance=instance)
         return render_collection_section(
@@ -282,7 +282,7 @@ class CollectionPublicationInfoView(LoginRequiredMixin, View):
     def post(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
         if not can_manage_collection(request.user, collection):
-            return HttpResponseForbidden("Collection manager access required.")
+            raise PermissionDenied("Collection manager access required.")
         instance = CollectionPublicationInfo.objects.filter(collection=collection).first()
         form = CollectionPublicationInfoForm(request.POST, instance=instance)
         if form.is_valid():
@@ -307,7 +307,7 @@ class CollectionAdministrativeInfoView(LoginRequiredMixin, View):
     def get(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
         if not can_manage_collection(request.user, collection):
-            return HttpResponseForbidden("Collection manager access required.")
+            raise PermissionDenied("Collection manager access required.")
         instance = CollectionAdministrativeInfo.objects.filter(collection=collection).first()
         form = CollectionAdministrativeInfoForm(instance=instance)
         return render_collection_section(
@@ -321,7 +321,7 @@ class CollectionAdministrativeInfoView(LoginRequiredMixin, View):
     def post(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
         if not can_manage_collection(request.user, collection):
-            return HttpResponseForbidden("Collection manager access required.")
+            raise PermissionDenied("Collection manager access required.")
         instance = CollectionAdministrativeInfo.objects.filter(collection=collection).first()
         form = CollectionAdministrativeInfoForm(request.POST, instance=instance)
         if form.is_valid():
@@ -346,7 +346,7 @@ class CollectionStructuralInfoView(LoginRequiredMixin, View):
     def get(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
         if not can_manage_collection(request.user, collection):
-            return HttpResponseForbidden("Collection manager access required.")
+            raise PermissionDenied("Collection manager access required.")
         instance = CollectionStructuralInfo.objects.filter(collection=collection).first()
         form = CollectionStructuralInfoForm(instance=instance)
         return render_collection_section(
@@ -360,7 +360,7 @@ class CollectionStructuralInfoView(LoginRequiredMixin, View):
     def post(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
         if not can_manage_collection(request.user, collection):
-            return HttpResponseForbidden("Collection manager access required.")
+            raise PermissionDenied("Collection manager access required.")
         instance = CollectionStructuralInfo.objects.filter(collection=collection).first()
         form = CollectionStructuralInfoForm(request.POST, instance=instance)
         if form.is_valid():
@@ -385,7 +385,7 @@ class CollectionProjectInfoView(LoginRequiredMixin, View):
     def get(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
         if not can_manage_collection(request.user, collection):
-            return HttpResponseForbidden("Collection manager access required.")
+            raise PermissionDenied("Collection manager access required.")
         form = CollectionProjectInfoForm(instance=collection)
         return render_collection_section(
             request,
@@ -398,7 +398,7 @@ class CollectionProjectInfoView(LoginRequiredMixin, View):
     def post(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
         if not can_manage_collection(request.user, collection):
-            return HttpResponseForbidden("Collection manager access required.")
+            raise PermissionDenied("Collection manager access required.")
         form = CollectionProjectInfoForm(request.POST, instance=collection)
         if form.is_valid():
             collection = form.save(commit=False)
@@ -421,7 +421,7 @@ class CollectionBundlesView(LoginRequiredMixin, View):
     def get(self, request, collection_id):
         collection = get_object_or_404(Collection, pk=collection_id)
         if not can_manage_collection(request.user, collection):
-            return HttpResponseForbidden("Collection manager access required.")
+            raise PermissionDenied("Collection manager access required.")
 
         from django.db.models import Q
 

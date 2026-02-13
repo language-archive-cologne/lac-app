@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from django.http import Http404, HttpResponse, HttpResponseForbidden
+from django.core.exceptions import PermissionDenied
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -288,7 +289,7 @@ class BasePublicationReferenceView(HtmxTemplateHelperMixin, View):
         parent = self.get_parent(**kwargs)
         publication_info = self.get_publication_info(parent)
         if not self._authorize(request, parent, publication_info):
-            return HttpResponseForbidden("Collection manager access required.")
+            raise PermissionDenied("Collection manager access required.")
         config = self.get_reference_config(reference_slug)
         edit_object = None
         form = None
@@ -316,7 +317,7 @@ class BasePublicationReferenceView(HtmxTemplateHelperMixin, View):
         parent = self.get_parent(**kwargs)
         publication_info = self.get_publication_info(parent)
         if not self._authorize(request, parent, publication_info):
-            return HttpResponseForbidden("Collection manager access required.")
+            raise PermissionDenied("Collection manager access required.")
         config = self.get_reference_config(reference_slug)
         edit_object = None
 

@@ -3,7 +3,8 @@ import json
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from lacos.storage.permissions import can_manage_collection, resolve_collection_from_path
-from django.http import JsonResponse, HttpResponse, HttpResponseForbidden, QueryDict
+from django.core.exceptions import PermissionDenied
+from django.http import JsonResponse, HttpResponse, QueryDict
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.template.loader import render_to_string
@@ -28,7 +29,7 @@ def file_content(request, bucket_type, file_path):
     """
     collection = resolve_collection_from_path(file_path)
     if not can_manage_collection(request.user, collection):
-        return HttpResponseForbidden("Collection manager access required.")
+        raise PermissionDenied("Collection manager access required.")
 
     try:
         bucket_service = BucketService()
@@ -69,7 +70,7 @@ def file_viewer_htmx(request, bucket_type, object_path):
     """Return modal content with a presigned URL for streaming file previews."""
     collection = resolve_collection_from_path(object_path)
     if not can_manage_collection(request.user, collection):
-        return HttpResponseForbidden("Collection manager access required.")
+        raise PermissionDenied("Collection manager access required.")
     bucket_service = BucketService()
 
     accessible_buckets = set(bucket_service.get_all_accessible_buckets())
@@ -227,7 +228,7 @@ class RenameObjectHTMXView(HtmxTemplateHelperMixin, View):
     def post(self, request, bucket_name, object_type, object_path):
         collection = resolve_collection_from_path(object_path)
         if not can_manage_collection(request.user, collection):
-            return HttpResponseForbidden("Collection manager access required.")
+            raise PermissionDenied("Collection manager access required.")
         bucket_service = BucketService()
 
         new_name = (request.POST.get('newName') or request.POST.get('prompt') or '').strip()
