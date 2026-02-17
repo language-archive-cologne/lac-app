@@ -77,9 +77,9 @@
                 <a href="{% url 'explorer:bundle_detail_by_handle' handle=bundle.identifier %}"
                    class="text-base-content hover:text-primary font-semibold">
                   {% if gi and gi.display_title %}
-                    {{ gi.display_title }}
+                    {{ gi.display_title|highlight_query:search_query }}
                   {% else %}
-                    {{ bundle.identifier }}
+                    {{ bundle.identifier|highlight_query:search_query }}
                   {% endif %}
                 </a>
                 <div class="text-xs text-base-content/50 font-mono">{{ bundle.identifier }}</div>
@@ -99,7 +99,7 @@
             </td>
             <td class="px-6 py-5 align-top text-sm text-base-content/70 max-w-xs">
               {% if gi and gi.description %}
-                <span class="cursor-help" title="{{ gi.description }}">{{ gi.description|truncatewords:12 }}</span>
+                <span class="cursor-help" title="{{ gi.description }}">{{ gi.description|truncatewords:12|highlight_query:search_query }}</span>
               {% endif %}
             </td>
             <td class="px-6 py-5 align-top text-sm text-base-content/70">

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from dataclasses import replace
+import re
 from typing import Literal
 
+from django.contrib.postgres.search import SearchHeadline
 from django.contrib.postgres.search import SearchQuery
 from django.contrib.postgres.search import SearchRank
 from django.contrib.postgres.search import SearchVector
@@ -12,7 +15,9 @@ from django.db.models import Subquery
 from django.db.models import Value
 from django.db.models import F
 from django.db.models import Q
+from django.db.models import TextField
 from django.db.models.functions import Coalesce
+from django.db.models.functions import Concat
 from django.db.models.functions import Greatest
 from django.urls import reverse
 
@@ -34,8 +39,41 @@ class SearchResult:
     identifier: str
     title: str
     description: str
+    highlight_snippet: str
     url: str
     rank: float
+
+
+def _build_headline_source(identifier_field: str, title_field: str, description_field: str):
+    return Concat(
+        Coalesce(F(identifier_field), Value("")),
+        Value(" "),
+        Coalesce(F(title_field), Value("")),
+        Value(" "),
+        Coalesce(F(description_field), Value("")),
+        output_field=TextField(),
+    )
+
+
+def _highlight_literal_query(text: str, term: str) -> str:
+    if not text:
+        return ""
+    normalized_term = term.strip()
+    if not normalized_term:
+        return text
+    pattern = re.compile(re.escape(normalized_term), flags=re.IGNORECASE)
+    return pattern.sub(lambda match: f"<mark>{match.group(0)}</mark>", text)
+
+
+def _resolve_highlight_snippet(snippet: str | None, description: str, term: str) -> str:
+    snippet_text = (snippet or "").strip()
+    if snippet_text:
+        return snippet_text
+    return _highlight_literal_query(description, term)
+
+
+def _has_mark_highlight(snippet: str) -> bool:
+    return "<mark>" in (snippet or "")
 
 
 def search_archives(term: str, *, limit: int | None = None, use_stored_vectors: bool = True) -> list[SearchResult]:
@@ -55,8 +93,8 @@ def search_archives(term: str, *, limit: int | None = None, use_stored_vectors: 
     prefix_terms = " & ".join(f"{word}:*" for word in normalized.split())
     query = SearchQuery(prefix_terms, config="simple", search_type="raw")
 
-    collection_results = _search_collections(query, use_stored_vectors)
-    bundle_results = _search_bundles(query, use_stored_vectors)
+    collection_results = _search_collections(query, normalized, use_stored_vectors)
+    bundle_results = _search_bundles(query, normalized, use_stored_vectors)
 
     # Supplement with trigram results for typo tolerance (>= 3 chars)
     if len(normalized) >= 3:
@@ -67,13 +105,19 @@ def search_archives(term: str, *, limit: int | None = None, use_stored_vectors: 
     combined.sort(key=lambda result: result.rank, reverse=True)
 
     deduped: list[SearchResult] = []
-    seen_keys: set[tuple[str, str]] = set()
+    seen_keys: dict[tuple[str, str], int] = {}
 
     for result in combined:
         key = (result.kind, result.object_id)
         if key in seen_keys:
+            existing_index = seen_keys[key]
+            existing = deduped[existing_index]
+            # Keep current ordering/rank, but prefer any snippet that actually
+            # contains highlights when duplicate hits come from mixed sources.
+            if _has_mark_highlight(result.highlight_snippet) and not _has_mark_highlight(existing.highlight_snippet):
+                deduped[existing_index] = replace(existing, highlight_snippet=result.highlight_snippet)
             continue
-        seen_keys.add(key)
+        seen_keys[key] = len(deduped)
         deduped.append(result)
 
     if limit is None:
@@ -82,7 +126,7 @@ def search_archives(term: str, *, limit: int | None = None, use_stored_vectors: 
     return deduped[:limit]
 
 
-def _search_collections(query: SearchQuery, use_stored_vectors: bool = True) -> list[SearchResult]:
+def _search_collections(query: SearchQuery, term: str, use_stored_vectors: bool = True) -> list[SearchResult]:
     general_info = CollectionGeneralInfo.objects.filter(collection=OuterRef("pk"))
     publication_info = CollectionPublicationInfo.objects.filter(collection=OuterRef("pk"))
 
@@ -99,7 +143,18 @@ def _search_collections(query: SearchQuery, use_stored_vectors: bool = True) -> 
         collections = (
             base_qs
             .filter(search_vector__isnull=False)
-            .annotate(search_rank=SearchRank(F("search_vector"), query))
+            .annotate(
+                search_rank=SearchRank(F("search_vector"), query),
+                highlight_snippet=SearchHeadline(
+                    _build_headline_source("identifier", "collection_display_title", "collection_description"),
+                    query,
+                    config="simple",
+                    start_sel="<mark>",
+                    stop_sel="</mark>",
+                    max_words=30,
+                    min_words=8,
+                ),
+            )
             .filter(search_vector=query)
             .order_by("-search_rank", "identifier")
         )[:50]
@@ -129,7 +184,18 @@ def _search_collections(query: SearchQuery, use_stored_vectors: bool = True) -> 
                     + SearchVector("project_infos__funder_infos__grant_identifier", weight="D", config="simple")
                 ),
             )
-            .annotate(search_rank=SearchRank(F("computed_search_vector"), query))
+            .annotate(
+                search_rank=SearchRank(F("computed_search_vector"), query),
+                highlight_snippet=SearchHeadline(
+                    _build_headline_source("identifier", "collection_display_title", "collection_description"),
+                    query,
+                    config="simple",
+                    start_sel="<mark>",
+                    stop_sel="</mark>",
+                    max_words=30,
+                    min_words=8,
+                ),
+            )
             .filter(Q(computed_search_vector=query))
             .order_by("-search_rank", "identifier")
             .distinct()
@@ -139,6 +205,11 @@ def _search_collections(query: SearchQuery, use_stored_vectors: bool = True) -> 
     for collection in collections:
         title = collection.collection_display_title or collection.identifier
         description = collection.collection_description or ""
+        highlight_snippet = _resolve_highlight_snippet(
+            getattr(collection, "highlight_snippet", None),
+            description,
+            term,
+        )
         results.append(
             SearchResult(
                 kind="collection",
@@ -146,6 +217,7 @@ def _search_collections(query: SearchQuery, use_stored_vectors: bool = True) -> 
                 identifier=collection.identifier,
                 title=title,
                 description=description,
+                highlight_snippet=highlight_snippet,
                 url=reverse("explorer:collection_detail", kwargs={"pk": collection.pk}),
                 rank=collection.search_rank or 0.0,
             )
@@ -153,7 +225,7 @@ def _search_collections(query: SearchQuery, use_stored_vectors: bool = True) -> 
     return results
 
 
-def _search_bundles(query: SearchQuery, use_stored_vectors: bool = True) -> list[SearchResult]:
+def _search_bundles(query: SearchQuery, term: str, use_stored_vectors: bool = True) -> list[SearchResult]:
     general_info = BundleGeneralInfo.objects.filter(bundle=OuterRef("pk"))
     structural_info = BundleStructuralInfo.objects.filter(bundle=OuterRef("pk"))
 
@@ -171,7 +243,18 @@ def _search_bundles(query: SearchQuery, use_stored_vectors: bool = True) -> list
         bundles = (
             base_qs
             .filter(search_vector__isnull=False)
-            .annotate(search_rank=SearchRank(F("search_vector"), query))
+            .annotate(
+                search_rank=SearchRank(F("search_vector"), query),
+                highlight_snippet=SearchHeadline(
+                    _build_headline_source("identifier", "bundle_display_title", "bundle_description"),
+                    query,
+                    config="simple",
+                    start_sel="<mark>",
+                    stop_sel="</mark>",
+                    max_words=30,
+                    min_words=8,
+                ),
+            )
             .filter(search_vector=query)
             .order_by("-search_rank", "identifier")
         )[:50]
@@ -199,7 +282,18 @@ def _search_bundles(query: SearchQuery, use_stored_vectors: bool = True) -> list
                     + SearchVector("structural_info__is_member_of_collection__general_info__display_title", weight="D", config="simple")
                 ),
             )
-            .annotate(search_rank=SearchRank(F("computed_search_vector"), query))
+            .annotate(
+                search_rank=SearchRank(F("computed_search_vector"), query),
+                highlight_snippet=SearchHeadline(
+                    _build_headline_source("identifier", "bundle_display_title", "bundle_description"),
+                    query,
+                    config="simple",
+                    start_sel="<mark>",
+                    stop_sel="</mark>",
+                    max_words=30,
+                    min_words=8,
+                ),
+            )
             .filter(Q(computed_search_vector=query))
             .order_by("-search_rank", "identifier")
             .distinct()
@@ -209,6 +303,11 @@ def _search_bundles(query: SearchQuery, use_stored_vectors: bool = True) -> list
     for bundle in bundles:
         title = bundle.bundle_display_title or bundle.identifier
         description = bundle.bundle_description or ""
+        highlight_snippet = _resolve_highlight_snippet(
+            getattr(bundle, "highlight_snippet", None),
+            description,
+            term,
+        )
         results.append(
             SearchResult(
                 kind="bundle",
@@ -216,6 +315,7 @@ def _search_bundles(query: SearchQuery, use_stored_vectors: bool = True) -> list
                 identifier=bundle.identifier,
                 title=title,
                 description=description,
+                highlight_snippet=highlight_snippet,
                 url=reverse("explorer:bundle_detail", kwargs={"pk": bundle.pk}),
                 rank=bundle.search_rank or 0.0,
             )
@@ -251,6 +351,7 @@ def _trigram_search_collections(search_term: str) -> list[SearchResult]:
                 identifier=collection.identifier,
                 title=title,
                 description=description,
+                highlight_snippet=_resolve_highlight_snippet(None, description, search_term),
                 url=reverse("explorer:collection_detail", kwargs={"pk": collection.pk}),
                 rank=collection.similarity or 0.0,
             )
@@ -288,6 +389,7 @@ def _trigram_search_bundles(search_term: str) -> list[SearchResult]:
                 identifier=bundle.identifier,
                 title=title,
                 description=description,
+                highlight_snippet=_resolve_highlight_snippet(None, description, search_term),
                 url=reverse("explorer:bundle_detail", kwargs={"pk": bundle.pk}),
                 rank=bundle.similarity or 0.0,
             )

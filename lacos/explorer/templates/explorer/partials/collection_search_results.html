@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load i18n explorer_extras %}
 {% if collection_search_results %}
   <div class="bg-base-100 border border-base-300 rounded-xl shadow-sm overflow-hidden">
     <div class="px-6 py-4 border-b border-base-300 flex items-center justify-between">
@@ -12,11 +12,11 @@
         <li class="px-6 py-4 flex flex-col md:flex-row md:items-start md:justify-between md:gap-4">
           <div>
             <a href="{{ result.url }}" class="text-base font-semibold text-base-content hover:text-base-content">
-              {{ result.title }}
+              {{ result.title|highlight_query:search_query }}
             </a>
-            {% if result.description %}
+            {% if result.highlight_snippet %}
               <p class="mt-2 text-sm text-base-content/70">
-                {{ result.description|truncatewords:30|urlize }}
+                {{ result.highlight_snippet|render_search_snippet }}
               </p>
             {% endif %}
           </div>

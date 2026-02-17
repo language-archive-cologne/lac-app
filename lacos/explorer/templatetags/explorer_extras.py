@@ -1,6 +1,6 @@
 import re
 from django import template
-from django.utils.html import mark_safe
+from django.utils.html import conditional_escape, mark_safe
 from django.utils.safestring import SafeString
 from django.template.defaultfilters import stringfilter
 
@@ -166,3 +166,29 @@ def is_media_type(resource, target_type: str) -> bool:
         getattr(resource, "file_name", None),
         target_type,
     )
+
+
+@register.filter
+@stringfilter
+def render_search_snippet(text):
+    """Render search snippets while allowing only <mark> tags."""
+    if not text:
+        return ""
+
+    escaped = conditional_escape(text)
+    rendered = escaped.replace("&lt;mark&gt;", "<mark>").replace("&lt;/mark&gt;", "</mark>")
+    return mark_safe(rendered)
+
+
+@register.filter
+def highlight_query(text, query):
+    """Highlight literal query matches in plain text, escaping other HTML."""
+    text = text or ""
+    query = (query or "").strip()
+    escaped = conditional_escape(text)
+    if not query:
+        return mark_safe(escaped)
+
+    pattern = re.compile(re.escape(query), flags=re.IGNORECASE)
+    rendered = pattern.sub(lambda match: f"<mark>{match.group(0)}</mark>", str(escaped))
+    return mark_safe(rendered)

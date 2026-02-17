@@ -31,6 +31,7 @@ def _create_collection(
     languages: list[tuple[str, str]] | None = None,
     country: str | None = None,
     region: str | None = None,
+    description: str | None = None,
 ) -> Collection:
     """Helper to create a collection with related metadata."""
     collection = Collection.objects.create(identifier=identifier)
@@ -47,7 +48,7 @@ def _create_collection(
         id_value=f"CID-{identifier}",
         id_type=IdentifierTypeChoices.DOI,
         display_title=title,
-        description=f"Description for {title}",
+        description=description or f"Description for {title}",
         location=location,
         version="1.0",
     )
@@ -294,6 +295,38 @@ def test_text_search_combined_with_facets(client):
 
     response = client.get("/search/", {"q": "Senufo", "country": "Mali"})
     assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_text_search_highlights_literal_query_in_description(client):
+    c1 = _create_collection(
+        "C1",
+        "Language Variety Archive",
+        country="Mali",
+        description="Documentation of language variety in Latin America and the Caribbean.",
+    )
+    update_collection_search_vector(c1)
+
+    response = client.get("/search/", {"q": "ety"})
+    assert response.status_code == 200
+    page = response.content.decode("utf-8")
+    assert "<mark>ety</mark>" in page
+
+
+@pytest.mark.django_db
+def test_text_search_highlights_literal_query_in_title(client):
+    c1 = _create_collection(
+        "C1",
+        "Etymological Archive",
+        country="Mali",
+        description="Reference material.",
+    )
+    update_collection_search_vector(c1)
+
+    response = client.get("/search/", {"q": "ety"})
+    assert response.status_code == 200
+    page = response.content.decode("utf-8")
+    assert "<mark>Ety</mark>mological" in page
 
 
 @pytest.mark.django_db

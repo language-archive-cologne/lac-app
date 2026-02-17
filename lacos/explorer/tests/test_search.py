@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import pytest
+from django.template import Context, Template
+from django.urls import reverse
 
 from lacos.blam.models import Bundle
 from lacos.blam.models import Collection
@@ -65,6 +67,63 @@ def test_collection_search_matches_title_and_keywords():
     results = search_archives("senufo", use_stored_vectors=False)
 
     assert any(result.kind == "collection" and result.object_id == str(collection.pk) for result in results)
+
+
+@pytest.mark.django_db
+def test_fts_results_include_highlight_snippet():
+    collection = Collection.objects.create(identifier="COL-HL-001")
+    location = CollectionLocation.objects.create(
+        location_name="Korhogo",
+        country_name="Ivory Coast",
+        country_code="CI",
+    )
+    CollectionGeneralInfo.objects.create(
+        collection=collection,
+        id_value="CID-HL-001",
+        id_type=IdentifierTypeChoices.DOI,
+        display_title="Senufo Language Archive",
+        description="Documentation resources for Senufo speakers.",
+        location=location,
+        version="1.0",
+    )
+
+    # Two-letter query skips trigram path and exercises the FTS snippet path.
+    results = search_archives("se", use_stored_vectors=False)
+    match = next(
+        result
+        for result in results
+        if result.kind == "collection" and result.object_id == str(collection.pk)
+    )
+
+    assert match.highlight_snippet
+    assert "<mark>" in match.highlight_snippet
+
+
+@pytest.mark.django_db
+def test_fallback_snippet_highlights_literal_query_in_description():
+    collection = Collection.objects.create(identifier="COL-LIT-HL-001")
+    location = CollectionLocation.objects.create(
+        location_name="Bogota",
+        country_name="Colombia",
+        country_code="CO",
+    )
+    CollectionGeneralInfo.objects.create(
+        collection=collection,
+        id_value="CID-LIT-HL-001",
+        id_type=IdentifierTypeChoices.DOI,
+        display_title="Language Variety Archive",
+        description="Documentation of language variety in Latin America.",
+        location=location,
+        version="1.0",
+    )
+
+    results = search_archives("ety", use_stored_vectors=True)
+    match = next(
+        result
+        for result in results
+        if result.kind == "collection" and result.object_id == str(collection.pk)
+    )
+    assert "<mark>" in match.highlight_snippet
 
 
 @pytest.mark.django_db
@@ -279,10 +338,13 @@ def test_trigram_fallback_finds_typo():
     rebuild_all_search_vectors()
 
     results = search_archives("senufu", use_stored_vectors=True)
-    assert any(
-        result.kind == "collection" and result.object_id == str(collection.pk)
+    match = next(
+        result
         for result in results
+        if result.kind == "collection" and result.object_id == str(collection.pk)
     )
+    assert match.highlight_snippet == match.description
+    assert "<mark>" not in match.highlight_snippet
 
 
 @pytest.mark.django_db
@@ -341,3 +403,169 @@ def test_short_query_skips_trigram_fallback():
     # With prefix matching, FTS may or may not find this — but trigram must not run.
     # The key assertion: we don't crash and results are either from FTS or empty.
     assert isinstance(results, list)
+
+
+@pytest.mark.django_db
+def test_collection_search_page_renders_highlighted_snippet(client):
+    collection = Collection.objects.create(identifier="COL-PAGE-HL-001")
+    location = CollectionLocation.objects.create(
+        location_name="Korhogo",
+        country_name="Ivory Coast",
+        country_code="CI",
+    )
+    CollectionGeneralInfo.objects.create(
+        collection=collection,
+        id_value="CID-PAGE-HL-001",
+        id_type=IdentifierTypeChoices.DOI,
+        display_title="Senufo Language Archive",
+        description="Documentation resources for Senufo speakers.",
+        location=location,
+        version="1.0",
+    )
+
+    rebuild_all_search_vectors()
+
+    response = client.get(reverse("explorer:collection_list"), {"q": "se"})
+    assert response.status_code == 200
+    page = response.content.decode("utf-8")
+    assert "<mark>" in page
+
+
+@pytest.mark.django_db
+def test_collection_search_page_renders_highlighted_bundle_snippet(client):
+    collection = Collection.objects.create(identifier="COL-PARENT-001")
+    collection_location = CollectionLocation.objects.create(
+        location_name="Accra",
+        country_name="Ghana",
+        country_code="GH",
+    )
+    CollectionGeneralInfo.objects.create(
+        collection=collection,
+        id_value="CID-PARENT-001",
+        id_type=IdentifierTypeChoices.DOI,
+        display_title="Ghana Oral Histories",
+        description="Source material for Ghanaian narratives.",
+        location=collection_location,
+        version="1.0",
+    )
+
+    bundle = Bundle.objects.create(identifier="BND-HL-001")
+    bundle_location = BundleLocation.objects.create(location_name="Accra")
+    BundleGeneralInfo.objects.create(
+        bundle=bundle,
+        id_value="BID-HL-001",
+        id_type=IdentifierTypeChoices.DOI,
+        display_title="Evening Stories",
+        description="Audio recordings of evening storytelling sessions.",
+        location=bundle_location,
+        version="1.0",
+    )
+
+    rebuild_all_search_vectors()
+
+    response = client.get(reverse("explorer:collection_list"), {"q": "ev"})
+    assert response.status_code == 200
+    page = response.content.decode("utf-8")
+    assert "BND-HL-001" in page
+    assert "<mark>" in page
+
+
+@pytest.mark.django_db
+def test_collection_search_page_highlights_literal_fallback_snippet(client):
+    collection = Collection.objects.create(identifier="COL-LIT-PAGE-001")
+    location = CollectionLocation.objects.create(
+        location_name="Bogota",
+        country_name="Colombia",
+        country_code="CO",
+    )
+    CollectionGeneralInfo.objects.create(
+        collection=collection,
+        id_value="CID-LIT-PAGE-001",
+        id_type=IdentifierTypeChoices.DOI,
+        display_title="Language Variety Archive",
+        description="Documentation of language variety in Latin America.",
+        location=location,
+        version="1.0",
+    )
+
+    response = client.get(reverse("explorer:collection_list"), {"q": "ety"})
+    assert response.status_code == 200
+    page = response.content.decode("utf-8")
+    assert "<mark>" in page
+
+
+@pytest.mark.django_db
+def test_collection_search_page_highlights_title_matches(client):
+    collection = Collection.objects.create(identifier="COL-TITLE-HL-001")
+    location = CollectionLocation.objects.create(
+        location_name="Bogota",
+        country_name="Colombia",
+        country_code="CO",
+    )
+    CollectionGeneralInfo.objects.create(
+        collection=collection,
+        id_value="CID-TITLE-HL-001",
+        id_type=IdentifierTypeChoices.DOI,
+        display_title="Etymological Archive",
+        description="Reference material.",
+        location=location,
+        version="1.0",
+    )
+
+    response = client.get(reverse("explorer:collection_list"), {"q": "ety"})
+    assert response.status_code == 200
+    page = response.content.decode("utf-8")
+    assert "<mark>Ety</mark>mological" in page
+
+
+def test_render_search_snippet_allows_only_mark_tags():
+    template = Template("{% load explorer_extras %}{{ snippet|render_search_snippet }}")
+    rendered = template.render(
+        Context({"snippet": "<mark>Senufo</mark><script>alert('x')</script>"})
+    )
+
+    assert "<mark>Senufo</mark>" in rendered
+    assert "<script>" not in rendered
+    assert "&lt;script&gt;" in rendered
+
+
+def test_dedup_prefers_highlighted_snippet_for_duplicate_results(monkeypatch):
+    from lacos.explorer import search as search_module
+
+    fts_result = search_module.SearchResult(
+        kind="collection",
+        object_id="obj-1",
+        identifier="COL-001",
+        title="Senufo Language Archive",
+        description="Documentation resources for Senufo speakers.",
+        highlight_snippet="<mark>Senufo</mark> Language Archive",
+        url="/collections/obj-1/",
+        rank=0.2,
+    )
+    trigram_result = search_module.SearchResult(
+        kind="collection",
+        object_id="obj-1",
+        identifier="COL-001",
+        title="Senufo Language Archive",
+        description="Documentation resources for Senufo speakers.",
+        highlight_snippet="Documentation resources for Senufo speakers.",
+        url="/collections/obj-1/",
+        rank=0.9,
+    )
+
+    monkeypatch.setattr(search_module, "_search_collections", lambda query, term, use_stored_vectors=True: [fts_result])
+    monkeypatch.setattr(search_module, "_search_bundles", lambda query, term, use_stored_vectors=True: [])
+    monkeypatch.setattr(search_module, "_trigram_search_collections", lambda term: [trigram_result])
+    monkeypatch.setattr(search_module, "_trigram_search_bundles", lambda term: [])
+
+    results = search_module.search_archives("senufo", use_stored_vectors=True)
+    assert len(results) == 1
+    assert "<mark>" in results[0].highlight_snippet
+
+
+def test_highlight_query_marks_literal_matches():
+    template = Template("{% load explorer_extras %}{{ snippet|highlight_query:'ety' }}")
+    rendered = template.render(
+        Context({"snippet": "Documentation of language variety in Latin America."})
+    )
+    assert "<mark>ety</mark>" in rendered

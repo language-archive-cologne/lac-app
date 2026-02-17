@@ -56,6 +56,7 @@ def _create_bundle(
     country: str | None = None,
     region: str | None = None,
     topics: list[str] | None = None,
+    description: str | None = None,
 ) -> Bundle:
     """Helper to create a bundle with related metadata."""
     bundle = Bundle.objects.create(identifier=identifier)
@@ -71,7 +72,7 @@ def _create_bundle(
         id_value=f"BID-{identifier}",
         id_type=IdentifierTypeChoices.DOI,
         display_title=title,
-        description=f"Description for {title}",
+        description=description or f"Description for {title}",
         location=location,
         version="1.0",
     )
@@ -370,6 +371,40 @@ def test_text_search_by_description(client):
     identifiers = {b.identifier for b in bundles}
     assert "B1" in identifiers
     assert "B2" not in identifiers
+
+
+@pytest.mark.django_db
+def test_text_search_highlights_literal_query_in_description(client):
+    coll = _create_collection("C1", "Test Collection")
+    b1 = _create_bundle(
+        "B1",
+        "Language Variety Bundle",
+        coll,
+        description="Documentation of language variety in Latin America and the Caribbean.",
+    )
+    update_bundle_search_vector(b1)
+
+    response = client.get("/search/bundles/", {"q": "ety"})
+    assert response.status_code == 200
+    page = response.content.decode("utf-8")
+    assert "<mark>ety</mark>" in page
+
+
+@pytest.mark.django_db
+def test_text_search_highlights_literal_query_in_title(client):
+    coll = _create_collection("C1", "Test Collection")
+    b1 = _create_bundle(
+        "B1",
+        "Etymological Bundle",
+        coll,
+        description="Reference material.",
+    )
+    update_bundle_search_vector(b1)
+
+    response = client.get("/search/bundles/", {"q": "ety"})
+    assert response.status_code == 200
+    page = response.content.decode("utf-8")
+    assert "<mark>Ety</mark>mological" in page
 
 
 @pytest.mark.django_db

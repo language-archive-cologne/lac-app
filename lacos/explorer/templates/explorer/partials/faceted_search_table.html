@@ -64,9 +64,9 @@
                 <a href="{% url 'explorer:collection_detail_by_handle' handle=collection.identifier %}"
                    class="text-base-content hover:text-primary font-semibold">
                   {% if collection.get_general_info.display_title %}
-                    {{ collection.get_general_info.display_title }}
+                    {{ collection.get_general_info.display_title|highlight_query:search_query }}
                   {% else %}
-                    {{ collection.identifier }}
+                    {{ collection.identifier|highlight_query:search_query }}
                   {% endif %}
                 </a>
                 <div class="text-xs text-base-content/50 font-mono">{{ collection.identifier }}</div>
@@ -86,7 +86,7 @@
             </td>
             <td class="px-6 py-5 align-top text-sm text-base-content/70 max-w-xs">
               {% if collection.get_general_info and collection.get_general_info.description %}
-                <span class="cursor-help" title="{{ collection.get_general_info.description }}">{{ collection.get_general_info.description|truncatewords:12 }}</span>
+                <span class="cursor-help" title="{{ collection.get_general_info.description }}">{{ collection.get_general_info.description|truncatewords:12|highlight_query:search_query }}</span>
               {% endif %}
             </td>
             <td class="px-6 py-5 align-top text-sm text-base-content/70">
