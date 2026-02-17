@@ -181,6 +181,14 @@ def render_search_snippet(text):
 
 
 @register.filter
+def split_csv(value):
+    """Split a comma-separated string into trimmed values."""
+    if not value:
+        return []
+    return [part.strip() for part in str(value).split(",") if part.strip()]
+
+
+@register.filter
 def highlight_query(text, query):
     """Highlight literal query matches in plain text, escaping other HTML."""
     text = text or ""
@@ -192,3 +200,111 @@ def highlight_query(text, query):
     pattern = re.compile(re.escape(query), flags=re.IGNORECASE)
     rendered = pattern.sub(lambda match: f"<mark>{match.group(0)}</mark>", str(escaped))
     return mark_safe(rendered)
+
+
+def _tokenize_query(query: str) -> list[str]:
+    return [token.lower() for token in query.split() if token.strip()]
+
+
+def _text_matches_query(text: str, tokens: list[str]) -> bool:
+    if not text or not tokens:
+        return False
+    lowered = text.lower()
+    words = re.findall(r"\w+", lowered)
+    return any(token in lowered or any(word.startswith(token) for word in words) for token in tokens)
+
+
+def _dedupe(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        out.append(value)
+    return out
+
+
+@register.filter
+def collection_match_reasons(collection, query):
+    """Infer matched collection fields for advanced search display."""
+    tokens = _tokenize_query((query or "").strip())
+    if not tokens:
+        return ""
+
+    reasons: list[str] = []
+    if _text_matches_query(getattr(collection, "identifier", ""), tokens):
+        reasons.append("identifier")
+
+    gi = getattr(collection, "get_general_info", None)
+    if gi:
+        if _text_matches_query(getattr(gi, "display_title", ""), tokens):
+            reasons.append("title")
+        if _text_matches_query(getattr(gi, "description", ""), tokens):
+            reasons.append("description")
+        location = getattr(gi, "location", None)
+        if location:
+            if _text_matches_query(getattr(location, "location_name", ""), tokens):
+                reasons.append("location")
+            if (
+                _text_matches_query(getattr(location, "country_name", ""), tokens)
+                or _text_matches_query(getattr(location, "country_facet", ""), tokens)
+            ):
+                reasons.append("country")
+        object_languages = getattr(gi, "object_languages", None)
+        if object_languages and any(
+            _text_matches_query(getattr(lang, "name", ""), tokens)
+            or _text_matches_query(getattr(lang, "display_name", ""), tokens)
+            for lang in object_languages.all()
+        ):
+            reasons.append("language")
+
+    pub = getattr(collection, "get_publication_info", None)
+    if pub and _text_matches_query(getattr(pub, "data_provider", ""), tokens):
+        reasons.append("data provider")
+
+    return ", ".join(_dedupe(reasons) or ["metadata"])
+
+
+@register.filter
+def bundle_match_reasons(bundle, query):
+    """Infer matched bundle fields for advanced search display."""
+    tokens = _tokenize_query((query or "").strip())
+    if not tokens:
+        return ""
+
+    reasons: list[str] = []
+    if _text_matches_query(getattr(bundle, "identifier", ""), tokens):
+        reasons.append("identifier")
+
+    gi = getattr(bundle, "get_general_info", None)
+    if gi:
+        if _text_matches_query(getattr(gi, "display_title", ""), tokens):
+            reasons.append("title")
+        if _text_matches_query(getattr(gi, "description", ""), tokens):
+            reasons.append("description")
+        location = getattr(gi, "location", None)
+        if location:
+            if (
+                _text_matches_query(getattr(location, "country_name", ""), tokens)
+                or _text_matches_query(getattr(location, "country_facet", ""), tokens)
+            ):
+                reasons.append("country")
+        object_languages = getattr(gi, "object_languages", None)
+        if object_languages and any(
+            _text_matches_query(getattr(lang, "name", ""), tokens)
+            or _text_matches_query(getattr(lang, "display_name", ""), tokens)
+            for lang in object_languages.all()
+        ):
+            reasons.append("language")
+
+    si = getattr(bundle, "get_structural_info", None)
+    if si and getattr(si, "is_member_of_collection", None):
+        parent = si.is_member_of_collection
+        if _text_matches_query(getattr(parent, "identifier", ""), tokens):
+            reasons.append("parent collection identifier")
+        parent_gi = getattr(parent, "get_general_info", None)
+        if parent_gi and _text_matches_query(getattr(parent_gi, "display_title", ""), tokens):
+            reasons.append("parent collection title")
+
+    return ", ".join(_dedupe(reasons) or ["metadata"])

@@ -19,6 +19,16 @@
                 {{ result.highlight_snippet|render_search_snippet }}
               </p>
             {% endif %}
+            {% if result.matched_fields %}
+              <div class="mt-2 flex flex-wrap items-center gap-1.5 text-xs matched-in-row">
+                <span class="text-[11px] uppercase tracking-wide text-base-content/50">{% translate "Matched in" %}</span>
+                {% for field in result.matched_fields %}
+                  <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-[11px] font-medium text-base-content/75">
+                    {{ field|capfirst }}
+                  </span>
+                {% endfor %}
+              </div>
+            {% endif %}
           </div>
           <span class="mt-2 md:mt-0 text-xs font-mono text-base-content/60">{{ result.identifier }}</span>
         </li>

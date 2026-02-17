@@ -70,6 +70,20 @@
                   {% endif %}
                 </a>
                 <div class="text-xs text-base-content/50 font-mono">{{ collection.identifier }}</div>
+                {% if search_query %}
+                  {% with reasons=collection|collection_match_reasons:search_query|split_csv %}
+                    {% if reasons %}
+                      <div class="mt-2 flex flex-wrap items-center gap-1.5 text-xs matched-in-row">
+                        <span class="text-[11px] uppercase tracking-wide text-base-content/50">{% translate "Matched in" %}</span>
+                        {% for reason in reasons %}
+                          <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-[11px] font-medium text-base-content/75">
+                            {{ reason|capfirst }}
+                          </span>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
+                  {% endwith %}
+                {% endif %}
               </div>
             </td>
             <td class="px-6 py-5 align-top">

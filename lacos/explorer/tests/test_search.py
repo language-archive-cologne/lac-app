@@ -100,6 +100,34 @@ def test_fts_results_include_highlight_snippet():
 
 
 @pytest.mark.django_db
+def test_fts_results_include_matched_fields():
+    collection = Collection.objects.create(identifier="COL-MATCH-001")
+    location = CollectionLocation.objects.create(
+        location_name="Korhogo",
+        country_name="Ivory Coast",
+        country_code="CI",
+    )
+    CollectionGeneralInfo.objects.create(
+        collection=collection,
+        id_value="CID-MATCH-001",
+        id_type=IdentifierTypeChoices.DOI,
+        display_title="Senufo Language Archive",
+        description="Documentation resources for Senufo speakers.",
+        location=location,
+        version="1.0",
+    )
+
+    results = search_archives("senufo", use_stored_vectors=False)
+    match = next(
+        result
+        for result in results
+        if result.kind == "collection" and result.object_id == str(collection.pk)
+    )
+
+    assert "title" in match.matched_fields
+
+
+@pytest.mark.django_db
 def test_fallback_snippet_highlights_literal_query_in_description():
     collection = Collection.objects.create(identifier="COL-LIT-HL-001")
     location = CollectionLocation.objects.create(
@@ -124,6 +152,7 @@ def test_fallback_snippet_highlights_literal_query_in_description():
         if result.kind == "collection" and result.object_id == str(collection.pk)
     )
     assert "<mark>" in match.highlight_snippet
+    assert "title (similar)" in match.matched_fields or "description" in match.matched_fields
 
 
 @pytest.mark.django_db
@@ -516,6 +545,8 @@ def test_collection_search_page_highlights_title_matches(client):
     assert response.status_code == 200
     page = response.content.decode("utf-8")
     assert "<mark>Ety</mark>mological" in page
+    assert "Matched in" in page
+    assert "matched-in-row" in page
 
 
 def test_render_search_snippet_allows_only_mark_tags():
@@ -539,6 +570,7 @@ def test_dedup_prefers_highlighted_snippet_for_duplicate_results(monkeypatch):
         title="Senufo Language Archive",
         description="Documentation resources for Senufo speakers.",
         highlight_snippet="<mark>Senufo</mark> Language Archive",
+        matched_fields=("title",),
         url="/collections/obj-1/",
         rank=0.2,
     )
@@ -549,6 +581,7 @@ def test_dedup_prefers_highlighted_snippet_for_duplicate_results(monkeypatch):
         title="Senufo Language Archive",
         description="Documentation resources for Senufo speakers.",
         highlight_snippet="Documentation resources for Senufo speakers.",
+        matched_fields=("title (similar)",),
         url="/collections/obj-1/",
         rank=0.9,
     )

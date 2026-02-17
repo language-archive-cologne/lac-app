@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from dataclasses import replace
+from difflib import SequenceMatcher
 import re
 from typing import Literal
 
@@ -40,6 +41,7 @@ class SearchResult:
     title: str
     description: str
     highlight_snippet: str
+    matched_fields: tuple[str, ...]
     url: str
     rank: float
 
@@ -70,6 +72,49 @@ def _resolve_highlight_snippet(snippet: str | None, description: str, term: str)
     if snippet_text:
         return snippet_text
     return _highlight_literal_query(description, term)
+
+
+def _tokenize_search_term(term: str) -> list[str]:
+    return [token.lower() for token in term.split() if token.strip()]
+
+
+def _matches_prefix_token(text: str, tokens: list[str]) -> bool:
+    if not text or not tokens:
+        return False
+    lowered = text.lower()
+    words = re.findall(r"\w+", lowered)
+    return any(token in lowered or any(word.startswith(token) for word in words) for token in tokens)
+
+
+def _matches_fuzzy_token(text: str, term: str, threshold: float = 0.72) -> bool:
+    if not text or not term:
+        return False
+    query = term.lower()
+    words = re.findall(r"\w+", text.lower())
+    return any(SequenceMatcher(None, query, word).ratio() >= threshold for word in words)
+
+
+def _infer_matched_fields(
+    term: str,
+    field_values: list[tuple[str, str]],
+    *,
+    allow_fuzzy: bool = False,
+) -> tuple[str, ...]:
+    tokens = _tokenize_search_term(term)
+    matched = [label for label, value in field_values if _matches_prefix_token(value, tokens)]
+    if matched:
+        return tuple(matched)
+
+    if allow_fuzzy:
+        fuzzy_matches = [
+            f"{label} (similar)"
+            for label, value in field_values
+            if _matches_fuzzy_token(value, term)
+        ]
+        if fuzzy_matches:
+            return tuple(fuzzy_matches)
+
+    return ("metadata",)
 
 
 def _has_mark_highlight(snippet: str) -> bool:
@@ -218,6 +263,17 @@ def _search_collections(query: SearchQuery, term: str, use_stored_vectors: bool 
                 title=title,
                 description=description,
                 highlight_snippet=highlight_snippet,
+                matched_fields=_infer_matched_fields(
+                    term,
+                    [
+                        ("identifier", collection.identifier),
+                        ("title", title),
+                        ("description", description),
+                        ("location", collection.collection_location or ""),
+                        ("country", collection.collection_country or ""),
+                        ("data provider", collection.collection_data_provider or ""),
+                    ],
+                ),
                 url=reverse("explorer:collection_detail", kwargs={"pk": collection.pk}),
                 rank=collection.search_rank or 0.0,
             )
@@ -316,6 +372,16 @@ def _search_bundles(query: SearchQuery, term: str, use_stored_vectors: bool = Tr
                 title=title,
                 description=description,
                 highlight_snippet=highlight_snippet,
+                matched_fields=_infer_matched_fields(
+                    term,
+                    [
+                        ("identifier", bundle.identifier),
+                        ("title", title),
+                        ("description", description),
+                        ("parent collection identifier", bundle.parent_collection_identifier or ""),
+                        ("parent collection title", bundle.parent_collection_title or ""),
+                    ],
+                ),
                 url=reverse("explorer:bundle_detail", kwargs={"pk": bundle.pk}),
                 rank=bundle.search_rank or 0.0,
             )
@@ -352,6 +418,15 @@ def _trigram_search_collections(search_term: str) -> list[SearchResult]:
                 title=title,
                 description=description,
                 highlight_snippet=_resolve_highlight_snippet(None, description, search_term),
+                matched_fields=_infer_matched_fields(
+                    search_term,
+                    [
+                        ("identifier", collection.identifier),
+                        ("title", title),
+                        ("description", description),
+                    ],
+                    allow_fuzzy=True,
+                ),
                 url=reverse("explorer:collection_detail", kwargs={"pk": collection.pk}),
                 rank=collection.similarity or 0.0,
             )
@@ -390,6 +465,15 @@ def _trigram_search_bundles(search_term: str) -> list[SearchResult]:
                 title=title,
                 description=description,
                 highlight_snippet=_resolve_highlight_snippet(None, description, search_term),
+                matched_fields=_infer_matched_fields(
+                    search_term,
+                    [
+                        ("identifier", bundle.identifier),
+                        ("title", title),
+                        ("description", description),
+                    ],
+                    allow_fuzzy=True,
+                ),
                 url=reverse("explorer:bundle_detail", kwargs={"pk": bundle.pk}),
                 rank=bundle.similarity or 0.0,
             )

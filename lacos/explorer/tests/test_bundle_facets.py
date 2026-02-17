@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from django.http import QueryDict
 
@@ -405,6 +407,12 @@ def test_text_search_highlights_literal_query_in_title(client):
     assert response.status_code == 200
     page = response.content.decode("utf-8")
     assert "<mark>Ety</mark>mological" in page
+    assert "Matched in" in page
+    assert "title" in page
+    assert re.search(
+        r"B1</div>\s*<div class=\"mt-2 flex flex-wrap items-center gap-1\.5 text-xs matched-in-row\">",
+        page,
+    )
 
 
 @pytest.mark.django_db
