@@ -1,10 +1,9 @@
-"""Shared text-search helpers: FTS combined with trigram similarity."""
+"""Shared text-search helpers based on PostgreSQL full-text search."""
 
 from __future__ import annotations
 
-from django.contrib.postgres.search import SearchQuery, TrigramWordSimilarity
-from django.db.models import Q, QuerySet
-from django.db.models.functions import Greatest
+from django.contrib.postgres.search import SearchQuery
+from django.db.models import QuerySet
 
 
 def build_fts_query(search_term: str) -> SearchQuery:
@@ -14,24 +13,6 @@ def build_fts_query(search_term: str) -> SearchQuery:
 
 
 def apply_text_search(qs: QuerySet, search_term: str) -> QuerySet:
-    """Apply FTS combined with trigram similarity for typo tolerance.
-
-    For queries < 3 chars: FTS only (trigrams need at least 3 chars).
-    For queries >= 3 chars: FTS OR trigram match, so both exact prefix
-    matches and fuzzy matches are returned together.
-    """
+    """Apply prefix-matching full-text search."""
     query = build_fts_query(search_term)
-
-    if len(search_term) < 3:
-        return qs.filter(search_vector=query)
-
-    return (
-        qs.annotate(
-            similarity=Greatest(
-                TrigramWordSimilarity(search_term, "general_info__display_title"),
-                TrigramWordSimilarity(search_term, "identifier"),
-            )
-        )
-        .filter(Q(search_vector=query) | Q(similarity__gt=0.3))
-        .distinct()
-    )
+    return qs.filter(search_vector=query)

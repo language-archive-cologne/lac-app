@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from dataclasses import replace
-from difflib import SequenceMatcher
 import re
 from typing import Literal
 
@@ -10,7 +9,6 @@ from django.contrib.postgres.search import SearchHeadline
 from django.contrib.postgres.search import SearchQuery
 from django.contrib.postgres.search import SearchRank
 from django.contrib.postgres.search import SearchVector
-from django.contrib.postgres.search import TrigramWordSimilarity
 from django.db.models import OuterRef
 from django.db.models import Subquery
 from django.db.models import Value
@@ -19,7 +17,6 @@ from django.db.models import Q
 from django.db.models import TextField
 from django.db.models.functions import Coalesce
 from django.db.models.functions import Concat
-from django.db.models.functions import Greatest
 from django.urls import reverse
 
 from lacos.blam.models import Bundle
@@ -86,33 +83,14 @@ def _matches_prefix_token(text: str, tokens: list[str]) -> bool:
     return any(token in lowered or any(word.startswith(token) for word in words) for token in tokens)
 
 
-def _matches_fuzzy_token(text: str, term: str, threshold: float = 0.72) -> bool:
-    if not text or not term:
-        return False
-    query = term.lower()
-    words = re.findall(r"\w+", text.lower())
-    return any(SequenceMatcher(None, query, word).ratio() >= threshold for word in words)
-
-
 def _infer_matched_fields(
     term: str,
     field_values: list[tuple[str, str]],
-    *,
-    allow_fuzzy: bool = False,
 ) -> tuple[str, ...]:
     tokens = _tokenize_search_term(term)
     matched = [label for label, value in field_values if _matches_prefix_token(value, tokens)]
     if matched:
         return tuple(matched)
-
-    if allow_fuzzy:
-        fuzzy_matches = [
-            f"{label} (similar)"
-            for label, value in field_values
-            if _matches_fuzzy_token(value, term)
-        ]
-        if fuzzy_matches:
-            return tuple(fuzzy_matches)
 
     return ("metadata",)
 
@@ -141,11 +119,6 @@ def search_archives(term: str, *, limit: int | None = None, use_stored_vectors: 
     collection_results = _search_collections(query, normalized, use_stored_vectors)
     bundle_results = _search_bundles(query, normalized, use_stored_vectors)
 
-    # Supplement with trigram results for typo tolerance (>= 3 chars)
-    if len(normalized) >= 3:
-        collection_results = [*collection_results, *_trigram_search_collections(normalized)]
-        bundle_results = [*bundle_results, *_trigram_search_bundles(normalized)]
-
     combined: list[SearchResult] = [*collection_results, *bundle_results]
     combined.sort(key=lambda result: result.rank, reverse=True)
 
@@ -157,8 +130,6 @@ def search_archives(term: str, *, limit: int | None = None, use_stored_vectors: 
         if key in seen_keys:
             existing_index = seen_keys[key]
             existing = deduped[existing_index]
-            # Keep current ordering/rank, but prefer any snippet that actually
-            # contains highlights when duplicate hits come from mixed sources.
             if _has_mark_highlight(result.highlight_snippet) and not _has_mark_highlight(existing.highlight_snippet):
                 deduped[existing_index] = replace(existing, highlight_snippet=result.highlight_snippet)
             continue
@@ -384,98 +355,6 @@ def _search_bundles(query: SearchQuery, term: str, use_stored_vectors: bool = Tr
                 ),
                 url=reverse("explorer:bundle_detail", kwargs={"pk": bundle.pk}),
                 rank=bundle.search_rank or 0.0,
-            )
-        )
-    return results
-
-
-def _trigram_search_collections(search_term: str) -> list[SearchResult]:
-    general_info = CollectionGeneralInfo.objects.filter(collection=OuterRef("pk"))
-
-    collections = (
-        Collection.objects.annotate(
-            collection_display_title=Subquery(general_info.values("display_title")[:1]),
-            collection_description=Subquery(general_info.values("description")[:1]),
-            similarity=Greatest(
-                TrigramWordSimilarity(search_term, "general_info__display_title"),
-                TrigramWordSimilarity(search_term, "identifier"),
-            ),
-        )
-        .filter(similarity__gt=0.3)
-        .distinct()
-        .order_by("-similarity", "identifier")
-    )[:50]
-
-    results: list[SearchResult] = []
-    for collection in collections:
-        title = collection.collection_display_title or collection.identifier
-        description = collection.collection_description or ""
-        results.append(
-            SearchResult(
-                kind="collection",
-                object_id=str(collection.pk),
-                identifier=collection.identifier,
-                title=title,
-                description=description,
-                highlight_snippet=_resolve_highlight_snippet(None, description, search_term),
-                matched_fields=_infer_matched_fields(
-                    search_term,
-                    [
-                        ("identifier", collection.identifier),
-                        ("title", title),
-                        ("description", description),
-                    ],
-                    allow_fuzzy=True,
-                ),
-                url=reverse("explorer:collection_detail", kwargs={"pk": collection.pk}),
-                rank=collection.similarity or 0.0,
-            )
-        )
-    return results
-
-
-def _trigram_search_bundles(search_term: str) -> list[SearchResult]:
-    general_info = BundleGeneralInfo.objects.filter(bundle=OuterRef("pk"))
-    structural_info = BundleStructuralInfo.objects.filter(bundle=OuterRef("pk"))
-
-    bundles = (
-        Bundle.objects.annotate(
-            bundle_display_title=Subquery(general_info.values("display_title")[:1]),
-            bundle_description=Subquery(general_info.values("description")[:1]),
-            parent_collection_identifier=Subquery(structural_info.values("is_member_of_collection__identifier")[:1]),
-            similarity=Greatest(
-                TrigramWordSimilarity(search_term, "general_info__display_title"),
-                TrigramWordSimilarity(search_term, "identifier"),
-            ),
-        )
-        .filter(similarity__gt=0.3)
-        .distinct()
-        .order_by("-similarity", "identifier")
-    )[:50]
-
-    results: list[SearchResult] = []
-    for bundle in bundles:
-        title = bundle.bundle_display_title or bundle.identifier
-        description = bundle.bundle_description or ""
-        results.append(
-            SearchResult(
-                kind="bundle",
-                object_id=str(bundle.pk),
-                identifier=bundle.identifier,
-                title=title,
-                description=description,
-                highlight_snippet=_resolve_highlight_snippet(None, description, search_term),
-                matched_fields=_infer_matched_fields(
-                    search_term,
-                    [
-                        ("identifier", bundle.identifier),
-                        ("title", title),
-                        ("description", description),
-                    ],
-                    allow_fuzzy=True,
-                ),
-                url=reverse("explorer:bundle_detail", kwargs={"pk": bundle.pk}),
-                rank=bundle.similarity or 0.0,
             )
         )
     return results

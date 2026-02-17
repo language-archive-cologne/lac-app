@@ -87,7 +87,7 @@ def test_fts_results_include_highlight_snippet():
         version="1.0",
     )
 
-    # Two-letter query skips trigram path and exercises the FTS snippet path.
+    # Two-letter prefix query should still exercise the FTS snippet path.
     results = search_archives("se", use_stored_vectors=False)
     match = next(
         result
@@ -128,7 +128,7 @@ def test_fts_results_include_matched_fields():
 
 
 @pytest.mark.django_db
-def test_fallback_snippet_highlights_literal_query_in_description():
+def test_fts_query_highlights_description_matches():
     collection = Collection.objects.create(identifier="COL-LIT-HL-001")
     location = CollectionLocation.objects.create(
         location_name="Bogota",
@@ -145,14 +145,14 @@ def test_fallback_snippet_highlights_literal_query_in_description():
         version="1.0",
     )
 
-    results = search_archives("ety", use_stored_vectors=True)
+    results = search_archives("var", use_stored_vectors=False)
     match = next(
         result
         for result in results
         if result.kind == "collection" and result.object_id == str(collection.pk)
     )
     assert "<mark>" in match.highlight_snippet
-    assert "title (similar)" in match.matched_fields or "description" in match.matched_fields
+    assert "description" in match.matched_fields
 
 
 @pytest.mark.django_db
@@ -345,8 +345,8 @@ def test_stored_vectors_search_matches_object_language_alternative_name():
 
 
 @pytest.mark.django_db
-def test_trigram_fallback_finds_typo():
-    """Typo 'senufu' should find 'Senufo Language Archive' via trigram fallback."""
+def test_typo_query_does_not_match_in_fts_only_mode():
+    """Typo queries should not match once trigram fallback is removed."""
     collection = Collection.objects.create(identifier="COL-TRGM-001")
     location = CollectionLocation.objects.create(
         location_name="Korhogo",
@@ -363,22 +363,19 @@ def test_trigram_fallback_finds_typo():
         version="1.0",
     )
 
-    # Rebuild stored vectors so FTS path runs first and finds nothing
+    # Rebuild stored vectors so the stored-vector FTS path is used.
     rebuild_all_search_vectors()
 
     results = search_archives("senufu", use_stored_vectors=True)
-    match = next(
-        result
+    assert not any(
+        result.kind == "collection" and result.object_id == str(collection.pk)
         for result in results
-        if result.kind == "collection" and result.object_id == str(collection.pk)
     )
-    assert match.highlight_snippet == match.description
-    assert "<mark>" not in match.highlight_snippet
 
 
 @pytest.mark.django_db
-def test_correct_search_uses_fts_not_trigram():
-    """Correct search 'senufo' should use the fast FTS path."""
+def test_correct_search_uses_fts():
+    """Correct search 'senufo' should match via FTS."""
     collection = Collection.objects.create(identifier="COL-FTS-001")
     location = CollectionLocation.objects.create(
         location_name="Korhogo",
@@ -406,8 +403,8 @@ def test_correct_search_uses_fts_not_trigram():
 
 
 @pytest.mark.django_db
-def test_short_query_skips_trigram_fallback():
-    """Very short query ('se') should not trigger trigram fallback."""
+def test_short_query_uses_fts_prefix_matching():
+    """Very short queries should still work through FTS prefix matching."""
     collection = Collection.objects.create(identifier="COL-SHORT-001")
     location = CollectionLocation.objects.create(
         location_name="Korhogo",
@@ -426,12 +423,11 @@ def test_short_query_skips_trigram_fallback():
 
     rebuild_all_search_vectors()
 
-    # 'se' is only 2 chars — FTS won't match (no prefix match on 'se' for 'Senufo'?),
-    # but trigram should be skipped due to guard
     results = search_archives("se", use_stored_vectors=True)
-    # With prefix matching, FTS may or may not find this — but trigram must not run.
-    # The key assertion: we don't crash and results are either from FTS or empty.
-    assert isinstance(results, list)
+    assert any(
+        result.kind == "collection" and result.object_id == str(collection.pk)
+        for result in results
+    )
 
 
 @pytest.mark.django_db
@@ -517,7 +513,9 @@ def test_collection_search_page_highlights_literal_fallback_snippet(client):
         version="1.0",
     )
 
-    response = client.get(reverse("explorer:collection_list"), {"q": "ety"})
+    rebuild_all_search_vectors()
+
+    response = client.get(reverse("explorer:collection_list"), {"q": "var"})
     assert response.status_code == 200
     page = response.content.decode("utf-8")
     assert "<mark>" in page
@@ -541,6 +539,8 @@ def test_collection_search_page_highlights_title_matches(client):
         version="1.0",
     )
 
+    rebuild_all_search_vectors()
+
     response = client.get(reverse("explorer:collection_list"), {"q": "ety"})
     assert response.status_code == 200
     page = response.content.decode("utf-8")
@@ -563,7 +563,18 @@ def test_render_search_snippet_allows_only_mark_tags():
 def test_dedup_prefers_highlighted_snippet_for_duplicate_results(monkeypatch):
     from lacos.explorer import search as search_module
 
-    fts_result = search_module.SearchResult(
+    plain_result = search_module.SearchResult(
+        kind="collection",
+        object_id="obj-1",
+        identifier="COL-001",
+        title="Senufo Language Archive",
+        description="Documentation resources for Senufo speakers.",
+        highlight_snippet="Documentation resources for Senufo speakers.",
+        matched_fields=("title",),
+        url="/collections/obj-1/",
+        rank=0.9,
+    )
+    highlighted_result = search_module.SearchResult(
         kind="collection",
         object_id="obj-1",
         identifier="COL-001",
@@ -574,22 +585,13 @@ def test_dedup_prefers_highlighted_snippet_for_duplicate_results(monkeypatch):
         url="/collections/obj-1/",
         rank=0.2,
     )
-    trigram_result = search_module.SearchResult(
-        kind="collection",
-        object_id="obj-1",
-        identifier="COL-001",
-        title="Senufo Language Archive",
-        description="Documentation resources for Senufo speakers.",
-        highlight_snippet="Documentation resources for Senufo speakers.",
-        matched_fields=("title (similar)",),
-        url="/collections/obj-1/",
-        rank=0.9,
-    )
 
-    monkeypatch.setattr(search_module, "_search_collections", lambda query, term, use_stored_vectors=True: [fts_result])
+    monkeypatch.setattr(
+        search_module,
+        "_search_collections",
+        lambda query, term, use_stored_vectors=True: [plain_result, highlighted_result],
+    )
     monkeypatch.setattr(search_module, "_search_bundles", lambda query, term, use_stored_vectors=True: [])
-    monkeypatch.setattr(search_module, "_trigram_search_collections", lambda term: [trigram_result])
-    monkeypatch.setattr(search_module, "_trigram_search_bundles", lambda term: [])
 
     results = search_module.search_archives("senufo", use_stored_vectors=True)
     assert len(results) == 1

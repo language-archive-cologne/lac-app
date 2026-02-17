@@ -386,10 +386,10 @@ def test_text_search_highlights_literal_query_in_description(client):
     )
     update_bundle_search_vector(b1)
 
-    response = client.get("/search/bundles/", {"q": "ety"})
+    response = client.get("/search/bundles/", {"q": "var"})
     assert response.status_code == 200
     page = response.content.decode("utf-8")
-    assert "<mark>ety</mark>" in page
+    assert "<mark>var</mark>" in page
 
 
 @pytest.mark.django_db
