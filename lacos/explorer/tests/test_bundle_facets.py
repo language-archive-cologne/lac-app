@@ -309,6 +309,20 @@ def test_bundle_htmx_returns_partial(client):
 
 
 @pytest.mark.django_db
+def test_bundle_faceted_search_template_resets_loading_on_history_restore(client):
+    """Bundle faceted page should clear stale loading lock on back/forward."""
+    response = client.get("/search/bundles/")
+    assert response.status_code == 200
+    page = response.content.decode("utf-8")
+    assert '"refreshOnHistoryMiss":true' in page
+    assert "htmx:historyRestore" in page
+    assert "htmx:historyCacheMissLoad" in page
+    assert "htmx:historyCacheMissLoadError" in page
+    assert "window.addEventListener('pageshow'" in page
+    assert "setLoading(false)" in page
+
+
+@pytest.mark.django_db
 def test_text_search_filters_results(client):
     """Verify q= actually removes non-matching bundles from results."""
     coll = _create_collection("C1", "Test Collection")

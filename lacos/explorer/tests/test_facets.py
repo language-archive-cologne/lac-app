@@ -407,3 +407,17 @@ def test_htmx_returns_partial(client):
     content = response.content.decode()
     assert "facet-sidebar-inner" in content
     assert "active-filters-wrapper" in content
+
+
+@pytest.mark.django_db
+def test_faceted_search_template_resets_loading_on_history_restore(client):
+    """Back/forward navigation should clear stale loading lock state."""
+    response = client.get("/search/")
+    assert response.status_code == 200
+    page = response.content.decode("utf-8")
+    assert '"refreshOnHistoryMiss":true' in page
+    assert "htmx:historyRestore" in page
+    assert "htmx:historyCacheMissLoad" in page
+    assert "htmx:historyCacheMissLoadError" in page
+    assert "window.addEventListener('pageshow'" in page
+    assert "setLoading(false)" in page
