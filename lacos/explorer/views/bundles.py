@@ -51,6 +51,7 @@ class BundleDetailView(HandleLookupMixin, ACLPermissionMixin, DetailView):
     def get_queryset(self):
         return Bundle.objects.prefetch_related(
             "general_info",
+            "general_info__keywords",
             "general_info__object_languages",
             "structural_info",
             "structural_info__bundle_topics",

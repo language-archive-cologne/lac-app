@@ -55,6 +55,7 @@ class CollectionListView(ListView):
                 queryset=CollectionGeneralInfo.objects.select_related('location'),
                 to_attr='prefetched_general_info',
             ),
+            'general_info__keywords',
             'general_info__object_languages',
             'publication_info',
             'publication_info__creators',

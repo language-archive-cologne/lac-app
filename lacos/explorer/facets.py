@@ -75,6 +75,15 @@ class FacetDefinition:
 
 FACET_DEFINITIONS: list[FacetDefinition] = [
     FacetDefinition(
+        name="keyword",
+        label="Keyword",
+        value_field="general_info__keywords__value",
+        label_field="general_info__keywords__value",
+        filter_lookup="general_info__keywords__value__in",
+        sort_alphabetically=True,
+        show_all=True,
+    ),
+    FacetDefinition(
         name="language",
         label="Language",
         value_field="general_info__object_languages__iso_639_3_code",
@@ -472,5 +481,4 @@ class FacetService:
                     }
                 )
         return active
-
 

@@ -19,6 +19,18 @@
                 {{ result.highlight_snippet|render_search_snippet }}
               </p>
             {% endif %}
+            {% if result.keywords %}
+              <div class="mt-2 flex flex-wrap gap-1.5">
+                {% for keyword in result.keywords|slice:":3" %}
+                  <span class="inline-flex max-w-[14rem] items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-xs font-medium text-base-content/70" title="{{ keyword }}">
+                    <span class="truncate">{{ keyword|highlight_query:search_query }}</span>
+                  </span>
+                {% endfor %}
+                {% if result.keywords|length > 3 %}
+                  <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-xs font-semibold text-base-content/60">+{{ result.keywords|length|add:"-3" }}</span>
+                {% endif %}
+              </div>
+            {% endif %}
             {% if result.matched_fields %}
               <div class="mt-2 flex flex-wrap items-center gap-1.5 text-xs matched-in-row">
                 <span class="text-[11px] uppercase tracking-wide text-base-content/50">{% translate "Matched in" %}</span>

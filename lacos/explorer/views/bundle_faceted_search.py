@@ -74,6 +74,7 @@ class BundleFacetedSearchView(ListView):
 
         qs = qs.prefetch_related(
             "general_info",
+            "general_info__keywords",
             "general_info__object_languages",
             "general_info__location",
             "structural_info",

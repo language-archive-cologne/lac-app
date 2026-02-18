@@ -93,6 +93,20 @@
                     {{ collection.bundles_count }} {% translate "bundles" %}
                   </a>
                 </div>
+                {% with keywords=collection.get_general_info.keywords.all %}
+                  {% if keywords %}
+                    <div class="mt-2 flex flex-wrap gap-1.5">
+                      {% for keyword in keywords|slice:":3" %}
+                        <span class="inline-flex max-w-[14rem] items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-xs font-medium text-base-content/70" title="{{ keyword.value }}">
+                          <span class="truncate">{{ keyword.value }}</span>
+                        </span>
+                      {% endfor %}
+                      {% if keywords|length > 3 %}
+                        <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-xs font-semibold text-base-content/60">+{{ keywords|length|add:"-3" }}</span>
+                      {% endif %}
+                    </div>
+                  {% endif %}
+                {% endwith %}
               </div>
             </td>
             <td class="px-6 py-5 align-top">

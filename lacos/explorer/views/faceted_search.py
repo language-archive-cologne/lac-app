@@ -69,6 +69,7 @@ class FacetedSearchView(ListView):
 
         qs = qs.prefetch_related(
             "general_info",
+            "general_info__keywords",
             "general_info__object_languages",
             "general_info__location",
             "publication_info",

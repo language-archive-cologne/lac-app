@@ -41,6 +41,7 @@ class SearchResult:
     matched_fields: tuple[str, ...]
     url: str
     rank: float
+    keywords: tuple[str, ...] = ()
 
 
 def _build_headline_source(identifier_field: str, title_field: str, description_field: str):
@@ -97,6 +98,44 @@ def _infer_matched_fields(
 
 def _has_mark_highlight(snippet: str) -> bool:
     return "<mark>" in (snippet or "")
+
+
+def _collection_keywords_by_object_id(
+    collections: list[Collection],
+) -> dict[str, tuple[str, ...]]:
+    object_ids = [collection.pk for collection in collections]
+    if not object_ids:
+        return {}
+
+    keyword_map: dict[str, tuple[str, ...]] = {}
+    for general_info in CollectionGeneralInfo.objects.filter(
+        collection_id__in=object_ids
+    ).prefetch_related("keywords"):
+        values = tuple(
+            keyword.value for keyword in general_info.keywords.all() if keyword.value
+        )
+        if values:
+            keyword_map[str(general_info.collection_id)] = values
+    return keyword_map
+
+
+def _bundle_keywords_by_object_id(
+    bundles: list[Bundle],
+) -> dict[str, tuple[str, ...]]:
+    object_ids = [bundle.pk for bundle in bundles]
+    if not object_ids:
+        return {}
+
+    keyword_map: dict[str, tuple[str, ...]] = {}
+    for general_info in BundleGeneralInfo.objects.filter(
+        bundle_id__in=object_ids
+    ).prefetch_related("keywords"):
+        values = tuple(
+            keyword.value for keyword in general_info.keywords.all() if keyword.value
+        )
+        if values:
+            keyword_map[str(general_info.bundle_id)] = values
+    return keyword_map
 
 
 def search_archives(term: str, *, limit: int | None = None, use_stored_vectors: bool = True) -> list[SearchResult]:
@@ -217,10 +256,14 @@ def _search_collections(query: SearchQuery, term: str, use_stored_vectors: bool 
             .distinct()
         )[:50]
 
+    collection_rows = list(collections)
+    keywords_by_collection = _collection_keywords_by_object_id(collection_rows)
+
     results: list[SearchResult] = []
-    for collection in collections:
+    for collection in collection_rows:
         title = collection.collection_display_title or collection.identifier
         description = collection.collection_description or ""
+        keywords = keywords_by_collection.get(str(collection.pk), ())
         highlight_snippet = _resolve_highlight_snippet(
             getattr(collection, "highlight_snippet", None),
             description,
@@ -240,6 +283,7 @@ def _search_collections(query: SearchQuery, term: str, use_stored_vectors: bool 
                         ("identifier", collection.identifier),
                         ("title", title),
                         ("description", description),
+                        ("keywords", " ".join(keywords)),
                         ("location", collection.collection_location or ""),
                         ("country", collection.collection_country or ""),
                         ("data provider", collection.collection_data_provider or ""),
@@ -247,6 +291,7 @@ def _search_collections(query: SearchQuery, term: str, use_stored_vectors: bool 
                 ),
                 url=reverse("explorer:collection_detail", kwargs={"pk": collection.pk}),
                 rank=collection.search_rank or 0.0,
+                keywords=keywords,
             )
         )
     return results
@@ -326,10 +371,14 @@ def _search_bundles(query: SearchQuery, term: str, use_stored_vectors: bool = Tr
             .distinct()
         )[:50]
 
+    bundle_rows = list(bundles)
+    keywords_by_bundle = _bundle_keywords_by_object_id(bundle_rows)
+
     results: list[SearchResult] = []
-    for bundle in bundles:
+    for bundle in bundle_rows:
         title = bundle.bundle_display_title or bundle.identifier
         description = bundle.bundle_description or ""
+        keywords = keywords_by_bundle.get(str(bundle.pk), ())
         highlight_snippet = _resolve_highlight_snippet(
             getattr(bundle, "highlight_snippet", None),
             description,
@@ -349,12 +398,14 @@ def _search_bundles(query: SearchQuery, term: str, use_stored_vectors: bool = Tr
                         ("identifier", bundle.identifier),
                         ("title", title),
                         ("description", description),
+                        ("keywords", " ".join(keywords)),
                         ("parent collection identifier", bundle.parent_collection_identifier or ""),
                         ("parent collection title", bundle.parent_collection_title or ""),
                     ],
                 ),
                 url=reverse("explorer:bundle_detail", kwargs={"pk": bundle.pk}),
                 rank=bundle.search_rank or 0.0,
+                keywords=keywords,
             )
         )
     return results

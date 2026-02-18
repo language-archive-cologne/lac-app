@@ -83,6 +83,22 @@
                   {% endif %}
                 </a>
                 <div class="text-xs text-base-content/50 font-mono">{{ bundle.identifier }}</div>
+                {% if gi %}
+                  {% with keywords=gi.keywords.all %}
+                    {% if keywords %}
+                      <div class="mt-2 flex flex-wrap gap-1.5">
+                        {% for keyword in keywords|slice:":3" %}
+                          <span class="inline-flex max-w-[14rem] items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-xs font-medium text-base-content/70" title="{{ keyword.value }}">
+                            <span class="truncate">{{ keyword.value|highlight_query:search_query }}</span>
+                          </span>
+                        {% endfor %}
+                        {% if keywords|length > 3 %}
+                          <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-xs font-semibold text-base-content/60">+{{ keywords|length|add:"-3" }}</span>
+                        {% endif %}
+                      </div>
+                    {% endif %}
+                  {% endwith %}
+                {% endif %}
                 {% if search_query %}
                   {% with reasons=bundle|bundle_match_reasons:search_query|split_csv %}
                     {% if reasons %}

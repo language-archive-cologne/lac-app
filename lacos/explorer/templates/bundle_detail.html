@@ -141,6 +141,23 @@
           </div>
         {% endif %}
 
+        {% with keywords=bundle.get_general_info.keywords.all %}
+          {% if keywords %}
+            <div>
+              <dt class="text-sm font-semibold text-base-content/70 mb-1.5">{% translate "Keywords" %}</dt>
+              <dd>
+                <div class="flex flex-wrap gap-1.5">
+                  {% for keyword in keywords %}
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-base-200 text-base-content border border-base-300">
+                      {{ keyword.value }}
+                    </span>
+                  {% endfor %}
+                </div>
+              </dd>
+            </div>
+          {% endif %}
+        {% endwith %}
+
         {% if bundle.region_facet or bundle.country_facet %}
           <div>
             <dt class="text-sm font-semibold text-base-content/70 mb-1.5">{% translate "Location" %}</dt>

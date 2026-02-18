@@ -15,6 +15,7 @@ from lacos.blam.models import Collection
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
 from lacos.blam.models.collection.collection_general_info import (
     CollectionGeneralInfo,
+    CollectionKeyword,
     CollectionLocation,
     CollectionObjectLanguage,
 )
@@ -113,6 +114,29 @@ def test_single_language_filter():
     assert result.queryset.count() == 1
     pks = list(result.queryset.values_list("pk", flat=True))
     assert c1.pk in pks
+
+
+@pytest.mark.django_db
+def test_keyword_facet_values_and_filtering():
+    c1 = _create_collection("C1", "Alpha")
+    c2 = _create_collection("C2", "Beta")
+
+    gi1 = c1.general_info.first()
+    gi2 = c2.general_info.first()
+    gi1.keywords.add(CollectionKeyword.objects.create(value="phonology"))
+    gi2.keywords.add(CollectionKeyword.objects.create(value="lexicon"))
+
+    service = FacetService()
+    result = service.search(_make_params(keyword=["phonology"]), _collection_qs())
+
+    assert result.queryset.count() == 1
+    pks = set(result.queryset.values_list("pk", flat=True))
+    assert pks == {c1.pk}
+
+    keyword_facet = next(f for f in result.facets if f.name == "keyword")
+    values = {fv.value for fv in keyword_facet.values}
+    assert "phonology" in values
+    assert "lexicon" in values
 
 
 @pytest.mark.django_db
