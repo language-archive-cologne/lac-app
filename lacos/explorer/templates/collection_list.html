@@ -135,6 +135,20 @@
       });
     }
 
+    window.fitCollectionsMapToAllMarkers = function fitCollectionsMapToAllMarkers() {
+      const map = window.collectionsMap;
+      if (!map || !window.collectionMarkers.length) return;
+
+      const bounds = new maplibregl.LngLatBounds();
+      window.collectionMarkers.forEach(function(entry) {
+        bounds.extend([entry.data.lng, entry.data.lat]);
+      });
+
+      if (!bounds.isEmpty()) {
+        map.fitBounds(bounds, { padding: 60, maxZoom: 4, duration: 500 });
+      }
+    };
+
     window.initCollectionsMap = function initCollectionsMap() {
       const container = document.getElementById('collections-map');
       if (!container || container.dataset.mapInitialized === 'true') return;
@@ -182,7 +196,7 @@
       window.updateCollectionsMap();
 
       document.getElementById('recenter-btn').addEventListener('click', function() {
-        map.flyTo({ center: [20, 20], zoom: 0.7 });
+        window.fitCollectionsMapToAllMarkers();
       });
     };
 
@@ -218,8 +232,8 @@
         // Filter active with matches - zoom to matching markers
         map.fitBounds(matchBounds, { padding: 60, maxZoom: 4 });
       } else if (!activeKey) {
-        // No filter - show all markers with world view
-        map.flyTo({ center: [20, 20], zoom: 1, duration: 500 });
+        // No filter - always fit to all markers
+        window.fitCollectionsMapToAllMarkers();
       }
     };
 
