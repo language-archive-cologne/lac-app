@@ -640,14 +640,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
         event.preventDefault();
 
-        if (!window.singleFileDownloadModal) return;
+        const filename = btn.dataset.filename || 'unknown';
+
+        if (!window.singleFileDownloadModal) {
+            console.info('[single-download] modal is not initialized', { filename });
+            return;
+        }
 
         const bucket = btn.dataset.bucket;
         const key = btn.dataset.key;
-        if (!bucket || !key) return;
+        if (!bucket || !key) {
+            console.info('[single-download] missing storage mapping', {
+                filename,
+                bucket: bucket || null,
+                key: key || null,
+            });
+            return;
+        }
 
-        const filename = btn.dataset.filename || key.split('/').pop() || 'download';
-        window.singleFileDownloadModal.open({ bucket, key, filename });
+        const resolvedFilename = filename || key.split('/').pop() || 'download';
+        window.singleFileDownloadModal.open({ bucket, key, filename: resolvedFilename });
     });
 
     // Bundles table multi-select
