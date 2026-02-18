@@ -73,6 +73,28 @@
       });
     }
 
+    function updateSelectionInputs(scope) {
+      const selected = Array.from(selectionStore[scope] || []);
+      document
+        .querySelectorAll('[data-acl-selection-form][data-acl-scope="' + scope + '"]')
+        .forEach(form => {
+          const container = form.querySelector('[data-acl-selected-inputs]');
+          if (!container) {
+            return;
+          }
+          while (container.firstChild) {
+            container.removeChild(container.firstChild);
+          }
+          selected.forEach(id => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = scope === 'collection' ? 'collection_ids' : 'bundle_ids';
+            input.value = id;
+            container.appendChild(input);
+          });
+        });
+    }
+
     function syncCheckboxes(scope) {
       const container = document.querySelector('#acl-records-selection[data-acl-scope="' + scope + '"]');
       if (!container) {
@@ -84,6 +106,7 @@
       });
       updateSelectAll(scope);
       updateSelectedCount(scope);
+      updateSelectionInputs(scope);
     }
 
     function setSelection(scope, ids, isSelected) {
@@ -98,6 +121,7 @@
         }
       });
       updateSelectedCount(scope);
+      updateSelectionInputs(scope);
     }
 
     document.addEventListener('change', event => {
@@ -114,6 +138,7 @@
         }
         updateSelectAll(scope);
         updateSelectedCount(scope);
+        updateSelectionInputs(scope);
         return;
       }
 
@@ -141,20 +166,7 @@
       if (!scope || !selectionStore[scope]) {
         return;
       }
-      const container = form.querySelector('[data-acl-selected-inputs]');
-      if (!container) {
-        return;
-      }
-      while (container.firstChild) {
-        container.removeChild(container.firstChild);
-      }
-      selectionStore[scope].forEach(id => {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = scope === 'collection' ? 'collection_ids' : 'bundle_ids';
-        input.value = id;
-        container.appendChild(input);
-      });
+      updateSelectionInputs(scope);
     });
 
     document.addEventListener('htmx:afterSwap', event => {
