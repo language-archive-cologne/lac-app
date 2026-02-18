@@ -82,6 +82,8 @@ class BundleFacetedSearchView(ListView):
             "structural_info__is_member_of_collection",
             "structural_info__is_member_of_collection__general_info",
             "publication_info",
+            "publication_info__creators",
+            "publication_info__contributors__contributor_name",
         )
 
         return qs

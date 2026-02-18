@@ -74,6 +74,7 @@ class FacetedSearchView(ListView):
             "general_info__location",
             "publication_info",
             "publication_info__creators",
+            "publication_info__contributors",
         )
 
         return qs

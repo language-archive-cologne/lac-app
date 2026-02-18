@@ -283,8 +283,23 @@ def collection_match_reasons(collection, query):
             reasons.append("language")
 
     pub = getattr(collection, "get_publication_info", None)
-    if pub and _text_matches_query(getattr(pub, "data_provider", ""), tokens):
-        reasons.append("data provider")
+    if pub:
+        if _text_matches_query(getattr(pub, "data_provider", ""), tokens):
+            reasons.append("data provider")
+        if any(
+            _text_matches_query(getattr(creator, "family_name", ""), tokens)
+            or _text_matches_query(getattr(creator, "given_name", ""), tokens)
+            for creator in pub.creators.all()
+        ):
+            reasons.append("creator")
+        if any(
+            _text_matches_query(getattr(contributor, "family_name", ""), tokens)
+            or _text_matches_query(getattr(contributor, "given_name", ""), tokens)
+            or _text_matches_query(getattr(contributor, "contributor_display_name", ""), tokens)
+            or _text_matches_query(getattr(contributor, "role", ""), tokens)
+            for contributor in pub.contributors.all()
+        ):
+            reasons.append("contributor")
 
     return ", ".join(_dedupe(reasons) or ["metadata"])
 
@@ -329,5 +344,36 @@ def bundle_match_reasons(bundle, query):
         parent_gi = getattr(parent, "get_general_info", None)
         if parent_gi and _text_matches_query(getattr(parent_gi, "display_title", ""), tokens):
             reasons.append("parent collection title")
+
+    pub = getattr(bundle, "get_publication_info", None)
+    if pub:
+        if _text_matches_query(getattr(pub, "data_provider", ""), tokens):
+            reasons.append("data provider")
+        if any(
+            _text_matches_query(getattr(creator, "family_name", ""), tokens)
+            or _text_matches_query(getattr(creator, "given_name", ""), tokens)
+            for creator in pub.creators.all()
+        ):
+            reasons.append("creator")
+        if any(
+            _text_matches_query(getattr(contributor, "family_name", ""), tokens)
+            or _text_matches_query(getattr(contributor, "given_name", ""), tokens)
+            or _text_matches_query(getattr(contributor, "role", ""), tokens)
+            or (
+                getattr(contributor, "contributor_name", None)
+                and (
+                    _text_matches_query(
+                        getattr(contributor.contributor_name, "contributor_family_name", ""),
+                        tokens,
+                    )
+                    or _text_matches_query(
+                        getattr(contributor.contributor_name, "contributor_given_name", ""),
+                        tokens,
+                    )
+                )
+            )
+            for contributor in pub.contributors.all()
+        ):
+            reasons.append("contributor")
 
     return ", ".join(_dedupe(reasons) or ["metadata"])

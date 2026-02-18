@@ -58,9 +58,19 @@ def build_collection_search_vector(collection: Collection) -> SearchVector:
         # Creators (weight C)
         for creator in pub_info.creators.all():
             vectors.append(SearchVector(Value(creator.family_name or ""), weight="C", config="simple"))
+            vectors.append(SearchVector(Value(creator.given_name or ""), weight="C", config="simple"))
         # Contributors (weight D)
         for contributor in pub_info.contributors.all():
             vectors.append(SearchVector(Value(contributor.family_name or ""), weight="D", config="simple"))
+            vectors.append(SearchVector(Value(contributor.given_name or ""), weight="D", config="simple"))
+            vectors.append(
+                SearchVector(
+                    Value(getattr(contributor, "contributor_display_name", "") or ""),
+                    weight="D",
+                    config="simple",
+                )
+            )
+            vectors.append(SearchVector(Value(contributor.role or ""), weight="D", config="simple"))
         # Data provider (weight D)
         vectors.append(SearchVector(Value(pub_info.data_provider or ""), weight="D", config="simple"))
 
@@ -133,6 +143,37 @@ def build_bundle_search_vector(bundle: Bundle) -> SearchVector:
             if parent_general:
                 vectors.append(SearchVector(Value(parent_general.display_title or ""), weight="D", config="simple"))
 
+    # Publication info
+    pub_info = bundle.publication_info.first()
+    if pub_info:
+        # Creators (weight C)
+        for creator in pub_info.creators.all():
+            vectors.append(SearchVector(Value(creator.family_name or ""), weight="C", config="simple"))
+            vectors.append(SearchVector(Value(creator.given_name or ""), weight="C", config="simple"))
+        # Contributors (weight D)
+        for contributor in pub_info.contributors.all():
+            vectors.append(SearchVector(Value(contributor.family_name or ""), weight="D", config="simple"))
+            vectors.append(SearchVector(Value(contributor.given_name or ""), weight="D", config="simple"))
+            vectors.append(SearchVector(Value(contributor.role or ""), weight="D", config="simple"))
+            contributor_name = getattr(contributor, "contributor_name", None)
+            if contributor_name:
+                vectors.append(
+                    SearchVector(
+                        Value(contributor_name.contributor_family_name or ""),
+                        weight="D",
+                        config="simple",
+                    )
+                )
+                vectors.append(
+                    SearchVector(
+                        Value(contributor_name.contributor_given_name or ""),
+                        weight="D",
+                        config="simple",
+                    )
+                )
+        # Data provider (weight D)
+        vectors.append(SearchVector(Value(pub_info.data_provider or ""), weight="D", config="simple"))
+
     # Project info (weight D)
     for project in bundle.projects.all():
         vectors.append(SearchVector(Value(project.project_display_name or ""), weight="D", config="simple"))
@@ -170,7 +211,13 @@ def update_collection_search_vector(collection: Collection) -> None:
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT olan.value, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT lf.value, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT cr.family_name, ' '), '')), 'C') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT cr.given_name, ' '), '')), 'C') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT concat_ws(' ', cr.given_name, cr.family_name), ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT co.family_name, ' '), '')), 'D') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT co.given_name, ' '), '')), 'D') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT co.contributor_display_name, ' '), '')), 'D') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT co.role, ' '), '')), 'D') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT concat_ws(' ', co.given_name, co.family_name), ' '), '')), 'D') ||
                     setweight(to_tsvector('simple', COALESCE(pi.data_provider, '')), 'D') ||
                     setweight(to_tsvector('simple', COALESCE(loc.location_name, '')), 'D') ||
                     setweight(to_tsvector('simple', COALESCE(loc.location_facet, '')), 'D') ||
@@ -228,6 +275,16 @@ def update_bundle_search_vector(bundle: Bundle) -> None:
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT ol.display_name, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT olan.value, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT lf.value, ' '), '')), 'C') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT bc.family_name, ' '), '')), 'C') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT bc.given_name, ' '), '')), 'C') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT concat_ws(' ', bc.given_name, bc.family_name), ' '), '')), 'C') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT bco.family_name, ' '), '')), 'D') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT bco.given_name, ' '), '')), 'D') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT bco.role, ' '), '')), 'D') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT concat_ws(' ', bco.given_name, bco.family_name), ' '), '')), 'D') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT bcon.contributor_family_name, ' '), '')), 'D') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT bcon.contributor_given_name, ' '), '')), 'D') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT bpi.data_provider, ' '), '')), 'D') ||
                     setweight(to_tsvector('simple', COALESCE(loc.location_facet, '')), 'D') ||
                     setweight(to_tsvector('simple', COALESCE(loc.region_facet, '')), 'D') ||
                     setweight(to_tsvector('simple', COALESCE(loc.country_facet, '')), 'D') ||
@@ -252,6 +309,12 @@ def update_bundle_search_vector(bundle: Bundle) -> None:
                 LEFT JOIN blam_bundletopic bt ON bt.id = sibt.bundletopic_id
                 LEFT JOIN blam_collection pc ON pc.id = si.is_member_of_collection_id
                 LEFT JOIN blam_collectiongeneralinfo pcgi ON pcgi.collection_id = pc.id
+                LEFT JOIN blam_bundlepublicationinfo bpi ON bpi.bundle_id = b.id
+                LEFT JOIN blam_bundlepublicationinfo_creators bpic ON bpic.bundlepublicationinfo_id = bpi.id
+                LEFT JOIN blam_bundlecreator bc ON bc.id = bpic.bundlecreator_id
+                LEFT JOIN blam_bundlepublicationinfo_contributors bpico ON bpico.bundlepublicationinfo_id = bpi.id
+                LEFT JOIN blam_bundlecontributor bco ON bco.id = bpico.bundlecontributor_id
+                LEFT JOIN blam_bundlecontributorname bcon ON bcon.id = bco.contributor_name_id
                 LEFT JOIN blam_bundle_projects bp ON bp.bundle_id = b.id
                 LEFT JOIN blam_projectinfo proj ON proj.id = bp.projectinfo_id
                 LEFT JOIN blam_projectinfo_funder_infos pfi ON pfi.projectinfo_id = proj.id
@@ -287,7 +350,13 @@ def rebuild_all_search_vectors() -> tuple[int, int]:
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT olan.value, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT lf.value, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT cr.family_name, ' '), '')), 'C') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT cr.given_name, ' '), '')), 'C') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT concat_ws(' ', cr.given_name, cr.family_name), ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT co.family_name, ' '), '')), 'D') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT co.given_name, ' '), '')), 'D') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT co.contributor_display_name, ' '), '')), 'D') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT co.role, ' '), '')), 'D') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT concat_ws(' ', co.given_name, co.family_name), ' '), '')), 'D') ||
                     setweight(to_tsvector('simple', COALESCE(pi.data_provider, '')), 'D') ||
                     setweight(to_tsvector('simple', COALESCE(loc.location_name, '')), 'D') ||
                     setweight(to_tsvector('simple', COALESCE(loc.location_facet, '')), 'D') ||
@@ -343,6 +412,16 @@ def rebuild_all_search_vectors() -> tuple[int, int]:
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT ol.display_name, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT olan.value, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT lf.value, ' '), '')), 'C') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT bc.family_name, ' '), '')), 'C') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT bc.given_name, ' '), '')), 'C') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT concat_ws(' ', bc.given_name, bc.family_name), ' '), '')), 'C') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT bco.family_name, ' '), '')), 'D') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT bco.given_name, ' '), '')), 'D') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT bco.role, ' '), '')), 'D') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT concat_ws(' ', bco.given_name, bco.family_name), ' '), '')), 'D') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT bcon.contributor_family_name, ' '), '')), 'D') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT bcon.contributor_given_name, ' '), '')), 'D') ||
+                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT bpi.data_provider, ' '), '')), 'D') ||
                     setweight(to_tsvector('simple', COALESCE(loc.location_facet, '')), 'D') ||
                     setweight(to_tsvector('simple', COALESCE(loc.region_facet, '')), 'D') ||
                     setweight(to_tsvector('simple', COALESCE(loc.country_facet, '')), 'D') ||
@@ -368,6 +447,12 @@ def rebuild_all_search_vectors() -> tuple[int, int]:
                 LEFT JOIN blam_bundletopic bt ON bt.id = sibt.bundletopic_id
                 LEFT JOIN blam_collection pc ON pc.id = si.is_member_of_collection_id
                 LEFT JOIN blam_collectiongeneralinfo pcgi ON pcgi.collection_id = pc.id
+                LEFT JOIN blam_bundlepublicationinfo bpi ON bpi.bundle_id = b.id
+                LEFT JOIN blam_bundlepublicationinfo_creators bpic ON bpic.bundlepublicationinfo_id = bpi.id
+                LEFT JOIN blam_bundlecreator bc ON bc.id = bpic.bundlecreator_id
+                LEFT JOIN blam_bundlepublicationinfo_contributors bpico ON bpico.bundlepublicationinfo_id = bpi.id
+                LEFT JOIN blam_bundlecontributor bco ON bco.id = bpico.bundlecontributor_id
+                LEFT JOIN blam_bundlecontributorname bcon ON bcon.id = bco.contributor_name_id
                 LEFT JOIN blam_bundle_projects bp ON bp.bundle_id = b.id
                 LEFT JOIN blam_projectinfo proj ON proj.id = bp.projectinfo_id
                 LEFT JOIN blam_projectinfo_funder_infos pfi ON pfi.projectinfo_id = proj.id
