@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Optional, Sequence
@@ -339,12 +340,21 @@ class ACLService(BaseStorageService):
         if not cleaned:
             return None
 
-        # OCFL content paths often include versioned segments like
-        # ".../v1/content/..." – the ACL lives at the object root, so strip
-        # anything after the first version marker.
-        version_index = cleaned.find('/v')
-        if version_index > 0:
-            cleaned = cleaned[:version_index]
+        # OCFL content paths include explicit version markers like
+        # ".../v1/content/...". Trim only at that marker so regular path
+        # segments starting with "v" (e.g. "veraa") are preserved.
+        marker = re.search(r"/v\d+/content(?:/|$)", cleaned, flags=re.IGNORECASE)
+        if marker and marker.start() > 0:
+            cleaned = cleaned[:marker.start()]
+            return cleaned
+
+        # Legacy/non-OCFL imports may store the XML file path directly
+        # (e.g. "collection/bundle/bundle.xml"). In that case ACL lives
+        # next to the object root directory, so strip filename.
+        filename_like_suffixes = (".xml", ".cmdi", ".imdi")
+        if cleaned.lower().endswith(filename_like_suffixes):
+            parent = cleaned.rsplit("/", 1)[0] if "/" in cleaned else ""
+            cleaned = parent or cleaned
 
         return cleaned
 

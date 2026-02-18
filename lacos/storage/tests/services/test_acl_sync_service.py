@@ -127,3 +127,65 @@ def test_sync_bundle_handles_missing_acl(mock_s3, acl_sync_service):
     assert permissions.last_synced is None
     assert permissions.access_level == ACL_LEVEL_RESTRICTED
     assert permissions.read_agents is None or permissions.read_agents == []
+
+
+@pytest.mark.django_db
+def test_sync_bundle_preserves_v_prefixed_bundle_segment(mock_s3, acl_sync_service):
+    collection = _create_collection(identifier="multicast_veraa")
+    collection.import_bucket = TEST_BUCKET_NAME
+    collection.import_object_key = "multicast_veraa/v1/content/multicast_veraa.xml"
+    collection.save()
+
+    bundle = _create_bundle(collection, identifier="veraa-story")
+    bundle.import_bucket = TEST_BUCKET_NAME
+    bundle.import_object_key = "multicast_veraa/veraa_story/v1/content/veraa_story.xml"
+    bundle.save()
+
+    acl_rules = [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}]
+    expected_acl_key = "multicast_veraa/veraa_story/acl.json"
+
+    mock_s3.put_object(
+        Bucket=TEST_BUCKET_NAME,
+        Key=expected_acl_key,
+        Body=json.dumps(acl_rules),
+    )
+
+    result = acl_sync_service.sync_bundle(bundle)
+    assert result.success is True
+    assert result.key == expected_acl_key
+
+    ct = ContentType.objects.get_for_model(Bundle)
+    permissions = ACLPermissions.objects.get(content_type=ct, object_id=bundle.pk)
+    assert permissions.ACL_file_key == expected_acl_key
+    assert permissions.permissions_data == acl_rules
+
+
+@pytest.mark.django_db
+def test_sync_bundle_legacy_xml_path_without_v1(mock_s3, acl_sync_service):
+    collection = _create_collection(identifier="multicast_veraa")
+    collection.import_bucket = TEST_BUCKET_NAME
+    collection.import_object_key = "multicast_veraa/multicast_veraa.xml"
+    collection.save()
+
+    bundle = _create_bundle(collection, identifier="veraa-story-legacy")
+    bundle.import_bucket = TEST_BUCKET_NAME
+    bundle.import_object_key = "multicast_veraa/veraa_story/veraa_story.xml"
+    bundle.save()
+
+    acl_rules = [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}]
+    expected_acl_key = "multicast_veraa/veraa_story/acl.json"
+
+    mock_s3.put_object(
+        Bucket=TEST_BUCKET_NAME,
+        Key=expected_acl_key,
+        Body=json.dumps(acl_rules),
+    )
+
+    result = acl_sync_service.sync_bundle(bundle)
+    assert result.success is True
+    assert result.key == expected_acl_key
+
+    ct = ContentType.objects.get_for_model(Bundle)
+    permissions = ACLPermissions.objects.get(content_type=ct, object_id=bundle.pk)
+    assert permissions.ACL_file_key == expected_acl_key
+    assert permissions.permissions_data == acl_rules
