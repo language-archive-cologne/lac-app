@@ -221,9 +221,9 @@
           {% for row in bundle_access_overview %}
           <tr>
             <td class="space-y-0.5">
-              <div class="font-medium">{{ row.collection_identifier }}</div>
-              {% if row.collection_name and row.collection_name != row.collection_identifier %}
-              <div class="text-[11px] text-base-content/60">{{ row.collection_name }}</div>
+              <div class="font-medium">{{ row.collection_name|default:row.collection_identifier }}</div>
+              {% if row.collection_identifier and row.collection_identifier != row.collection_name %}
+              <div class="text-[11px] font-mono text-base-content/60">{{ row.collection_identifier }}</div>
               {% endif %}
             </td>
             <td class="text-right font-medium">{{ row.total_bundles }}</td>

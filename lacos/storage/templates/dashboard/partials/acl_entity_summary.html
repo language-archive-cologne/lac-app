@@ -18,7 +18,7 @@
 
     <div class="flex flex-wrap gap-2">
       {% for row in summary.by_level %}
-      <div class="badge badge-outline gap-1 {% if row.access_level == 'public' %}text-success{% elif row.access_level == 'academic' %}text-warning{% else %}text-amber-600{% endif %}">
+      <div class="badge gap-1 {% if row.access_level == 'public' %}badge-success{% elif row.access_level == 'academic' %}badge-warning{% else %}bg-amber-600 text-white border-amber-600{% endif %}">
         <span class="font-medium">
           {% if row.access_level == 'public' %}
             Public

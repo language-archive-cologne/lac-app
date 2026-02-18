@@ -101,6 +101,70 @@ def _get_acl_scope_model(scope: str):
     raise ValueError(f"Unsupported ACL scope: {scope}")
 
 
+def _empty_bundle_access_summary() -> dict[str, int]:
+    return {
+        "total_bundles": 0,
+        "public_count": 0,
+        "academic_count": 0,
+        "restricted_count": 0,
+        "missing_acl_count": 0,
+    }
+
+
+def _build_collection_bundle_access_summary(
+    collection_ids: list[str],
+) -> dict[str, dict[str, int]]:
+    """Build bundle access-level counts for each collection id in the current page."""
+    if not collection_ids:
+        return {}
+
+    normalized_ids = {str(collection_id) for collection_id in collection_ids if collection_id}
+    if not normalized_ids:
+        return {}
+
+    summary_by_collection: dict[str, dict[str, int]] = {
+        collection_id: _empty_bundle_access_summary() for collection_id in normalized_ids
+    }
+
+    bundle_pairs = list(
+        Bundle.objects.filter(
+            structural_info__is_member_of_collection_id__in=normalized_ids,
+        )
+        .values_list("pk", "structural_info__is_member_of_collection_id")
+        .distinct()
+    )
+    if not bundle_pairs:
+        return summary_by_collection
+
+    bundle_ids = {str(bundle_id) for bundle_id, _ in bundle_pairs}
+    bundle_ct = ContentType.objects.get_for_model(Bundle)
+    bundle_levels = {
+        str(object_id): access_level
+        for object_id, access_level in ACLPermissions.objects.filter(
+            content_type=bundle_ct,
+            object_id__in=bundle_ids,
+        ).values_list("object_id", "access_level")
+    }
+
+    for bundle_id, collection_id in bundle_pairs:
+        key = str(collection_id)
+        if key not in summary_by_collection:
+            continue
+        summary = summary_by_collection[key]
+        summary["total_bundles"] += 1
+        level = bundle_levels.get(str(bundle_id))
+        if level == ACL_LEVEL_PUBLIC:
+            summary["public_count"] += 1
+        elif level == ACL_LEVEL_ACADEMIC:
+            summary["academic_count"] += 1
+        elif level == ACL_LEVEL_RESTRICTED:
+            summary["restricted_count"] += 1
+        else:
+            summary["missing_acl_count"] += 1
+
+    return summary_by_collection
+
+
 def _build_acl_table_context(request, scope: str) -> dict[str, object]:
     model = _get_acl_scope_model(scope)
     content_type = ContentType.objects.get_for_model(model)
@@ -189,6 +253,7 @@ def _build_acl_table_context(request, scope: str) -> dict[str, object]:
                 "read_agents": perm.read_agents or [],
                 "bucket": perm.ACL_file_bucket,
                 "key": perm.ACL_file_key,
+                "bundle_access_summary": None,
             }
             for perm in page_obj.object_list
         ]
@@ -251,6 +316,11 @@ def _build_acl_table_context(request, scope: str) -> dict[str, object]:
         filtered_count = objects.count()
         paginator = Paginator(objects, page_size)
         page_obj = paginator.get_page(page_number)
+        bundle_access_by_collection: dict[str, dict[str, int]] = {}
+        if scope == "collection":
+            bundle_access_by_collection = _build_collection_bundle_access_summary(
+                [str(obj.pk) for obj in page_obj.object_list]
+            )
 
         rows = [
             {
@@ -266,6 +336,14 @@ def _build_acl_table_context(request, scope: str) -> dict[str, object]:
                 "read_agents": obj.read_agents or [],
                 "bucket": obj.bucket,
                 "key": obj.key,
+                "bundle_access_summary": (
+                    bundle_access_by_collection.get(
+                        str(obj.pk),
+                        _empty_bundle_access_summary(),
+                    )
+                    if scope == "collection"
+                    else None
+                ),
             }
             for obj in page_obj.object_list
         ]

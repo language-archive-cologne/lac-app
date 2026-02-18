@@ -184,6 +184,9 @@
                 {% endif %}
               </button>
             </th>
+            {% if scope == 'collection' %}
+            <th class="w-56">Bundle access</th>
+            {% endif %}
             <th class="w-1/3">Read agents</th>
             <th>Actions</th>
           </tr>
@@ -203,10 +206,17 @@
               >
             </td>
             <td class="space-y-0.5">
-              {% if row.name %}
-              <div class="font-semibold">{{ row.name }}</div>
+              {% if scope == 'collection' %}
+                <div class="font-semibold text-base-content">{{ row.name|default:row.identifier }}</div>
+                {% if row.identifier and row.identifier != row.name %}
+                <div class="text-[11px] font-mono text-base-content/45">{{ row.identifier }}</div>
+                {% endif %}
+              {% else %}
+                {% if row.name %}
+                <div class="font-semibold">{{ row.name }}</div>
+                {% endif %}
+                <div class="text-xs font-mono text-base-content/50">{{ row.identifier }}</div>
               {% endif %}
-              <div class="text-xs font-mono text-base-content/50">{{ row.identifier }}</div>
               {% if not row.object_exists %}
               <div class="badge badge-error badge-outline badge-xs">Object missing</div>
               {% elif not row.has_permission %}
@@ -219,7 +229,7 @@
               {% endif %}
             </td>
             <td class="w-24">
-              <span class="badge badge-sm {% if row.access_level == 'public' %}badge-success{% elif row.access_level == 'academic' %}badge-warning{% else %}bg-amber-500 text-white{% endif %}">
+              <span class="badge badge-sm {% if row.access_level == 'public' %}badge-success{% elif row.access_level == 'academic' %}badge-warning{% else %}bg-amber-600 text-white border-amber-600{% endif %}">
                 {% if row.access_level == 'public' %}
                   Public
                 {% elif row.access_level == 'academic' %}
@@ -232,6 +242,21 @@
             <td class="text-sm text-base-content/70">
               {{ row.last_synced|date:"Y-m-d H:i"|default:"—" }}
             </td>
+            {% if scope == 'collection' %}
+            <td class="text-xs text-base-content/70 w-56">
+              {% with summary=row.bundle_access_summary %}
+                <div class="space-y-1">
+                  <div class="text-[11px] text-base-content/60">Bundles: {{ summary.total_bundles|default:0 }}</div>
+                  <div class="flex flex-wrap gap-1">
+                    <span class="badge badge-success badge-xs">Public {{ summary.public_count|default:0 }}</span>
+                    <span class="badge badge-warning badge-xs">Academic {{ summary.academic_count|default:0 }}</span>
+                    <span class="badge badge-xs bg-amber-600 text-white border-amber-600">Restricted {{ summary.restricted_count|default:0 }}</span>
+                    <span class="badge badge-error badge-outline badge-xs">Missing {{ summary.missing_acl_count|default:0 }}</span>
+                  </div>
+                </div>
+              {% endwith %}
+            </td>
+            {% endif %}
             <td class="text-sm text-base-content/70 w-1/3">
               {% if row.read_agents %}
                 <div class="space-y-1 max-w-xs">
@@ -303,7 +328,7 @@
           </tr>
           {% empty %}
           <tr>
-            <td colspan="6" class="py-6 text-center text-sm text-base-content/60">
+            <td colspan="{% if scope == 'collection' %}7{% else %}6{% endif %}" class="py-6 text-center text-sm text-base-content/60">
               No {{ scope }}s to display.
             </td>
           </tr>

@@ -143,6 +143,81 @@ def test_acl_records_table_sorting(client, django_user_model):
 
 
 @pytest.mark.django_db
+def test_acl_records_table_collection_rows_include_bundle_access_summary(
+    client, django_user_model
+):
+    user = django_user_model.objects.create_user("summary", "summary@example.com", "pass")
+    _make_archivist(user)
+    client.force_login(user)
+
+    target_collection = Collection.objects.create(identifier="col-summary")
+    other_collection = Collection.objects.create(identifier="col-other")
+
+    bundle_public = Bundle.objects.create(identifier="bundle-public")
+    bundle_academic = Bundle.objects.create(identifier="bundle-academic")
+    bundle_restricted = Bundle.objects.create(identifier="bundle-restricted")
+    bundle_missing = Bundle.objects.create(identifier="bundle-missing")
+    other_bundle = Bundle.objects.create(identifier="bundle-other")
+
+    BundleStructuralInfo.objects.create(
+        bundle=bundle_public, is_member_of_collection=target_collection
+    )
+    BundleStructuralInfo.objects.create(
+        bundle=bundle_academic, is_member_of_collection=target_collection
+    )
+    BundleStructuralInfo.objects.create(
+        bundle=bundle_restricted, is_member_of_collection=target_collection
+    )
+    BundleStructuralInfo.objects.create(
+        bundle=bundle_missing, is_member_of_collection=target_collection
+    )
+    BundleStructuralInfo.objects.create(bundle=other_bundle, is_member_of_collection=other_collection)
+
+    bundle_ct = ContentType.objects.get_for_model(Bundle)
+    ACLPermissions.objects.create(
+        content_type=bundle_ct,
+        object_id=str(bundle_public.pk),
+        access_level=ACL_LEVEL_PUBLIC,
+    )
+    ACLPermissions.objects.create(
+        content_type=bundle_ct,
+        object_id=str(bundle_academic.pk),
+        access_level=ACL_LEVEL_ACADEMIC,
+    )
+    ACLPermissions.objects.create(
+        content_type=bundle_ct,
+        object_id=str(bundle_restricted.pk),
+        access_level=ACL_LEVEL_RESTRICTED,
+    )
+    ACLPermissions.objects.create(
+        content_type=bundle_ct,
+        object_id=str(other_bundle.pk),
+        access_level=ACL_LEVEL_PUBLIC,
+    )
+
+    response = client.get(
+        reverse("storage:acl_records_table", args=["collection"]),
+        {"q": "col-summary"},
+    )
+    assert response.status_code == 200
+
+    html = response.content.decode()
+    assert "Bundle access" in html
+    assert "Public 1" in html
+    assert "Academic 1" in html
+    assert "Restricted 1" in html
+    assert "Missing 1" in html
+
+    row = response.context["page_obj"].object_list[0]
+    summary = row["bundle_access_summary"]
+    assert summary["total_bundles"] == 4
+    assert summary["public_count"] == 1
+    assert summary["academic_count"] == 1
+    assert summary["restricted_count"] == 1
+    assert summary["missing_acl_count"] == 1
+
+
+@pytest.mark.django_db
 def test_acl_admin_dashboard_respects_tab_query(client, django_user_model):
     user = django_user_model.objects.create_user("owner", "owner@example.com", "pass")
     _make_archivist(user)
