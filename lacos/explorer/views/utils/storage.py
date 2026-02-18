@@ -4,6 +4,7 @@ import logging
 from pathlib import PurePosixPath
 from typing import Optional, Sequence, Tuple
 from urllib.parse import quote
+import xml.dom.minidom
 
 from botocore.exceptions import ClientError
 
@@ -58,6 +59,57 @@ def resolve_existing_object(
             raise
 
     return None, None
+
+
+def _strip_whitespace_nodes(node):
+    """Remove whitespace-only text nodes to avoid double indentation."""
+    remove = []
+    for child in node.childNodes:
+        if child.nodeType == child.TEXT_NODE and not child.data.strip():
+            remove.append(child)
+        elif child.hasChildNodes():
+            _strip_whitespace_nodes(child)
+    for child in remove:
+        node.removeChild(child)
+
+
+def load_xml_preview(
+    resource_service,
+    bucket_name: str,
+    object_key: str,
+    *,
+    max_preview_bytes: int = 2 * 1024 * 1024,
+) -> Optional[str]:
+    """Load and pretty-format XML content for preview modals."""
+    if not bucket_name or not object_key:
+        return None
+
+    try:
+        response = resource_service.s3_client.get_object(Bucket=bucket_name, Key=object_key)
+        content_length = response.get("ContentLength")
+        if content_length is not None and content_length > max_preview_bytes:
+            return None
+
+        raw = response["Body"].read(max_preview_bytes + 1)
+        if len(raw) > max_preview_bytes:
+            return None
+
+        text = raw.decode("utf-8", errors="replace")
+        doc = xml.dom.minidom.parseString(text)
+        _strip_whitespace_nodes(doc)
+        pretty = doc.toprettyxml(indent="  ")
+        lines = pretty.split("\n")
+        if lines and lines[0].startswith("<?xml"):
+            lines = lines[1:]
+        return "\n".join(line for line in lines if line.strip())
+    except Exception:
+        logger.debug(
+            "Could not build XML preview for s3://%s/%s",
+            bucket_name,
+            object_key,
+            exc_info=True,
+        )
+        return None
 
 
 def resolve_resource_to_presigned(

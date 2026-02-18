@@ -221,6 +221,27 @@
           </div>
         </div>
       </div>
+    {% elif media_type == 'xml' %}
+      {% if xml_content %}
+        <div class="border border-slate-200 rounded-lg overflow-hidden bg-base-100">
+          <div class="bg-slate-100 px-4 py-2 text-sm font-medium text-slate-600">
+            {% translate "XML Content" %}
+          </div>
+          <pre class="p-4 overflow-auto max-h-[70vh] text-xs leading-relaxed"><code id="resource-xml-content" class="language-xml">{{ xml_content }}</code></pre>
+        </div>
+        <script>
+          if (window.Prism) {
+            const xmlCodeEl = document.getElementById('resource-xml-content');
+            if (xmlCodeEl) {
+              Prism.highlightElement(xmlCodeEl);
+            }
+          }
+        </script>
+      {% else %}
+        <div class="alert alert-info">
+          <span>{% translate "XML preview is unavailable for this file." %}</span>
+        </div>
+      {% endif %}
     {% else %}
       <div class="flex flex-col items-start gap-3">
         <p class="text-sm text-slate-600">

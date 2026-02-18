@@ -25,6 +25,7 @@ from .resource import (
 )
 from .storage import (
     build_content_disposition,
+    load_xml_preview,
     resolve_existing_object,
     resolve_resource_to_presigned,
 )
@@ -56,6 +57,7 @@ __all__ = [
     "prepare_resource_lists",
     # Storage utilities
     "build_content_disposition",
+    "load_xml_preview",
     "resolve_existing_object",
     "resolve_resource_to_presigned",
     # Lookup utilities

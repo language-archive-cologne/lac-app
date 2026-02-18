@@ -38,6 +38,7 @@ from .utils import (
     annotate_resource,
     get_formatted_location,
     get_object_by_pk_or_handle,
+    load_xml_preview,
     paginate_bundle_contexts,
     summarize_collection_bundle_access_levels,
 )
@@ -489,6 +490,13 @@ class CollectionResourcesView(View):
             )
 
             is_htmx = request.headers.get('HX-Request') == 'true'
+            xml_preview = None
+            if is_htmx and action in {'play', 'view'} and detected_media_type == 'xml':
+                xml_preview = load_xml_preview(
+                    resource_service,
+                    location.s3_bucket,
+                    location.s3_key,
+                )
 
             if action == 'download':
                 raise Http404("Direct downloads are not available")
@@ -497,6 +505,7 @@ class CollectionResourcesView(View):
                 return self._render_htmx_modal(
                     request, file_name, file_description, mime_type,
                     detected_media_type, source_mime_type, presigned_url, download_url,
+                    xml_preview=xml_preview,
                     download_bucket=location.s3_bucket,
                     download_key=location.s3_key,
                 )
@@ -519,6 +528,7 @@ class CollectionResourcesView(View):
     def _render_htmx_modal(
         self, request, file_name, file_description, mime_type,
         detected_media_type, source_mime_type, presigned_url, download_url,
+        xml_preview=None,
         download_bucket=None, download_key=None
     ):
         """Render the HTMX modal response for play/view actions."""
@@ -535,6 +545,7 @@ class CollectionResourcesView(View):
             'download_key': download_key,
             'download_filename': file_name,
             'elan_context': None,
+            'xml_content': xml_preview,
         }
 
         response = render(

@@ -50,6 +50,7 @@ IMAGE_EXTENSIONS = {
 }
 
 PDF_EXTENSIONS = {".pdf"}
+XML_EXTENSIONS = {".xml", ".imdi", ".cmdi"}
 
 
 def _normalize_mime(mime_type: Optional[str]) -> str:
@@ -69,7 +70,7 @@ def determine_media_type(
     """
     Infer the media type for a resource based on its MIME type and file extension.
 
-    Returns one of ``audio``, ``video``, ``image``, ``pdf`` or ``None`` when no
+    Returns one of ``audio``, ``video``, ``image``, ``pdf``, ``xml`` or ``None`` when no
     sensible inference can be made.
     """
     normalized_mime = _normalize_mime(mime_type)
@@ -83,6 +84,8 @@ def determine_media_type(
         return "image"
     if normalized_mime == "application/pdf":
         return "pdf"
+    if normalized_mime in {"application/xml", "text/xml"} or normalized_mime.endswith("+xml"):
+        return "xml"
 
     if extension in AUDIO_EXTENSIONS:
         return "audio"
@@ -92,6 +95,8 @@ def determine_media_type(
         return "image"
     if extension in PDF_EXTENSIONS:
         return "pdf"
+    if extension in XML_EXTENSIONS:
+        return "xml"
 
     return None
 
@@ -134,5 +139,7 @@ def guess_source_mime_type(
         return "image/jpeg"
     if media_type == "pdf":
         return "application/pdf"
+    if media_type == "xml":
+        return "application/xml"
 
     return "application/octet-stream"

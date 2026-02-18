@@ -30,6 +30,7 @@ from .utils import (
     get_formatted_location,
     get_object_by_pk_or_handle,
     HandleLookupMixin,
+    load_xml_preview,
     parse_elan_document,
     pick_elan_audio_resource,
     prepare_resource_lists,
@@ -351,6 +352,9 @@ class ResourceAccessView(View):
             )
 
             is_htmx = request.headers.get('HX-Request') == 'true'
+            xml_preview = None
+            if is_htmx and action in {'play', 'view'} and detected_media_type == 'xml' and not is_elan:
+                xml_preview = load_xml_preview(resource_service, bucket_name, object_key)
 
             if action == 'download':
                 raise Http404("Direct downloads are not available")
@@ -359,6 +363,7 @@ class ResourceAccessView(View):
                 return self._render_htmx_modal(
                     request, resource, mime_type, detected_media_type, source_mime_type,
                     presigned_url, download_url, elan_context, is_elan,
+                    xml_preview=xml_preview,
                     download_bucket=bucket_name,
                     download_key=object_key,
                 )
@@ -419,6 +424,7 @@ class ResourceAccessView(View):
     def _render_htmx_modal(
         self, request, resource, mime_type, detected_media_type, source_mime_type,
         presigned_url, download_url, elan_context, is_elan,
+        xml_preview=None,
         download_bucket=None, download_key=None
     ):
         """Render the HTMX modal response for play/view actions."""
@@ -437,6 +443,7 @@ class ResourceAccessView(View):
             'download_key': download_key,
             'download_filename': getattr(resource, 'file_name', None),
             'elan_context': elan_context,
+            'xml_content': xml_preview,
         }
 
         response = render(

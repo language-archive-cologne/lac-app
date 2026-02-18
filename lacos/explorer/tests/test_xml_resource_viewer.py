@@ -1,0 +1,122 @@
+from types import SimpleNamespace
+
+import pytest
+from django.urls import reverse
+
+from lacos.blam.models.bundle.bundle_repository import Bundle
+from lacos.blam.models.bundle.bundle_structural_info import (
+    BundleAdditionalMetadataFile,
+    BundleStructuralInfo,
+)
+from lacos.blam.models.collection.collection_repository import Collection
+from lacos.blam.models.collection.collection_structural_info import (
+    CollectionAdditionalMetadataFile,
+    CollectionStructuralInfo,
+)
+
+
+@pytest.mark.django_db
+def test_bundle_imdi_resource_renders_xml_modal_for_htmx_view(client, monkeypatch):
+    collection = Collection.objects.create(identifier="hdl:test/collection-imdi-bundle")
+    bundle = Bundle.objects.create(identifier="hdl:test/bundle-imdi-resource")
+    structural_info = BundleStructuralInfo.objects.create(
+        bundle=bundle,
+        is_member_of_collection=collection,
+    )
+    metadata_file = BundleAdditionalMetadataFile.objects.create(
+        file_pid="hdl:test/bundle-imdi-file",
+        file_name="Wooinap_family_situation.imdi",
+        mime_type="application/octet-stream",
+        file_description="Bundle IMDI metadata",
+    )
+    structural_info.additional_metadata_files.add(metadata_file)
+
+    class DummyService:
+        def generate_presigned_url(self, _bucket, _key, response_headers=None):
+            if response_headers:
+                return "https://example.test/download"
+            return "https://example.test/preview"
+
+    monkeypatch.setattr(
+        "lacos.explorer.views.bundles.ResourceMappingService",
+        lambda: DummyService(),
+    )
+    monkeypatch.setattr(
+        "lacos.explorer.views.bundles.resolve_resource_to_presigned",
+        lambda *_args, **_kwargs: {
+            "bucket": "bucket-a",
+            "key": "path/Wooinap_family_situation.imdi",
+            "url": "https://example.test/preview",
+        },
+    )
+    monkeypatch.setattr(
+        "lacos.explorer.views.bundles.load_xml_preview",
+        lambda *_args, **_kwargs: "<IMDI><Session>Bundle</Session></IMDI>",
+    )
+
+    response = client.get(
+        reverse(
+            "explorer:resource_access",
+            kwargs={"bundle_id": bundle.pk, "resource_id": metadata_file.pk},
+        ),
+        {"action": "view"},
+        HTTP_HX_REQUEST="true",
+    )
+
+    assert response.status_code == 200
+    page = response.content.decode("utf-8")
+    assert 'data-viewer-type="xml"' in page
+    assert "resource-xml-content" in page
+    assert "&lt;IMDI&gt;" in page
+
+
+@pytest.mark.django_db
+def test_collection_imdi_resource_renders_xml_modal_for_htmx_view(client, monkeypatch):
+    collection = Collection.objects.create(identifier="hdl:test/collection-imdi-resource")
+    structural_info = CollectionStructuralInfo.objects.create(collection=collection)
+    metadata_file = CollectionAdditionalMetadataFile.objects.create(
+        file_pid="hdl:test/collection-imdi-file",
+        file_name="collection_metadata.imdi",
+        mime_type="application/octet-stream",
+        file_description="Collection IMDI metadata",
+    )
+    structural_info.additional_metadata_files.add(metadata_file)
+
+    class DummyService:
+        def resolve_pid_to_s3(self, _pid):
+            return SimpleNamespace(
+                s3_bucket="bucket-a",
+                s3_key="path/collection_metadata.imdi",
+            )
+
+        def generate_presigned_url(self, _bucket, _key, response_headers=None):
+            if response_headers:
+                return "https://example.test/download"
+            return "https://example.test/preview"
+
+    monkeypatch.setattr(
+        "lacos.explorer.views.collections.ResourceMappingService",
+        lambda: DummyService(),
+    )
+    monkeypatch.setattr(
+        "lacos.explorer.views.collections.load_xml_preview",
+        lambda *_args, **_kwargs: "<IMDI><Session>Collection</Session></IMDI>",
+    )
+
+    response = client.get(
+        reverse(
+            "explorer:collection_resource_by_handle",
+            kwargs={
+                "handle": collection.identifier,
+                "resource_id": metadata_file.file_pid,
+            },
+        ),
+        {"action": "view"},
+        HTTP_HX_REQUEST="true",
+    )
+
+    assert response.status_code == 200
+    page = response.content.decode("utf-8")
+    assert 'data-viewer-type="xml"' in page
+    assert "resource-xml-content" in page
+    assert "&lt;IMDI&gt;" in page
