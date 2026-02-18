@@ -1,22 +1,35 @@
-<div id="acl-tab-controls" class="tabs tabs-boxed w-fit" role="tablist" {% if hx_oob %}hx-swap-oob="outerHTML"{% endif %}>
-  <button
-    type="button"
-    class="tab {% if active_tab == 'dashboard' %}tab-active{% endif %}"
-    hx-get="{% url 'storage:acl_dashboard_panel' %}"
-    hx-target="#acl-tab-content"
-    hx-swap="innerHTML"
-    hx-push-url="false"
-  >
-    Dashboard
-  </button>
-  <button
-    type="button"
-    class="tab {% if active_tab == 'records' %}tab-active{% endif %}"
-    hx-get="{% url 'storage:acl_records_panel' %}?scope={{ records_scope|default:'collection' }}"
-    hx-target="#acl-tab-content"
-    hx-swap="innerHTML"
-    hx-push-url="false"
-  >
-    ACL Records
-  </button>
+<div
+  id="acl-tab-controls"
+  class="navbar rounded-xl border border-base-300 bg-base-100 shadow-sm"
+  role="navigation"
+  {% if hx_oob %}hx-swap-oob="outerHTML"{% endif %}
+>
+  <div class="navbar-start">
+    <span class="btn btn-ghost text-base font-semibold normal-case">ACL</span>
+  </div>
+  <div class="navbar-center">
+    <div class="join">
+      <button
+        type="button"
+        class="btn btn-sm join-item {% if active_tab == 'dashboard' %}btn-primary{% else %}btn-ghost{% endif %}"
+        hx-get="{% url 'storage:acl_dashboard_panel' %}?scope={{ records_scope|default:'collection' }}"
+        hx-target="#acl-tab-content"
+        hx-swap="innerHTML"
+        hx-push-url="false"
+      >
+        Dashboard
+      </button>
+      <button
+        type="button"
+        class="btn btn-sm join-item {% if active_tab == 'records' %}btn-primary{% else %}btn-ghost{% endif %}"
+        hx-get="{% url 'storage:acl_records_panel' %}?scope={{ records_scope|default:'collection' }}"
+        hx-target="#acl-tab-content"
+        hx-swap="innerHTML"
+        hx-push-url="false"
+      >
+        ACL Records
+      </button>
+    </div>
+  </div>
+  <div class="navbar-end"></div>
 </div>

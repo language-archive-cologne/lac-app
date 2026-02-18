@@ -1,5 +1,8 @@
 {% load i18n %}
 {% load explorer_extras %}
+{% if bundles_header_oob %}
+  {% include "explorer/partials/collection_bundles_select_header.html" with bundles_header_oob=True %}
+{% endif %}
 {% if bundle_contexts %}
   {% if bundle_page_obj %}
     <div class="flex items-center justify-between mb-3 text-sm text-base-content/70">
@@ -78,7 +81,7 @@
       <tbody class="bg-base-100 divide-y divide-base-200">
         {% for bundle_info in bundle_contexts %}
           {% with bundle=bundle_info.bundle level=bundle_info.access_level|default:bundle_info.acl_check_result.access_level %}
-            <tr class="hover:bg-base-200 transition-colors">
+            <tr class="hover:bg-base-200 transition-colors" data-bundle-row data-bundle-id="{{ bundle.pk }}">
               <td class="px-4 py-5 align-top text-sm">
                 {% if level == 'public' %}
                   <div class="tooltip tooltip-right" data-tip="{% translate 'Anyone can read' %}">
@@ -135,7 +138,7 @@
                         <p class="text-xs font-semibold text-base-content/70 mb-2">{% translate "Media Files" %}</p>
                         <ul class="space-y-1.5">
                           {% for resource in bundle_info.media_resources %}
-                            <li class="bundle-resource-item text-xs flex items-center"
+                            <li class="bundle-resource-item text-xs flex items-center rounded-md px-1.5 py-1 transition-colors"
                                 data-resource-id="{{ resource.id }}"
                                 data-bundle-id="{{ bundle.pk }}"
                                 data-filename="{{ resource.file_name }}"
@@ -185,7 +188,7 @@
                         <p class="text-xs font-semibold text-base-content/70 mb-2">{% translate "Written Files" %}</p>
                         <ul class="space-y-1.5">
                           {% for resource in bundle_info.written_resources %}
-                            <li class="bundle-resource-item text-xs flex items-center"
+                            <li class="bundle-resource-item text-xs flex items-center rounded-md px-1.5 py-1 transition-colors"
                                 data-resource-id="{{ resource.id }}"
                                 data-bundle-id="{{ bundle.pk }}"
                                 data-filename="{{ resource.file_name }}"
@@ -248,7 +251,7 @@
                         <p class="text-xs font-semibold text-base-content/70 mb-2">{% translate "Other Files" %}</p>
                         <ul class="space-y-1.5">
                           {% for resource in bundle_info.other_resources %}
-                            <li class="bundle-resource-item text-xs flex items-center"
+                            <li class="bundle-resource-item text-xs flex items-center rounded-md px-1.5 py-1 transition-colors"
                                 data-resource-id="{{ resource.id }}"
                                 data-bundle-id="{{ bundle.pk }}"
                                 data-filename="{{ resource.file_name }}"
@@ -284,7 +287,7 @@
                         <p class="text-xs font-semibold text-base-content/70 mb-2">{% translate "Metadata Files" %}</p>
                         <ul class="space-y-1.5">
                           {% for resource in bundle_info.metadata_files %}
-                            <li class="bundle-resource-item text-xs flex items-center"
+                            <li class="bundle-resource-item text-xs flex items-center rounded-md px-1.5 py-1 transition-colors"
                                 data-resource-id="{{ resource.id }}"
                                 data-bundle-id="{{ bundle.pk }}"
                                 data-filename="{{ resource.file_name }}"

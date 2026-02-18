@@ -419,6 +419,7 @@ class CollectionDetailView(HandleLookupMixin, DetailView):
 
         if self.request.headers.get('HX-Request'):
             if 'bundle_page' in self.request.GET or 'bundle_search' in self.request.GET:
+                context['bundles_header_oob'] = True
                 return render(
                     self.request,
                     'explorer/partials/collection_bundles_table.html',

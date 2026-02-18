@@ -1,0 +1,20 @@
+{% load i18n %}
+<div
+  id="bundles-multi-select-header"
+  class="flex items-center justify-between mb-3 p-3 bg-base-200 rounded-lg {% if not bundle_contexts %}hidden{% endif %}"
+  {% if bundles_header_oob %}hx-swap-oob="outerHTML"{% endif %}
+>
+  <div class="flex items-center gap-3">
+    <label class="flex items-center gap-2 cursor-pointer">
+      <input type="checkbox" class="checkbox checkbox-sm" id="bundles-select-all-checkbox" />
+      <span class="text-sm bundles-select-all-label select-all-label">{% translate "Select All Files" %}</span>
+    </label>
+    <span id="bundles-selection-count" class="text-sm text-base-content/60"></span>
+  </div>
+  <button id="bundles-download-selected" class="btn btn-primary btn-sm" disabled>
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+    </svg>
+    <span class="btn-text">{% translate "Download Selected" %}</span>
+  </button>
+</div>

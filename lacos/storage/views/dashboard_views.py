@@ -662,10 +662,15 @@ def acl_admin_dashboard(request):
 def acl_dashboard_panel(request):
     """HTMX endpoint rendering the overview dashboard panel."""
     overview = _build_acl_overview_context()
+    records_scope = request.GET.get("scope", "collection")
+    template_name = "dashboard/partials/acl_dashboard_overview.html"
+    if request.headers.get("HX-Request"):
+        template_name = "dashboard/partials/acl_dashboard_panel_response.html"
+
     return render(
         request,
-        "dashboard/partials/acl_dashboard_overview.html",
-        {**overview, "sync_summary": None},
+        template_name,
+        {**overview, "sync_summary": None, "records_scope": records_scope},
     )
 
 
@@ -679,9 +684,13 @@ def acl_records_panel(request):
         records_context = _build_acl_table_context(request, "collection")
         scope = "collection"
 
+    template_name = "dashboard/partials/acl_records_panel.html"
+    if request.headers.get("HX-Request"):
+        template_name = "dashboard/partials/acl_records_panel_response.html"
+
     return render(
         request,
-        "dashboard/partials/acl_records_panel.html",
+        template_name,
         {
             "records_context": records_context,
             "records_scope": scope,
