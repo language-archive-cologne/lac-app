@@ -21,6 +21,7 @@ from lacos.blam.models.collection.collection_structural_info import (
 )
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import (
+    BundleAdditionalMetadataFile,
     BundleResources,
     MediaResource,
     OtherResource,
@@ -343,25 +344,30 @@ class ResourceResolverService:
         Get all resource IDs that belong to a bundle.
 
         Returns a set of resource UUIDs (as strings) for all MediaResource,
-        WrittenResource, and OtherResource objects linked to this bundle.
+        WrittenResource, OtherResource, and BundleAdditionalMetadataFile objects
+        linked to this bundle.
         """
         resource_ids: set[str] = set()
 
         try:
             bundle_resources = BundleResources.objects.filter(bundle=bundle).first()
-            if not bundle_resources:
+            if bundle_resources:
+                # Collect IDs from all bundle resource types
+                for media_resource in bundle_resources.bundle_media_resources.all():
+                    resource_ids.add(str(media_resource.id))
+
+                for written_resource in bundle_resources.bundle_written_resources.all():
+                    resource_ids.add(str(written_resource.id))
+
+                for other_resource in bundle_resources.bundle_other_resources.all():
+                    resource_ids.add(str(other_resource.id))
+            else:
                 logger.debug(f"No BundleResources found for bundle {bundle.id}")
-                return resource_ids
 
-            # Collect IDs from all resource types
-            for media_resource in bundle_resources.bundle_media_resources.all():
-                resource_ids.add(str(media_resource.id))
-
-            for written_resource in bundle_resources.bundle_written_resources.all():
-                resource_ids.add(str(written_resource.id))
-
-            for other_resource in bundle_resources.bundle_other_resources.all():
-                resource_ids.add(str(other_resource.id))
+            structural_info = bundle.structural_info.first()
+            if structural_info:
+                for metadata_file in structural_info.additional_metadata_files.all():
+                    resource_ids.add(str(metadata_file.id))
 
         except Exception as e:
             logger.error(f"Error getting bundle resource IDs: {e}")
@@ -437,7 +443,7 @@ class ResourceResolverService:
 
     def _find_resource_by_id(
         self, resource_id: str
-    ) -> MediaResource | WrittenResource | OtherResource | None:
+    ) -> MediaResource | WrittenResource | OtherResource | BundleAdditionalMetadataFile | None:
         """
         Find a resource by its UUID across all resource types.
 
@@ -463,10 +469,16 @@ class ResourceResolverService:
         except OtherResource.DoesNotExist:
             pass
 
+        try:
+            return BundleAdditionalMetadataFile.objects.get(id=resource_id)
+        except BundleAdditionalMetadataFile.DoesNotExist:
+            pass
+
         return None
 
     def _get_s3_location(
-        self, resource: MediaResource | WrittenResource | OtherResource
+        self,
+        resource: MediaResource | WrittenResource | OtherResource | BundleAdditionalMetadataFile,
     ) -> S3ResourceLocation | None:
         """
         Get the S3 location for a resource.

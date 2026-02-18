@@ -576,14 +576,17 @@
               <div>
                 {% if can_read_bundle %}
                 <div class="flex space-x-2">
-                  <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=metadata_file.id %}"
-                     class="btn btn-primary btn-xs"
-                     target="_blank">
+                  <button
+                     type="button"
+                     class="btn btn-primary btn-xs single-download-btn"
+                     data-bucket="{{ metadata_file.s3_location.s3_bucket|default:'' }}"
+                     data-key="{{ metadata_file.s3_location.s3_key|default:'' }}"
+                     data-filename="{{ metadata_file.file_name }}">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
                     {% translate "Download" %}
-                  </a>
+                  </button>
 
                   {% if metadata_file|is_media_type:"audio" or metadata_file|is_media_type:"video" %}
                   <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=metadata_file.id %}?action=play"
@@ -793,7 +796,7 @@
   </script>
 
   {% if can_read_bundle %}
-    {% if media_resources or written_resources or other_resources %}
+    {% if media_resources or written_resources or other_resources or metadata_files %}
       {% include "dashboard/partials/bundle_download_modal.html" %}
       {% include "dashboard/partials/single_file_download_modal.html" %}
     {% endif %}
@@ -803,7 +806,7 @@
 {% block inline_javascript %}
 {{ block.super }}
 {% if can_read_bundle %}
-{% if media_resources or written_resources or other_resources %}
+{% if media_resources or written_resources or other_resources or metadata_files %}
 <script type="module">
 import { ResourceSelector } from '{% static "js/src/download/resource-selector.js" %}';
 
@@ -828,24 +831,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 );
             }
         });
-
-        // Single file download buttons - open modal with ALTCHA (delegated for HTMX content)
-        document.addEventListener('click', (event) => {
-            const btn = event.target.closest('.single-download-btn');
-            if (!btn) return;
-
-            event.preventDefault();
-
-            if (!window.singleFileDownloadModal) return;
-
-            const bucket = btn.dataset.bucket;
-            const key = btn.dataset.key;
-            if (!bucket || !key) return;
-
-            const filename = btn.dataset.filename || key.split('/').pop() || 'download';
-            window.singleFileDownloadModal.open({ bucket, key, filename });
-        });
     }
+
+    // Single file download buttons - open modal with ALTCHA (delegated for HTMX content)
+    document.addEventListener('click', (event) => {
+        const btn = event.target.closest('.single-download-btn');
+        if (!btn) return;
+
+        event.preventDefault();
+
+        if (!window.singleFileDownloadModal) return;
+
+        const bucket = btn.dataset.bucket;
+        const key = btn.dataset.key;
+        if (!bucket || !key) return;
+
+        const filename = btn.dataset.filename || key.split('/').pop() || 'download';
+        window.singleFileDownloadModal.open({ bucket, key, filename });
+    });
 });
 </script>
 {% endif %}

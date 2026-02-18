@@ -470,6 +470,51 @@ class ResourceMappingService(BaseStorageService):
                 logger.info(f"Mapped Bundle {bundle.id} to S3 location: {bucket}/{bundle_key_prefix}")
                 total_mapped += 1
 
+                # Derive the base key for bundle files once so both additional
+                # metadata files and regular resources use the same OCFL location.
+                resources_base_key = self._get_ocfl_resource_base_path(bundle.import_object_key)
+                if not resources_base_key:
+                    try:
+                        resource_pattern = discovery_service.get_resource_path_pattern()
+                        prefix_pattern = resource_pattern.rsplit('{resource_filename}', 1)[0]
+                        resources_base_key = prefix_pattern.format(
+                            collection_id=collection_id,
+                            bundle_id=bundle.id,
+                        )
+                        logger.warning(
+                            f"Bundle {bundle.id} has no import_object_key, "
+                            f"falling back to UUID-based resource path: {resources_base_key}"
+                        )
+                    except Exception as format_e:
+                        logger.error(
+                            f"Could not format resource base key for bundle {bundle.id}: {format_e}"
+                        )
+                        resources_base_key = None
+
+                # 2.5 Map bundle additional metadata files.
+                structural_info = bundle.structural_info.first()
+                if structural_info and resources_base_key:
+                    metadata_count = 0
+                    for metadata_file in structural_info.additional_metadata_files.all():
+                        if hasattr(metadata_file, 'file_name') and metadata_file.file_name:
+                            try:
+                                resource_s3_key = f"{resources_base_key}{metadata_file.file_name}"
+                                self.register_s3_location(metadata_file, bucket, resource_s3_key)
+                                metadata_count += 1
+                                total_mapped += 1
+                            except Exception as meta_map_e:
+                                logger.error(
+                                    f"Failed to map bundle metadata file "
+                                    f"{getattr(metadata_file, 'id', 'N/A')} "
+                                    f"(name: {metadata_file.file_name}): {meta_map_e}",
+                                    exc_info=False,
+                                )
+                    if metadata_count:
+                        logger.info(
+                            f"Mapped {metadata_count} additional metadata files "
+                            f"for Bundle {bundle.id}"
+                        )
+
                 # 3. Map Resources using the BundleResources ID
                 if bundle_resources_id:
                     try:
@@ -477,18 +522,12 @@ class ResourceMappingService(BaseStorageService):
                         bundle_resources = BundleResources.objects.get(id=bundle_resources_id)
                         logger.info(f"Found BundleResources object (ID: {bundle_resources.id}) for Bundle {bundle.id} via passed ID.")
 
-                        # Get base S3 key for resources using OCFL path
-                        resources_base_key = self._get_ocfl_resource_base_path(bundle.import_object_key)
                         if not resources_base_key:
-                            # Fallback to UUID-based path if import_object_key is not set
-                            try:
-                                resource_pattern = discovery_service.get_resource_path_pattern()
-                                prefix_pattern = resource_pattern.rsplit('{resource_filename}', 1)[0]
-                                resources_base_key = prefix_pattern.format(collection_id=collection_id, bundle_id=bundle.id)
-                                logger.warning(f"Bundle {bundle.id} has no import_object_key, falling back to UUID-based resource path: {resources_base_key}")
-                            except Exception as format_e:
-                                logger.error(f"Could not format resource base key for bundle {bundle.id}: {format_e}")
-                                continue # Skip resource mapping for this bundle if key fails
+                            logger.warning(
+                                f"No resources base path available for Bundle {bundle.id}. "
+                                "Skipping resource mapping."
+                            )
+                            continue
 
                         resource_count = 0
                         # Map media resources

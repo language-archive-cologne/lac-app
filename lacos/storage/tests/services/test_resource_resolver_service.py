@@ -9,6 +9,7 @@ from django.contrib.contenttypes.models import ContentType
 
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import (
+    BundleAdditionalMetadataFile,
     BundleResources,
     BundleStructuralInfo,
     MediaResource,
@@ -84,6 +85,20 @@ def other_resource(bundle_resources):
     )
     bundle_resources.bundle_other_resources.add(resource)
     return resource
+
+
+@pytest.fixture
+def bundle_metadata_resource(bundle):
+    """Create a bundle additional metadata file linked to bundle structural info."""
+    metadata_file = BundleAdditionalMetadataFile.objects.create(
+        file_name="metadata.xml",
+        file_pid="https://hdl.handle.net/12345/metadata",
+        mime_type="application/xml",
+        is_metadata_for="https://hdl.handle.net/12345/test_video",
+    )
+    structural_info = bundle.structural_info.first()
+    structural_info.additional_metadata_files.add(metadata_file)
+    return metadata_file
 
 
 @pytest.fixture
@@ -375,6 +390,37 @@ class TestResourceResolverService:
 
         filenames = {r.filename for r in resolved}
         assert filenames == {"test_video.mp4", "transcript.txt", "data.json"}
+
+    def test_resolve_bundle_additional_metadata_resource(
+        self,
+        bundle,
+        bundle_metadata_resource,
+        user,
+        mock_acl_allowed,
+        mock_presigned_url,
+    ):
+        """Bundle additional metadata files should resolve like other bundle resources."""
+        content_type = ContentType.objects.get_for_model(bundle_metadata_resource)
+        S3ResourceLocation.objects.create(
+            content_type=content_type,
+            object_id=str(bundle_metadata_resource.id),
+            s3_bucket="test-bucket",
+            s3_key="collections/test/bundles/test/resources/metadata.xml",
+            size_bytes=2048,
+            resource_pid=bundle_metadata_resource.file_pid,
+        )
+
+        service = ResourceResolverService()
+        resolved, errors = service.resolve_resources(
+            bundle_id=str(bundle.id),
+            resource_ids=[str(bundle_metadata_resource.id)],
+            user=user,
+        )
+
+        assert len(errors) == 0
+        assert len(resolved) == 1
+        assert resolved[0].resource_id == str(bundle_metadata_resource.id)
+        assert resolved[0].filename == "metadata.xml"
 
 
 @pytest.mark.django_db

@@ -16,7 +16,8 @@ from lacos.blam.models.bundle.bundle_structural_info import (
     BundleResources,
     MediaResource,
     WrittenResource,
-    OtherResource
+    OtherResource,
+    BundleAdditionalMetadataFile,
 )
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
 from lacos.blam.models.collection.collection_structural_info import CollectionStructuralInfo
@@ -411,6 +412,53 @@ def test_map_collection_hierarchy_exception_in_bundle_mapping(mock_discovery_ser
     # Verify method calls
     mock_discovery_instance.form_collection_path.assert_called_once_with(collection_id)
     mock_discovery_instance.form_bundle_path.assert_called_once_with(collection_id, bundle_id)
+
+
+@pytest.mark.django_db
+@patch('lacos.storage.services.file_discovery_service.FileDiscoveryService')
+def test_map_collection_hierarchy_maps_bundle_additional_metadata(
+    mock_discovery_service,
+    resource_mapping_service,
+    db_objects,
+):
+    """Bundle additional metadata files should be registered in S3ResourceLocation."""
+    collection = db_objects['collection']
+    bundle = db_objects['bundle']
+    collection_id = collection.id
+    bundle_id = bundle.id
+
+    metadata_file = BundleAdditionalMetadataFile.objects.create(
+        file_name="bundle-metadata.xml",
+        mime_type="application/xml",
+        file_pid=f"hdl:test/{uuid4()}",
+        is_metadata_for="hdl:test/resource",
+    )
+    db_objects['struct_info'].additional_metadata_files.add(metadata_file)
+
+    mock_discovery_instance = MagicMock()
+    mock_discovery_service.return_value = mock_discovery_instance
+
+    mock_discovery_instance.production_bucket = "test-bucket"
+    mock_discovery_instance.form_collection_path.return_value = f"collections/{collection_id}"
+    mock_discovery_instance.form_bundle_path.return_value = f"collections/{collection_id}/bundles/{bundle_id}"
+    mock_discovery_instance.get_resource_path_pattern.return_value = (
+        "collections/{collection_id}/bundles/{bundle_id}/resources/{resource_filename}"
+    )
+
+    mapped_count = resource_mapping_service.map_collection_hierarchy(collection.id)
+
+    # 1 Collection + 1 Bundle + 3 regular resources + 1 bundle metadata file
+    assert mapped_count == 6
+
+    metadata_ct = ContentType.objects.get_for_model(BundleAdditionalMetadataFile)
+    metadata_loc = S3ResourceLocation.objects.get(
+        content_type=metadata_ct,
+        object_id=metadata_file.id,
+    )
+    assert metadata_loc.s3_bucket == "test-bucket"
+    assert metadata_loc.s3_key == (
+        f"collections/{collection_id}/bundles/{bundle_id}/resources/{metadata_file.file_name}"
+    )
 
 # --- Add more tests for other methods like register_s3_location if needed ---
 
