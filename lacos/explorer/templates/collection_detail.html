@@ -219,21 +219,24 @@
 
         <div>
           <h2 class="text-xl font-light text-base-content mb-4 tracking-tight">{% translate "Publication Information" %}</h2>
+          {% with publication=collection.publication_info.first %}
           <dl class="space-y-4">
-            {% if collection.publication_info.first and collection.publication_info.first.publication_year %}
+            {% if publication and publication.publication_year %}
               <div>
                 <dt class="text-sm font-semibold text-base-content/70 mb-1.5">{% translate "Publication Year" %}</dt>
-                <dd class="text-sm text-base-content">{{ collection.publication_info.first.publication_year }}</dd>
+                <dd class="text-sm text-base-content">{{ publication.publication_year }}</dd>
               </div>
             {% endif %}
 
-            {% if collection.publication_info.first and collection.publication_info.first.creators.all %}
+            {% if publication and publication.creators.all %}
               <div>
-                <dt class="text-sm font-semibold text-base-content/70 mb-1.5">{% translate "Researchers" %}</dt>
+                <dt class="text-sm font-semibold text-base-content/70 mb-1.5">{% translate "Creators" %}</dt>
                 <dd class="text-sm text-base-content">
-                  {% for creator in collection.publication_info.first.creators.all %}
+                  {% for creator in publication.creators.all %}
                     <div class="{% if not forloop.first %}mt-3 pt-3 border-t border-base-200{% endif %}">
-                      <div class="font-medium">{{ creator.given_name }} {{ creator.family_name }}</div>
+                      <div class="font-medium">
+                        {% if creator.given_name %}{{ creator.given_name }} {% endif %}{{ creator.family_name }}
+                      </div>
                       {% if creator.affiliation %}
                         <div class="text-xs text-base-content/60 mt-0.5">{{ creator.affiliation }}</div>
                       {% endif %}
@@ -245,7 +248,79 @@
                 </dd>
               </div>
             {% endif %}
+
+            {% if publication and publication.contributors.all %}
+              {% with contributors=publication.contributors.all %}
+              <div>
+                <dt class="text-sm font-semibold text-base-content/70 mb-1.5">{% translate "Contributors" %}</dt>
+                <dd class="text-sm text-base-content">
+                  {% for contributor in contributors|slice:":3" %}
+                    <div class="{% if not forloop.first %}mt-3 pt-3 border-t border-base-200{% endif %}">
+                      <div class="font-medium">
+                        {% if contributor.given_name %}{{ contributor.given_name }} {% endif %}{{ contributor.family_name }}
+                      </div>
+                      {% if contributor.role %}
+                        <div class="text-xs text-base-content/70 mt-0.5">{{ contributor.role|normalize_role }}</div>
+                      {% endif %}
+                      {% if contributor.affiliation %}
+                        <div class="text-xs text-base-content/60 mt-0.5">{{ contributor.affiliation }}</div>
+                      {% endif %}
+                      {% if contributor.name_identifier %}
+                        {{ contributor|creator_identifier_display }}
+                      {% endif %}
+                    </div>
+                  {% endfor %}
+                  {% if contributors|length > 3 %}
+                    <button
+                      type="button"
+                      class="btn btn-ghost btn-sm mt-3"
+                      onclick="document.getElementById('collection-contributors-modal').showModal()"
+                    >
+                      {% translate "See all contributors" %} ({{ contributors|length }})
+                    </button>
+                  {% endif %}
+                </dd>
+              </div>
+
+              {% if contributors|length > 3 %}
+                <dialog id="collection-contributors-modal" class="modal">
+                  <div class="modal-box max-w-2xl">
+                    <h3 class="text-lg font-semibold">
+                      {% translate "Contributors" %} ({{ contributors|length }})
+                    </h3>
+                    <div class="mt-4 max-h-[70vh] overflow-y-auto pr-1 space-y-3">
+                      {% for contributor in contributors %}
+                        <div class="{% if not forloop.first %}pt-3 border-t border-base-200{% endif %}">
+                          <div class="font-medium">
+                            {% if contributor.given_name %}{{ contributor.given_name }} {% endif %}{{ contributor.family_name }}
+                          </div>
+                          {% if contributor.role %}
+                            <div class="text-xs text-base-content/70 mt-0.5">{{ contributor.role|normalize_role }}</div>
+                          {% endif %}
+                          {% if contributor.affiliation %}
+                            <div class="text-xs text-base-content/60 mt-0.5">{{ contributor.affiliation }}</div>
+                          {% endif %}
+                          {% if contributor.name_identifier %}
+                            {{ contributor|creator_identifier_display }}
+                          {% endif %}
+                        </div>
+                      {% endfor %}
+                    </div>
+                    <div class="modal-action">
+                      <form method="dialog">
+                        <button class="btn">{% translate "Close" %}</button>
+                      </form>
+                    </div>
+                  </div>
+                  <form method="dialog" class="modal-backdrop">
+                    <button>{% translate "close" %}</button>
+                  </form>
+                </dialog>
+              {% endif %}
+              {% endwith %}
+            {% endif %}
           </dl>
+          {% endwith %}
         </div>
       </div>
 

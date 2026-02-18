@@ -262,6 +262,7 @@ class CollectionDetailView(HandleLookupMixin, DetailView):
             "general_info__keywords",
             "publication_info",
             "publication_info__creators",
+            "publication_info__contributors",
             "structural_info",
             "structural_info__additional_metadata_files",
             "administrative_info",

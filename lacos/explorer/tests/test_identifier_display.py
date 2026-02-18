@@ -125,11 +125,13 @@ class TestFormatIdentifierHtml:
 
     # --- EMAIL ---
 
-    def test_email(self):
+    def test_email_not_rendered(self):
         html = format_identifier_html("user@example.com", "EMAIL")
-        assert "Email:" in html
-        assert "user@example.com" in html
-        assert 'href="mailto:user@example.com"' in html
+        assert html == ""
+
+    def test_email_not_rendered_for_mailto_value(self):
+        html = format_identifier_html("mailto:user@example.com", "EMAIL")
+        assert html == ""
 
     def test_email_no_target_blank(self):
         html = format_identifier_html("user@example.com", "EMAIL")

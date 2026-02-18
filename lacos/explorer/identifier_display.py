@@ -57,6 +57,10 @@ def format_identifier_html(identifier: str, identifier_type: str) -> str:
         return ""
 
     id_type = (identifier_type or "").upper()
+    # Email addresses should not be rendered in public metadata blocks.
+    if id_type == "EMAIL":
+        return ""
+
     short_id = extract_short_id(identifier, id_type)
     url = build_full_url(short_id, id_type)
     escaped_id = escape(short_id)
@@ -72,11 +76,6 @@ def format_identifier_html(identifier: str, identifier_type: str) -> str:
         return (
             f'<a href="{escape(url)}" target="_blank" rel="noopener" class="{link_classes}">'
             f"ISNI: {escaped_id}</a>"
-        )
-    elif id_type == "EMAIL" and url:
-        return (
-            f'<a href="{escape(url)}" class="{link_classes}">'
-            f"Email: {escaped_id}</a>"
         )
     else:
         return f'<span class="inline-flex items-center text-xs text-base-content/60 mt-1">{escaped_id}</span>'

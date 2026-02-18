@@ -1,3 +1,4 @@
+import ast
 import re
 from django import template
 from django.utils.html import conditional_escape, mark_safe
@@ -186,6 +187,28 @@ def split_csv(value):
     if not value:
         return []
     return [part.strip() for part in str(value).split(",") if part.strip()]
+
+
+@register.filter
+def normalize_role(value):
+    """Normalize role values that may be stored as list-like strings."""
+    if not value:
+        return ""
+    if isinstance(value, (list, tuple)):
+        return ", ".join(str(item).strip() for item in value if str(item).strip())
+
+    text = str(value).strip()
+    if not text:
+        return ""
+
+    try:
+        parsed = ast.literal_eval(text)
+    except (ValueError, SyntaxError):
+        return text
+
+    if isinstance(parsed, (list, tuple)):
+        return ", ".join(str(item).strip() for item in parsed if str(item).strip())
+    return str(parsed).strip()
 
 
 @register.filter
