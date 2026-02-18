@@ -140,11 +140,33 @@ class ResourceMappingService(BaseStorageService):
     
     def resolve_pid_to_s3(self, pid_url):
         """Resolve a PID URL to an S3 location"""
-        try:
-            location = S3ResourceLocation.objects.get(resource_pid=pid_url)
-            return location
-        except S3ResourceLocation.DoesNotExist:
+        if not pid_url:
             return None
+
+        normalized = str(pid_url).strip()
+        if not normalized:
+            return None
+
+        candidates = {normalized}
+
+        def _suffix_from_handle(value: str) -> Optional[str]:
+            if value.startswith("hdl:"):
+                return value[4:]
+            marker = "hdl.handle.net/"
+            if marker in value:
+                return value.split(marker, 1)[1].lstrip("/")
+            return None
+
+        suffix = _suffix_from_handle(normalized)
+        if suffix:
+            candidates.add(f"hdl:{suffix}")
+            candidates.add(f"https://hdl.handle.net/{suffix}")
+            candidates.add(f"http://hdl.handle.net/{suffix}")
+
+        location = S3ResourceLocation.objects.filter(
+            resource_pid__in=list(candidates)
+        ).first()
+        return location
     
     def register_s3_location(self, obj, bucket, key=None, pid_url=None, fetch_metadata=True):
         """

@@ -529,3 +529,33 @@ def test_create_resource_location_for_multiple_object_types(mock_s3):
     assert service.get_s3_location(objects['collection']) == collection_location
     assert service.get_s3_location(objects['bundle']) == bundle_location
     assert service.get_s3_location(media_resource) == resource_location
+
+
+@pytest.mark.django_db
+def test_resolve_pid_to_s3_accepts_hdl_and_handle_url_forms():
+    """PID resolution should work for both hdl: and hdl.handle.net forms."""
+    collection = Collection.objects.create(identifier="pid-form-collection")
+    bundle = Bundle.objects.create(identifier="pid-form-bundle")
+    BundleStructuralInfo.objects.create(bundle=bundle, is_member_of_collection=collection)
+    resources = BundleResources.objects.create(bundle=bundle)
+    media_resource = MediaResource.objects.create(
+        file_name="pid-form.wav",
+        mime_type="audio/wav",
+        file_pid="hdl:11341/0000-0000-0000-3D03",
+    )
+    resources.bundle_media_resources.add(media_resource)
+
+    content_type = ContentType.objects.get_for_model(media_resource)
+    location = S3ResourceLocation.objects.create(
+        content_type=content_type,
+        object_id=media_resource.id,
+        resource_pid="https://hdl.handle.net/11341/0000-0000-0000-3D03",
+        s3_bucket="test-bucket",
+        s3_key="any/path/Wooinap_family_situation.imdi",
+    )
+
+    service = ResourceMappingService(skip_bucket_check=True)
+    resolved = service.resolve_pid_to_s3("hdl:11341/0000-0000-0000-3D03")
+
+    assert resolved is not None
+    assert resolved.id == location.id
