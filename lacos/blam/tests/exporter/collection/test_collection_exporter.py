@@ -16,6 +16,7 @@ from lacos.blam.models.collection.collection_general_info import (
 from lacos.blam.models.collection.collection_publication_info import (
     CollectionPublicationInfo,
     CollectionCreator,
+    CollectionContributor,
 )
 from lacos.blam.models.collection.collection_administrative_info import (
     CollectionAdministrativeInfo,
@@ -243,6 +244,16 @@ def _find_resource_proxies(xml_output: str) -> list[ET.Element]:
     return root.findall(f".//{{{CMD_NS}}}ResourceProxy")
 
 
+def _find_creator_name_identifiers(xml_output: str) -> list[ET.Element]:
+    root = ET.fromstring(xml_output)
+    return root.findall(f".//{{{CMD_NS}}}CreatorNameIdentifier")
+
+
+def _find_contributor_name_identifiers(xml_output: str) -> list[ET.Element]:
+    root = ET.fromstring(xml_output)
+    return root.findall(f".//{{{CMD_NS}}}ContributorNameIdentifier")
+
+
 @pytest.mark.django_db
 def test_export_resource_proxy_list_with_bundles(sample_collection):
     """Bundles appear as ResourceProxy entries with Metadata type."""
@@ -313,3 +324,56 @@ def test_export_contains_keywords(sample_collection):
 
     assert "linguistics" in xml_output
     assert "fieldwork" in xml_output
+
+
+@pytest.mark.django_db
+def test_export_creator_identifier_type_normalizes_lowercase_value(sample_collection):
+    """Lowercase legacy identifier types should still export IdentifierType."""
+    creator = sample_collection.publication_info.first().creators.first()
+    creator.name_identifier = "https://orcid.org/0000-0001-2345-6789"
+    creator.name_identifier_type = "orcid"
+    creator.save(update_fields=["name_identifier", "name_identifier_type"])
+
+    exporter = CollectionExporter()
+    xml_output = exporter.export(sample_collection)
+    creator_identifiers = _find_creator_name_identifiers(xml_output)
+
+    assert len(creator_identifiers) == 1
+    assert creator_identifiers[0].get("IdentifierType") == "ORCID"
+
+
+@pytest.mark.django_db
+def test_export_contributor_identifier_type_normalizes_lowercase_value(sample_collection):
+    """Contributor identifier types should export with uppercase schema tokens."""
+    pub_info = sample_collection.publication_info.first()
+    contributor = CollectionContributor.objects.create(
+        family_name="Doe",
+        given_name="Jane",
+        contributor_display_name="Jane Doe",
+        name_identifier="https://isni.org/isni/000000012146438X",
+        name_identifier_type="isni",
+    )
+    pub_info.contributors.add(contributor)
+
+    exporter = CollectionExporter()
+    xml_output = exporter.export(sample_collection)
+    contributor_identifiers = _find_contributor_name_identifiers(xml_output)
+
+    assert len(contributor_identifiers) == 1
+    assert contributor_identifiers[0].get("IdentifierType") == "ISNI"
+
+
+@pytest.mark.django_db
+def test_export_creator_identifier_type_defaults_to_other_for_unknown_value(sample_collection):
+    """Unknown identifier types should not drop IdentifierType in XML export."""
+    creator = sample_collection.publication_info.first().creators.first()
+    creator.name_identifier = "https://example.com/id/creator-1"
+    creator.name_identifier_type = "legacy"
+    creator.save(update_fields=["name_identifier", "name_identifier_type"])
+
+    exporter = CollectionExporter()
+    xml_output = exporter.export(sample_collection)
+    creator_identifiers = _find_creator_name_identifiers(xml_output)
+
+    assert len(creator_identifiers) == 1
+    assert (creator_identifiers[0].get("IdentifierType") or "").upper() == "OTHER"

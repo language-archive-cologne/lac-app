@@ -85,15 +85,16 @@ def _export_creator_name_identifier(creator: CollectionCreator) -> CreatorNameId
 
 
 def _map_creator_id_type(id_type: Optional[str]) -> Optional[CreatorNameIdentifierIdentifierType]:
-    if not id_type:
+    normalized_type = _normalize_person_identifier_type(id_type)
+    if not normalized_type:
         return None
     mapping = {
-        PersonIdentifierTypeChoices.ORCID: CreatorNameIdentifierIdentifierType.ORCID,
-        PersonIdentifierTypeChoices.ISNI: CreatorNameIdentifierIdentifierType.ISNI,
-        PersonIdentifierTypeChoices.EMAIL: CreatorNameIdentifierIdentifierType.EMAIL,
-        PersonIdentifierTypeChoices.OTHER: CreatorNameIdentifierIdentifierType.OTHER,
+        PersonIdentifierTypeChoices.ORCID.value: CreatorNameIdentifierIdentifierType.ORCID,
+        PersonIdentifierTypeChoices.ISNI.value: CreatorNameIdentifierIdentifierType.ISNI,
+        PersonIdentifierTypeChoices.EMAIL.value: CreatorNameIdentifierIdentifierType.EMAIL,
+        PersonIdentifierTypeChoices.OTHER.value: CreatorNameIdentifierIdentifierType.OTHER,
     }
-    return mapping.get(id_type)
+    return mapping.get(normalized_type, CreatorNameIdentifierIdentifierType.OTHER)
 
 
 def _export_contributors(contributors: QuerySet[CollectionContributor]) -> ContributorsType:
@@ -139,12 +140,20 @@ def _export_contributor_name_identifier(contributor: CollectionContributor) -> C
 
 
 def _map_contributor_id_type(id_type: Optional[str]) -> Optional[ContributorNameIdentifierIdentifierType]:
-    if not id_type:
+    normalized_type = _normalize_person_identifier_type(id_type)
+    if not normalized_type:
         return None
     mapping = {
-        PersonIdentifierTypeChoices.ORCID: ContributorNameIdentifierIdentifierType.ORCID,
-        PersonIdentifierTypeChoices.ISNI: ContributorNameIdentifierIdentifierType.ISNI,
-        PersonIdentifierTypeChoices.EMAIL: ContributorNameIdentifierIdentifierType.EMAIL,
-        PersonIdentifierTypeChoices.OTHER: ContributorNameIdentifierIdentifierType.OTHER,
+        PersonIdentifierTypeChoices.ORCID.value: ContributorNameIdentifierIdentifierType.ORCID,
+        PersonIdentifierTypeChoices.ISNI.value: ContributorNameIdentifierIdentifierType.ISNI,
+        PersonIdentifierTypeChoices.EMAIL.value: ContributorNameIdentifierIdentifierType.EMAIL,
+        PersonIdentifierTypeChoices.OTHER.value: ContributorNameIdentifierIdentifierType.OTHER,
     }
-    return mapping.get(id_type)
+    return mapping.get(normalized_type, ContributorNameIdentifierIdentifierType.OTHER)
+
+
+def _normalize_person_identifier_type(id_type: Optional[str]) -> Optional[str]:
+    """Normalize identifier type tokens to schema-compatible uppercase values."""
+    if not id_type:
+        return None
+    return str(id_type).strip().upper()
