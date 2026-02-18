@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load i18n l10n %}
 
 <div class="flex items-center justify-between p-4 border-b border-base-300">
   <h3 class="text-lg font-semibold text-base-content">{{ title }}</h3>
@@ -18,8 +18,8 @@
 
 <script>
   (function() {
-    const lat = {{ lat }};
-    const lng = {{ lng }};
+    const lat = {{ lat|unlocalize }};
+    const lng = {{ lng|unlocalize }};
     const container = document.getElementById('map-container');
 
     const map = new maplibregl.Map({

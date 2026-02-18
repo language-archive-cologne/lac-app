@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load i18n l10n %}
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -30,8 +30,8 @@
     "name": "{{ bundle.formatted_location|escapejs }}"{% if bundle.geo_location %},
     "geo": {
       "@type": "GeoCoordinates",
-      "latitude": {{ bundle.geo_location.y }},
-      "longitude": {{ bundle.geo_location.x }}
+      "latitude": {{ bundle.geo_location.y|unlocalize }},
+      "longitude": {{ bundle.geo_location.x|unlocalize }}
     }{% endif %}
   }{% endif %}{% if media_resources or written_resources %},
   "distribution": [{% for resource in media_resources %}{"@type": "DataDownload", "name": "{{ resource.file_name|escapejs }}", "encodingFormat": "{{ resource.mime_type|escapejs }}"}{% if not forloop.last or written_resources %}, {% endif %}{% endfor %}{% for resource in written_resources %}{"@type": "DataDownload", "name": "{{ resource.file_name|escapejs }}", "encodingFormat": "{{ resource.mime_type|escapejs }}"}{% if not forloop.last %}, {% endif %}{% endfor %}]{% endif %},

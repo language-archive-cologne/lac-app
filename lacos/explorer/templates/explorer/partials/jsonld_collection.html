@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load i18n l10n %}
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -25,8 +25,8 @@
     "name": "{{ collection.formatted_location|escapejs }}"{% if collection.geo_location %},
     "geo": {
       "@type": "GeoCoordinates",
-      "latitude": {{ collection.geo_location.y }},
-      "longitude": {{ collection.geo_location.x }}
+      "latitude": {{ collection.geo_location.y|unlocalize }},
+      "longitude": {{ collection.geo_location.x|unlocalize }}
     }{% endif %}
   }{% endif %}{% if collection.publication_info.first %},
   {% if collection.publication_info.first.publication_year %}"datePublished": "{{ collection.publication_info.first.publication_year }}",{% endif %}

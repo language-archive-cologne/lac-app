@@ -1,4 +1,4 @@
-{% load static %}
+{% load static l10n %}
 <link rel="stylesheet" href="{% static 'vendor/js/maplibre-gl/maplibre-gl.css' %}" />
 <script src="{% static 'vendor/js/maplibre-gl/maplibre-gl.js' %}"></script>
 
@@ -14,8 +14,8 @@
 
 <script>
   (function() {
-    const lat = {{ lat|default:"50.9254927" }};
-    const lng = {{ lng|default:"6.9328194" }};
+    const lat = {{ lat|default:"50.9254927"|unlocalize }};
+    const lng = {{ lng|default:"6.9328194"|unlocalize }};
     const zoom = {{ zoom|default:"12" }};
 
     const map = new maplibregl.Map({
