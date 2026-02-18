@@ -136,8 +136,8 @@ def load_folder_contents(request, bucket_type, folder_path):
                 {
                     "listing": contents,
                     "folder_path": sanitized_path,
-                    "folder_path_param": folder_path,
-                    "bucket_type": bucket_name,
+                    "folder_path_param": sanitized_path or ROOT_FOLDER_SENTINEL,
+                    "bucket_type": bucket_type,
                     "max_keys": requested_max_keys,
                     "is_root": sanitized_path in ("", None),
                     "root_folder_sentinel": ROOT_FOLDER_SENTINEL,
