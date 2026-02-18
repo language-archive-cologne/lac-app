@@ -132,6 +132,25 @@ def resolve_resource_to_presigned(
     if not bucket_name or not object_key:
         return None
 
+    # Keep S3ResourceLocation aligned with the actually reachable object path so
+    # protected download authorization can match bucket/key reliably.
+    try:
+        if hasattr(resource_service, "register_s3_location"):
+            resource_service.register_s3_location(
+                resource,
+                bucket_name,
+                object_key,
+                pid_url=getattr(resource, "file_pid", None),
+                fetch_metadata=False,
+            )
+    except Exception as exc:
+        logger.debug(
+            "Could not sync resolved S3 location for %s (%s): %s",
+            getattr(resource, "id", "unknown"),
+            getattr(resource, "file_name", "unknown"),
+            exc,
+        )
+
     presigned_url = resource_service.generate_presigned_url(
         bucket_name,
         object_key,
