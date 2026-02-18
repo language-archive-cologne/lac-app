@@ -4,6 +4,7 @@ import json
 import logging
 from urllib.parse import unquote
 
+from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Count, Min, Prefetch, Q
 from django.http import Http404, HttpResponse, HttpResponseForbidden
@@ -127,6 +128,8 @@ class CollectionListView(ListView):
             collection.access_level = acl_result.access_level or 'restricted'
 
         context['map_markers_json'] = get_collection_map_markers(context['collection_list'])
+        context['main_map_style_url'] = settings.EXPLORER_MAIN_MAP_STYLE_URL
+        context['main_map_dark_style_url'] = settings.EXPLORER_MAIN_MAP_DARK_STYLE_URL
 
         # Cache language count as it rarely changes unless filtered.
         # Deduplicate by iso_639_3_code since languages are now per-collection.

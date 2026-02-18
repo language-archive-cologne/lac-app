@@ -109,6 +109,31 @@
 
     window.collectionsMap = null;
     window.collectionMarkers = [];
+    window.currentMainMapStyle = null;
+    const mainMapStyleUrl = '{{ main_map_style_url|escapejs }}';
+    const mainMapDarkStyleUrl = '{{ main_map_dark_style_url|escapejs }}';
+
+    function getCurrentMainMapStyle() {
+      const isDarkTheme = document.documentElement.getAttribute('data-theme') === 'dark';
+      return isDarkTheme ? mainMapDarkStyleUrl : mainMapStyleUrl;
+    }
+
+    if (!window.collectionsMapThemeObserver) {
+      window.collectionsMapThemeObserver = new MutationObserver(function() {
+        const map = window.collectionsMap;
+        if (!map) return;
+
+        const nextStyle = getCurrentMainMapStyle();
+        if (!nextStyle || nextStyle === window.currentMainMapStyle) return;
+
+        window.currentMainMapStyle = nextStyle;
+        map.setStyle(nextStyle);
+      });
+      window.collectionsMapThemeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-theme'],
+      });
+    }
 
     window.initCollectionsMap = function initCollectionsMap() {
       const container = document.getElementById('collections-map');
@@ -119,9 +144,12 @@
       const markers = rawMarkers ? JSON.parse(rawMarkers) : [];
       if (!markers.length) return;
 
+      const initialStyle = getCurrentMainMapStyle();
+      window.currentMainMapStyle = initialStyle;
+
       const map = new maplibregl.Map({
         container: 'collections-map',
-        style: 'https://tiles.openfreemap.org/styles/bright',
+        style: initialStyle,
         center: [20, 20],
         zoom: 0.7,
         renderWorldCopies: false,

@@ -338,6 +338,17 @@ COLLECTION_PATH_PATTERN = env("COLLECTION_PATH_PATTERN")
 BUNDLE_PATH_PATTERN = env("BUNDLE_PATH_PATTERN")
 RESOURCE_PATH_PATTERN = env("RESOURCE_PATH_PATTERN")
 
+# Explorer Map Configuration
+# ------------------------------------------------------------------------------
+EXPLORER_MAIN_MAP_STYLE_URL = env(
+    "EXPLORER_MAIN_MAP_STYLE_URL",
+    default="/static/vendor/maps/openfreemap/bright.json",
+)
+EXPLORER_MAIN_MAP_DARK_STYLE_URL = env(
+    "EXPLORER_MAIN_MAP_DARK_STYLE_URL",
+    default=EXPLORER_MAIN_MAP_STYLE_URL,
+)
+
 # Storage Configuration
 # ------------------------------------------------------------------------------
 # S3/MinIO bucket configuration for flexible workspace access
