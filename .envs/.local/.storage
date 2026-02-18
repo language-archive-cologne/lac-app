@@ -16,3 +16,6 @@ MULTIPART_THRESHOLD=104857600
 
 # Enable automatic ACL sync on startup for local dev
 ACL_SYNC_ON_STARTUP=true
+
+# Storage dashboard pagination (set low for easy local load-more testing)
+STORAGE_DASHBOARD_PAGE_SIZE=5

@@ -2,7 +2,7 @@
 Unit tests for StorageServiceContext.
 """
 from unittest.mock import Mock, MagicMock
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from lacos.storage.services.service_context import StorageServiceContext
 from lacos.storage.services.base_storage_service import BaseStorageService
@@ -50,3 +50,22 @@ class StorageServiceContextTest(TestCase):
         self.assertEqual(context.ingest_bucket, "ingest")
         self.assertEqual(context.production_bucket, "prod")
         self.assertFalse(context.is_minio)
+
+    @override_settings(
+        STORAGE_DASHBOARD_PAGINATION_ENABLED=True,
+        STORAGE_DASHBOARD_PAGE_SIZE=5,
+    )
+    def test_context_reads_dashboard_pagination_settings(self):
+        """Context should pick dashboard pagination values from Django settings."""
+        mock_service = Mock(spec=BaseStorageService)
+        mock_service.s3_client = Mock()
+        mock_service.workspace_buckets = ["test"]
+        mock_service.ingest_bucket = "ingest"
+        mock_service.production_bucket = "prod"
+        mock_service.is_minio = False
+        mock_service.endpoint_url = None
+
+        context = StorageServiceContext.from_base_service(mock_service)
+
+        self.assertTrue(context.dashboard_pagination_enabled)
+        self.assertEqual(context.dashboard_page_size, 5)

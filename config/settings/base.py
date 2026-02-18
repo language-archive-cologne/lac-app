@@ -354,6 +354,12 @@ S3_PRODUCTION_BUCKET = env("S3_PRODUCTION_BUCKET", default="lacos-production")
 
 # Cache configuration for storage subsystems
 STORAGE_ACL_CACHE_TIMEOUT = env.int("STORAGE_ACL_CACHE_TIMEOUT", default=900)
+# Dashboard listing pagination (used by archivist/storage folder browsing)
+STORAGE_DASHBOARD_PAGINATION_ENABLED = env.bool(
+    "STORAGE_DASHBOARD_PAGINATION_ENABLED",
+    default=True,
+)
+STORAGE_DASHBOARD_PAGE_SIZE = env.int("STORAGE_DASHBOARD_PAGE_SIZE", default=200)
 
 # Presigned URL Configuration
 # ------------------------------------------------------------------------------

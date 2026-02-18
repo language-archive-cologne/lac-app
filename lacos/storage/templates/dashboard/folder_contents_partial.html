@@ -227,9 +227,9 @@ Nested folder contents returned via HTMX when a folder is expanded.
         <button type="button"
                 class="btn btn-outline btn-sm w-full justify-center gap-2"
                 hx-get="{{ load_more_url }}?continuation_token={{ listing.next_token|urlencode }}{% if max_keys %}&max_keys={{ max_keys }}{% endif %}"
-                hx-target="closest li"
-                hx-swap="outerHTML"
-                hx-indicator="closest li .htmx-indicator">
+                hx-target="closest ul"
+                hx-swap="beforeend"
+                hx-on::after-request="if (event.detail.successful) { this.closest('li')?.remove(); }">
             <span class="loading loading-spinner loading-xs htmx-indicator"></span>
             <span>Load more</span>
         </button>
