@@ -357,7 +357,8 @@
                    class="btn btn-primary btn-sm single-download-btn"
                    data-bucket="{{ file.s3_location.s3_bucket|default:'' }}"
                    data-key="{{ file.s3_location.s3_key|default:'' }}"
-                   data-filename="{{ file.file_name }}">
+                   data-filename="{{ file.file_name }}"
+                   data-resource-url="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=file.file_pid %}">
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
@@ -650,11 +651,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const bucket = btn.dataset.bucket;
         const key = btn.dataset.key;
         if (!bucket || !key) {
+            const resourceUrl = btn.dataset.resourceUrl;
             console.info('[single-download] missing storage mapping', {
                 filename,
                 bucket: bucket || null,
                 key: key || null,
+                resourceUrl: resourceUrl || null,
             });
+
+            if (resourceUrl && typeof htmx !== 'undefined') {
+                const viewUrl = resourceUrl.includes('?')
+                    ? `${resourceUrl}&action=view`
+                    : `${resourceUrl}?action=view`;
+                htmx.ajax('GET', viewUrl, {
+                    target: '#resource-modal-content',
+                    swap: 'innerHTML',
+                });
+            }
             return;
         }
 
