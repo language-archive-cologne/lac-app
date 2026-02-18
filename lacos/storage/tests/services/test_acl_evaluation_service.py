@@ -135,6 +135,35 @@ def test_bundle_inherits_collection_acl():
 
 
 @pytest.mark.django_db
+def test_bundle_acl_takes_precedence_over_collection_acl():
+    collection = _create_collection()
+    bundle = _create_bundle(collection)
+
+    _store_acl(collection, [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}])
+    _store_acl(bundle, [{"agentClass": "foaf:Person", "agent": "http://example.org/users/bundle-only", "mode": ["acl:Read"]}])
+
+    allowed_user = get_user_model().objects.create_user(
+        username="bundle-only",
+        password="pass",
+        acl_agent_uri="http://example.org/users/bundle-only",
+    )
+    other_user = get_user_model().objects.create_user(username="outsider2", password="pass")
+
+    service = ACLEvaluationService()
+
+    allowed = service.evaluate(allowed_user, bundle)
+    assert allowed.allowed is True
+    assert allowed.source == bundle
+    assert allowed.access_level == ACL_LEVEL_RESTRICTED
+
+    denied = service.evaluate(other_user, bundle)
+    assert denied.allowed is False
+    assert denied.source == bundle
+    assert denied.default_applied is True
+    assert denied.access_level == ACL_LEVEL_RESTRICTED
+
+
+@pytest.mark.django_db
 def test_default_deny_when_no_rules_match():
     collection = _create_collection()
     bundle = _create_bundle(collection)
@@ -161,3 +190,15 @@ def test_archivist_override_allows_access():
     result = service.evaluate(user, bundle)
     assert result.allowed is True
     assert result.access_level == ACL_LEVEL_RESTRICTED
+
+
+@pytest.mark.django_db
+def test_missing_acl_denies_even_if_default_deny_flag_is_false():
+    collection = _create_collection(identifier="collection-no-acl")
+    service = ACLEvaluationService()
+    service.default_deny = False
+
+    result = service.evaluate(AnonymousUser(), collection)
+    assert result.allowed is False
+    assert result.default_applied is True
+    assert result.reason == "No ACL data found; default deny"

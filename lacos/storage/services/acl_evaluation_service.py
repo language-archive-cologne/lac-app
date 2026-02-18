@@ -128,22 +128,24 @@ class ACLEvaluationService:
                     access_level=last_access_level,
                 )
 
-        if self.default_deny:
+            # If ACL rules exist on the current object but none match, the
+            # current object is authoritative for this mode and principal.
+            # Do not fall back to parent ACLs in that case.
             return ACLCheckResult(
                 allowed=False,
                 matched_rule=None,
-                source=last_source,
+                source=source,
                 default_applied=True,
-                reason="No ACL rule matched; default deny",
+                reason="No ACL rule matched on object; default deny",
                 access_level=last_access_level,
             )
 
         return ACLCheckResult(
-            allowed=True,
+            allowed=False,
             matched_rule=None,
             source=last_source,
             default_applied=True,
-            reason="No ACL rule matched; default allow",
+            reason="No ACL data found; default deny",
             access_level=last_access_level,
         )
 
