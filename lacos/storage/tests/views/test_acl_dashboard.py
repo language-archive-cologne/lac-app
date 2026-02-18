@@ -160,6 +160,138 @@ def test_acl_admin_dashboard_requires_archivist(client, django_user_model):
     assert response.status_code == 403
 
 
+@pytest.mark.django_db
+@patch("lacos.storage.services.acl_service.ACLService.load_collection")
+def test_acl_load_single_htmx_returns_oob_table_and_status(
+    mock_load_collection, client, django_user_model
+):
+    from lacos.storage.services.acl_service import ACLResult
+
+    user = django_user_model.objects.create_user("loader", "loader@example.com", "pass")
+    _make_archivist(user)
+    client.force_login(user)
+
+    collection = Collection.objects.create(identifier="alpha-col")
+    ct = ContentType.objects.get_for_model(Collection)
+    ACLPermissions.objects.create(
+        content_type=ct,
+        object_id=str(collection.pk),
+        access_level=ACL_LEVEL_RESTRICTED,
+    )
+    mock_load_collection.return_value = ACLResult(
+        obj=collection,
+        bucket="mock-bucket",
+        key="alpha/acl.json",
+        success=True,
+    )
+
+    response = client.post(
+        reverse("storage:acl_load_single", args=["collection", str(collection.pk)]),
+        data={
+            "sort": "identifier",
+            "dir": "asc",
+            "page": "1",
+            "q": "alpha",
+            "status": "has_acl",
+            "access": ACL_LEVEL_RESTRICTED,
+        },
+        HTTP_HX_REQUEST="true",
+    )
+
+    assert response.status_code == 200
+    html = response.content.decode()
+    assert "Loaded ACL for collection" in html
+    assert 'id="acl-records-table"' in html
+    assert 'hx-swap-oob="outerHTML"' in html
+    assert 'value="alpha"' in html
+
+
+@pytest.mark.django_db
+@patch("lacos.storage.services.acl_service.ACLService.save_bundle")
+def test_acl_save_single_htmx_returns_oob_table_with_multiple_rows(
+    mock_save_bundle, client, django_user_model
+):
+    from lacos.storage.services.acl_service import ACLResult
+
+    user = django_user_model.objects.create_user("saver", "saver@example.com", "pass")
+    _make_archivist(user)
+    client.force_login(user)
+
+    first = Bundle.objects.create(identifier="vera-one")
+    second = Bundle.objects.create(identifier="vera-two")
+    ct = ContentType.objects.get_for_model(Bundle)
+    ACLPermissions.objects.create(
+        content_type=ct,
+        object_id=str(first.pk),
+        access_level=ACL_LEVEL_RESTRICTED,
+    )
+    ACLPermissions.objects.create(
+        content_type=ct,
+        object_id=str(second.pk),
+        access_level=ACL_LEVEL_RESTRICTED,
+    )
+    mock_save_bundle.return_value = ACLResult(
+        obj=first,
+        bucket="mock-bucket",
+        key="vera/acl.json",
+        success=True,
+    )
+
+    response = client.post(
+        reverse("storage:acl_save_single", args=["bundle", str(first.pk)]),
+        data={
+            "sort": "identifier",
+            "dir": "asc",
+            "page": "1",
+            "status": "all",
+            "access": "all",
+        },
+        HTTP_HX_REQUEST="true",
+    )
+
+    assert response.status_code == 200
+    html = response.content.decode()
+    assert "Saved ACL for bundle" in html
+    assert 'id="acl-records-table"' in html
+    assert 'hx-swap-oob="outerHTML"' in html
+    assert "vera-one" in html
+    assert "vera-two" in html
+
+
+@pytest.mark.django_db
+@patch("lacos.storage.services.acl_service.ACLService.load_collection")
+def test_acl_load_single_htmx_failure_keeps_oob_refresh_and_escapes_error(
+    mock_load_collection, client, django_user_model
+):
+    from lacos.storage.services.acl_service import ACLResult
+
+    user = django_user_model.objects.create_user("loader2", "loader2@example.com", "pass")
+    _make_archivist(user)
+    client.force_login(user)
+
+    collection = Collection.objects.create(identifier="alpha-fail")
+    mock_load_collection.return_value = ACLResult(
+        obj=collection,
+        bucket="mock-bucket",
+        key="alpha/acl.json",
+        success=False,
+        error="<bad>",
+    )
+
+    response = client.post(
+        reverse("storage:acl_load_single", args=["collection", str(collection.pk)]),
+        data={"sort": "identifier", "dir": "asc", "page": "1"},
+        HTTP_HX_REQUEST="true",
+    )
+
+    assert response.status_code == 200
+    html = response.content.decode()
+    assert 'hx-swap-oob="outerHTML"' in html
+    assert "text-error" in html
+    assert "Failed to load: &lt;bad&gt;" in html
+    assert "Failed to load: <bad>" not in html
+
+
 # ---------------------------------------------------------------------------
 # Integration tests: ACL save pipeline normalization
 # ---------------------------------------------------------------------------

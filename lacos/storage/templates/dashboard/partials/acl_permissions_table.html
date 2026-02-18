@@ -256,6 +256,12 @@
                       hx-confirm="Load ACL from S3? This will overwrite the database record."
                     >
                       {% csrf_token %}
+                      <input type="hidden" name="sort" value="{{ sort }}">
+                      <input type="hidden" name="dir" value="{{ direction }}">
+                      <input type="hidden" name="page" value="{{ page_obj.number }}">
+                      <input type="hidden" name="q" value="{{ search_term }}">
+                      <input type="hidden" name="status" value="{{ status_filter }}">
+                      <input type="hidden" name="access" value="{{ access_filter }}">
                       <button type="submit" class="btn btn-xs join-item" {% if not row.object_exists %}disabled{% endif %}>Load</button>
                     </form>
                   </div>
@@ -269,6 +275,12 @@
                       hx-confirm="Save ACL to S3? This will overwrite the S3 file."
                     >
                       {% csrf_token %}
+                      <input type="hidden" name="sort" value="{{ sort }}">
+                      <input type="hidden" name="dir" value="{{ direction }}">
+                      <input type="hidden" name="page" value="{{ page_obj.number }}">
+                      <input type="hidden" name="q" value="{{ search_term }}">
+                      <input type="hidden" name="status" value="{{ status_filter }}">
+                      <input type="hidden" name="access" value="{{ access_filter }}">
                       <button type="submit" class="btn btn-xs join-item" {% if not row.object_exists or not row.has_permission %}disabled{% endif %}>Save</button>
                     </form>
                   </div>

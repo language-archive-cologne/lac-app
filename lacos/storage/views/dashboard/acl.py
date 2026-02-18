@@ -6,16 +6,18 @@ Handles ACL configuration, sync operations, and permission management.
 import json
 import logging
 import re
+from types import SimpleNamespace
 from urllib.parse import quote_plus
 
 from django.conf import settings
 from lacos.storage.permissions import archivist_required
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
-from django.http import HttpResponse
+from django.http import HttpResponse, QueryDict
 from django.shortcuts import render, redirect
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils.html import escape
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
@@ -88,6 +90,42 @@ def _render_load_summary_partial(request, summary=None, error_message=None):
 
 # Route alias for legacy callers
 _render_sync_summary_partial = _render_load_summary_partial
+
+
+def _build_acl_table_context_from_post_state(request, scope: str) -> dict[str, object]:
+    """Rebuild ACL records table context from HTMX form POST state."""
+    from lacos.storage.views.dashboard_views import _build_acl_table_context
+
+    table_query = QueryDict("", mutable=True)
+    for field_name in ("sort", "dir", "page", "q", "status", "access"):
+        field_value = request.POST.get(field_name)
+        if field_value not in (None, ""):
+            table_query[field_name] = field_value
+
+    state_request = SimpleNamespace(GET=table_query)
+    return _build_acl_table_context(state_request, scope)
+
+
+def _render_acl_single_action_htmx_response(
+    request,
+    *,
+    scope: str,
+    message: str,
+    success: bool,
+) -> HttpResponse:
+    """Return status text plus OOB table replacement for single ACL actions."""
+    status_class = "text-success" if success else "text-error"
+    status_html = f'<span class="text-xs {status_class}">{escape(message)}</span>'
+
+    table_context = _build_acl_table_context_from_post_state(request, scope)
+    table_context["hx_oob"] = True
+    table_html = render_to_string(
+        "dashboard/partials/acl_records_table_wrapper.html",
+        table_context,
+        request=request,
+    )
+
+    return HttpResponse(f"{status_html}{table_html}")
 
 
 @archivist_required
@@ -449,9 +487,12 @@ def acl_load_single(request, object_type, object_id):
             message = f"Failed to load: {result.error}"
 
         if request.headers.get("HX-Request"):
-            status_class = "text-success" if result.success else "text-error"
-            html = f'<span class="text-xs {status_class}">{message}</span>'
-            return HttpResponse(html)
+            return _render_acl_single_action_htmx_response(
+                request,
+                scope=object_type,
+                message=message,
+                success=result.success,
+            )
         return redirect(f"{reverse('storage:acl_admin_dashboard')}?message={message}")
 
     except Exception as e:
@@ -490,9 +531,12 @@ def acl_save_single(request, object_type, object_id):
             message = f"Failed to save: {result.error}"
 
         if request.headers.get("HX-Request"):
-            status_class = "text-success" if result.success else "text-error"
-            html = f'<span class="text-xs {status_class}">{message}</span>'
-            return HttpResponse(html)
+            return _render_acl_single_action_htmx_response(
+                request,
+                scope=object_type,
+                message=message,
+                success=result.success,
+            )
         return redirect(f"{reverse('storage:acl_admin_dashboard')}?message={message}")
 
     except Exception as e:
