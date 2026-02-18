@@ -243,11 +243,17 @@ class Command(BaseCommand):
             if bundle_id and bundle_resources_id
         ]
 
+        # Passing [] to map_collection_hierarchy means "map no bundles".
+        # Passing None triggers fallback discovery of all bundles/resources
+        # belonging to the collection, which is what we want when reindex
+        # did not return explicit bundle/resource pairs.
+        pairs_for_mapping = bundle_resources_pairs or None
+
         try:
             mapping_service = ResourceMappingService()
             total_mapped = mapping_service.map_collection_hierarchy(
                 collection_id=collection_id,
-                bundle_resources_pairs=bundle_resources_pairs,
+                bundle_resources_pairs=pairs_for_mapping,
             )
             self.stdout.write(
                 self.style.SUCCESS(

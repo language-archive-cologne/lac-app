@@ -103,3 +103,39 @@ def test_handle_prefix_reindexes_only_associated_bundles(mock_discovery_service_
         "col-b/bundle-2/v1/content/bundle-2.xml",
         "col-b/bundle-3/v1/content/bundle-3.xml",
     ]
+
+
+@patch("lacos.ingest.management.commands.reindex_collection.ResourceMappingService")
+def test_update_s3_resource_locations_uses_none_when_no_bundle_pairs(mock_mapping_service_cls):
+    command = Command()
+    mapping_service = MagicMock()
+    mapping_service.map_collection_hierarchy.return_value = 7
+    mock_mapping_service_cls.return_value = mapping_service
+
+    command._update_s3_resource_locations(
+        collection_id=uuid.uuid4(),
+        bundle_results=[],
+        dry_run=False,
+    )
+
+    _, kwargs = mapping_service.map_collection_hierarchy.call_args
+    assert kwargs["bundle_resources_pairs"] is None
+
+
+@patch("lacos.ingest.management.commands.reindex_collection.ResourceMappingService")
+def test_update_s3_resource_locations_passes_explicit_bundle_pairs(mock_mapping_service_cls):
+    command = Command()
+    mapping_service = MagicMock()
+    mapping_service.map_collection_hierarchy.return_value = 3
+    mock_mapping_service_cls.return_value = mapping_service
+
+    bundle_id = uuid.uuid4()
+    resources_id = uuid.uuid4()
+    command._update_s3_resource_locations(
+        collection_id=uuid.uuid4(),
+        bundle_results=[(bundle_id, resources_id)],
+        dry_run=False,
+    )
+
+    _, kwargs = mapping_service.map_collection_hierarchy.call_args
+    assert kwargs["bundle_resources_pairs"] == [(bundle_id, resources_id)]
