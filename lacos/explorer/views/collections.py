@@ -33,7 +33,14 @@ from lacos.explorer.views.utils import build_content_disposition
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
 from lacos.storage.services.resource_mapping_service import ResourceMappingService
 
-from .utils import get_formatted_location, paginate_bundle_contexts, HandleLookupMixin, annotate_resource, get_object_by_pk_or_handle
+from .utils import (
+    HandleLookupMixin,
+    annotate_resource,
+    get_formatted_location,
+    get_object_by_pk_or_handle,
+    paginate_bundle_contexts,
+    summarize_collection_bundle_access_levels,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -298,6 +305,7 @@ class CollectionDetailView(HandleLookupMixin, DetailView):
         context['bundle_page_base_url'] = base_url
         context['bundle_page_separator'] = separator
         context['bundles_total'] = page_obj.paginator.count if page_obj else 0
+        context['bundle_access_summary'] = summarize_collection_bundle_access_levels(self.object)
 
         acl_service = ACLEvaluationService()
         collection_acl = acl_service.evaluate(self.request.user, self.object)
