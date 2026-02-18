@@ -14,6 +14,20 @@
             <a href="{{ result.url }}" class="text-base font-semibold text-base-content hover:text-base-content">
               {{ result.title|highlight_query:search_query }}
             </a>
+            {% if result.parent_collection_title or result.parent_collection_identifier %}
+              <p class="mt-1 text-xs">
+                <span class="uppercase tracking-wide font-semibold text-base-content/50">{% translate "Part of" %}</span>
+                {% if result.parent_collection_url %}
+                  <a href="{{ result.parent_collection_url }}" class="ml-1 font-medium text-base-content/75 hover:text-base-content hover:underline">
+                    {{ result.parent_collection_title|default:result.parent_collection_identifier }}
+                  </a>
+                {% else %}
+                  <span class="ml-1 font-medium text-base-content/75">
+                    {{ result.parent_collection_title|default:result.parent_collection_identifier }}
+                  </span>
+                {% endif %}
+              </p>
+            {% endif %}
             {% if result.highlight_snippet %}
               <p class="mt-2 text-sm text-base-content/70">
                 {{ result.highlight_snippet|render_search_snippet }}

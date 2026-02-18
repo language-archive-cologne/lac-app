@@ -20,7 +20,9 @@
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
         </svg>
-        {% translate "Back to Collection" %}
+        <span class="uppercase tracking-wide text-xs font-semibold text-base-content/60">{% translate "Back to Collection" %}</span>
+        <span class="mx-1 text-base-content/40">:</span>
+        <span class="text-sm font-semibold text-base-content/80">{% if collection.get_general_info and collection.get_general_info.display_title %}{{ collection.get_general_info.display_title }}{% else %}{{ collection.identifier }}{% endif %}</span>
       </a>
     {% else %}
       <a href="{% url 'explorer:collection_list' %}" class="inline-flex items-center text-base-content/70 hover:text-base-content font-medium">
@@ -44,6 +46,18 @@
           {{ bundle.identifier }}
         {% endif %}
       </h1>
+      {% if collection %}
+        <p class="mt-2 text-sm">
+          <span class="uppercase tracking-wide text-xs font-semibold text-base-content/50">{% translate "Part of" %}</span>
+          <a href="{% url 'explorer:collection_detail' pk=collection.pk %}" class="ml-1 font-medium text-base-content/80 hover:text-base-content hover:underline">
+            {% if collection.get_general_info and collection.get_general_info.display_title %}
+              {{ collection.get_general_info.display_title }}
+            {% else %}
+              {{ collection.identifier }}
+            {% endif %}
+          </a>
+        </p>
+      {% endif %}
       {% with access_level=acl_check_result.access_level|default:'restricted' %}
         <div class="mt-2 flex items-center gap-2 flex-wrap">
           {% if access_level == 'public' %}

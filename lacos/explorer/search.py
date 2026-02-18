@@ -42,6 +42,9 @@ class SearchResult:
     url: str
     rank: float
     keywords: tuple[str, ...] = ()
+    parent_collection_identifier: str = ""
+    parent_collection_title: str = ""
+    parent_collection_url: str = ""
 
 
 def _build_headline_source(identifier_field: str, title_field: str, description_field: str):
@@ -406,6 +409,16 @@ def _search_bundles(query: SearchQuery, term: str, use_stored_vectors: bool = Tr
                 url=reverse("explorer:bundle_detail", kwargs={"pk": bundle.pk}),
                 rank=bundle.search_rank or 0.0,
                 keywords=keywords,
+                parent_collection_identifier=bundle.parent_collection_identifier or "",
+                parent_collection_title=bundle.parent_collection_title or "",
+                parent_collection_url=(
+                    reverse(
+                        "explorer:collection_detail_by_handle",
+                        kwargs={"handle": bundle.parent_collection_identifier},
+                    )
+                    if bundle.parent_collection_identifier
+                    else ""
+                ),
             )
         )
     return results

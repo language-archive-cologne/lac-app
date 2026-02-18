@@ -82,6 +82,21 @@
                     {{ bundle.identifier|highlight_query:search_query }}
                   {% endif %}
                 </a>
+                {% if si and si.is_member_of_collection %}
+                  {% with coll=si.is_member_of_collection coll_gi=si.is_member_of_collection.get_general_info %}
+                    <p class="mt-1 text-xs">
+                      <span class="uppercase tracking-wide font-semibold text-base-content/50">{% translate "Part of" %}</span>
+                      <a href="{% url 'explorer:collection_detail_by_handle' handle=coll.identifier %}"
+                         class="ml-1 font-medium text-base-content/75 hover:text-base-content hover:underline">
+                        {% if coll_gi and coll_gi.display_title %}
+                          {{ coll_gi.display_title|truncatewords:6 }}
+                        {% else %}
+                          {{ coll.identifier }}
+                        {% endif %}
+                      </a>
+                    </p>
+                  {% endwith %}
+                {% endif %}
                 <div class="text-xs text-base-content/50 font-mono">{{ bundle.identifier }}</div>
                 {% if gi %}
                   {% with keywords=gi.keywords.all %}
