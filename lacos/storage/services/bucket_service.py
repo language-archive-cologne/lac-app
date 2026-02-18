@@ -240,6 +240,7 @@ class BucketService(BaseStorageService):
         max_keys: Optional[int] = None,
         continuation_token: Optional[str] = None,
         force_fresh: bool = False,
+        raise_errors: bool = False,
     ) -> BucketListingPage:
         """
         Get the contents of a specific folder.
@@ -253,6 +254,7 @@ class BucketService(BaseStorageService):
             max_keys (int, optional): Maximum number of items to return
             continuation_token (str, optional): Token for pagination
             force_fresh (bool): Force bypass cache
+            raise_errors (bool): Re-raise listing errors instead of returning an empty page
 
         Returns:
             BucketListingPage: Paginated list of items in the folder
@@ -268,6 +270,7 @@ class BucketService(BaseStorageService):
                 "max_keys": max_keys,
                 "continuation_token": continuation_token,
                 "force_fresh": force_fresh,
+                "raise_errors": raise_errors,
                 "cache_hit": False,
             }
             session.metadata.setdefault("bucket_service_calls", []).append(operation_meta)
@@ -294,6 +297,7 @@ class BucketService(BaseStorageService):
                 max_keys=max_keys,
                 continuation_token=continuation_token,
                 force_fresh=force_fresh,
+                raise_errors=raise_errors,
             )
 
             # Enrich with BLAM metadata
@@ -347,6 +351,8 @@ class BucketService(BaseStorageService):
             logger.error(f"Error getting folder contents for '{folder_path}' in bucket '{bucket_name}': {str(e)}")
             if operation_meta is not None:
                 operation_meta["error"] = str(e)
+            if raise_errors:
+                raise
             return BucketListingPage(items=[], has_more=False, next_token=None, bucket=bucket_name, prefix=folder_path)
         finally:
             if operation_meta is not None:

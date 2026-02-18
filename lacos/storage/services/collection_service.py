@@ -201,6 +201,7 @@ class CollectionService(BaseStorageService):
         max_keys: Optional[int] = None,
         continuation_token: Optional[str] = None,
         force_fresh: bool = False,
+        raise_errors: bool = False,
     ) -> BucketListingPage:
         """
         List the contents of a bucket with the given prefix.
@@ -210,6 +211,8 @@ class CollectionService(BaseStorageService):
             prefix (str, optional): The prefix (path) to list. Defaults to "".
             max_keys (int, optional): Maximum number of keys to return for lazy loading.
             continuation_token (str, optional): S3 continuation token for pagination.
+            raise_errors (bool, optional): If True, re-raise backend errors instead of
+                returning an empty page fallback.
             
         Returns:
             BucketListingPage: Paginated results including continuation metadata.
@@ -350,6 +353,8 @@ class CollectionService(BaseStorageService):
             logger.error(
                 f"Error listing bucket contents for bucket: '{bucket_name}'. Error: {e}"
             )
+            if raise_errors:
+                raise
             return BucketListingPage(items=[], has_more=False, next_token=None, bucket=bucket_name, prefix=prefix)
     
     def get_folder_structure(self, bucket_name: str, prefix: str = "") -> Dict[str, Any]:

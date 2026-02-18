@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import MagicMock
 
 from lacos.storage.services.collection_service import CollectionService, BucketListingPage
 
@@ -229,6 +230,39 @@ def test_list_bucket_contents_pagination(mock_s3, mock_collection_service):
     assert isinstance(second_page, BucketListingPage)
     assert len(second_page) == 1
     assert second_page.next_token != first_page.next_token
+
+
+def test_list_bucket_contents_raises_on_error_when_requested(mock_collection_service):
+    """Errors should bubble up when raise_errors=True."""
+    mock_collection_service.s3_client.list_objects_v2 = MagicMock(
+        side_effect=Exception("Invalid continuation token")
+    )
+
+    with pytest.raises(Exception, match="Invalid continuation token"):
+        mock_collection_service.list_bucket_contents(
+            TEST_BUCKET_NAME,
+            max_keys=1,
+            continuation_token="token",
+            raise_errors=True,
+        )
+
+
+def test_list_bucket_contents_returns_empty_page_on_error_by_default(mock_collection_service):
+    """Default behavior should remain non-raising for callers that expect a safe fallback."""
+    mock_collection_service.s3_client.list_objects_v2 = MagicMock(
+        side_effect=Exception("Invalid continuation token")
+    )
+
+    page = mock_collection_service.list_bucket_contents(
+        TEST_BUCKET_NAME,
+        max_keys=1,
+        continuation_token="token",
+    )
+
+    assert isinstance(page, BucketListingPage)
+    assert len(page) == 0
+    assert page.has_more is False
+    assert page.next_token is None
 
 def test_get_folder_structure(mock_s3, mock_collection_service):
     """Test the get_folder_structure method"""

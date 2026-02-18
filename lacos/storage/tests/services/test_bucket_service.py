@@ -168,14 +168,16 @@ def test_direct_move_to_production(mock_s3, mock_bucket_service):
         mock_bucket_service.production_bucket = original_production_bucket
 
 
-@patch('lacos.storage.services.bucket_service.Bundle')
-@patch('lacos.storage.services.bucket_service.Collection')
+@patch('lacos.storage.services.bucket_metadata_service.Bundle')
+@patch('lacos.storage.services.bucket_metadata_service.Collection')
 def test_get_folder_contents_enriches_blam_metadata(MockCollection, MockBundle, mock_bucket_service):
     """BLAM directory metadata should be derived via batched lookups."""
     mock_bucket_service.folder_cache = MagicMock()
     mock_bucket_service.folder_cache.get.return_value = None
     mock_bucket_service.folder_cache.set = MagicMock()
     mock_bucket_service.production_bucket = TEST_PRODUCTION_BUCKET
+    mock_bucket_service._service_context.production_bucket = TEST_PRODUCTION_BUCKET
+    mock_bucket_service._metadata_service.context.production_bucket = TEST_PRODUCTION_BUCKET
 
     listing_items = [
         {"name": "collectionA", "path": "collectionA/collectionA/", "is_dir": True},
@@ -222,3 +224,38 @@ def test_get_folder_contents_enriches_blam_metadata(MockCollection, MockBundle, 
 
     MockCollection.objects.filter.assert_called_once()
     MockBundle.objects.filter.assert_called_once()
+
+
+def test_get_folder_contents_raises_on_error_when_requested(mock_bucket_service):
+    """Pagination callers can opt into propagated errors for retry handling."""
+    mock_bucket_service.collection_service.list_bucket_contents = MagicMock(
+        side_effect=Exception("Invalid continuation token")
+    )
+
+    with pytest.raises(Exception, match="Invalid continuation token"):
+        mock_bucket_service.get_folder_contents(
+            TEST_PRODUCTION_BUCKET,
+            "",
+            max_keys=100,
+            continuation_token="token",
+            raise_errors=True,
+        )
+
+
+def test_get_folder_contents_returns_empty_page_on_error_by_default(mock_bucket_service):
+    """Default behavior should preserve non-raising fallback for legacy callers."""
+    mock_bucket_service.collection_service.list_bucket_contents = MagicMock(
+        side_effect=Exception("S3 error")
+    )
+
+    page = mock_bucket_service.get_folder_contents(
+        TEST_PRODUCTION_BUCKET,
+        "",
+        max_keys=100,
+        continuation_token="token",
+    )
+
+    assert isinstance(page, BucketListingPage)
+    assert len(page) == 0
+    assert page.has_more is False
+    assert page.next_token is None

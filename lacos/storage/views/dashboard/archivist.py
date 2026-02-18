@@ -5,6 +5,7 @@ Handles the main archivist dashboard, bucket content display,
 and folder navigation for storage management.
 """
 import logging
+from urllib.parse import unquote
 from django.shortcuts import render
 from django.urls import reverse
 
@@ -116,14 +117,35 @@ def load_folder_contents(request, bucket_type, folder_path):
             session.metadata["max_keys"] = requested_max_keys
             session.metadata["continuation_token"] = continuation_token
 
-            # Get folder contents
-            contents = bucket_service.get_folder_contents(
-                bucket_name,
-                sanitized_path,
-                max_keys=requested_max_keys if pagination_enabled else None,
-                continuation_token=continuation_token,
-                force_fresh=force_fresh,
-            )
+            # Get folder contents. Some S3-compatible backends may return continuation tokens
+            # that need one extra decoding pass when routed through query params.
+            try:
+                contents = bucket_service.get_folder_contents(
+                    bucket_name,
+                    sanitized_path,
+                    max_keys=requested_max_keys if pagination_enabled else None,
+                    continuation_token=continuation_token,
+                    force_fresh=force_fresh,
+                    raise_errors=True,
+                )
+            except Exception:
+                decoded_token = unquote(continuation_token) if continuation_token else None
+                if continuation_token and decoded_token and decoded_token != continuation_token:
+                    logger.warning(
+                        "Retrying folder pagination with decoded continuation token for %s",
+                        sanitized_path or ROOT_FOLDER_SENTINEL,
+                    )
+                    session.metadata["continuation_token_retry"] = True
+                    contents = bucket_service.get_folder_contents(
+                        bucket_name,
+                        sanitized_path,
+                        max_keys=requested_max_keys if pagination_enabled else None,
+                        continuation_token=decoded_token,
+                        force_fresh=force_fresh,
+                        raise_errors=True,
+                    )
+                else:
+                    raise
             session.metadata["items_loaded"] = len(contents)
             session.metadata["has_more"] = contents.has_more
             session.metadata["next_token"] = contents.next_token
