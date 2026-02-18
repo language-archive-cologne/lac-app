@@ -56,7 +56,11 @@ def _get_acl_queryset(model):
     if model is Collection:
         return model.objects.all().prefetch_related("general_info")
     if model is Bundle:
-        return model.objects.all().prefetch_related("general_info", "structural_info__is_member_of_collection")
+        return model.objects.all().prefetch_related(
+            "general_info",
+            "structural_info__is_member_of_collection",
+            "structural_info__is_member_of_collection__general_info",
+        )
     return model.objects.all()
 
 
@@ -126,6 +130,73 @@ def _render_acl_single_action_htmx_response(
     )
 
     return HttpResponse(f"{status_html}{table_html}")
+
+
+def _build_bundle_access_overview():
+    """Summarize bundle access levels grouped by parent collection."""
+    bundle_ct = ContentType.objects.get_for_model(Bundle)
+    access_by_bundle_id = {
+        str(object_id): access_level
+        for object_id, access_level in ACLPermissions.objects.filter(
+            content_type=bundle_ct
+        ).values_list("object_id", "access_level")
+    }
+
+    grouped: dict[str, dict[str, object]] = {}
+    for bundle in _get_acl_queryset(Bundle).order_by("identifier"):
+        structural_info = next(iter(bundle.structural_info.all()), None)
+        collection = structural_info.is_member_of_collection if structural_info else None
+
+        if collection is None:
+            collection_id = "__unassigned__"
+            collection_identifier = "Unassigned"
+            collection_name = "No linked collection"
+        else:
+            collection_id = str(collection.pk)
+            collection_identifier = getattr(collection, "identifier", str(collection.pk)) or str(collection.pk)
+            collection_name = _resolve_acl_display_name(collection)
+
+        row = grouped.setdefault(
+            collection_id,
+            {
+                "collection_id": collection_id,
+                "collection_identifier": collection_identifier,
+                "collection_name": collection_name,
+                "total_bundles": 0,
+                "public_count": 0,
+                "academic_count": 0,
+                "restricted_count": 0,
+                "missing_acl_count": 0,
+            },
+        )
+
+        row["total_bundles"] += 1
+        level = access_by_bundle_id.get(str(bundle.pk))
+        if level == ACL_LEVEL_PUBLIC:
+            row["public_count"] += 1
+        elif level == ACL_LEVEL_ACADEMIC:
+            row["academic_count"] += 1
+        elif level == ACL_LEVEL_RESTRICTED:
+            row["restricted_count"] += 1
+        else:
+            row["missing_acl_count"] += 1
+
+    rows = sorted(
+        grouped.values(),
+        key=lambda row: (
+            row["collection_id"] == "__unassigned__",
+            str(row["collection_identifier"]).lower(),
+        ),
+    )
+    totals = {
+        "collections": len(rows),
+        "bundles": sum(int(row["total_bundles"]) for row in rows),
+        "public": sum(int(row["public_count"]) for row in rows),
+        "academic": sum(int(row["academic_count"]) for row in rows),
+        "restricted": sum(int(row["restricted_count"]) for row in rows),
+        "missing_acl": sum(int(row["missing_acl_count"]) for row in rows),
+    }
+    return rows, totals
 
 
 @archivist_required
@@ -234,6 +305,7 @@ def acl_admin_dashboard(request):
         "unsynced_objects": collection_summary["unsynced_objects"] + bundle_summary["unsynced_objects"],
         "total_objects": collection_summary["total_objects"] + bundle_summary["total_objects"],
     }
+    bundle_access_overview, bundle_access_totals = _build_bundle_access_overview()
 
     collection_options = []
     bundle_options = []
@@ -263,6 +335,8 @@ def acl_admin_dashboard(request):
             "collection_summary": collection_summary,
             "bundle_summary": bundle_summary,
             "overall_summary": overall_summary,
+            "bundle_access_overview": bundle_access_overview,
+            "bundle_access_totals": bundle_access_totals,
             "sync_summary": None,
             "collection_options": collection_options,
             "bundle_options": bundle_options,

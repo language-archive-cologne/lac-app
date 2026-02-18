@@ -9,8 +9,10 @@ from django.urls import reverse
 from django.contrib.auth.models import Group
 
 from lacos.blam.models.bundle.bundle_repository import Bundle
+from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.storage.constants import (
+    ACL_LEVEL_ACADEMIC,
     ACL_LEVEL_PUBLIC,
     ACL_LEVEL_RESTRICTED,
 )
@@ -158,6 +160,131 @@ def test_acl_admin_dashboard_requires_archivist(client, django_user_model):
 
     response = client.get(reverse("storage:acl_admin_dashboard"))
     assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_acl_dashboard_panel_groups_bundle_access_by_collection(client, django_user_model):
+    user = django_user_model.objects.create_user("overview1", "overview1@example.com", "pass")
+    _make_archivist(user)
+    client.force_login(user)
+
+    col_a = Collection.objects.create(identifier="col-a")
+    col_b = Collection.objects.create(identifier="col-b")
+    bundle_a1 = Bundle.objects.create(identifier="bundle-a1")
+    bundle_a2 = Bundle.objects.create(identifier="bundle-a2")
+    bundle_b1 = Bundle.objects.create(identifier="bundle-b1")
+    BundleStructuralInfo.objects.create(bundle=bundle_a1, is_member_of_collection=col_a)
+    BundleStructuralInfo.objects.create(bundle=bundle_a2, is_member_of_collection=col_a)
+    BundleStructuralInfo.objects.create(bundle=bundle_b1, is_member_of_collection=col_b)
+
+    bundle_ct = ContentType.objects.get_for_model(Bundle)
+    ACLPermissions.objects.create(
+        content_type=bundle_ct,
+        object_id=str(bundle_a1.pk),
+        access_level=ACL_LEVEL_PUBLIC,
+    )
+    ACLPermissions.objects.create(
+        content_type=bundle_ct,
+        object_id=str(bundle_a2.pk),
+        access_level=ACL_LEVEL_RESTRICTED,
+    )
+    ACLPermissions.objects.create(
+        content_type=bundle_ct,
+        object_id=str(bundle_b1.pk),
+        access_level=ACL_LEVEL_ACADEMIC,
+    )
+
+    response = client.get(reverse("storage:acl_dashboard_panel"))
+    assert response.status_code == 200
+
+    rows = {row["collection_identifier"]: row for row in response.context["bundle_access_overview"]}
+    assert rows["col-a"]["total_bundles"] == 2
+    assert rows["col-a"]["public_count"] == 1
+    assert rows["col-a"]["restricted_count"] == 1
+    assert rows["col-a"]["academic_count"] == 0
+    assert rows["col-a"]["missing_acl_count"] == 0
+
+    assert rows["col-b"]["total_bundles"] == 1
+    assert rows["col-b"]["public_count"] == 0
+    assert rows["col-b"]["restricted_count"] == 0
+    assert rows["col-b"]["academic_count"] == 1
+    assert rows["col-b"]["missing_acl_count"] == 0
+
+    totals = response.context["bundle_access_totals"]
+    assert totals["collections"] == 2
+    assert totals["bundles"] == 3
+    assert totals["public"] == 1
+    assert totals["academic"] == 1
+    assert totals["restricted"] == 1
+    assert totals["missing_acl"] == 0
+
+
+@pytest.mark.django_db
+def test_acl_dashboard_panel_includes_unassigned_and_missing_acl_bundles(
+    client, django_user_model
+):
+    user = django_user_model.objects.create_user("overview2", "overview2@example.com", "pass")
+    _make_archivist(user)
+    client.force_login(user)
+
+    col = Collection.objects.create(identifier="col-missing")
+    assigned_bundle = Bundle.objects.create(identifier="bundle-assigned")
+    unassigned_bundle = Bundle.objects.create(identifier="bundle-unassigned")
+    BundleStructuralInfo.objects.create(bundle=assigned_bundle, is_member_of_collection=col)
+
+    bundle_ct = ContentType.objects.get_for_model(Bundle)
+    ACLPermissions.objects.create(
+        content_type=bundle_ct,
+        object_id=str(unassigned_bundle.pk),
+        access_level=ACL_LEVEL_PUBLIC,
+    )
+
+    response = client.get(reverse("storage:acl_dashboard_panel"))
+    assert response.status_code == 200
+
+    rows = {row["collection_identifier"]: row for row in response.context["bundle_access_overview"]}
+    assert rows["col-missing"]["total_bundles"] == 1
+    assert rows["col-missing"]["missing_acl_count"] == 1
+
+    assert rows["Unassigned"]["total_bundles"] == 1
+    assert rows["Unassigned"]["public_count"] == 1
+    assert rows["Unassigned"]["missing_acl_count"] == 0
+
+    totals = response.context["bundle_access_totals"]
+    assert totals["collections"] == 2
+    assert totals["bundles"] == 2
+    assert totals["public"] == 1
+    assert totals["academic"] == 0
+    assert totals["restricted"] == 0
+    assert totals["missing_acl"] == 1
+
+
+@pytest.mark.django_db
+def test_acl_admin_dashboard_tab_dashboard_has_bundle_access_overview(
+    client, django_user_model
+):
+    user = django_user_model.objects.create_user("overview3", "overview3@example.com", "pass")
+    _make_archivist(user)
+    client.force_login(user)
+
+    col = Collection.objects.create(identifier="col-main")
+    bundle = Bundle.objects.create(identifier="bundle-main")
+    BundleStructuralInfo.objects.create(bundle=bundle, is_member_of_collection=col)
+
+    bundle_ct = ContentType.objects.get_for_model(Bundle)
+    ACLPermissions.objects.create(
+        content_type=bundle_ct,
+        object_id=str(bundle.pk),
+        access_level=ACL_LEVEL_RESTRICTED,
+    )
+
+    response = client.get(reverse("storage:acl_admin_dashboard"), {"tab": "dashboard"})
+    assert response.status_code == 200
+
+    rows = {row["collection_identifier"]: row for row in response.context["bundle_access_overview"]}
+    assert rows["col-main"]["total_bundles"] == 1
+    assert rows["col-main"]["restricted_count"] == 1
+    assert response.context["bundle_access_totals"]["bundles"] == 1
 
 
 @pytest.mark.django_db

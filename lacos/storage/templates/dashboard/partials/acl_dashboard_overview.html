@@ -195,3 +195,62 @@
     </div>
   </div>
 </div>
+
+<div class="card bg-base-100 shadow-sm mt-6">
+  <div class="card-body space-y-3">
+    <div class="flex items-center justify-between flex-wrap gap-2">
+      <h2 class="card-title text-lg">Bundle Access by Collection</h2>
+      <div class="text-xs text-base-content/60">
+        Collections: {{ bundle_access_totals.collections|default:0 }}
+        · Bundles: {{ bundle_access_totals.bundles|default:0 }}
+      </div>
+    </div>
+    <div class="overflow-x-auto rounded-lg border border-base-200">
+      <table class="table table-xs">
+        <thead>
+          <tr class="text-[11px] uppercase text-base-content/50">
+            <th>Collection</th>
+            <th class="text-right">Bundles</th>
+            <th class="text-right text-success">Public</th>
+            <th class="text-right text-warning">Academic</th>
+            <th class="text-right">Restricted</th>
+            <th class="text-right text-error">Missing ACL</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in bundle_access_overview %}
+          <tr>
+            <td class="space-y-0.5">
+              <div class="font-medium">{{ row.collection_identifier }}</div>
+              {% if row.collection_name and row.collection_name != row.collection_identifier %}
+              <div class="text-[11px] text-base-content/60">{{ row.collection_name }}</div>
+              {% endif %}
+            </td>
+            <td class="text-right font-medium">{{ row.total_bundles }}</td>
+            <td class="text-right">{{ row.public_count }}</td>
+            <td class="text-right">{{ row.academic_count }}</td>
+            <td class="text-right">{{ row.restricted_count }}</td>
+            <td class="text-right {% if row.missing_acl_count > 0 %}text-error{% endif %}">{{ row.missing_acl_count }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="6" class="py-6 text-center text-sm text-base-content/60">
+              No bundles available.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr class="font-semibold">
+            <td>Total</td>
+            <td class="text-right">{{ bundle_access_totals.bundles|default:0 }}</td>
+            <td class="text-right">{{ bundle_access_totals.public|default:0 }}</td>
+            <td class="text-right">{{ bundle_access_totals.academic|default:0 }}</td>
+            <td class="text-right">{{ bundle_access_totals.restricted|default:0 }}</td>
+            <td class="text-right">{{ bundle_access_totals.missing_acl|default:0 }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
