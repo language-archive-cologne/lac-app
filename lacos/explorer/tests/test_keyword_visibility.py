@@ -94,6 +94,7 @@ def test_collection_list_renders_compact_keywords(client):
     assert "phonology" in page
     assert "documentation" in page
     assert '+1' in page
+    assert 'title="archive"' in page
     assert f'title="{long_keyword}"' in page
 
 
@@ -143,6 +144,7 @@ def test_bundle_faceted_list_renders_compact_keywords(client):
     assert "audio" in page
     assert "transcription" in page
     assert '+1' in page
+    assert 'title="metadata"' in page
     assert f'title="{long_keyword}"' in page
 
 
