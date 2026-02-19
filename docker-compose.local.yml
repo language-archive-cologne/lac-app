@@ -13,6 +13,7 @@ services:
     build:
       context: .
       dockerfile: ./compose/local/django/Dockerfile
+      target: web-run-stage
     image: lacos_local_django
     restart: unless-stopped
     depends_on:
@@ -94,6 +95,7 @@ services:
     build:
       context: .
       dockerfile: ./compose/local/django/Dockerfile
+      target: worker-run-stage
     image: lacos_local_huey
     depends_on:
       - django
