@@ -1,6 +1,9 @@
 """Bundle and collection utility functions."""
 
+from collections.abc import Iterable
+
 from django.contrib.contenttypes.models import ContentType
+from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db.models import Prefetch
 
@@ -9,6 +12,7 @@ from lacos.blam.models.bundle.bundle_structural_info import (
     BundleResources,
     BundleStructuralInfo,
 )
+from lacos.blam.models.collection.collection_repository import Collection
 from lacos.storage.constants import ACL_LEVEL_ACADEMIC, ACL_LEVEL_PUBLIC, ACL_LEVEL_RESTRICTED
 from lacos.storage.models.acl_permissions import ACLPermissions
 
@@ -16,6 +20,26 @@ from .resource import annotate_resource, prepare_resource_lists
 
 
 BUNDLES_PER_PAGE = 10
+COLLECTION_BUNDLE_ACCESS_SUMMARY_CACHE_TIMEOUT = 300
+COLLECTION_BUNDLE_ACCESS_SUMMARY_CACHE_KEY_PREFIX = "explorer:collection_bundle_access_summary"
+
+
+def _empty_collection_bundle_access_summary() -> dict[str, int]:
+    return {
+        "public": 0,
+        "academic": 0,
+        "restricted": 0,
+        "total": 0,
+    }
+
+
+def _normalize_collection_summary(raw_summary: dict) -> dict[str, int]:
+    return {
+        "public": int(raw_summary.get("public", 0)),
+        "academic": int(raw_summary.get("academic", 0)),
+        "restricted": int(raw_summary.get("restricted", 0)),
+        "total": int(raw_summary.get("total", 0)),
+    }
 
 
 def bundle_queryset_for_collection(collection, search_query=None):
@@ -92,23 +116,21 @@ def paginate_bundle_contexts(collection, page_number, per_page=BUNDLES_PER_PAGE,
     return page_obj, contexts
 
 
-def summarize_collection_bundle_access_levels(collection) -> dict[str, int]:
-    """Return aggregate bundle counts by access level for a collection."""
-    counts = {
-        "public": 0,
-        "academic": 0,
-        "restricted": 0,
-        "total": 0,
+def _compute_bundle_access_summary_for_collection_ids(
+    collection_ids: set[str],
+) -> dict[str, dict[str, int]]:
+    summary_by_collection: dict[str, dict[str, int]] = {
+        collection_id: _empty_collection_bundle_access_summary() for collection_id in collection_ids
     }
+    bundle_pairs = list(
+        BundleStructuralInfo.objects.filter(
+            is_member_of_collection_id__in=collection_ids,
+        ).values_list("bundle_id", "is_member_of_collection_id").distinct()
+    )
+    if not bundle_pairs:
+        return summary_by_collection
 
-    bundle_ids = [
-        str(bundle_id)
-        for bundle_id in bundle_queryset_for_collection(collection).values_list("bundle_id", flat=True).distinct()
-    ]
-    if not bundle_ids:
-        return counts
-
-    counts["total"] = len(bundle_ids)
+    bundle_ids = {str(bundle_id) for bundle_id, _ in bundle_pairs}
     bundle_ct = ContentType.objects.get_for_model(Bundle)
     bundle_levels = {
         str(object_id): level
@@ -118,15 +140,23 @@ def summarize_collection_bundle_access_levels(collection) -> dict[str, int]:
         ).values_list("object_id", "access_level")
     }
 
-    collection_ct = ContentType.objects.get_for_model(collection)
-    collection_level = ACLPermissions.objects.filter(
-        content_type=collection_ct,
-        object_id=str(collection.pk),
-    ).values_list("access_level", flat=True).first()
-    fallback_level = collection_level or ACL_LEVEL_RESTRICTED
+    collection_ct = ContentType.objects.get_for_model(Collection)
+    collection_fallback_levels = {
+        str(object_id): level
+        for object_id, level in ACLPermissions.objects.filter(
+            content_type=collection_ct,
+            object_id__in=collection_ids,
+        ).values_list("object_id", "access_level")
+    }
 
-    for bundle_id in bundle_ids:
-        level = bundle_levels.get(bundle_id) or fallback_level
+    for bundle_id, collection_id in bundle_pairs:
+        collection_key = str(collection_id)
+        if collection_key not in summary_by_collection:
+            continue
+        counts = summary_by_collection[collection_key]
+        counts["total"] += 1
+        fallback_level = collection_fallback_levels.get(collection_key) or ACL_LEVEL_RESTRICTED
+        level = bundle_levels.get(str(bundle_id)) or fallback_level
         if level == ACL_LEVEL_PUBLIC:
             counts["public"] += 1
         elif level == ACL_LEVEL_ACADEMIC:
@@ -134,4 +164,52 @@ def summarize_collection_bundle_access_levels(collection) -> dict[str, int]:
         else:
             counts["restricted"] += 1
 
-    return counts
+    return summary_by_collection
+
+
+def summarize_bundle_access_levels_by_collection_ids(
+    collection_ids: Iterable[str],
+) -> dict[str, dict[str, int]]:
+    """Return bundle access summaries for a set of collection ids."""
+    normalized_ids = {str(collection_id) for collection_id in collection_ids if collection_id}
+    if not normalized_ids:
+        return {}
+
+    cache_keys_by_collection = {
+        collection_id: f"{COLLECTION_BUNDLE_ACCESS_SUMMARY_CACHE_KEY_PREFIX}:{collection_id}"
+        for collection_id in normalized_ids
+    }
+    cached_values = cache.get_many(cache_keys_by_collection.values())
+    summary_by_collection: dict[str, dict[str, int]] = {}
+    missing_collection_ids: set[str] = set()
+
+    for collection_id, cache_key in cache_keys_by_collection.items():
+        cached_summary = cached_values.get(cache_key)
+        if isinstance(cached_summary, dict):
+            summary_by_collection[collection_id] = _normalize_collection_summary(cached_summary)
+        else:
+            missing_collection_ids.add(collection_id)
+
+    if missing_collection_ids:
+        computed_summaries = _compute_bundle_access_summary_for_collection_ids(missing_collection_ids)
+        cache_payload = {}
+        for collection_id in missing_collection_ids:
+            summary = _normalize_collection_summary(
+                computed_summaries.get(
+                    collection_id,
+                    _empty_collection_bundle_access_summary(),
+                )
+            )
+            summary_by_collection[collection_id] = summary
+            cache_payload[cache_keys_by_collection[collection_id]] = summary
+        cache.set_many(cache_payload, timeout=COLLECTION_BUNDLE_ACCESS_SUMMARY_CACHE_TIMEOUT)
+
+    return summary_by_collection
+
+
+def summarize_collection_bundle_access_levels(collection) -> dict[str, int]:
+    """Return aggregate bundle counts by access level for a collection."""
+    if not getattr(collection, "pk", None):
+        return _empty_collection_bundle_access_summary()
+    summary_by_collection = summarize_bundle_access_levels_by_collection_ids([str(collection.pk)])
+    return summary_by_collection.get(str(collection.pk), _empty_collection_bundle_access_summary())

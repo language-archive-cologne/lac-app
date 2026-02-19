@@ -5,6 +5,7 @@ from .bundle import (
     build_bundle_context,
     bundle_queryset_for_collection,
     paginate_bundle_contexts,
+    summarize_bundle_access_levels_by_collection_ids,
     summarize_collection_bundle_access_levels,
 )
 from .elan import (
@@ -41,6 +42,7 @@ __all__ = [
     "build_bundle_context",
     "bundle_queryset_for_collection",
     "paginate_bundle_contexts",
+    "summarize_bundle_access_levels_by_collection_ids",
     "summarize_collection_bundle_access_levels",
     # ELAN utilities
     "parse_elan_document",

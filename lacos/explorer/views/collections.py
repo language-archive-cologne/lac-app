@@ -22,6 +22,7 @@ from lacos.blam.models.collection.collection_general_info import (
     CollectionGeneralInfo,
     CollectionObjectLanguage,
 )
+from lacos.blam.models.collection.collection_publication_info import CollectionPublicationInfo
 from lacos.blam.models.collection.collection_structural_info import (
     CollectionAdditionalMetadataFile,
 )
@@ -40,6 +41,7 @@ from .utils import (
     get_object_by_pk_or_handle,
     load_xml_preview,
     paginate_bundle_contexts,
+    summarize_bundle_access_levels_by_collection_ids,
     summarize_collection_bundle_access_levels,
 )
 
@@ -55,23 +57,27 @@ class CollectionListView(ListView):
     template_name = "collection_list.html"
     context_object_name = "collection_list"
 
+    def get_paginate_by(self, queryset):
+        return getattr(settings, "EXPLORER_COLLECTIONS_PAGE_SIZE", 25)
+
     def get_queryset(self):
         """Explicitly return all collections and log the count."""
         logger.info("Fetching collections in CollectionListView...")
         queryset = Collection.objects.prefetch_related(
             Prefetch(
                 'general_info',
-                queryset=CollectionGeneralInfo.objects.select_related('location'),
+                queryset=CollectionGeneralInfo.objects.select_related('location').prefetch_related(
+                    'keywords',
+                    'object_languages',
+                ),
                 to_attr='prefetched_general_info',
             ),
-            'general_info__keywords',
-            'general_info__object_languages',
-            'publication_info',
-            'publication_info__creators',
-        ).annotate(
-            bundles_count=Count('bundle_collection', distinct=True),
-            first_language=Min('general_info__object_languages__name'),
-        )
+            Prefetch(
+                'publication_info',
+                queryset=CollectionPublicationInfo.objects.prefetch_related('creators'),
+                to_attr='prefetched_publication_info',
+            ),
+        ).annotate(bundles_count=Count('bundle_collection', distinct=True))
 
         language_filter = self.request.GET.get("language", "").strip()
         if language_filter:
@@ -86,20 +92,21 @@ class CollectionListView(ListView):
         prefix = '-' if order == 'desc' else ''
 
         if sort == 'language':
+            queryset = queryset.annotate(first_language=Min('general_info__object_languages__name'))
             queryset = queryset.order_by(f'{prefix}first_language', 'general_info__display_title')
         elif sort == 'bundles':
             queryset = queryset.order_by(f'{prefix}bundles_count', 'general_info__display_title')
         else:
             queryset = queryset.order_by(f'{prefix}general_info__display_title')
 
-        collection_count = queryset.count()
-        logger.info(f"Found {collection_count} collections.")
         return queryset
 
     def get_context_data(self, **kwargs):
         """Add processed location data to the context."""
         context = super().get_context_data(**kwargs)
         context["is_htmx"] = self.request.headers.get("HX-Request") == "true"
+        context['current_sort'] = self.request.GET.get('sort', 'name')
+        context['current_order'] = self.request.GET.get('order', 'asc')
         search_query = self.request.GET.get("q", "").strip()
         context["search_query"] = search_query
         language_filter = self.request.GET.get("language", "").strip()
@@ -114,11 +121,39 @@ class CollectionListView(ListView):
                 result for result in search_results if result.kind == "bundle"
             ]
 
-        acl_service = ACLEvaluationService()
-        for collection in context['collection_list']:
+        # Search results partial does not render the collection table/map.
+        # Avoid loading and enriching the full collection queryset for this path.
+        if context["is_htmx"] and search_query:
+            return context
+
+        collection_list = list(context['collection_list'])
+        context['collection_list'] = collection_list
+        collection_ids: list[str] = []
+        for collection in collection_list:
             # Use prefetched data to avoid N+1 queries
             general_info_list = getattr(collection, 'prefetched_general_info', None)
-            general_info = general_info_list[0] if general_info_list else None
+            general_info = (
+                general_info_list[0] if general_info_list else collection.get_general_info
+            )
+            collection.list_general_info = general_info
+            collection.list_languages = (
+                list(general_info.object_languages.all()) if general_info else []
+            )
+            collection.list_keywords = (
+                list(general_info.keywords.all()) if general_info else []
+            )
+            collection.list_display_title = (
+                general_info.display_title
+                if general_info and general_info.display_title
+                else (
+                    general_info.title
+                    if general_info and general_info.title
+                    else collection.identifier
+                )
+            )
+            collection.list_description = (
+                general_info.description if general_info and general_info.description else ""
+            )
             if general_info and general_info.location:
                 location = general_info.location
                 collection.formatted_location = get_formatted_location(location)
@@ -131,22 +166,71 @@ class CollectionListView(ListView):
                 collection.country_facet = None
                 collection.region_facet = None
 
-            # Evaluate access level for display in list
-            acl_result = acl_service.evaluate(self.request.user, collection)
-            collection.access_level = acl_result.access_level or 'restricted'
-
-        context['map_markers_json'] = get_collection_map_markers(context['collection_list'])
-        context['main_map_style_url'] = settings.EXPLORER_MAIN_MAP_STYLE_URL
-        context['main_map_dark_style_url'] = settings.EXPLORER_MAIN_MAP_DARK_STYLE_URL
-
-        # Cache language count as it rarely changes unless filtered.
-        # Deduplicate by iso_639_3_code since languages are now per-collection.
-        if language_filter:
-            languages_count = (
-                CollectionObjectLanguage.objects.filter(
-                    collectiongeneralinfo__collection__in=context['collection_list']
-                ).values('iso_639_3_code').distinct().count()
+            publication_info_list = getattr(collection, 'prefetched_publication_info', None)
+            publication_info = (
+                publication_info_list[0] if publication_info_list else collection.get_publication_info
             )
+            collection.list_publication_year = (
+                publication_info.publication_year if publication_info else None
+            )
+            creators = list(publication_info.creators.all()) if publication_info else []
+            collection.list_creators_display = ", ".join(
+                " ".join(
+                    part
+                    for part in [creator.given_name, creator.family_name]
+                    if part
+                )
+                for creator in creators
+                if creator.given_name or creator.family_name
+            )
+            collection_ids.append(str(collection.pk))
+
+        bundle_access_summaries = summarize_bundle_access_levels_by_collection_ids(collection_ids)
+        for collection in collection_list:
+            collection.bundle_access_summary = bundle_access_summaries.get(
+                str(collection.pk),
+                {"public": 0, "academic": 0, "restricted": 0, "total": 0},
+            )
+
+        is_table_sort_request = (
+            context["is_htmx"]
+            and self.request.headers.get('HX-Target') == 'collections-table'
+        )
+
+        if not context["is_htmx"] and not search_query:
+            map_collections = (
+                context["paginator"].object_list
+                if context.get("is_paginated") and context.get("paginator")
+                else collection_list
+            )
+            context['map_markers_json'] = get_collection_map_markers(map_collections)
+            context['main_map_style_url'] = settings.EXPLORER_MAIN_MAP_STYLE_URL
+            context['main_map_dark_style_url'] = settings.EXPLORER_MAIN_MAP_DARK_STYLE_URL
+
+        all_filtered_collection_ids = collection_ids
+        if context.get("is_paginated") and context.get("paginator"):
+            all_filtered_collection_ids = [
+                str(collection_id)
+                for collection_id in context["paginator"].object_list.values_list("pk", flat=True)
+            ]
+
+        # Cache language count as it rarely changes.
+        # For filtered subsets, derive the count from already prefetched languages.
+        if language_filter:
+            if context.get("is_paginated"):
+                languages_count = (
+                    CollectionObjectLanguage.objects.filter(
+                        collectiongeneralinfo__collection_id__in=all_filtered_collection_ids
+                    ).values('iso_639_3_code').distinct().count()
+                )
+            else:
+                languages_count = len(
+                    {
+                        language.iso_639_3_code
+                        for collection in collection_list
+                        for language in collection.list_languages
+                    }
+                )
         else:
             languages_count = cache.get(LANGUAGE_COUNT_CACHE_KEY)
             if languages_count is None:
@@ -157,35 +241,59 @@ class CollectionListView(ListView):
 
         context['stats'] = {
             'collections_count': (
-                context['collection_list'].count()
-                if hasattr(context['collection_list'], 'count')
-                else len(context['collection_list'])
+                context["paginator"].count if context.get("paginator") else len(collection_list)
             ),
             'languages_count': languages_count,
         }
 
-        if not search_query:
-            # Compute per-ISO-code collection counts
-            iso_counts = dict(
-                CollectionObjectLanguage.objects.filter(
-                    collectiongeneralinfo__collection__in=context['collection_list']
-                ).values('iso_639_3_code')
-                .annotate(cnt=Count('collectiongeneralinfo__collection', distinct=True))
-                .values_list('iso_639_3_code', 'cnt')
-            )
+        if is_table_sort_request:
+            return context
 
-            # Get one representative language per ISO code using DISTINCT ON
-            languages_list = list(
-                CollectionObjectLanguage.objects.filter(
-                    collectiongeneralinfo__collection__in=context['collection_list']
+        if not search_query:
+            if context.get("is_paginated"):
+                # For paginated lists, keep language index scoped to the full filtered set.
+                iso_counts = dict(
+                    CollectionObjectLanguage.objects.filter(
+                        collectiongeneralinfo__collection_id__in=all_filtered_collection_ids
+                    ).values('iso_639_3_code')
+                    .annotate(cnt=Count('collectiongeneralinfo__collection', distinct=True))
+                    .values_list('iso_639_3_code', 'cnt')
                 )
-                .exclude(name__isnull=True)
-                .exclude(name__exact="")
-                .order_by('iso_639_3_code', '-pk')
-                .distinct('iso_639_3_code')
-            )
-            for lang in languages_list:
-                lang.collections_count = iso_counts.get(lang.iso_639_3_code, 0)
+                languages_list = list(
+                    CollectionObjectLanguage.objects.filter(
+                        collectiongeneralinfo__collection_id__in=all_filtered_collection_ids
+                    )
+                    .exclude(name__isnull=True)
+                    .exclude(name__exact="")
+                    .order_by('iso_639_3_code', '-pk')
+                    .distinct('iso_639_3_code')
+                )
+                for language in languages_list:
+                    language.collections_count = iso_counts.get(language.iso_639_3_code, 0)
+            else:
+                # Build language index from already prefetched row languages.
+                iso_counts: dict[str | None, int] = {}
+                representative_by_iso: dict[str | None, CollectionObjectLanguage] = {}
+
+                for collection in collection_list:
+                    seen_in_collection: set[str | None] = set()
+                    for language in collection.list_languages:
+                        iso_code = language.iso_639_3_code
+                        if iso_code not in seen_in_collection:
+                            iso_counts[iso_code] = iso_counts.get(iso_code, 0) + 1
+                            seen_in_collection.add(iso_code)
+
+                        existing = representative_by_iso.get(iso_code)
+                        if existing is None or (language.pk or 0) > (existing.pk or 0):
+                            representative_by_iso[iso_code] = language
+
+                languages_list = [
+                    language
+                    for language in representative_by_iso.values()
+                    if language.name
+                ]
+                for language in languages_list:
+                    language.collections_count = iso_counts.get(language.iso_639_3_code, 0)
 
             language_spotlight = sorted(
                 languages_list,
@@ -204,14 +312,51 @@ class CollectionListView(ListView):
             context['language_spotlight'] = language_spotlight
             context['language_index'] = language_index
             if language_filter:
-                filtered = CollectionObjectLanguage.objects.filter(
-                    collectiongeneralinfo__collection__in=context['collection_list']
-                ).filter(
-                    Q(name__iexact=language_filter)
-                    | Q(display_name__iexact=language_filter)
-                    | Q(iso_639_3_code__iexact=language_filter)
-                ).order_by('iso_639_3_code', '-pk').distinct('iso_639_3_code')
-                selected = filtered.first()
+                if context.get("is_paginated"):
+                    selected = (
+                        CollectionObjectLanguage.objects.filter(
+                            collectiongeneralinfo__collection_id__in=all_filtered_collection_ids
+                        )
+                        .filter(
+                            Q(name__iexact=language_filter)
+                            | Q(display_name__iexact=language_filter)
+                            | Q(iso_639_3_code__iexact=language_filter)
+                        )
+                        .order_by('iso_639_3_code', '-pk')
+                        .distinct('iso_639_3_code')
+                        .first()
+                    )
+                else:
+                    normalized_filter = language_filter.lower()
+                    matching_by_iso: dict[str | None, CollectionObjectLanguage] = {}
+                    for collection in collection_list:
+                        for language in collection.list_languages:
+                            if not (
+                                (language.name and language.name.lower() == normalized_filter)
+                                or (
+                                    language.display_name
+                                    and language.display_name.lower() == normalized_filter
+                                )
+                                or (
+                                    language.iso_639_3_code
+                                    and language.iso_639_3_code.lower() == normalized_filter
+                                )
+                            ):
+                                continue
+                            iso_code = language.iso_639_3_code
+                            existing = matching_by_iso.get(iso_code)
+                            if existing is None or (language.pk or 0) > (existing.pk or 0):
+                                matching_by_iso[iso_code] = language
+
+                    selected = None
+                    if matching_by_iso:
+                        selected = sorted(
+                            matching_by_iso.values(),
+                            key=lambda language: (
+                                language.iso_639_3_code is not None,
+                                language.iso_639_3_code or "",
+                            ),
+                        )[0]
                 if selected:
                     entry = lookup_glottolog_entry(
                         glottocode=selected.glottolog_code,
@@ -220,9 +365,6 @@ class CollectionListView(ListView):
                     if entry:
                         selected.glottolog_macroarea = entry.get("macroarea")
                 context['selected_language'] = selected
-
-        context['current_sort'] = self.request.GET.get('sort', 'name')
-        context['current_order'] = self.request.GET.get('order', 'asc')
 
         return context
 
@@ -240,7 +382,7 @@ class CollectionListView(ListView):
                     'explorer/partials/collection_language_shell.html',
                     context,
                 )
-            if 'sort' in self.request.GET:
+            if self.request.headers.get('HX-Target') == 'collections-table':
                 return render(
                     self.request,
                     'explorer/partials/collections_table.html',

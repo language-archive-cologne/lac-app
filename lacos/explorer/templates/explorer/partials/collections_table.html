@@ -30,7 +30,7 @@
       <thead class="bg-base-200 sticky top-0 z-10">
         <tr class="text-left">
           <th scope="col" class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">
-            <button hx-get="?sort=name&order={% if current_sort == 'name' and current_order == 'asc' %}desc{% else %}asc{% endif %}{% if language_filter %}&language={{ language_filter|urlencode }}{% endif %}"
+            <button hx-get="?sort=name&order={% if current_sort == 'name' and current_order == 'asc' %}desc{% else %}asc{% endif %}&page=1{% if language_filter %}&language={{ language_filter|urlencode }}{% endif %}"
                     hx-target="#collections-table"
                     hx-swap="outerHTML"
                     class="hover:text-primary cursor-pointer inline-flex items-center gap-2 uppercase tracking-widest">
@@ -40,9 +40,9 @@
               {% endif %}
             </button>
           </th>
-          <th scope="col" class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">{% translate "Access" %}</th>
+          <th scope="col" class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">{% translate "Bundle Access" %}</th>
           <th scope="col" class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">
-            <button hx-get="?sort=language&order={% if current_sort == 'language' and current_order == 'asc' %}desc{% else %}asc{% endif %}{% if language_filter %}&language={{ language_filter|urlencode }}{% endif %}"
+            <button hx-get="?sort=language&order={% if current_sort == 'language' and current_order == 'asc' %}desc{% else %}asc{% endif %}&page=1{% if language_filter %}&language={{ language_filter|urlencode }}{% endif %}"
                     hx-target="#collections-table"
                     hx-swap="outerHTML"
                     class="hover:text-primary cursor-pointer inline-flex items-center gap-2 uppercase tracking-widest">
@@ -66,15 +66,9 @@
                 <a
                   href="{% url 'explorer:collection_detail_by_handle' handle=collection.identifier %}"
                   class="text-base-content hover:text-primary font-semibold"
-                  title="{% if collection.get_general_info.display_title %}{{ collection.get_general_info.display_title }}{% elif collection.get_general_info.title %}{{ collection.get_general_info.title }}{% else %}{{ collection.identifier }}{% endif %}"
+                  title="{{ collection.list_display_title }}"
                 >
-                  {% if collection.get_general_info.display_title %}
-                    {{ collection.get_general_info.display_title }}
-                  {% elif collection.get_general_info.title %}
-                    {{ collection.get_general_info.title }}
-                  {% else %}
-                    {{ collection.identifier }}
-                  {% endif %}
+                  {{ collection.list_display_title }}
                 </a>
                 <div class="flex flex-wrap items-center gap-2 text-xs text-base-content/60">
                   <span class="font-mono text-base-content/50">{{ collection.identifier }}</span>
@@ -93,7 +87,7 @@
                     {{ collection.bundles_count }} {% translate "bundles" %}
                   </a>
                 </div>
-                {% with keywords=collection.get_general_info.keywords.all %}
+                {% with keywords=collection.list_keywords %}
                   {% if keywords %}
                     <div class="mt-2 flex flex-wrap gap-1.5">
                       {% for keyword in keywords|slice:":3" %}
@@ -113,24 +107,22 @@
               </div>
             </td>
             <td class="px-6 py-5 align-top">
-              {% if collection.access_level == 'public' %}
-                <div class="tooltip tooltip-right" data-tip="{% translate 'Anyone can read bundles in this collection' %}">
-                  <span class="badge badge-success badge-sm cursor-help">{% translate "Public" %}</span>
-                </div>
-              {% elif collection.access_level == 'academic' %}
-                <div class="tooltip tooltip-right" data-tip="{% translate 'Only authenticated users can read bundles' %}">
-                  <span class="badge badge-warning badge-sm cursor-help">{% translate "Academic" %}</span>
-                </div>
-              {% else %}
-                <div class="tooltip tooltip-right" data-tip="{% translate 'Only authorized users can access' %}">
-                  <span class="badge bg-amber-600 text-white border-amber-600 badge-sm cursor-help">{% translate "Restricted" %}</span>
-                </div>
-              {% endif %}
+              {% with summary=collection.bundle_access_summary %}
+                {% if summary.total %}
+                  <div class="flex max-w-[13rem] flex-wrap items-center gap-1.5">
+                    <span class="badge badge-success badge-sm whitespace-nowrap" title="{% translate 'Public bundles' %}">{% translate "Public" %} {{ summary.public }}</span>
+                    <span class="badge badge-warning badge-sm whitespace-nowrap" title="{% translate 'Academic bundles' %}">{% translate "Academic" %} {{ summary.academic }}</span>
+                    <span class="badge badge-sm bg-amber-600 text-white border-amber-600 whitespace-nowrap" title="{% translate 'Restricted bundles' %}">{% translate "Restricted" %} {{ summary.restricted }}</span>
+                  </div>
+                {% else %}
+                  <span class="text-xs text-base-content/50">{% translate "No bundles" %}</span>
+                {% endif %}
+              {% endwith %}
             </td>
             <td class="px-6 py-5 align-top">
-              {% if collection.get_general_info and collection.get_general_info.object_languages.all %}
+              {% if collection.list_languages %}
                 <div class="flex flex-wrap gap-2">
-                  {% for language in collection.get_general_info.object_languages.all %}
+                  {% for language in collection.list_languages %}
                     <span class="inline-flex items-center gap-1 rounded-full border border-base-300 bg-base-200 px-3 py-1 text-xs font-medium text-base-content/70"{% if language.glottolog_macroarea %} title="{{ language.glottolog_macroarea }}"{% endif %}>
                       {{ language.name }}
                       {% if language.iso_639_3_code %}<span class="text-base-content/50 text-xs">[{{ language.iso_639_3_code }}]</span>{% endif %}
@@ -140,8 +132,8 @@
               {% endif %}
             </td>
             <td class="px-6 py-5 align-top text-sm text-base-content/70">
-              {% if collection.get_general_info and collection.get_general_info.description %}
-                <span class="cursor-help" title="{{ collection.get_general_info.description }}">{{ collection.get_general_info.description|truncatewords:10|urlize_text }}</span>
+              {% if collection.list_description %}
+                <span class="cursor-help" title="{{ collection.list_description }}">{{ collection.list_description|truncatewords:10|urlize_text }}</span>
               {% endif %}
             </td>
             <td class="px-6 py-5 align-top text-sm text-base-content/70">
@@ -164,15 +156,15 @@
               {% endif %}
             </td>
             <td class="px-6 py-5 align-top text-sm text-base-content/70 whitespace-nowrap">
-              {% if collection.publication_info.first and collection.publication_info.first.publication_year %}
-                {{ collection.publication_info.first.publication_year }}
-              {% elif collection.get_general_info and collection.get_general_info.recording_date %}
-                {{ collection.get_general_info.recording_date|date:"M Y" }}
+              {% if collection.list_publication_year %}
+                {{ collection.list_publication_year }}
+              {% elif collection.list_general_info and collection.list_general_info.recording_date %}
+                {{ collection.list_general_info.recording_date|date:"M Y" }}
               {% endif %}
             </td>
             <td class="px-6 py-5 align-top text-sm text-base-content/70">
-              {% if collection.publication_info.first and collection.publication_info.first.creators.all %}
-                {% for creator in collection.publication_info.first.creators.all %}{% if not forloop.first %}, {% endif %}{{ creator.given_name }} {{ creator.family_name }}{% endfor %}
+              {% if collection.list_creators_display %}
+                {{ collection.list_creators_display }}
               {% endif %}
             </td>
           </tr>
@@ -180,4 +172,35 @@
       </tbody>
     </table>
   </div>
+  {% if is_paginated %}
+    <div class="flex items-center justify-between gap-3 border-t border-base-300 bg-base-200 px-4 py-3 text-xs text-base-content/70">
+      <div class="uppercase tracking-widest">
+        {% translate "Page" %} {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+      </div>
+      <div class="flex items-center gap-2">
+        {% if page_obj.has_previous %}
+          <a
+            href="?page={{ page_obj.previous_page_number }}&sort={{ current_sort }}&order={{ current_order }}{% if language_filter %}&language={{ language_filter|urlencode }}{% endif %}"
+            hx-get="?page={{ page_obj.previous_page_number }}&sort={{ current_sort }}&order={{ current_order }}{% if language_filter %}&language={{ language_filter|urlencode }}{% endif %}"
+            hx-target="#collections-table"
+            hx-swap="outerHTML"
+            class="btn btn-ghost btn-xs"
+          >{% translate "Previous" %}</a>
+        {% else %}
+          <span class="btn btn-ghost btn-xs btn-disabled pointer-events-none">{% translate "Previous" %}</span>
+        {% endif %}
+        {% if page_obj.has_next %}
+          <a
+            href="?page={{ page_obj.next_page_number }}&sort={{ current_sort }}&order={{ current_order }}{% if language_filter %}&language={{ language_filter|urlencode }}{% endif %}"
+            hx-get="?page={{ page_obj.next_page_number }}&sort={{ current_sort }}&order={{ current_order }}{% if language_filter %}&language={{ language_filter|urlencode }}{% endif %}"
+            hx-target="#collections-table"
+            hx-swap="outerHTML"
+            class="btn btn-ghost btn-xs"
+          >{% translate "Next" %}</a>
+        {% else %}
+          <span class="btn btn-ghost btn-xs btn-disabled pointer-events-none">{% translate "Next" %}</span>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
 </div>

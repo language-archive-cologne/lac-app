@@ -23,14 +23,17 @@ def get_collection_map_markers(collections):
 
     markers = []
     for collection in collections:
-        geo = getattr(collection, 'geo_location', None)
-        if not geo or ',' not in geo:
-            continue
         try:
-            lat, lng = geo.split(',')
             # Use prefetched data if available, fall back to get_general_info
             gi_list = getattr(collection, 'prefetched_general_info', None)
             gi = gi_list[0] if gi_list else collection.get_general_info
+            geo = getattr(collection, 'geo_location', None)
+            if not geo and gi and gi.location:
+                geo = gi.location.geo_location
+            if not geo or ',' not in geo:
+                continue
+
+            lat, lng = geo.split(',')
             title = (
                 (gi.display_title if gi else None)
                 or (gi.title if gi else None)
