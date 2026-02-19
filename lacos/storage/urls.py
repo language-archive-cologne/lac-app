@@ -93,6 +93,12 @@ urlpatterns = [
     path("ocfl/modal/<str:bucket_name>/<path:folder_path>/", views.ocfl_conversion_modal, name="ocfl_conversion_modal"),
     path("ocfl/convert/<str:bucket_name>/<path:folder_path>/", views.ConvertToOCFLView.as_view(), name="convert_to_ocfl"),
 
+    # Audio peaks generation
+    path("peaks/modal/<str:bucket_name>/", views.generate_peaks_modal, name="generate_peaks_modal"),
+    path("peaks/modal/<str:bucket_name>/<path:folder_path>/", views.generate_peaks_modal, name="generate_peaks_folder_modal"),
+    path("peaks/generate/<str:bucket_name>/", views.GeneratePeaksView.as_view(), name="generate_peaks"),
+    path("peaks/generate/<str:bucket_name>/<path:folder_path>/", views.GeneratePeaksView.as_view(), name="generate_peaks_folder"),
+
     # ALTCHA and protected downloads
     # Note: CSRF exempt because these endpoints use ALTCHA proof-of-work for protection
     # and only return presigned URLs (no state modification)
