@@ -99,7 +99,6 @@ def generate_peaks_task(
                 message="Audio sidecars generated",
                 result={
                     "peaks_key": result.get("peaks_key"),
-                    "spectrogram_key": result.get("spectrogram_key"),
                     "spectrogram_data_key": result.get("spectrogram_data_key"),
                 },
             )

@@ -1,7 +1,7 @@
 """Service for generating pre-computed audio visualization artifacts.
 
-Uses BBC's audiowaveform CLI to pre-compute peak data that WaveSurfer.js
-can load instantly, avoiding client-side decoding of large audio files.
+Uses BBC's audiowaveform CLI for peak data and numpy STFT for spectrogram
+frequency bins that match WaveSurfer.js Spectrogram plugin output exactly.
 """
 
 import json
@@ -10,8 +10,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import numpy as np
 from botocore.exceptions import ClientError
-from PIL import Image
 
 from lacos.storage.services.bucket_service import BucketService
 
@@ -20,10 +20,18 @@ logger = logging.getLogger(__name__)
 AUDIOWAVEFORM_BIN = "audiowaveform"
 FFPROBE_BIN = "ffprobe"
 FFMPEG_BIN = "ffmpeg"
-SPECTROGRAM_STYLE_VERSION = "2"
-SPECTROGRAM_DATA_VERSION = "1"
-SPECTROGRAM_WIDTH = 1200
-SPECTROGRAM_HEIGHT = 256
+# Bump style version to force regeneration with new FFT pipeline.
+SPECTROGRAM_STYLE_VERSION = "5"
+SPECTROGRAM_DATA_VERSION = "4"
+
+# FFT parameters matching WaveSurfer Spectrogram plugin defaults.
+FFT_SAMPLES = 512
+GAIN_DB = 20
+RANGE_DB = 80
+TARGET_SAMPLE_RATE = 44100
+# Cap spectrogram frames to keep JSON under ~5 MB.
+# 8000 frames * 257 bins * ~3 bytes ≈ 6 MB.
+MAX_SPECTROGRAM_FRAMES = 8000
 
 
 class MediaProcessingService:
@@ -38,32 +46,22 @@ class MediaProcessingService:
         Returns dict with 'success', sidecar keys, and optional 'error'.
         """
         peaks_key = self._peaks_key(s3_key)
-        spectrogram_key = self._spectrogram_key(s3_key)
         spectrogram_data_key = self._spectrogram_data_key(s3_key)
 
-        # Idempotency: skip if all sidecars already match the source ETag.
         source_etag = self._get_source_etag(bucket, s3_key)
         if not source_etag:
             return {"success": False, "error": f"Source file not found: {s3_key}"}
 
         peaks_current = self._artifact_is_current(bucket, peaks_key, source_etag)
-        spectrogram_current = self._spectrogram_is_current(
-            bucket,
-            spectrogram_key,
-            source_etag,
-        )
         spectrogram_data_current = self._spectrogram_data_is_current(
-            bucket,
-            spectrogram_data_key,
-            source_etag,
+            bucket, spectrogram_data_key, source_etag,
         )
 
-        if peaks_current and spectrogram_current and spectrogram_data_current:
+        if peaks_current and spectrogram_data_current:
             logger.info("Audio derivatives already current for %s/%s", bucket, s3_key)
             return {
                 "success": True,
                 "peaks_key": peaks_key,
-                "spectrogram_key": spectrogram_key,
                 "spectrogram_data_key": spectrogram_data_key,
                 "skipped": True,
             }
@@ -72,10 +70,7 @@ class MediaProcessingService:
             tmp_path = Path(tmp_dir)
             input_path = tmp_path / Path(s3_key).name
             peaks_output_path = tmp_path / "peaks.json"
-            spectrogram_output_path = tmp_path / "spectrogram.png"
-            spectrogram_data_output_path = tmp_path / "spectrogram.json"
 
-            # Download source audio
             try:
                 self.bucket_service.s3_client.download_file(
                     bucket, s3_key, str(input_path)
@@ -84,13 +79,11 @@ class MediaProcessingService:
                 logger.error("Failed to download %s/%s: %s", bucket, s3_key, exc)
                 return {"success": False, "error": f"Download failed: {exc}"}
 
-            # Get duration for adaptive resolution
             duration = self._get_duration(input_path)
             if duration <= 0:
                 return {"success": False, "error": "Could not determine audio duration"}
 
             if not peaks_current:
-                # Generate waveform peaks sidecar.
                 try:
                     self._run_audiowaveform(input_path, peaks_output_path, duration)
                 except subprocess.CalledProcessError as exc:
@@ -120,82 +113,48 @@ class MediaProcessingService:
                     logger.error("Failed to upload peaks for %s: %s", s3_key, exc)
                     return {"success": False, "error": f"Upload failed: {exc}"}
 
-            if not spectrogram_current or not spectrogram_data_current:
-                # Generate spectrogram source image for sidecars.
+            if not spectrogram_data_current:
                 try:
-                    self._run_ffmpeg_spectrogram(input_path, spectrogram_output_path)
-                except subprocess.CalledProcessError as exc:
-                    logger.error("ffmpeg spectrogram failed for %s: %s", s3_key, exc.stderr)
-                    return {"success": False, "error": f"ffmpeg spectrogram error: {exc.stderr}"}
-                except FileNotFoundError:
-                    logger.error("ffmpeg binary not found")
-                    return {"success": False, "error": "ffmpeg not installed"}
+                    spectrogram_data = self._compute_spectrogram(input_path)
+                except Exception as exc:
+                    logger.error(
+                        "Failed to compute spectrogram for %s: %s", s3_key, exc,
+                    )
+                    return {"success": False, "error": f"Spectrogram computation failed: {exc}"}
 
-                if not spectrogram_current:
-                    try:
-                        spectrogram_bytes = spectrogram_output_path.read_bytes()
-                    except FileNotFoundError as exc:
-                        return {"success": False, "error": f"Failed to read spectrogram output: {exc}"}
+                spectrogram_bytes = json.dumps(
+                    spectrogram_data, separators=(",", ":")
+                ).encode()
 
-                    try:
-                        self.bucket_service.s3_client.put_object(
-                            Bucket=bucket,
-                            Key=spectrogram_key,
-                            Body=spectrogram_bytes,
-                            ContentType="image/png",
-                            Metadata={
-                                "source-etag": source_etag,
-                                "spectrogram-style-version": SPECTROGRAM_STYLE_VERSION,
-                            },
-                        )
-                    except ClientError as exc:
-                        logger.error("Failed to upload spectrogram for %s: %s", s3_key, exc)
-                        return {"success": False, "error": f"Upload failed: {exc}"}
-
-                if not spectrogram_data_current:
-                    try:
-                        spectrogram_data = self._transform_spectrogram_for_wavesurfer(
-                            spectrogram_output_path,
-                            spectrogram_data_output_path,
-                        )
-                    except Exception as exc:
-                        logger.error(
-                            "Failed to generate spectrogram JSON for %s: %s",
-                            s3_key,
-                            exc,
-                        )
-                        return {"success": False, "error": f"Failed to generate spectrogram data: {exc}"}
-
-                    try:
-                        self.bucket_service.s3_client.put_object(
-                            Bucket=bucket,
-                            Key=spectrogram_data_key,
-                            Body=spectrogram_data,
-                            ContentType="application/json",
-                            Metadata={
-                                "source-etag": source_etag,
-                                "spectrogram-style-version": SPECTROGRAM_STYLE_VERSION,
-                                "spectrogram-data-version": SPECTROGRAM_DATA_VERSION,
-                            },
-                        )
-                    except ClientError as exc:
-                        logger.error("Failed to upload spectrogram data for %s: %s", s3_key, exc)
-                        return {"success": False, "error": f"Upload failed: {exc}"}
+                try:
+                    self.bucket_service.s3_client.put_object(
+                        Bucket=bucket,
+                        Key=spectrogram_data_key,
+                        Body=spectrogram_bytes,
+                        ContentType="application/json",
+                        Metadata={
+                            "source-etag": source_etag,
+                            "spectrogram-style-version": SPECTROGRAM_STYLE_VERSION,
+                            "spectrogram-data-version": SPECTROGRAM_DATA_VERSION,
+                        },
+                    )
+                except ClientError as exc:
+                    logger.error("Failed to upload spectrogram data for %s: %s", s3_key, exc)
+                    return {"success": False, "error": f"Upload failed: {exc}"}
 
         logger.info(
-            "Generated audio derivatives for %s/%s -> peaks=%s spectrogram=%s spectrogram_data=%s",
-            bucket,
-            s3_key,
-            peaks_key,
-            spectrogram_key,
-            spectrogram_data_key,
+            "Generated audio derivatives for %s/%s -> peaks=%s spectrogram_data=%s",
+            bucket, s3_key, peaks_key, spectrogram_data_key,
         )
         return {
             "success": True,
             "peaks_key": peaks_key,
-            "spectrogram_key": spectrogram_key,
             "spectrogram_data_key": spectrogram_data_key,
         }
+
+    # ------------------------------------------------------------------
+    # Peaks
+    # ------------------------------------------------------------------
 
     def _run_audiowaveform(
         self, input_path: Path, output_path: Path, duration: float
@@ -211,75 +170,15 @@ class MediaProcessingService:
         ]
         subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=600)
 
-    def _run_ffmpeg_spectrogram(self, input_path: Path, output_path: Path) -> None:
-        """Render a static spectrogram image from an audio file."""
-        cmd = [
-            FFMPEG_BIN,
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-y",
-            "-i",
-            str(input_path),
-            "-lavfi",
-            (
-                "showspectrumpic="
-                f"s={SPECTROGRAM_WIDTH}x{SPECTROGRAM_HEIGHT}:"
-                "legend=disabled:"
-                "color=intensity:"
-                "saturation=0:"
-                "scale=log:"
-                "fscale=lin:"
-                "gain=3:"
-                "drange=70"
-            ),
-            "-frames:v",
-            "1",
-            str(output_path),
-        ]
-        subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=600)
-
-    def _transform_spectrogram_for_wavesurfer(
-        self,
-        image_path: Path,
-        output_path: Path,
-    ) -> bytes:
-        """Convert spectrogram image into WaveSurfer frequency matrix JSON."""
-        with Image.open(image_path) as image:
-            grayscale = image.convert("L")
-            if grayscale.size != (SPECTROGRAM_WIDTH, SPECTROGRAM_HEIGHT):
-                grayscale = grayscale.resize(
-                    (SPECTROGRAM_WIDTH, SPECTROGRAM_HEIGHT),
-                    Image.Resampling.BILINEAR,
-                )
-
-            width, height = grayscale.size
-            pixels = grayscale.load()
-
-            # WaveSurfer expects [time_slice][frequency_bin], low->high frequency.
-            frequency_data = []
-            for x_pos in range(width):
-                column = [int(pixels[x_pos, y_pos]) for y_pos in range(height - 1, -1, -1)]
-                frequency_data.append(column)
-
-        output_path.write_text(json.dumps(frequency_data, separators=(",", ":")))
-        return output_path.read_bytes()
-
     def _transform_peaks_for_wavesurfer(
         self, raw_json: dict, duration: float
     ) -> dict:
-        """Transform audiowaveform JSON to WaveSurfer-compatible format.
-
-        audiowaveform outputs: {version, channels, sample_rate, samples_per_pixel,
-                                bits, length, data}
-        WaveSurfer expects: {data: [...peaks], duration: float}
-        """
+        """Transform audiowaveform JSON to WaveSurfer-compatible format."""
         data = raw_json.get("data", [])
         channels = raw_json.get("channels", 1)
         bits = raw_json.get("bits", 8)
         max_val = (2 ** (bits - 1)) - 1 if bits > 0 else 127
 
-        # Normalize to [-1, 1] range
         normalized = [round(v / max_val, 4) for v in data]
 
         return {
@@ -289,6 +188,85 @@ class MediaProcessingService:
             "sample_rate": raw_json.get("sample_rate", 0),
             "samples_per_pixel": raw_json.get("samples_per_pixel", 0),
         }
+
+    # ------------------------------------------------------------------
+    # Spectrogram (numpy STFT matching WaveSurfer Spectrogram plugin)
+    # ------------------------------------------------------------------
+
+    def _decode_audio_to_pcm(self, input_path: Path) -> np.ndarray:
+        """Decode any audio format to mono float32 PCM via ffmpeg."""
+        cmd = [
+            FFMPEG_BIN,
+            "-hide_banner", "-loglevel", "error",
+            "-i", str(input_path),
+            "-ac", "1",
+            "-ar", str(TARGET_SAMPLE_RATE),
+            "-f", "f32le",
+            "-acodec", "pcm_f32le",
+            "pipe:1",
+        ]
+        result = subprocess.run(
+            cmd, check=True, capture_output=True, timeout=600,
+        )
+        return np.frombuffer(result.stdout, dtype=np.float32)
+
+    def _compute_spectrogram(self, input_path: Path) -> list[list[int]]:
+        """Compute spectrogram frequency bins matching WaveSurfer's FFT.
+
+        Replicates the exact algorithm from WaveSurfer's Spectrogram plugin:
+        1. Hann window of size fftSamples
+        2. RFFT → magnitude spectrum
+        3. Normalize: 2/N * |FFT|
+        4. dB conversion: 20 * log10(max(1e-12, mag))
+        5. Scale to 0-255 with gain/range parameters
+
+        The hop size is adaptive: short files get WaveSurfer's native 75%
+        overlap, long files use a larger hop to cap output at MAX_SPECTROGRAM_FRAMES.
+        """
+        samples = self._decode_audio_to_pcm(input_path)
+        n_fft = FFT_SAMPLES
+        n_bins = n_fft // 2 + 1
+        n_samples = len(samples)
+
+        if n_samples < n_fft:
+            return []
+
+        # Hann window (periodic, matching WaveSurfer)
+        window = np.hanning(n_fft).astype(np.float32)
+
+        # Adaptive hop: native 75% overlap (hop=128) for short files,
+        # larger hop for long files to keep total frames ≤ MAX_SPECTROGRAM_FRAMES.
+        native_hop = max(64, n_fft // 4)
+        native_frames = (n_samples - n_fft) // native_hop + 1
+        if native_frames <= MAX_SPECTROGRAM_FRAMES:
+            hop_size = native_hop
+        else:
+            hop_size = max(native_hop, (n_samples - n_fft) // MAX_SPECTROGRAM_FRAMES)
+
+        n_frames = (n_samples - n_fft) // hop_size + 1
+
+        # Vectorised STFT
+        indices = np.arange(n_fft)[None, :] + (np.arange(n_frames) * hop_size)[:, None]
+        frames = samples[indices] * window
+
+        fft_result = np.fft.rfft(frames, n=n_fft)
+        magnitudes = (2.0 / n_fft) * np.abs(fft_result)
+
+        # dB conversion and 0-255 scaling (matches WaveSurfer exactly)
+        magnitudes = np.maximum(magnitudes, 1e-12)
+        db = 20.0 * np.log10(magnitudes)
+
+        lower = -(GAIN_DB + RANGE_DB)  # -100 dB
+        upper = -GAIN_DB               # -20 dB
+
+        scaled = np.clip((db - lower) / (upper - lower) * 255.0, 0, 255)
+        uint8_data = np.round(scaled).astype(np.uint8)
+
+        return uint8_data.tolist()
+
+    # ------------------------------------------------------------------
+    # Duration
+    # ------------------------------------------------------------------
 
     def _get_duration(self, file_path: Path) -> float:
         """Use ffprobe to get duration in seconds."""
@@ -309,20 +287,24 @@ class MediaProcessingService:
             logger.warning("ffprobe failed for %s: %s", file_path, exc)
             return 0.0
 
+    # ------------------------------------------------------------------
+    # S3 key helpers
+    # ------------------------------------------------------------------
+
     def _peaks_key(self, s3_key: str) -> str:
-        """Derive peaks S3 key: recording.wav -> recording.wav.peaks.json"""
         return f"{s3_key}.peaks.json"
 
     def _spectrogram_key(self, s3_key: str) -> str:
-        """Derive spectrogram S3 key: recording.wav -> recording.wav.spectrogram.png"""
         return f"{s3_key}.spectrogram.png"
 
     def _spectrogram_data_key(self, s3_key: str) -> str:
-        """Derive spectrogram data S3 key: recording.wav -> recording.wav.spectrogram.json"""
         return f"{s3_key}.spectrogram.json"
 
+    # ------------------------------------------------------------------
+    # Freshness checks
+    # ------------------------------------------------------------------
+
     def _get_source_etag(self, bucket: str, s3_key: str) -> str | None:
-        """Get ETag of the source audio file."""
         info = self.bucket_service.get_file_info(bucket, s3_key)
         if info.get("success"):
             return info.get("etag", "").strip('"')
@@ -331,7 +313,6 @@ class MediaProcessingService:
     def _artifact_is_current(
         self, bucket: str, key: str, source_etag: str
     ) -> bool:
-        """Check whether a sidecar exists and matches the source file's ETag."""
         try:
             response = self.bucket_service.s3_client.head_object(
                 Bucket=bucket, Key=key
@@ -342,7 +323,6 @@ class MediaProcessingService:
             return False
 
     def _artifact_exists(self, bucket: str, key: str) -> bool:
-        """Check if a sidecar exists in S3 regardless of version freshness."""
         try:
             self.bucket_service.s3_client.head_object(Bucket=bucket, Key=key)
             return True
@@ -354,11 +334,9 @@ class MediaProcessingService:
     def _spectrogram_is_current(
         self, bucket: str, spectrogram_key: str, source_etag: str
     ) -> bool:
-        """Check if spectrogram exists, matches source ETag, and style version."""
         try:
             response = self.bucket_service.s3_client.head_object(
-                Bucket=bucket,
-                Key=spectrogram_key,
+                Bucket=bucket, Key=spectrogram_key,
             )
             metadata = response.get("Metadata", {})
             stored_etag = metadata.get("source-etag", "")
@@ -371,16 +349,11 @@ class MediaProcessingService:
             return False
 
     def _spectrogram_data_is_current(
-        self,
-        bucket: str,
-        spectrogram_data_key: str,
-        source_etag: str,
+        self, bucket: str, spectrogram_data_key: str, source_etag: str,
     ) -> bool:
-        """Check if spectrogram frequency data is current for the source audio."""
         try:
             response = self.bucket_service.s3_client.head_object(
-                Bucket=bucket,
-                Key=spectrogram_data_key,
+                Bucket=bucket, Key=spectrogram_data_key,
             )
             metadata = response.get("Metadata", {})
             stored_etag = metadata.get("source-etag", "")
@@ -395,28 +368,21 @@ class MediaProcessingService:
             return False
 
     def peaks_exist(self, bucket: str, s3_key: str) -> bool:
-        """Check if peaks file already exists (any version)."""
         return self._artifact_exists(bucket, self._peaks_key(s3_key))
 
     def derivatives_exist(self, bucket: str, s3_key: str) -> bool:
-        """Check whether peaks and both spectrogram sidecars exist."""
         return (
             self._artifact_exists(bucket, self._peaks_key(s3_key))
-            and self._artifact_exists(bucket, self._spectrogram_key(s3_key))
             and self._artifact_exists(bucket, self._spectrogram_data_key(s3_key))
         )
 
     def derivatives_current(self, bucket: str, s3_key: str) -> bool:
-        """Check whether all audio sidecars are up to date for the source file."""
         source_etag = self._get_source_etag(bucket, s3_key)
         if not source_etag:
             return False
 
         return (
             self._artifact_is_current(bucket, self._peaks_key(s3_key), source_etag)
-            and self._spectrogram_is_current(
-                bucket, self._spectrogram_key(s3_key), source_etag
-            )
             and self._spectrogram_data_is_current(
                 bucket, self._spectrogram_data_key(s3_key), source_etag
             )
