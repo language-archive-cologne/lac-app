@@ -32,6 +32,7 @@
       }
 
       let currentWavesurfer = null;
+      let spectrogramRenderer = null;
 
       // Format time as m:ss.mmm
       const formatTime = (seconds) => {
@@ -93,7 +94,6 @@
           const spectrogramDataUrl = playerContainer.dataset.spectrogramDataUrl;
 
           const waveformEl = playerContainer.querySelector('#waveform');
-          const spectrogramEl = playerContainer.querySelector('#spectrogram');
           const timelineEl = playerContainer.querySelector('#timeline');
           const loadingEl = playerContainer.querySelector('#player-loading');
 
@@ -123,42 +123,24 @@
 
         const usePrecomputedSpectrogram = (
           isAnalyzeMode
-          && spectrogramEl
           && spectrogramDataUrl
-          && typeof WaveSurfer.Spectrogram !== 'undefined'
+          && typeof window.SpectrogramRenderer !== 'undefined'
         );
 
-        // Analyze mode prefers pre-computed frequency bins for fast spectrogram rendering.
-        if (usePrecomputedSpectrogram) {
-          plugins.push(WaveSurfer.Spectrogram.create({
-            container: spectrogramEl,
-            height: 224,
-            labels: false,
-            colorMap: 'gray',
-            frequenciesDataUrl: spectrogramDataUrl,
-            // Required by WaveSurfer when loading precomputed frequency data.
-            sampleRate: 44100,
-            frequencyMin: 0,
-            frequencyMax: 22050,
-          }));
-        }
-
-        // Create WaveSurfer instance
-        const containerEl = waveformEl || spectrogramEl;
-        if (!containerEl) return false;
+        if (!waveformEl) return false;
 
         currentWavesurfer = WaveSurfer.create({
-          container: containerEl,
-          waveColor: usePrecomputedSpectrogram ? 'transparent' : '#64748b',
-          progressColor: usePrecomputedSpectrogram ? 'transparent' : '#3b82f6',
-          cursorColor: usePrecomputedSpectrogram ? '#C7D2FE' : '#ef4444',
-          cursorWidth: usePrecomputedSpectrogram ? 1 : 2,
-          height: isAnalyzeMode ? 224 : 128,
-          barWidth: usePrecomputedSpectrogram ? 0 : 2,
+          container: waveformEl,
+          waveColor: usePrecomputedSpectrogram ? 'rgba(200,200,200,0.5)' : '#64748b',
+          progressColor: usePrecomputedSpectrogram ? 'rgba(59,130,246,0.5)' : '#3b82f6',
+          cursorColor: '#ef4444',
+          cursorWidth: 2,
+          height: usePrecomputedSpectrogram ? 256 : 128,
+          barWidth: 2,
           barGap: 1,
           barRadius: 2,
           normalize: true,
-          minPxPerSec: isAnalyzeMode ? 500 : 20,
+          minPxPerSec: isAnalyzeMode ? 100 : 20,
           hideScrollbar: false,
           autoCenter: true,
           autoScroll: true,
@@ -359,6 +341,17 @@
 
         updateSelectionUi();
 
+        // Pre-fetch spectrogram data and render with vanilla canvas.
+        if (usePrecomputedSpectrogram && spectrogramDataUrl) {
+          fetch(spectrogramDataUrl)
+            .then(resp => { if (!resp.ok) throw new Error(resp.status); return resp.json(); })
+            .then(data => {
+              if (!currentWavesurfer) return;
+              spectrogramRenderer = new SpectrogramRenderer(currentWavesurfer, data, { height: 256 });
+            })
+            .catch(err => console.warn('Spectrogram data unavailable:', err));
+        }
+
         // Load audio with peaks whenever possible to avoid expensive decode.
         const canUsePeaksForLoad = Boolean(peaksUrl);
         if (canUsePeaksForLoad) {
@@ -462,7 +455,10 @@
       };
 
       const closeModal = () => {
-        // Destroy WaveSurfer instance to free resources
+        if (spectrogramRenderer) {
+          spectrogramRenderer.destroy();
+          spectrogramRenderer = null;
+        }
         if (currentWavesurfer) {
           currentWavesurfer.destroy();
           currentWavesurfer = null;
