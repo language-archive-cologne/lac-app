@@ -320,6 +320,15 @@ class DatabaseBackupService:
 
     def _build_s3_client(self):
         endpoint_url = getattr(settings, "AWS_S3_ENDPOINT_URL", None)
+        configured_pool_size = getattr(settings, "AWS_S3_MAX_POOL_CONNECTIONS", 50)
+        try:
+            max_pool_connections = max(1, int(configured_pool_size))
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid AWS_S3_MAX_POOL_CONNECTIONS value %r. Falling back to 50.",
+                configured_pool_size,
+            )
+            max_pool_connections = 50
         client_kwargs = {
             "service_name": "s3",
             "region_name": getattr(settings, "AWS_S3_REGION_NAME", None),
@@ -327,11 +336,13 @@ class DatabaseBackupService:
             "aws_secret_access_key": getattr(settings, "AWS_SECRET_ACCESS_KEY", None),
         }
         client_kwargs = {key: value for key, value in client_kwargs.items() if value is not None}
+        config_kwargs = {
+            "max_pool_connections": max_pool_connections,
+        }
         if endpoint_url:
             client_kwargs["endpoint_url"] = endpoint_url
-            client_kwargs["config"] = Config(
-                signature_version=getattr(settings, "AWS_S3_SIGNATURE_VERSION", "s3v4"),
-                s3={"addressing_style": "path"},
-            )
+            config_kwargs["signature_version"] = getattr(settings, "AWS_S3_SIGNATURE_VERSION", "s3v4")
+            config_kwargs["s3"] = {"addressing_style": "path"}
+        client_kwargs["config"] = Config(**config_kwargs)
 
         return boto3.client(**client_kwargs)

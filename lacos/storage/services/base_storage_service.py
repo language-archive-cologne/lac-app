@@ -44,6 +44,7 @@ class BaseStorageService:
         self.access_key = self._get_access_key()
         self.secret_key = self._get_secret_key()
         self.region = self._get_region()
+        self.max_pool_connections = self._get_max_pool_connections()
         
         # Determine if we're running inside a container
         # This helps us decide how to handle URLs for browser access
@@ -64,6 +65,7 @@ class BaseStorageService:
         logger.info(f"BaseStorageService initialized with {'MinIO' if self.is_minio else 'S3'}")
         logger.info(f"Using endpoint: {self.endpoint_url or 'default S3 endpoint'}")
         logger.info(f"Using region: {self.region}")
+        logger.info(f"S3 max pool connections: {self.max_pool_connections}")
         logger.info(f"Workspace buckets: {self.workspace_buckets}")
         logger.info(f"All buckets are OCFL-capable")
         logger.info(f"Legacy ingest bucket: {self.ingest_bucket}")
@@ -202,6 +204,19 @@ class BaseStorageService:
         
         # Default region
         return 'us-east-1'
+
+    def _get_max_pool_connections(self) -> int:
+        """Get max HTTP connection pool size for botocore clients."""
+        configured = getattr(settings, 'AWS_S3_MAX_POOL_CONNECTIONS', 50)
+        try:
+            parsed = int(configured)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid AWS_S3_MAX_POOL_CONNECTIONS value %r. Falling back to 50.",
+                configured,
+            )
+            parsed = 50
+        return max(1, parsed)
     
     def _get_ingest_bucket_name(self) -> str:
         """Get the ingest bucket name for S3/MinIO."""
@@ -298,6 +313,9 @@ class BaseStorageService:
             'aws_access_key_id': self.access_key,
             'aws_secret_access_key': self.secret_key,
         }
+        config_kwargs = {
+            'max_pool_connections': self.max_pool_connections,
+        }
         
         # Add region if specified
         if self.region:
@@ -313,10 +331,8 @@ class BaseStorageService:
             if self.is_minio:
                 # Create a config that tells boto3 to use path-style addressing
                 # This is required for MinIO
-                client_kwargs['config'] = boto3.session.Config(
-                    signature_version='s3v4',
-                    s3={'addressing_style': 'path'}
-                )
+                config_kwargs['signature_version'] = 's3v4'
+                config_kwargs['s3'] = {'addressing_style': 'path'}
                 
                 # For presigned URLs that will be used by the browser,
                 # we need to use a browser-accessible URL
@@ -340,12 +356,11 @@ class BaseStorageService:
                     aws_secret_access_key=self.secret_key,
                     region_name=self.region if self.region else None,
                     endpoint_url=browser_endpoint,
-                    config=boto3.session.Config(
-                        signature_version='s3v4',
-                        s3={'addressing_style': 'path'}
-                    )
+                    config=boto3.session.Config(**config_kwargs)
                 )
                 logger.info(f"Created separate client for presigned URLs with endpoint: {browser_endpoint}")
+
+        client_kwargs['config'] = boto3.session.Config(**config_kwargs)
         
         # Create the primary client
         client = boto3.client(**client_kwargs)
