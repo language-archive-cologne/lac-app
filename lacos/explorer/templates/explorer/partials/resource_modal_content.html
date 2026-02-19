@@ -18,7 +18,11 @@
     {% if media_type == 'audio' %}
       <!-- Native audio element (fast stream) -->
       <div class="bg-base-100 border border-base-300 rounded-lg p-3">
-        <audio controls preload="metadata" class="w-full">
+        {% if peaks_url %}
+          <div id="peaks-waveform" class="mb-2" style="min-height: 80px;" data-peaks-url="{{ peaks_url }}"></div>
+        {% endif %}
+        <audio controls preload="metadata" class="w-full"
+               {% if peaks_url %}data-peaks-url="{{ peaks_url }}"{% endif %}>
           <source src="{{ stream_url }}" type="{{ source_mime_type }}">
           <p>{% translate "Your browser does not support the audio element." %}</p>
         </audio>

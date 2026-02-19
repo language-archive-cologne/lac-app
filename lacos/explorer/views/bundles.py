@@ -359,6 +359,11 @@ class ResourceAccessView(View):
             if action == 'download':
                 raise Http404("Direct downloads are not available")
 
+            # Resolve peaks URL for audio files
+            peaks_url = None
+            if detected_media_type == 'audio':
+                peaks_url = self._resolve_peaks_url(resource_service, bucket_name, object_key)
+
             if is_htmx and action in {'play', 'view'}:
                 return self._render_htmx_modal(
                     request, resource, mime_type, detected_media_type, source_mime_type,
@@ -366,6 +371,7 @@ class ResourceAccessView(View):
                     xml_preview=xml_preview,
                     download_bucket=bucket_name,
                     download_key=object_key,
+                    peaks_url=peaks_url,
                 )
 
             if action in {'play', 'view'}:
@@ -421,11 +427,20 @@ class ResourceAccessView(View):
             'tier_headers': elan_data.get('tier_headers', []),
         }
 
+    def _resolve_peaks_url(self, resource_service, bucket_name, object_key):
+        """Check if pre-computed peaks exist and return a presigned URL."""
+        peaks_key = f"{object_key}.peaks.json"
+        try:
+            resource_service.s3_client.head_object(Bucket=bucket_name, Key=peaks_key)
+            return resource_service.generate_presigned_url(bucket_name, peaks_key)
+        except Exception:
+            return None
+
     def _render_htmx_modal(
         self, request, resource, mime_type, detected_media_type, source_mime_type,
         presigned_url, download_url, elan_context, is_elan,
         xml_preview=None,
-        download_bucket=None, download_key=None
+        download_bucket=None, download_key=None, peaks_url=None,
     ):
         """Render the HTMX modal response for play/view actions."""
         media_type = 'elan' if is_elan else detected_media_type
@@ -444,6 +459,7 @@ class ResourceAccessView(View):
             'download_filename': getattr(resource, 'file_name', None),
             'elan_context': elan_context,
             'xml_content': xml_preview,
+            'peaks_url': peaks_url,
         }
 
         response = render(

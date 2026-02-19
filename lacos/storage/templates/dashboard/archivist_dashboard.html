@@ -288,7 +288,9 @@
         const waveformTarget = container.querySelector('#waveform');
         const audioElement = container.querySelector('#audioPlayer');
         if (!waveformTarget || !audioElement || !window.WaveSurfer) return;
-        waveSurferInstance = WaveSurfer.create({
+
+        const peaksUrl = waveformTarget.dataset.peaksUrl;
+        const wsOpts = {
             container: waveformTarget,
             waveColor: '#4F46E5',
             progressColor: '#818CF8',
@@ -298,8 +300,27 @@
             cursorWidth: 1,
             height: 80,
             barGap: 2,
-        });
-        waveSurferInstance.load(audioElement.src);
+        };
+
+        if (peaksUrl) {
+            // Use pre-computed peaks — avoids full audio decode
+            fetch(peaksUrl)
+                .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+                .then(peaksData => {
+                    wsOpts.media = audioElement;
+                    wsOpts.peaks = [peaksData.data];
+                    wsOpts.duration = peaksData.duration;
+                    waveSurferInstance = WaveSurfer.create(wsOpts);
+                })
+                .catch(() => {
+                    // Fallback: decode full audio
+                    waveSurferInstance = WaveSurfer.create(wsOpts);
+                    waveSurferInstance.load(audioElement.src);
+                });
+        } else {
+            waveSurferInstance = WaveSurfer.create(wsOpts);
+            waveSurferInstance.load(audioElement.src);
+        }
     }
 
     function updateActiveBucketInput() {

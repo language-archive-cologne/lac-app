@@ -43,6 +43,41 @@
         return `${mins}:${wholeSecs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
       };
 
+      // Initialize lightweight peaks-based waveform (synced to native <audio>)
+      const initializePeaksPlayer = () => {
+        const audioEl = modalContent.querySelector('audio[data-peaks-url]');
+        const waveformEl = modalContent.querySelector('#peaks-waveform');
+        if (!audioEl || !waveformEl || !window.WaveSurfer) return false;
+
+        const peaksUrl = audioEl.dataset.peaksUrl;
+        if (!peaksUrl) return false;
+
+        fetch(peaksUrl)
+          .then(resp => { if (!resp.ok) throw new Error(resp.status); return resp.json(); })
+          .then(peaksData => {
+            currentWavesurfer = WaveSurfer.create({
+              container: waveformEl,
+              media: audioEl,
+              peaks: [peaksData.data],
+              duration: peaksData.duration,
+              waveColor: '#64748b',
+              progressColor: '#3b82f6',
+              cursorColor: '#ef4444',
+              cursorWidth: 2,
+              height: 80,
+              barWidth: 2,
+              barGap: 1,
+              barRadius: 2,
+              normalize: true,
+            });
+          })
+          .catch(() => {
+            // Peaks unavailable — audio still plays via native element
+          });
+
+        return true;
+      };
+
       // Initialize WaveSurfer audio player
       const initializeWaveSurferPlayer = () => {
         const playerContainer = modalContent.querySelector('#linguist-audio-player');
@@ -364,7 +399,7 @@
         // Initialize appropriate player based on content
         const viewerType = modalContent.querySelector('[data-viewer-type]')?.dataset?.viewerType;
         if (viewerType === 'audio') {
-          initializeWaveSurferPlayer();
+          initializePeaksPlayer() || initializeWaveSurferPlayer();
         } else if (viewerType === 'elan') {
           initializeElanControls();
         }

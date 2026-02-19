@@ -242,3 +242,6 @@ from lacos.storage.upload_verification_tasks import (  # noqa: E402,F401
     verify_upload_session_task,
     verify_pending_upload_sessions,
 )
+
+# Ensure media processing tasks are registered with Huey.
+from lacos.storage.media_tasks import generate_peaks_task  # noqa: E402,F401

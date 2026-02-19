@@ -115,6 +115,16 @@ def file_viewer_htmx(request, bucket_type, object_path):
 
     viewer_type = _determine_viewer_type(content_type, file_name)
 
+    # Resolve peaks URL for audio files
+    peaks_url = None
+    if viewer_type == "audio":
+        peaks_key = f"{object_path}.peaks.json"
+        peaks_info = bucket_service.get_file_info(bucket_name, peaks_key)
+        if peaks_info.get("success"):
+            peaks_presigned = bucket_service.generate_presigned_download_url(bucket_name, peaks_key)
+            if peaks_presigned.get("success"):
+                peaks_url = peaks_presigned["url"]
+
     context = {
         "file_name": file_name,
         "filename": file_name,
@@ -128,6 +138,7 @@ def file_viewer_htmx(request, bucket_type, object_path):
         "download_url": presigned.get("url"),
         "expires_in": presigned.get("expires_in"),
         "viewer_type": viewer_type,
+        "peaks_url": peaks_url,
     }
 
     if viewer_type in ("json", "xml"):

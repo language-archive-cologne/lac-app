@@ -56,9 +56,18 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     xmlsec1 \
     # Graphviz for blueprint visualization
     graphviz \
+    # ffmpeg/ffprobe for media duration detection
+    ffmpeg \
+    curl \
     # cleaning up unused files
     && apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false \
     && rm -rf /var/lib/apt/lists/*
+
+# Install audiowaveform from upstream .deb (not in Debian repos)
+RUN curl -fsSL https://github.com/bbc/audiowaveform/releases/download/1.10.2/audiowaveform_1.10.2-1-12_amd64.deb -o /tmp/aw.deb \
+    && apt-get update && apt-get install -y --no-install-recommends /tmp/aw.deb \
+    && rm /tmp/aw.deb \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Copy Python packages from build stage - SAME Python base image ensures compatibility
 COPY --from=python-build-stage /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
