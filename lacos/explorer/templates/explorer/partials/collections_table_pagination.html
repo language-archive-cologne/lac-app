@@ -1,0 +1,32 @@
+{% load i18n %}
+{% if is_paginated %}
+  <div class="flex items-center justify-between gap-3 px-4 py-3 text-xs text-base-content/70 {% if border_side == 'top' %}border-b border-base-300 bg-base-200{% else %}border-t border-base-300 bg-base-200{% endif %}">
+    <div class="uppercase tracking-widest">
+      {% translate "Page" %} {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+    </div>
+    <div class="flex items-center gap-2">
+      {% if page_obj.has_previous %}
+        <a
+          href="?page={{ page_obj.previous_page_number }}&sort={{ current_sort }}&order={{ current_order }}{% if language_filter %}&language={{ language_filter|urlencode }}{% endif %}"
+          hx-get="?page={{ page_obj.previous_page_number }}&sort={{ current_sort }}&order={{ current_order }}{% if language_filter %}&language={{ language_filter|urlencode }}{% endif %}"
+          hx-target="#collections-table"
+          hx-swap="outerHTML"
+          class="btn btn-ghost btn-xs"
+        >{% translate "Previous" %}</a>
+      {% else %}
+        <span class="btn btn-ghost btn-xs btn-disabled pointer-events-none">{% translate "Previous" %}</span>
+      {% endif %}
+      {% if page_obj.has_next %}
+        <a
+          href="?page={{ page_obj.next_page_number }}&sort={{ current_sort }}&order={{ current_order }}{% if language_filter %}&language={{ language_filter|urlencode }}{% endif %}"
+          hx-get="?page={{ page_obj.next_page_number }}&sort={{ current_sort }}&order={{ current_order }}{% if language_filter %}&language={{ language_filter|urlencode }}{% endif %}"
+          hx-target="#collections-table"
+          hx-swap="outerHTML"
+          class="btn btn-ghost btn-xs"
+        >{% translate "Next" %}</a>
+      {% else %}
+        <span class="btn btn-ghost btn-xs btn-disabled pointer-events-none">{% translate "Next" %}</span>
+      {% endif %}
+    </div>
+  </div>
+{% endif %}
