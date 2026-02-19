@@ -6,7 +6,7 @@
         Scan {% if folder_path %}<strong>{{ folder_path }}</strong> in {% endif %}bucket
         <strong>{{ bucket_name }}</strong> for audio files and generate waveform peaks.
     </p>
-    <p class="text-sm text-gray-600">Files with existing peaks will be skipped.</p>
+    <p class="text-sm text-gray-600">Files with existing peaks will be skipped automatically.</p>
 </div>
 
 <div id="generate-peaks-status" class="mb-4">
@@ -23,6 +23,7 @@
         hx-target="#generate-peaks-status"
         hx-swap="innerHTML"
         hx-indicator="#indicator"
+        hx-disabled-elt="this"
     >
         Start
     </button>
@@ -34,5 +35,5 @@ document.addEventListener('peaksGenerationStarted', function () {
     if (actions) {
         actions.innerHTML = '<label for="generate-peaks-modal" class="btn">Close</label>';
     }
-});
+}, { once: true });
 </script>

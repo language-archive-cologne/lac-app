@@ -183,5 +183,7 @@ class MediaProcessingService:
         try:
             self.bucket_service.s3_client.head_object(Bucket=bucket, Key=peaks_key)
             return True
-        except ClientError:
-            return False
+        except ClientError as exc:
+            if exc.response["Error"]["Code"] == "404":
+                return False
+            raise

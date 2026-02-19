@@ -1,16 +1,17 @@
 """Views for triggering audio waveform peaks generation from the dashboard."""
 
+import json
 import logging
 
 from django.http import HttpResponse
 from django.shortcuts import render
+from django.template.loader import render_to_string
 from django.views import View
 
-from lacos.explorer.media_utils import determine_media_type
-from lacos.storage.media_tasks import generate_peaks_task
+from lacos.storage.media_tasks import scan_and_generate_peaks_task
 from lacos.storage.permissions import archivist_required, ArchivistRequiredMixin
+from lacos.storage.services.background_task_service import BackgroundTaskService
 from lacos.storage.services.bucket_service import BucketService
-from lacos.storage.services.media_processing_service import MediaProcessingService
 
 logger = logging.getLogger(__name__)
 
@@ -25,55 +26,53 @@ def generate_peaks_modal(request, bucket_name, folder_path=""):
 
 
 class GeneratePeaksView(ArchivistRequiredMixin, View):
-    """Scan a bucket/folder for audio files and enqueue peaks generation."""
+    """Enqueue a background scan for audio files and peaks generation."""
 
     def post(self, request, bucket_name, folder_path=""):
-        bucket_service = BucketService()
-        media_service = MediaProcessingService(bucket_service)
-        paginator = bucket_service.s3_client.get_paginator("list_objects_v2")
+        try:
+            bucket_service = BucketService()
+            if not bucket_service.ensure_bucket_exists(bucket_name):
+                return HttpResponse(
+                    '<div class="alert alert-error text-sm">'
+                    f"<span>Bucket '{bucket_name}' not found.</span></div>",
+                    headers={"HX-Trigger": "peaksGenerationStarted"},
+                )
 
-        page_kwargs = {"Bucket": bucket_name}
-        prefix = folder_path
-        if prefix and not prefix.endswith("/"):
-            prefix += "/"
-        if prefix:
-            page_kwargs["Prefix"] = prefix
+            scope = folder_path or bucket_name
+            task_record = BackgroundTaskService.create(
+                task_name="generate_peaks",
+                description=f"Generate peaks for {scope}",
+                metadata={
+                    "bucket_name": bucket_name,
+                    "folder_path": folder_path,
+                },
+            )
 
-        enqueued = 0
-        skipped = 0
+            task_result = scan_and_generate_peaks_task(
+                bucket_name=bucket_name,
+                folder_path=folder_path,
+                tracking_id=str(task_record.id),
+            )
 
-        for page in paginator.paginate(**page_kwargs):
-            for obj in page.get("Contents", []):
-                key = obj["Key"]
-                if key.endswith(".peaks.json"):
-                    continue
-                if determine_media_type(None, key) != "audio":
-                    continue
-                if media_service.peaks_exist(bucket_name, key):
-                    skipped += 1
-                    continue
-                generate_peaks_task(bucket_name, key)
-                enqueued += 1
+            task_id = getattr(task_result, "id", None)
+            if task_id:
+                BackgroundTaskService.attach_huey_id(task_record, task_id)
 
-        if enqueued == 0 and skipped == 0:
-            msg = "No audio files found."
-            alert = "alert-warning"
-        elif enqueued == 0:
-            msg = f"All {skipped} audio files already have peaks."
-            alert = "alert-info"
-        else:
-            msg = f"Enqueued {enqueued} peaks tasks."
-            if skipped:
-                msg += f" {skipped} already had peaks (skipped)."
-            alert = "alert-success"
+            status_html = render_to_string(
+                "storage/background_task_status.html",
+                {"task": task_record},
+                request=request,
+            )
 
-        html = (
-            f'<div class="alert {alert} text-sm">'
-            f"<span>{msg}</span>"
-            f"</div>"
-        )
+            return HttpResponse(
+                status_html,
+                headers={"HX-Trigger": "peaksGenerationStarted"},
+            )
 
-        return HttpResponse(
-            html,
-            headers={"HX-Trigger": "peaksGenerationStarted"},
-        )
+        except Exception as exc:
+            logger.error("Error triggering peaks generation: %s", exc)
+            return HttpResponse(
+                '<div class="alert alert-error text-sm">'
+                f"<span>Error starting peaks generation: {exc}</span></div>",
+                headers={"HX-Trigger": "peaksGenerationStarted"},
+            )
