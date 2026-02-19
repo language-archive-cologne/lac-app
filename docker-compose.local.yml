@@ -14,6 +14,7 @@ services:
       context: .
       dockerfile: ./compose/local/django/Dockerfile
       target: web-run-stage
+      network: host
     image: lacos_local_django
     restart: unless-stopped
     depends_on:
@@ -42,6 +43,7 @@ services:
     build:
       context: .
       dockerfile: ./compose/production/postgres/Dockerfile
+      network: host
     image: lacos_production_postgres
     volumes:
       - lacos_local_postgres_data:/var/lib/postgresql/data
@@ -82,7 +84,7 @@ services:
 
 
   redis:
-    image: "redis:7.2-alpine"
+    image: "redis:8.2-alpine@sha256:a308ca111032fa8f306a2dc7be7ba5deb8b777ed5d258c733cddba48a1fd7904"
     volumes:
       - lacos_local_redis_data:/data
     ports:
@@ -96,6 +98,7 @@ services:
       context: .
       dockerfile: ./compose/local/django/Dockerfile
       target: worker-run-stage
+      network: host
     image: lacos_local_huey
     depends_on:
       - django

@@ -13,6 +13,7 @@ services:
       context: .
       dockerfile: ./compose/local/django/Dockerfile
       target: web-run-stage
+      network: host
     image: lacos_dev_django
     container_name: lacos_dev_django
     restart: unless-stopped
@@ -54,6 +55,7 @@ services:
     build:
       context: .
       dockerfile: ./compose/production/postgres/Dockerfile
+      network: host
     image: lacos_dev_postgres
     container_name: lacos_dev_postgres
     restart: unless-stopped
@@ -74,7 +76,7 @@ services:
       - lacos_dev_network
 
   redis:
-    image: "redis:7.2-alpine"
+    image: "redis:8.2-alpine@sha256:a308ca111032fa8f306a2dc7be7ba5deb8b777ed5d258c733cddba48a1fd7904"
     container_name: lacos_dev_redis
     restart: unless-stopped
     logging:
@@ -94,6 +96,7 @@ services:
       context: .
       dockerfile: ./compose/local/django/Dockerfile
       target: worker-run-stage
+      network: host
     image: lacos_dev_huey
     container_name: lacos_dev_huey
     restart: unless-stopped
