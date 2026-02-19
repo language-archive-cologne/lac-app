@@ -74,7 +74,7 @@ services:
       - lacos_dev_network
 
   redis:
-    image: "redis:latest"
+    image: "redis:7.2-alpine"
     container_name: lacos_dev_redis
     restart: unless-stopped
     logging:
@@ -108,8 +108,7 @@ services:
     volumes:
       - .:/app:z
       - /etc/shibboleth:/etc/shibboleth:ro
-      - lacos_dev_postgres_data_backups:/backups
-      - /var/run/docker.sock:/var/run/docker.sock
+      - lacos_dev_postgres_data_backups:/backups:ro
     env_file:
       - ./.envs/.dev/.django
       - ./.envs/.dev/.postgres
@@ -119,13 +118,7 @@ services:
       SAML_LOGIN_ENABLED: "true"
       SAML_DJANGO_USER_MAIN_ATTRIBUTE: "username"
       SAML_USE_NAME_ID_AS_USERNAME: "false"
-      DB_BACKUP_ENABLED: "true"
-      DB_BACKUP_COMPOSE_FILE: "docker-compose.dev.yml"
-      DB_BACKUP_COMPOSE_PROJECT_DIR: /app
-      DB_BACKUP_COMPOSE_PROJECT_NAME: ""
-      DB_BACKUP_BACKUP_DIR: /backups
-      DB_BACKUP_CRON_HOUR: "2"
-      DB_BACKUP_CRON_MINUTE: "0"
+      DB_BACKUP_ENABLED: "false"
       HUEY_IMMEDIATE: "false"
     command: /bin/sh -c "python manage.py run_huey"
     networks:

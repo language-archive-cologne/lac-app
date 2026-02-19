@@ -3,7 +3,7 @@ stages:
 
 .deploy_base:
   stage: deploy
-  image: alpine:latest
+  image: alpine:3.21
   tags:
     - charch
   before_script:

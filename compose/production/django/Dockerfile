@@ -1,6 +1,6 @@
 
 # define an alias for the specific python version used in this file.
-FROM docker.io/python:3.12.9-slim-bookworm AS python
+FROM docker.io/python:3.12-slim-trixie@sha256:9e01bf1ae5db7649a236da7be1e94ffbbbdd7a93f867dd0d8d5720d9e1f89fab AS python
 
 # Python build stage
 FROM python AS python-build-stage
@@ -41,8 +41,8 @@ RUN addgroup --system django \
 
 # Install required system dependencies
 RUN apt-get update && apt-get install --no-install-recommends -y \
-  # psycopg dependencies
-  libpq-dev \
+  # psycopg runtime dependency
+  libpq5 \
   # XML Security tooling for SAML assertions
   xmlsec1 \
   # Translations dependencies
@@ -57,7 +57,10 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
   && rm -rf /var/lib/apt/lists/*
 
 # Install audiowaveform from upstream .deb (not in Debian repos)
-RUN curl -fsSL https://github.com/bbc/audiowaveform/releases/download/1.10.2/audiowaveform_1.10.2-1-12_amd64.deb -o /tmp/aw.deb \
+ARG AUDIOWAVEFORM_VERSION=1.10.2
+ARG AUDIOWAVEFORM_DEB_SHA256=4208706c6ae5ffb5761dddf8294eaf648c7ba9fb4d6fc6ec9f021d1bb109ea6e
+RUN curl -fsSL "https://github.com/bbc/audiowaveform/releases/download/${AUDIOWAVEFORM_VERSION}/audiowaveform_${AUDIOWAVEFORM_VERSION}-1-13_amd64.deb" -o /tmp/aw.deb \
+  && echo "${AUDIOWAVEFORM_DEB_SHA256}  /tmp/aw.deb" | sha256sum -c - \
   && apt-get update && apt-get install -y --no-install-recommends /tmp/aw.deb \
   && rm /tmp/aw.deb \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
