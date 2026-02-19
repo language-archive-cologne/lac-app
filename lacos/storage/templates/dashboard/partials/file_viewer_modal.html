@@ -37,11 +37,8 @@
         <div id="waveform-player" class="card bg-base-200/60 border border-base-300">
             <div class="card-body gap-4 p-4">
                 <div id="waveform-stage"
-                     class="relative h-56 rounded-lg bg-base-100 border border-base-300 overflow-hidden">
-                    <div id="waveform-spectrogram"
-                         class="absolute inset-0 z-10 pointer-events-none"></div>
+                     class="rounded-lg bg-base-100 border border-base-300 overflow-hidden">
                     <div id="waveform"
-                         class="absolute inset-0 z-20"
                          data-peaks-url="{{ peaks_url }}"
                          {% if spectrogram_data_url %}data-spectrogram-data-url="{{ spectrogram_data_url }}"{% endif %}></div>
                 </div>
