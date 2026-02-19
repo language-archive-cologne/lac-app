@@ -5,11 +5,20 @@
 {% endif %}
 {% if bundle_contexts %}
   {% if bundle_page_obj %}
-    <div class="flex items-center justify-between mb-3 text-sm text-base-content/70">
-      <div>
-        {% blocktrans with start=bundle_page_obj.start_index end=bundle_page_obj.end_index total=bundles_total %}
-          Showing {{ start }}–{{ end }} of {{ total }} bundles
-        {% endblocktrans %}
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-3 text-sm text-base-content/70">
+      <div class="flex flex-wrap items-center gap-3">
+        <div>
+          {% blocktrans with start=bundle_page_obj.start_index end=bundle_page_obj.end_index total=bundles_total %}
+            Showing {{ start }}–{{ end }} of {{ total }} bundles
+          {% endblocktrans %}
+        </div>
+        <div class="flex items-center gap-2 text-xs text-base-content/60">
+          <span class="uppercase tracking-widest">{% translate "Sort" %}</span>
+          <span class="rounded-full border border-base-300 bg-base-100 px-2 py-0.5 text-base-content/70">
+            {% if bundle_current_sort == 'access' %}{% translate "Access" %}{% else %}{% translate "Bundle Name" %}{% endif %}
+            {% if bundle_current_order == 'asc' %}↑{% else %}↓{% endif %}
+          </span>
+        </div>
       </div>
       <div class="flex gap-2">
         <button
@@ -72,8 +81,34 @@
     <table class="min-w-full divide-y divide-base-300">
       <thead class="bg-base-200">
         <tr>
-          <th scope="col" class="px-4 py-4 text-left text-xs font-semibold text-base-content/70 uppercase tracking-wide w-[6%]">{% translate "Access" %}</th>
-          <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-base-content/70 uppercase tracking-wide w-[24%]">{% translate "Bundle Name" %}</th>
+          <th scope="col" class="px-4 py-4 text-left text-xs font-semibold text-base-content/70 uppercase tracking-wide w-[6%]">
+            <button
+              hx-get="{{ bundle_sort_base_url }}{{ bundle_sort_separator }}bundle_sort=access&bundle_order={% if bundle_current_sort == 'access' and bundle_current_order == 'asc' %}desc{% else %}asc{% endif %}&bundle_page=1"
+              hx-target="#collection-bundles-table"
+              hx-swap="innerHTML"
+              hx-push-url="false"
+              class="hover:text-primary cursor-pointer inline-flex items-center gap-2 uppercase tracking-wide"
+            >
+              {% translate "Access" %}
+              {% if bundle_current_sort == 'access' %}
+                <span class="text-primary">{% if bundle_current_order == 'asc' %}&#9650;{% else %}&#9660;{% endif %}</span>
+              {% endif %}
+            </button>
+          </th>
+          <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-base-content/70 uppercase tracking-wide w-[24%]">
+            <button
+              hx-get="{{ bundle_sort_base_url }}{{ bundle_sort_separator }}bundle_sort=name&bundle_order={% if bundle_current_sort == 'name' and bundle_current_order == 'asc' %}desc{% else %}asc{% endif %}&bundle_page=1"
+              hx-target="#collection-bundles-table"
+              hx-swap="innerHTML"
+              hx-push-url="false"
+              class="hover:text-primary cursor-pointer inline-flex items-center gap-2 uppercase tracking-wide"
+            >
+              {% translate "Bundle Name" %}
+              {% if bundle_current_sort == 'name' %}
+                <span class="text-primary">{% if bundle_current_order == 'asc' %}&#9650;{% else %}&#9660;{% endif %}</span>
+              {% endif %}
+            </button>
+          </th>
           <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-base-content/70 uppercase tracking-wide w-[40%]">{% translate "Description" %}</th>
           <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-base-content/70 uppercase tracking-wide w-[30%]">{% translate "Files" %}</th>
         </tr>

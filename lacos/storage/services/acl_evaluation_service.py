@@ -65,6 +65,7 @@ class ACLEvaluationService:
             cfg.default_deny if cfg is not None else getattr(settings, "ACL_DEFAULT_DENY", True)
         )
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+        self._content_type_cache: dict[type, ContentType] = {}
 
     # Public API ---------------------------------------------------------------
     def evaluate(self, user, obj: Any, mode: str = "acl:Read") -> ACLCheckResult:
@@ -162,6 +163,8 @@ class ACLEvaluationService:
 
     @staticmethod
     def _get_parent(obj: Any) -> Optional[Any]:
+        if hasattr(obj, "_acl_parent"):
+            return getattr(obj, "_acl_parent")
         if isinstance(obj, Bundle):
             structural = getattr(obj, "structural_info", None)
             if structural and structural.exists():
@@ -170,9 +173,16 @@ class ACLEvaluationService:
                     return structural_info.is_member_of_collection
         return None
 
-    @staticmethod
-    def _get_permissions(obj: Any) -> Optional[ACLPermissions]:
-        content_type = ContentType.objects.get_for_model(obj)
+    def _get_permissions(self, obj: Any) -> Optional[ACLPermissions]:
+        if hasattr(obj, "_acl_permissions"):
+            return getattr(obj, "_acl_permissions")
+
+        model_cls = obj.__class__
+        content_type = self._content_type_cache.get(model_cls)
+        if content_type is None:
+            content_type = ContentType.objects.get_for_model(obj)
+            self._content_type_cache[model_cls] = content_type
+
         return ACLPermissions.objects.filter(
             content_type=content_type,
             object_id=obj.pk,

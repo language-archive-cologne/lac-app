@@ -5,7 +5,17 @@ from collections.abc import Iterable
 from django.contrib.contenttypes.models import ContentType
 from django.core.cache import cache
 from django.core.paginator import Paginator
-from django.db.models import Prefetch
+from django.db.models import (
+    Case,
+    CharField,
+    IntegerField,
+    OuterRef,
+    Prefetch,
+    Subquery,
+    Value,
+    When,
+)
+from django.db.models.functions import Cast, Coalesce
 
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import (
@@ -16,7 +26,11 @@ from lacos.blam.models.collection.collection_repository import Collection
 from lacos.storage.constants import ACL_LEVEL_ACADEMIC, ACL_LEVEL_PUBLIC, ACL_LEVEL_RESTRICTED
 from lacos.storage.models.acl_permissions import ACLPermissions
 
-from .resource import annotate_resource, prepare_resource_lists
+from .resource import (
+    annotate_resource,
+    build_s3_location_lookup,
+    prepare_resource_lists,
+)
 
 
 BUNDLES_PER_PAGE = 10
@@ -42,7 +56,7 @@ def _normalize_collection_summary(raw_summary: dict) -> dict[str, int]:
     }
 
 
-def bundle_queryset_for_collection(collection, search_query=None):
+def bundle_queryset_for_collection(collection, search_query=None, sort="name", order="asc"):
     """Build a queryset for bundles belonging to a collection.
 
     Includes prefetching of related resources and metadata.
@@ -75,16 +89,98 @@ def bundle_queryset_for_collection(collection, search_query=None):
             Q(bundle__general_info__description__icontains=search_query)
         ).distinct()
 
-    return queryset.order_by("bundle__identifier")
+    normalized_sort = sort if sort in {"name", "access"} else "name"
+    normalized_order = order if order in {"asc", "desc"} else "asc"
+    prefix = "-" if normalized_order == "desc" else ""
+
+    if normalized_sort == "access":
+        bundle_ct = ContentType.objects.get_for_model(Bundle)
+        collection_ct = ContentType.objects.get_for_model(Collection)
+        collection_level = ACLPermissions.objects.filter(
+            content_type=collection_ct,
+            object_id=str(collection.pk),
+        ).values_list("access_level", flat=True).first()
+        fallback_level = collection_level or ACL_LEVEL_RESTRICTED
+
+        queryset = queryset.annotate(
+            bundle_id_str=Cast("bundle_id", output_field=CharField()),
+            explicit_access_level=Subquery(
+                ACLPermissions.objects.filter(
+                    content_type=bundle_ct,
+                    object_id=OuterRef("bundle_id_str"),
+                ).values("access_level")[:1]
+            ),
+            effective_access_level=Coalesce(
+                "explicit_access_level",
+                Value(fallback_level),
+                output_field=CharField(),
+            ),
+            access_sort_rank=Case(
+                When(effective_access_level=ACL_LEVEL_PUBLIC, then=Value(0)),
+                When(effective_access_level=ACL_LEVEL_ACADEMIC, then=Value(1)),
+                default=Value(2),
+                output_field=IntegerField(),
+            ),
+        )
+        if normalized_order == "desc":
+            return queryset.order_by(
+                "-access_sort_rank",
+                "bundle__general_info__display_title",
+                "bundle__identifier",
+            )
+        return queryset.order_by(
+            "access_sort_rank",
+            "bundle__general_info__display_title",
+            "bundle__identifier",
+        )
+
+    return queryset.order_by(
+        f"{prefix}bundle__general_info__display_title",
+        "bundle__identifier",
+    )
 
 
-def build_bundle_context(struct_info):
+def _iter_structural_info_resources(struct_infos):
+    for struct_info in struct_infos:
+        primary_resources = _first_prefetched_related(struct_info.bundle, "resources")
+        if primary_resources:
+            yield from primary_resources.bundle_media_resources.all()
+            yield from primary_resources.bundle_written_resources.all()
+            yield from primary_resources.bundle_other_resources.all()
+        yield from struct_info.additional_metadata_files.all()
+
+
+def _first_prefetched_related(instance, related_name):
+    prefetched = getattr(instance, "_prefetched_objects_cache", {})
+    if related_name in prefetched:
+        prefetched_values = prefetched.get(related_name) or []
+        return prefetched_values[0] if prefetched_values else None
+    return getattr(instance, related_name).first()
+
+
+def build_bundle_context(
+    struct_info,
+    *,
+    s3_locations_by_resource=None,
+    content_type_cache=None,
+):
     """Build context dictionary for a bundle from its structural info."""
     bundle = struct_info.bundle
-    primary_resources = bundle.resources.first()
+    primary_resources = _first_prefetched_related(bundle, "resources")
 
-    media_resources, written_resources, other_resources = prepare_resource_lists(primary_resources)
-    metadata_files = [annotate_resource(res) for res in struct_info.additional_metadata_files.all()]
+    media_resources, written_resources, other_resources = prepare_resource_lists(
+        primary_resources,
+        s3_locations_by_resource=s3_locations_by_resource,
+        content_type_cache=content_type_cache,
+    )
+    metadata_files = [
+        annotate_resource(
+            res,
+            s3_locations_by_resource=s3_locations_by_resource,
+            content_type_cache=content_type_cache,
+        )
+        for res in struct_info.additional_metadata_files.all()
+    ]
     metadata_files = [res for res in metadata_files if res]
     topics = list(struct_info.bundle_topics.all())
 
@@ -100,19 +196,44 @@ def build_bundle_context(struct_info):
     }
 
 
-def paginate_bundle_contexts(collection, page_number, per_page=BUNDLES_PER_PAGE, search_query=None):
+def paginate_bundle_contexts(
+    collection,
+    page_number,
+    per_page=BUNDLES_PER_PAGE,
+    search_query=None,
+    sort="name",
+    order="asc",
+):
     """Paginate bundles for a collection and build context for each.
 
     Returns tuple of (page_obj, list of bundle contexts).
     """
-    queryset = bundle_queryset_for_collection(collection, search_query=search_query)
+    queryset = bundle_queryset_for_collection(
+        collection,
+        search_query=search_query,
+        sort=sort,
+        order=order,
+    )
     paginator = Paginator(queryset, per_page)
 
     if paginator.count == 0:
         return None, []
 
     page_obj = paginator.get_page(page_number)
-    contexts = [build_bundle_context(struct_info) for struct_info in page_obj.object_list]
+    struct_infos = list(page_obj.object_list)
+    content_type_cache = {}
+    s3_locations_by_resource = build_s3_location_lookup(
+        _iter_structural_info_resources(struct_infos),
+        content_type_cache=content_type_cache,
+    )
+    contexts = [
+        build_bundle_context(
+            struct_info,
+            s3_locations_by_resource=s3_locations_by_resource,
+            content_type_cache=content_type_cache,
+        )
+        for struct_info in struct_infos
+    ]
     return page_obj, contexts
 
 

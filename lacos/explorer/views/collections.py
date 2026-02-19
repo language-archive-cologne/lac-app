@@ -6,6 +6,7 @@ from urllib.parse import unquote
 
 from django.conf import settings
 from django.core.cache import cache
+from django.contrib.contenttypes.models import ContentType
 from django.db.models import Count, Min, Prefetch, Q
 from django.http import Http404, HttpResponse, HttpResponseForbidden
 from django.shortcuts import redirect, render
@@ -16,6 +17,7 @@ from django.views.generic import DetailView, ListView
 from django.http import JsonResponse
 
 from lacos.blam.models import Collection
+from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.mappers.collection.write.collection_exporter import CollectionExporter
 from lacos.blam.serializers import CollectionJsonLdSerializer
 from lacos.blam.models.collection.collection_general_info import (
@@ -32,6 +34,7 @@ from lacos.explorer.media_utils import determine_media_type, guess_source_mime_t
 from lacos.explorer.search import search_archives
 from lacos.explorer.views.utils import build_content_disposition
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
+from lacos.storage.models.acl_permissions import ACLPermissions
 from lacos.storage.services.resource_mapping_service import ResourceMappingService
 
 from .utils import (
@@ -429,9 +432,21 @@ class CollectionDetailView(HandleLookupMixin, DetailView):
 
         page_number = self.request.GET.get('bundle_page')
         bundle_search = self.request.GET.get('bundle_search', '').strip()
+        bundle_sort = self.request.GET.get('bundle_sort', 'name')
+        bundle_order = self.request.GET.get('bundle_order', 'asc')
+        if bundle_sort not in {"name", "access"}:
+            bundle_sort = "name"
+        if bundle_order not in {"asc", "desc"}:
+            bundle_order = "asc"
         context['bundle_search'] = bundle_search
+        context['bundle_current_sort'] = bundle_sort
+        context['bundle_current_order'] = bundle_order
         page_obj, bundle_contexts = paginate_bundle_contexts(
-            self.object, page_number, search_query=bundle_search or None
+            self.object,
+            page_number,
+            search_query=bundle_search or None,
+            sort=bundle_sort,
+            order=bundle_order,
         )
 
         query_params = self.request.GET.copy()
@@ -444,14 +459,61 @@ class CollectionDetailView(HandleLookupMixin, DetailView):
             base_url = self.request.path
         separator = '&' if '?' in base_url else '?'
 
+        sort_query_params = self.request.GET.copy()
+        for key in ('bundle_page', 'bundle_sort', 'bundle_order'):
+            if key in sort_query_params:
+                sort_query_params.pop(key)
+        sort_base_query = sort_query_params.urlencode()
+        if sort_base_query:
+            sort_base_url = f"{self.request.path}?{sort_base_query}"
+        else:
+            sort_base_url = self.request.path
+        sort_separator = '&' if '?' in sort_base_url else '?'
+
         context['bundle_page_obj'] = page_obj
         context['bundle_contexts'] = bundle_contexts
         context['bundle_page_base_url'] = base_url
         context['bundle_page_separator'] = separator
+        context['bundle_sort_base_url'] = sort_base_url
+        context['bundle_sort_separator'] = sort_separator
         context['bundles_total'] = page_obj.paginator.count if page_obj else 0
         context['bundle_access_summary'] = summarize_collection_bundle_access_levels(self.object)
 
         acl_service = ACLEvaluationService()
+        bundle_ids = [
+            str(bundle_info["bundle"].pk)
+            for bundle_info in bundle_contexts
+            if bundle_info.get("bundle")
+        ]
+        bundle_permissions_by_id: dict[str, ACLPermissions] = {}
+
+        bundle_content_type = ContentType.objects.get_for_model(Bundle)
+        collection_content_type = ContentType.objects.get_for_model(Collection)
+
+        if bundle_ids:
+            for permission in ACLPermissions.objects.filter(
+                content_type=bundle_content_type,
+                object_id__in=bundle_ids,
+            ).order_by("id"):
+                bundle_permissions_by_id.setdefault(str(permission.object_id), permission)
+
+        collection_permission = (
+            ACLPermissions.objects.filter(
+                content_type=collection_content_type,
+                object_id=str(self.object.pk),
+            )
+            .order_by("id")
+            .first()
+        )
+        self.object._acl_permissions = collection_permission
+
+        for bundle_info in bundle_contexts:
+            bundle = bundle_info.get("bundle")
+            if not bundle:
+                continue
+            bundle._acl_parent = self.object
+            bundle._acl_permissions = bundle_permissions_by_id.get(str(bundle.pk))
+
         collection_acl = acl_service.evaluate(self.request.user, self.object)
         context['collection_acl_check_result'] = collection_acl
         context['collection_can_read'] = collection_acl.allowed or not acl_service.enforcement_enabled
@@ -562,7 +624,12 @@ class CollectionDetailView(HandleLookupMixin, DetailView):
             return redirect('explorer:collection_xml_by_handle', handle=self.object.identifier)
 
         if self.request.headers.get('HX-Request'):
-            if 'bundle_page' in self.request.GET or 'bundle_search' in self.request.GET:
+            if (
+                'bundle_page' in self.request.GET
+                or 'bundle_search' in self.request.GET
+                or 'bundle_sort' in self.request.GET
+                or 'bundle_order' in self.request.GET
+            ):
                 context['bundles_header_oob'] = True
                 return render(
                     self.request,

@@ -154,3 +154,83 @@ def test_collection_list_uses_collection_acl_as_fallback_for_bundle_summary(clie
         "restricted": 0,
         "total": 2,
     }
+
+
+@pytest.mark.django_db
+def test_collection_detail_can_sort_bundles_by_access_ascending(client):
+    collection = Collection.objects.create(identifier="hdl:11341/test-detail-sort-access-asc")
+    bundle_restricted = _create_bundle_for_collection(collection, "bundle-sort-restricted")
+    bundle_public = _create_bundle_for_collection(collection, "bundle-sort-public")
+    bundle_academic = _create_bundle_for_collection(collection, "bundle-sort-academic")
+
+    bundle_ct = ContentType.objects.get_for_model(Bundle)
+    ACLPermissions.objects.create(
+        content_type=bundle_ct,
+        object_id=str(bundle_public.pk),
+        access_level=ACL_LEVEL_PUBLIC,
+    )
+    ACLPermissions.objects.create(
+        content_type=bundle_ct,
+        object_id=str(bundle_academic.pk),
+        access_level=ACL_LEVEL_ACADEMIC,
+    )
+    ACLPermissions.objects.create(
+        content_type=bundle_ct,
+        object_id=str(bundle_restricted.pk),
+        access_level=ACL_LEVEL_RESTRICTED,
+    )
+
+    response = client.get(
+        reverse("explorer:collection_detail", kwargs={"pk": collection.pk}),
+        {"bundle_sort": "access", "bundle_order": "asc"},
+    )
+    assert response.status_code == 200
+
+    ordered_identifiers = [ctx["bundle"].identifier for ctx in response.context["bundle_contexts"]]
+    assert ordered_identifiers == [
+        bundle_public.identifier,
+        bundle_academic.identifier,
+        bundle_restricted.identifier,
+    ]
+    page = response.content.decode("utf-8")
+    assert "Sort" in page
+    assert "Access" in page
+    assert "↑" in page
+
+
+@pytest.mark.django_db
+def test_collection_detail_can_sort_bundles_by_access_descending(client):
+    collection = Collection.objects.create(identifier="hdl:11341/test-detail-sort-access-desc")
+    bundle_restricted = _create_bundle_for_collection(collection, "bundle-sort-restricted")
+    bundle_public = _create_bundle_for_collection(collection, "bundle-sort-public")
+    bundle_academic = _create_bundle_for_collection(collection, "bundle-sort-academic")
+
+    bundle_ct = ContentType.objects.get_for_model(Bundle)
+    ACLPermissions.objects.create(
+        content_type=bundle_ct,
+        object_id=str(bundle_public.pk),
+        access_level=ACL_LEVEL_PUBLIC,
+    )
+    ACLPermissions.objects.create(
+        content_type=bundle_ct,
+        object_id=str(bundle_academic.pk),
+        access_level=ACL_LEVEL_ACADEMIC,
+    )
+    ACLPermissions.objects.create(
+        content_type=bundle_ct,
+        object_id=str(bundle_restricted.pk),
+        access_level=ACL_LEVEL_RESTRICTED,
+    )
+
+    response = client.get(
+        reverse("explorer:collection_detail", kwargs={"pk": collection.pk}),
+        {"bundle_sort": "access", "bundle_order": "desc"},
+    )
+    assert response.status_code == 200
+
+    ordered_identifiers = [ctx["bundle"].identifier for ctx in response.context["bundle_contexts"]]
+    assert ordered_identifiers == [
+        bundle_restricted.identifier,
+        bundle_academic.identifier,
+        bundle_public.identifier,
+    ]

@@ -503,10 +503,12 @@
           hx-target="#collection-bundles-table"
           hx-swap="innerHTML"
           hx-trigger="keyup changed delay:300ms, search"
-          hx-include="[name='bundle_search']"
+          hx-include="[name='bundle_search'], [name='bundle_sort'], [name='bundle_order']"
         >
+        <input type="hidden" name="bundle_sort" value="{{ bundle_current_sort }}">
+        <input type="hidden" name="bundle_order" value="{{ bundle_current_order }}">
         {% if bundle_search %}
-          <a href="{{ request.path }}" class="btn btn-ghost btn-sm">{% translate "Clear" %}</a>
+          <a href="{{ request.path }}?bundle_sort={{ bundle_current_sort }}&bundle_order={{ bundle_current_order }}" class="btn btn-ghost btn-sm">{% translate "Clear" %}</a>
         {% endif %}
       </div>
     </div>
