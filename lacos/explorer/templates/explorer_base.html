@@ -80,21 +80,25 @@
 
       // Initialize WaveSurfer audio player
       const initializeWaveSurferPlayer = () => {
-        const playerContainer = modalContent.querySelector('#linguist-audio-player');
-        if (!playerContainer) return;
+        try {
+          const playerContainer = modalContent.querySelector('#linguist-audio-player');
+          if (!playerContainer) return false;
 
-        const playerEnabled = playerContainer.dataset.playerEnabled !== 'false';
-        if (!playerEnabled) return;
+          const audioUrl = playerContainer.dataset.audioUrl;
+          if (!audioUrl) return false;
 
-        const audioUrl = playerContainer.dataset.audioUrl;
-        if (!audioUrl) return;
+          const playerMode = playerContainer.dataset.playerMode || 'simple';
+          const isAnalyzeMode = playerMode === 'analyze';
+          const peaksUrl = playerContainer.dataset.peaksUrl;
+          const spectrogramDataUrl = playerContainer.dataset.spectrogramDataUrl;
 
-        const waveformEl = playerContainer.querySelector('#waveform');
-        const timelineEl = playerContainer.querySelector('#timeline');
-        const loadingEl = playerContainer.querySelector('#player-loading');
+          const waveformEl = playerContainer.querySelector('#waveform');
+          const spectrogramEl = playerContainer.querySelector('#spectrogram');
+          const timelineEl = playerContainer.querySelector('#timeline');
+          const loadingEl = playerContainer.querySelector('#player-loading');
 
-        // Make container relative for loading overlay
-        playerContainer.style.position = 'relative';
+          // Make container relative for loading overlay
+          playerContainer.style.position = 'relative';
 
         // Build plugins array
         const plugins = [];
@@ -117,21 +121,44 @@
           plugins.push(regionsPlugin);
         }
 
+        const usePrecomputedSpectrogram = (
+          isAnalyzeMode
+          && spectrogramEl
+          && spectrogramDataUrl
+          && typeof WaveSurfer.Spectrogram !== 'undefined'
+        );
+
+        // Analyze mode prefers pre-computed frequency bins for fast spectrogram rendering.
+        if (usePrecomputedSpectrogram) {
+          plugins.push(WaveSurfer.Spectrogram.create({
+            container: spectrogramEl,
+            height: 224,
+            labels: false,
+            colorMap: 'gray',
+            frequenciesDataUrl: spectrogramDataUrl,
+            // Required by WaveSurfer when loading precomputed frequency data.
+            sampleRate: 44100,
+            frequencyMin: 0,
+            frequencyMax: 22050,
+          }));
+        }
+
         // Create WaveSurfer instance
-        if (!waveformEl) return;
+        const containerEl = waveformEl || spectrogramEl;
+        if (!containerEl) return false;
 
         currentWavesurfer = WaveSurfer.create({
-          container: waveformEl,
-          waveColor: '#64748b',
-          progressColor: '#3b82f6',
-          cursorColor: '#ef4444',
-          cursorWidth: 2,
-          height: 128,
-          barWidth: 2,
+          container: containerEl,
+          waveColor: usePrecomputedSpectrogram ? 'transparent' : '#64748b',
+          progressColor: usePrecomputedSpectrogram ? 'transparent' : '#3b82f6',
+          cursorColor: usePrecomputedSpectrogram ? '#C7D2FE' : '#ef4444',
+          cursorWidth: usePrecomputedSpectrogram ? 1 : 2,
+          height: isAnalyzeMode ? 224 : 128,
+          barWidth: usePrecomputedSpectrogram ? 0 : 2,
           barGap: 1,
           barRadius: 2,
           normalize: true,
-          minPxPerSec: 20,
+          minPxPerSec: isAnalyzeMode ? 500 : 20,
           hideScrollbar: false,
           autoCenter: true,
           autoScroll: true,
@@ -154,7 +181,7 @@
         const clearSelectionBtn = playerContainer.querySelector('#clear-selection-btn');
 
         let activeRegion = null;
-        let selectionMode = false;
+        let selectionMode = Boolean(regionsPlugin);
         let disableDragSelection = null;
         let selectionEndTime = null;
         let selectionPlaybackActive = false;
@@ -257,6 +284,10 @@
           if (playSelectionBtn) playSelectionBtn.disabled = true;
           if (clearSelectionBtn) clearSelectionBtn.disabled = true;
         } else {
+          disableDragSelection = regionsPlugin.enableDragSelection({
+            color: 'rgba(59, 130, 246, 0.2)'
+          });
+
           regionsPlugin.on('region-created', (region) => {
             if (activeRegion && activeRegion !== region) {
               activeRegion.remove();
@@ -328,8 +359,33 @@
 
         updateSelectionUi();
 
-        // Load audio
-        currentWavesurfer.load(audioUrl);
+        // Load audio with peaks whenever possible to avoid expensive decode.
+        const canUsePeaksForLoad = Boolean(peaksUrl);
+        if (canUsePeaksForLoad) {
+          fetch(peaksUrl)
+            .then(resp => { if (!resp.ok) throw new Error(resp.status); return resp.json(); })
+            .then(peaksData => {
+              if (Array.isArray(peaksData?.data) && Number.isFinite(peaksData?.duration)) {
+                currentWavesurfer.load(audioUrl, [peaksData.data], peaksData.duration);
+              } else {
+                currentWavesurfer.load(audioUrl);
+              }
+            })
+            .catch(() => {
+              currentWavesurfer.load(audioUrl);
+            });
+        } else {
+          currentWavesurfer.load(audioUrl);
+        }
+          return true;
+        } catch (error) {
+          console.error('Explorer player initialisation failed, falling back:', error);
+          if (currentWavesurfer) {
+            currentWavesurfer.destroy();
+            currentWavesurfer = null;
+          }
+          return false;
+        }
       };
 
       const initializeElanControls = () => {
@@ -399,7 +455,7 @@
         // Initialize appropriate player based on content
         const viewerType = modalContent.querySelector('[data-viewer-type]')?.dataset?.viewerType;
         if (viewerType === 'audio') {
-          initializePeaksPlayer() || initializeWaveSurferPlayer();
+          initializeWaveSurferPlayer() || initializePeaksPlayer();
         } else if (viewerType === 'elan') {
           initializeElanControls();
         }

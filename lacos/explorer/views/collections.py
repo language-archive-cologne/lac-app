@@ -643,16 +643,46 @@ class CollectionResourcesView(View):
             if action == 'download':
                 raise Http404("Direct downloads are not available")
 
-            if is_htmx and action in {'play', 'view'}:
+            peaks_url = None
+            spectrogram_url = None
+            spectrogram_data_url = None
+            if detected_media_type == 'audio':
+                peaks_url = self._resolve_peaks_url(
+                    resource_service,
+                    location.s3_bucket,
+                    location.s3_key,
+                )
+                spectrogram_url = self._resolve_spectrogram_url(
+                    resource_service,
+                    location.s3_bucket,
+                    location.s3_key,
+                )
+                spectrogram_data_url = self._resolve_spectrogram_data_url(
+                    resource_service,
+                    location.s3_bucket,
+                    location.s3_key,
+                )
+
+            player_mode = 'simple'
+            if detected_media_type == 'audio':
+                has_precomputed_spectrogram = bool(spectrogram_data_url)
+                if action == 'analyze' or (action == 'play' and has_precomputed_spectrogram):
+                    player_mode = 'analyze'
+
+            if is_htmx and action in {'play', 'view', 'analyze'}:
                 return self._render_htmx_modal(
                     request, file_name, file_description, mime_type,
                     detected_media_type, source_mime_type, presigned_url, download_url,
                     xml_preview=xml_preview,
                     download_bucket=location.s3_bucket,
                     download_key=location.s3_key,
+                    peaks_url=peaks_url,
+                    spectrogram_url=spectrogram_url,
+                    spectrogram_data_url=spectrogram_data_url,
+                    player_mode=player_mode,
                 )
 
-            if action in {'play', 'view'}:
+            if action in {'play', 'view', 'analyze'}:
                 return redirect(
                     'explorer:collection_detail_by_handle',
                     handle=collection.identifier,
@@ -671,7 +701,12 @@ class CollectionResourcesView(View):
         self, request, file_name, file_description, mime_type,
         detected_media_type, source_mime_type, presigned_url, download_url,
         xml_preview=None,
-        download_bucket=None, download_key=None
+        download_bucket=None,
+        download_key=None,
+        peaks_url=None,
+        spectrogram_url=None,
+        spectrogram_data_url=None,
+        player_mode='simple',
     ):
         """Render the HTMX modal response for play/view actions."""
         modal_context = {
@@ -688,6 +723,10 @@ class CollectionResourcesView(View):
             'download_filename': file_name,
             'elan_context': None,
             'xml_content': xml_preview,
+            'peaks_url': peaks_url,
+            'spectrogram_url': spectrogram_url,
+            'spectrogram_data_url': spectrogram_data_url,
+            'player_mode': player_mode,
         }
 
         response = render(
@@ -697,6 +736,33 @@ class CollectionResourcesView(View):
         )
         response['HX-Trigger'] = json.dumps({'showResourceModal': True})
         return response
+
+    def _resolve_peaks_url(self, resource_service, bucket_name, object_key):
+        """Check if pre-computed peaks exist and return a presigned URL."""
+        peaks_key = f"{object_key}.peaks.json"
+        try:
+            resource_service.s3_client.head_object(Bucket=bucket_name, Key=peaks_key)
+            return resource_service.generate_presigned_url(bucket_name, peaks_key)
+        except Exception:
+            return None
+
+    def _resolve_spectrogram_url(self, resource_service, bucket_name, object_key):
+        """Check if pre-computed spectrogram exists and return a presigned URL."""
+        spectrogram_key = f"{object_key}.spectrogram.png"
+        try:
+            resource_service.s3_client.head_object(Bucket=bucket_name, Key=spectrogram_key)
+            return resource_service.generate_presigned_url(bucket_name, spectrogram_key)
+        except Exception:
+            return None
+
+    def _resolve_spectrogram_data_url(self, resource_service, bucket_name, object_key):
+        """Check if pre-computed spectrogram frequencies exist and return a presigned URL."""
+        spectrogram_data_key = f"{object_key}.spectrogram.json"
+        try:
+            resource_service.s3_client.head_object(Bucket=bucket_name, Key=spectrogram_data_key)
+            return resource_service.generate_presigned_url(bucket_name, spectrogram_data_key)
+        except Exception:
+            return None
 
 
 class CollectionJsonLdView(View):

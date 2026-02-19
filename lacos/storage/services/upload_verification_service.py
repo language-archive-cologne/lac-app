@@ -157,7 +157,7 @@ class UploadVerificationService:
             return f"{size_bytes} B"
 
     def _enqueue_media_processing(self, session: UploadSession) -> None:
-        """Enqueue peaks generation for verified audio files in the session."""
+        """Enqueue audio sidecar generation for verified audio files in the session."""
         try:
             from lacos.explorer.media_utils import determine_media_type
             from lacos.storage.media_tasks import generate_peaks_task
@@ -171,7 +171,7 @@ class UploadVerificationService:
                     if bucket and file_obj.s3_key:
                         generate_peaks_task(bucket, file_obj.s3_key)
                         logger.info(
-                            "Enqueued peaks generation for %s/%s",
+                            "Enqueued audio sidecar generation for %s/%s",
                             bucket,
                             file_obj.s3_key,
                         )

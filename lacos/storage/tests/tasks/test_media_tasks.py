@@ -43,6 +43,7 @@ def test_skips_peaks_json_files(MockBucketService, mock_gen_task):
         _make_s3_page([
             "folder/track.wav",
             "folder/track.wav.peaks.json",
+            "folder/track.wav.spectrogram.json",
         ]),
     ]
     MockBucketService.return_value.s3_client.get_paginator.return_value = paginator

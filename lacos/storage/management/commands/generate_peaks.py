@@ -1,4 +1,4 @@
-"""Management command to backfill waveform peaks for existing audio files."""
+"""Management command to backfill audio sidecars for existing audio files."""
 
 import logging
 
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = "Generate waveform peaks for audio files that don't have them yet"
+    help = "Generate audio sidecars (peaks + spectrogram) for audio files"
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -29,7 +29,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--dry-run",
             action="store_true",
-            help="List files without generating peaks",
+            help="List files without generating sidecars",
         )
         parser.add_argument(
             "--inline",
@@ -57,7 +57,11 @@ class Command(BaseCommand):
         for page in paginator.paginate(**page_kwargs):
             for obj in page.get("Contents", []):
                 key = obj["Key"]
-                if key.endswith(".peaks.json"):
+                if (
+                    key.endswith(".peaks.json")
+                    or key.endswith(".spectrogram.png")
+                    or key.endswith(".spectrogram.json")
+                ):
                     continue
                 # list_objects_v2 doesn't return ContentType, rely on extension
                 media_type = determine_media_type(None, key)
@@ -70,14 +74,14 @@ class Command(BaseCommand):
         skipped = 0
 
         for key in audio_keys:
-            if media_service.peaks_exist(bucket, key):
+            if media_service.derivatives_current(bucket, key):
                 skipped += 1
                 if dry_run:
-                    self.stdout.write(f"  [SKIP] {key} (peaks exist)")
+                    self.stdout.write(f"  [SKIP] {key} (sidecars current)")
                 continue
 
             if dry_run:
-                self.stdout.write(f"  [WOULD GENERATE] {key}")
+                self.stdout.write(f"  [WOULD GENERATE SIDECARS] {key}")
                 enqueued += 1
                 continue
 
@@ -93,6 +97,6 @@ class Command(BaseCommand):
         action = "Would process" if dry_run else "Processed"
         self.stdout.write(
             self.style.SUCCESS(
-                f"\n{action} {enqueued} files, skipped {skipped} (peaks already exist)"
+                f"\n{action} {enqueued} files, skipped {skipped} (sidecars already current)"
             )
         )

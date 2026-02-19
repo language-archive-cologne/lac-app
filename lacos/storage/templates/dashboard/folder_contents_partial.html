@@ -65,13 +65,13 @@ Nested folder contents returned via HTMX when a folder is expanded.
                     <label class="btn btn-ghost btn-xs text-purple-600"
                            onclick="event.stopPropagation();"
                            for="generate-peaks-modal"
-                           title="Generate audio peaks"
+                           title="Generate audio peaks and spectrograms"
                            hx-get="{% url 'storage:generate_peaks_folder_modal' bucket_name=bucket_type folder_path=item.path %}"
                            hx-target="#generate-peaks-modal-content"
                            hx-swap="innerHTML"
                            hx-indicator="#indicator">
                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 18V9m4 9V6m4 12v-4m4 4V10m4 8V4" />
                         </svg>
                     </label>
                     <label class="btn btn-ghost btn-xs"

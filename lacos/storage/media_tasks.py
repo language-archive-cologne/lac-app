@@ -1,4 +1,4 @@
-"""Huey tasks for media processing (waveform peaks generation)."""
+"""Huey tasks for media processing (audio sidecar generation)."""
 
 import logging
 
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 def scan_and_generate_peaks_task(
     bucket_name: str, folder_path: str = "", tracking_id: str | None = None
 ) -> dict:
-    """Scan a bucket/folder for audio files and enqueue peaks generation.
+    """Scan a bucket/folder for audio files and enqueue sidecar generation.
 
     Runs as a background task so the HTTP request returns immediately.
     Individual files are dispatched to generate_peaks_task which handles
@@ -43,7 +43,11 @@ def scan_and_generate_peaks_task(
         for page in paginator.paginate(**page_kwargs):
             for obj in page.get("Contents", []):
                 key = obj["Key"]
-                if key.endswith(".peaks.json"):
+                if (
+                    key.endswith(".peaks.json")
+                    or key.endswith(".spectrogram.png")
+                    or key.endswith(".spectrogram.json")
+                ):
                     continue
                 if determine_media_type(None, key) != "audio":
                     continue
@@ -63,7 +67,7 @@ def scan_and_generate_peaks_task(
         if enqueued == 0:
             message = "No audio files found" if scanned == 0 else "No new audio files to process"
         else:
-            message = f"Enqueued {enqueued} audio files for peaks generation"
+            message = f"Enqueued {enqueued} audio files for sidecar generation"
         BackgroundTaskService.mark_success(
             tracking_id, message=message, result=result,
         )
@@ -79,11 +83,11 @@ def scan_and_generate_peaks_task(
 def generate_peaks_task(
     bucket_name: str, s3_key: str, tracking_id: str | None = None
 ) -> dict:
-    """Generate waveform peaks for a single audio file."""
-    logger.info("Generating peaks for %s/%s", bucket_name, s3_key)
+    """Generate audio sidecars (peaks + spectrogram) for a single audio file."""
+    logger.info("Generating audio sidecars for %s/%s", bucket_name, s3_key)
 
     if tracking_id:
-        BackgroundTaskService.mark_running(tracking_id, message="Generating peaks")
+        BackgroundTaskService.mark_running(tracking_id, message="Generating audio sidecars")
 
     service = MediaProcessingService()
     result = service.generate_peaks(bucket_name, s3_key)
@@ -92,8 +96,12 @@ def generate_peaks_task(
         if result.get("success"):
             BackgroundTaskService.mark_success(
                 tracking_id,
-                message="Peaks generated",
-                result={"peaks_key": result.get("peaks_key")},
+                message="Audio sidecars generated",
+                result={
+                    "peaks_key": result.get("peaks_key"),
+                    "spectrogram_key": result.get("spectrogram_key"),
+                    "spectrogram_data_key": result.get("spectrogram_data_key"),
+                },
             )
         else:
             BackgroundTaskService.mark_failed(
@@ -102,6 +110,11 @@ def generate_peaks_task(
             )
 
     if not result.get("success"):
-        logger.error("Peaks generation failed for %s/%s: %s", bucket_name, s3_key, result.get("error"))
+        logger.error(
+            "Audio sidecar generation failed for %s/%s: %s",
+            bucket_name,
+            s3_key,
+            result.get("error"),
+        )
 
     return result

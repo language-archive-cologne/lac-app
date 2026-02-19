@@ -1,12 +1,12 @@
 <!-- Generate Peaks Modal Content -->
-<h3 class="font-bold text-lg mb-4">Generate Audio Peaks</h3>
+<h3 class="font-bold text-lg mb-4">Generate Audio Peaks and Spectrograms</h3>
 
 <div class="mb-4">
     <p class="text-gray-700 mb-2">
         Scan {% if folder_path %}<strong>{{ folder_path }}</strong> in {% endif %}bucket
-        <strong>{{ bucket_name }}</strong> for audio files and generate waveform peaks.
+        <strong>{{ bucket_name }}</strong> for audio files and generate waveform peaks plus spectrogram sidecars.
     </p>
-    <p class="text-sm text-gray-600">Files with existing peaks will be skipped automatically.</p>
+    <p class="text-sm text-gray-600">Files with current sidecars (peaks + spectrogram image + spectrogram data) will be skipped automatically.</p>
 </div>
 
 <div id="generate-peaks-status" class="mb-4">
