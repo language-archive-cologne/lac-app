@@ -5,8 +5,10 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 
 from lacos.storage.services.media_processing_service import (
-    FFT_SAMPLES,
+    N_MELS,
+    TARGET_SAMPLE_RATE,
     MediaProcessingService,
+    _hz_to_mel,
 )
 
 
@@ -31,25 +33,24 @@ def test_compute_spectrogram_produces_correct_shape():
         result = service._compute_spectrogram("dummy.wav")
 
     assert len(result) > 0
-    n_bins = FFT_SAMPLES // 2 + 1
-    assert len(result[0]) == n_bins
+    assert len(result[0]) == N_MELS
 
     for frame in result:
         for val in frame:
             assert 0 <= val <= 255
 
 
-def test_compute_spectrogram_silence_is_dark():
-    """Silence should produce mostly zero (dark) values."""
+def test_compute_spectrogram_silence_is_uniform():
+    """Silence should produce uniform values (near-zero variance)."""
     samples = _make_silence(duration=0.5)
 
     service = MediaProcessingService(bucket_service=MagicMock())
     with patch.object(service, "_decode_audio_to_pcm", return_value=samples):
         result = service._compute_spectrogram("dummy.wav")
 
-    flat = [v for frame in result for v in frame]
-    avg = sum(flat) / len(flat)
-    assert avg < 10, f"Silence should be dark but average intensity was {avg}"
+    flat = np.array([v for frame in result for v in frame], dtype=np.float64)
+    std = float(np.std(flat))
+    assert std < 1.0, f"Silence should be uniform but std was {std}"
 
 
 def test_compute_spectrogram_tone_has_energy():
@@ -60,8 +61,10 @@ def test_compute_spectrogram_tone_has_energy():
     with patch.object(service, "_decode_audio_to_pcm", return_value=samples):
         result = service._compute_spectrogram("dummy.wav")
 
-    expected_bin = int(1000.0 * FFT_SAMPLES / 44100)
-    tone_values = [frame[expected_bin] for frame in result]
+    # Compute expected mel bin for 1 kHz tone
+    mel_max = _hz_to_mel(TARGET_SAMPLE_RATE / 2.0)
+    expected_mel_bin = int(N_MELS * _hz_to_mel(1000.0) / mel_max)
+    tone_values = [frame[expected_mel_bin] for frame in result]
     max_val = max(tone_values)
     assert max_val > 100, f"1kHz tone should have strong energy but max was {max_val}"
 

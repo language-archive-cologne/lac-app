@@ -22,16 +22,46 @@ FFPROBE_BIN = "ffprobe"
 FFMPEG_BIN = "ffmpeg"
 # Bump style version to force regeneration with new FFT pipeline.
 SPECTROGRAM_STYLE_VERSION = "5"
-SPECTROGRAM_DATA_VERSION = "4"
+SPECTROGRAM_DATA_VERSION = "5"
 
-# FFT parameters matching WaveSurfer Spectrogram plugin defaults.
-FFT_SAMPLES = 512
-GAIN_DB = 20
-RANGE_DB = 80
+# FFT / mel parameters for spectrogram pipeline.
+FFT_SAMPLES = 1024
+N_MELS = 128
 TARGET_SAMPLE_RATE = 44100
 # Cap spectrogram frames to keep JSON under ~5 MB.
-# 8000 frames * 257 bins * ~3 bytes ≈ 6 MB.
+# 8000 frames * 128 bins * ~3 bytes ≈ 3 MB.
 MAX_SPECTROGRAM_FRAMES = 8000
+
+
+def _hz_to_mel(hz):
+    return 2595.0 * np.log10(1.0 + hz / 700.0)
+
+
+def _mel_to_hz(mel):
+    return 700.0 * (np.power(10.0, mel / 2595.0) - 1.0)
+
+
+def _mel_filterbank(n_mels, n_fft, sr):
+    """Create triangular mel filterbank matrix [n_mels, n_fft//2+1]."""
+    n_bins = n_fft // 2 + 1
+    f_max = sr / 2.0
+    mel_points = np.linspace(_hz_to_mel(0), _hz_to_mel(f_max), n_mels + 2)
+    hz_points = _mel_to_hz(mel_points)
+    bin_indices = np.floor((n_fft + 1) * hz_points / sr).astype(int)
+
+    filterbank = np.zeros((n_mels, n_bins))
+    for m in range(n_mels):
+        left, center, right = bin_indices[m], bin_indices[m + 1], bin_indices[m + 2]
+        if center > left:
+            filterbank[m, left:center] = np.linspace(
+                0, 1, center - left, endpoint=False,
+            )
+        filterbank[m, center] = 1.0
+        if right > center:
+            filterbank[m, center + 1 : right + 1] = np.linspace(
+                1, 0, right - center, endpoint=False,
+            )
+    return filterbank
 
 
 class MediaProcessingService:
@@ -211,31 +241,27 @@ class MediaProcessingService:
         return np.frombuffer(result.stdout, dtype=np.float32)
 
     def _compute_spectrogram(self, input_path: Path) -> list[list[int]]:
-        """Compute spectrogram frequency bins matching WaveSurfer's FFT.
+        """Compute mel-scale spectrogram with adaptive dB scaling.
 
-        Replicates the exact algorithm from WaveSurfer's Spectrogram plugin:
-        1. Hann window of size fftSamples
-        2. RFFT → magnitude spectrum
-        3. Normalize: 2/N * |FFT|
-        4. dB conversion: 20 * log10(max(1e-12, mag))
-        5. Scale to 0-255 with gain/range parameters
-
-        The hop size is adaptive: short files get WaveSurfer's native 75%
-        overlap, long files use a larger hop to cap output at MAX_SPECTROGRAM_FRAMES.
+        Pipeline:
+        1. Hann window of size FFT_SAMPLES (1024)
+        2. RFFT → magnitude spectrum, normalized 2/N
+        3. Mel filterbank projection (N_MELS=128 bins)
+        4. dB conversion: 20 * log10(max(1e-12, mel_mag))
+        5. Adaptive percentile-based 0-255 scaling per file
         """
         samples = self._decode_audio_to_pcm(input_path)
         n_fft = FFT_SAMPLES
-        n_bins = n_fft // 2 + 1
         n_samples = len(samples)
 
         if n_samples < n_fft:
             return []
 
-        # Hann window (periodic, matching WaveSurfer)
+        # Hann window
         window = np.hanning(n_fft).astype(np.float32)
 
-        # Adaptive hop: native 75% overlap (hop=128) for short files,
-        # larger hop for long files to keep total frames ≤ MAX_SPECTROGRAM_FRAMES.
+        # Adaptive hop: native 75% overlap for short files,
+        # larger hop for long files to cap at MAX_SPECTROGRAM_FRAMES.
         native_hop = max(64, n_fft // 4)
         native_frames = (n_samples - n_fft) // native_hop + 1
         if native_frames <= MAX_SPECTROGRAM_FRAMES:
@@ -252,12 +278,21 @@ class MediaProcessingService:
         fft_result = np.fft.rfft(frames, n=n_fft)
         magnitudes = (2.0 / n_fft) * np.abs(fft_result)
 
-        # dB conversion and 0-255 scaling (matches WaveSurfer exactly)
-        magnitudes = np.maximum(magnitudes, 1e-12)
-        db = 20.0 * np.log10(magnitudes)
+        # Mel filterbank projection
+        mel_fb = _mel_filterbank(N_MELS, n_fft, TARGET_SAMPLE_RATE)
+        mel_magnitudes = magnitudes @ mel_fb.T  # [n_frames, N_MELS]
 
-        lower = -(GAIN_DB + RANGE_DB)  # -100 dB
-        upper = -GAIN_DB               # -20 dB
+        # dB conversion
+        db = 20.0 * np.log10(np.maximum(mel_magnitudes, 1e-12))
+
+        # Adaptive percentile-based scaling
+        lower = np.percentile(db, 5)
+        upper = np.percentile(db, 95)
+        # Ensure minimum 30 dB spread to avoid noise amplification
+        if upper - lower < 30:
+            center = (upper + lower) / 2
+            lower = center - 15
+            upper = center + 15
 
         scaled = np.clip((db - lower) / (upper - lower) * 255.0, 0, 255)
         uint8_data = np.round(scaled).astype(np.uint8)
