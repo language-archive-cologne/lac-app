@@ -8,6 +8,7 @@ from huey.contrib.djhuey import task
 
 from lacos.common.services.database_backup_service import DatabaseBackupService
 from lacos.explorer.search_indexing import rebuild_all_search_vectors
+from lacos.storage.media_tasks import scan_and_generate_peaks_task
 from lacos.storage.services.background_task_service import BackgroundTaskService
 
 logger = logging.getLogger(__name__)
@@ -138,6 +139,47 @@ def reindex_collections_task(tracking_id: str) -> dict:
         return payload
     except Exception as exc:
         logger.error("Failed to reindex collections task: %s", exc, exc_info=True)
+        payload = {"success": False, "error": str(exc)}
+        BackgroundTaskService.mark_failed(
+            tracking_id,
+            error_message=str(exc),
+            result=payload,
+        )
+        return payload
+
+
+@task(retries=0)
+def generate_all_peaks_task(tracking_id: str) -> dict:
+    """Generate audio sidecars (peaks + spectrograms) for all collection buckets."""
+    from lacos.blam.models.collection.collection_repository import Collection
+
+    BackgroundTaskService.mark_running(
+        tracking_id,
+        message="Scanning collection buckets for audio files",
+    )
+    try:
+        buckets = (
+            Collection.objects
+            .values_list("import_bucket", flat=True)
+            .distinct()
+        )
+        buckets = [b for b in buckets if b]
+
+        for bucket in buckets:
+            scan_and_generate_peaks_task(bucket_name=bucket, force=True)
+
+        payload = {
+            "success": True,
+            "buckets_scanned": len(buckets),
+        }
+        BackgroundTaskService.mark_success(
+            tracking_id,
+            message=f"Audio sidecar generation dispatched for {len(buckets)} bucket(s).",
+            result=payload,
+        )
+        return payload
+    except Exception as exc:
+        logger.error("Failed to generate audio sidecars: %s", exc, exc_info=True)
         payload = {"success": False, "error": str(exc)}
         BackgroundTaskService.mark_failed(
             tracking_id,

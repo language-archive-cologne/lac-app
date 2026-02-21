@@ -13,6 +13,7 @@ from django.template.loader import render_to_string
 from django.views import View
 
 from lacos.blam.tasks import backup_database_task
+from lacos.blam.tasks import generate_all_peaks_task
 from lacos.blam.tasks import reindex_collections_task
 from lacos.blam.tasks import reindex_search_vectors_task
 from lacos.storage.models import BackgroundTask
@@ -53,6 +54,12 @@ class DashboardTaskEnqueueView(DashboardTaskPermissionsMixin, View):
             description="Reindex all collections and bundles from S3 XML",
             start_message="Collection reindex queued.",
             enqueue_name="reindex_collections_task",
+        ),
+        "generate-peaks": DashboardTaskAction(
+            task_name="generate_audio_sidecars",
+            description="Generate audio sidecars for all collections",
+            start_message="Audio sidecar generation queued.",
+            enqueue_name="generate_all_peaks_task",
         ),
     }
 
