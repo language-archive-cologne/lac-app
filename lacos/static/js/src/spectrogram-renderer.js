@@ -12,7 +12,9 @@
  * - Precomputed Y-to-bin map for vertical scaling + Y-flip
  *
  * @param {Object} wavesurfer - WaveSurfer v7 instance
- * @param {Array<Uint8Array>|number[][]} data - [n_frames][n_bins] uint8 values
+ * @param {Array<Uint8Array>|number[][]|Object} data
+ *   Either [n_frames][n_bins] uint8 values, or:
+ *   { nFrames: number, nBins: number, flat: Uint8Array }.
  * @param {Object} [opts]
  * @param {number} [opts.height=384] - Display height in CSS pixels
  */
@@ -86,10 +88,20 @@
     this._imgH = 0;
     this._yToBin = null;
 
-    // Flatten data for cache-friendly access.
-    this._nFrames = data.length;
-    this._nBins = data[0].length;
-    this._flat = this._flattenData(data);
+    // Normalize into contiguous flat uint8 data for cache-friendly access.
+    if (data && data.flat instanceof Uint8Array) {
+      this._nFrames = data.nFrames | 0;
+      this._nBins = data.nBins | 0;
+      var expectedLen = this._nFrames * this._nBins;
+      if (expectedLen <= 0 || data.flat.length < expectedLen) {
+        throw new Error('Invalid spectrogram data dimensions');
+      }
+      this._flat = data.flat.subarray(0, expectedLen);
+    } else {
+      this._nFrames = data.length;
+      this._nBins = data[0].length;
+      this._flat = this._flattenData(data);
+    }
     this._sums = new Int32Array(this._nBins);
 
     this._mount();

@@ -360,18 +360,28 @@ class ResourceAccessView(View):
             # Resolve precomputed visualization sidecars for audio files
             peaks_url = None
             spectrogram_data_url = None
+            spectrogram_available = False
             if detected_media_type == 'audio':
                 peaks_url = self._resolve_peaks_url(resource_service, bucket_name, object_key)
-                spectrogram_data_url = self._resolve_spectrogram_data_url(
+                spectrogram_available = self._spectrogram_data_exists(
                     resource_service,
                     bucket_name,
                     object_key,
                 )
+                if action == 'analyze':
+                    if spectrogram_available:
+                        spectrogram_data_url = resource_service.generate_presigned_url(
+                            bucket_name,
+                            f"{object_key}.spectrogram.bin",
+                        )
             player_mode = 'simple'
             if detected_media_type == 'audio':
                 has_precomputed_spectrogram = bool(spectrogram_data_url)
-                if action == 'analyze' or (action == 'play' and has_precomputed_spectrogram):
+                if action == 'analyze' and has_precomputed_spectrogram:
                     player_mode = 'analyze'
+
+            resource_play_url = f"{request.path}?action=play"
+            resource_analyze_url = f"{request.path}?action=analyze"
 
             if is_htmx and action in {'play', 'view', 'analyze'}:
                 return self._render_htmx_modal(
@@ -383,6 +393,9 @@ class ResourceAccessView(View):
                     peaks_url=peaks_url,
                     spectrogram_data_url=spectrogram_data_url,
                     player_mode=player_mode,
+                    spectrogram_available=spectrogram_available,
+                    resource_play_url=resource_play_url,
+                    resource_analyze_url=resource_analyze_url,
                 )
 
             if action in {'play', 'view', 'analyze'}:
@@ -447,6 +460,9 @@ class ResourceAccessView(View):
         peaks_url=None,
         spectrogram_data_url=None,
         player_mode='simple',
+        spectrogram_available=False,
+        resource_play_url=None,
+        resource_analyze_url=None,
     ):
         """Render the HTMX modal response for play/view actions."""
         media_type = 'elan' if is_elan else detected_media_type
@@ -468,6 +484,9 @@ class ResourceAccessView(View):
             'peaks_url': peaks_url,
             'spectrogram_data_url': spectrogram_data_url,
             'player_mode': player_mode,
+            'spectrogram_available': spectrogram_available,
+            'resource_play_url': resource_play_url,
+            'resource_analyze_url': resource_analyze_url,
         }
 
         response = render(
@@ -495,6 +514,15 @@ class ResourceAccessView(View):
             return resource_service.generate_presigned_url(bucket_name, spectrogram_data_key)
         except Exception:
             return None
+
+    def _spectrogram_data_exists(self, resource_service, bucket_name, object_key):
+        """Check if pre-computed spectrogram sidecar exists."""
+        spectrogram_data_key = f"{object_key}.spectrogram.bin"
+        try:
+            resource_service.s3_client.head_object(Bucket=bucket_name, Key=spectrogram_data_key)
+            return True
+        except Exception:
+            return False
 
 
 class BundleJsonLdView(View):

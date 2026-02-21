@@ -32,6 +32,7 @@
       }
 
       let audioPlayer = null;
+      let activePlayerContainer = null;
 
       // Initialize audio player via unified AudioPlayer
       const initializeAudioPlayer = () => {
@@ -39,12 +40,23 @@
         if (!playerContainer || !playerContainer.dataset.audioUrl) return false;
         if (!window.AudioPlayer) return false;
 
+        if (audioPlayer && activePlayerContainer === playerContainer) {
+          return true;
+        }
+        if (audioPlayer) {
+          audioPlayer.destroy();
+          audioPlayer = null;
+          activePlayerContainer = null;
+        }
+
         try {
           audioPlayer = new AudioPlayer(playerContainer);
+          activePlayerContainer = playerContainer;
           return true;
         } catch (error) {
           console.error('Explorer player initialisation failed:', error);
           if (audioPlayer) { audioPlayer.destroy(); audioPlayer = null; }
+          activePlayerContainer = null;
           return false;
         }
       };
@@ -118,7 +130,16 @@
         if (viewerType === 'audio') {
           initializeAudioPlayer();
         } else if (viewerType === 'elan') {
+          if (audioPlayer) {
+            audioPlayer.destroy();
+            audioPlayer = null;
+            activePlayerContainer = null;
+          }
           initializeElanControls();
+        } else if (audioPlayer) {
+          audioPlayer.destroy();
+          audioPlayer = null;
+          activePlayerContainer = null;
         }
       };
 
@@ -126,6 +147,7 @@
         if (audioPlayer) {
           audioPlayer.destroy();
           audioPlayer = null;
+          activePlayerContainer = null;
         }
 
         modal.classList.remove('flex');

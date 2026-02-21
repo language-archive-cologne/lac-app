@@ -116,8 +116,13 @@ def file_viewer_htmx(request, bucket_type, object_path):
     viewer_type = _determine_viewer_type(content_type, file_name)
 
     # Resolve pre-computed audio visualization sidecars only for WAV previews.
+    requested_player_mode = (request.GET.get("player_mode") or "simple").lower()
+    if requested_player_mode not in {"simple", "analyze"}:
+        requested_player_mode = "simple"
+
     peaks_url = None
     spectrogram_data_url = None
+    spectrogram_available = False
     lowered_type = content_type.lower()
     file_ext = file_name.rsplit(".", 1)[-1].lower() if "." in file_name else ""
     is_wav_audio = viewer_type == "audio" and (
@@ -134,13 +139,18 @@ def file_viewer_htmx(request, bucket_type, object_path):
 
         spectrogram_data_key = f"{object_path}.spectrogram.bin"
         spectrogram_data_info = bucket_service.get_file_info(bucket_name, spectrogram_data_key)
-        if spectrogram_data_info.get("success"):
-            spectrogram_data_presigned = bucket_service.generate_presigned_download_url(
-                bucket_name,
-                spectrogram_data_key,
-            )
-            if spectrogram_data_presigned.get("success"):
-                spectrogram_data_url = spectrogram_data_presigned["url"]
+        spectrogram_available = bool(spectrogram_data_info.get("success"))
+
+        if requested_player_mode == "analyze":
+            if spectrogram_available:
+                spectrogram_data_presigned = bucket_service.generate_presigned_download_url(
+                    bucket_name,
+                    spectrogram_data_key,
+                )
+                if spectrogram_data_presigned.get("success"):
+                    spectrogram_data_url = spectrogram_data_presigned["url"]
+
+    effective_player_mode = "analyze" if spectrogram_data_url else "simple"
 
     context = {
         "file_name": file_name,
@@ -157,6 +167,8 @@ def file_viewer_htmx(request, bucket_type, object_path):
         "viewer_type": viewer_type,
         "peaks_url": peaks_url,
         "spectrogram_data_url": spectrogram_data_url,
+        "player_mode": effective_player_mode,
+        "spectrogram_available": spectrogram_available,
     }
 
     if viewer_type in ("json", "xml"):

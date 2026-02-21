@@ -298,16 +298,19 @@
         // Find the audio player container with data attributes
         const playerContainer = container.querySelector('[data-audio-url]') || container.closest('[data-audio-url]');
         if (!playerContainer) {
+            if (dashboardPlayer) { dashboardPlayer.destroy(); dashboardPlayer = null; }
             const audioElement = container.querySelector('#audioPlayer');
             if (audioElement) { audioElement.controls = true; audioElement.classList.remove('hidden'); }
             return;
         }
         if (!window.AudioPlayer) {
+            if (dashboardPlayer) { dashboardPlayer.destroy(); dashboardPlayer = null; }
             const audioElement = playerContainer.querySelector('#audioPlayer');
             if (audioElement) { audioElement.controls = true; audioElement.classList.remove('hidden'); }
             return;
         }
 
+        if (dashboardPlayer) { dashboardPlayer.destroy(); dashboardPlayer = null; }
         dashboardPlayer = new AudioPlayer(playerContainer);
     }
 

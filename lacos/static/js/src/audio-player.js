@@ -33,6 +33,8 @@
     this._disableDragSelection = null;
     this._selectionEndTime = null;
     this._selectionPlaybackActive = false;
+    this._spectrogramFetchController = null;
+    this._loadingFallbackTimer = null;
     this._destroyed = false;
 
     this._init();
@@ -61,6 +63,7 @@
     var audioUrl = this._container.dataset.audioUrl;
     var peaksUrl = this._container.dataset.peaksUrl;
     var spectrogramDataUrl = this._container.dataset.spectrogramDataUrl;
+    var playerMode = (this._container.dataset.playerMode || '').toLowerCase();
 
     // Fallback: no peaks data or WaveSurfer unavailable → native audio
     if (!peaksUrl || typeof WaveSurfer === 'undefined') {
@@ -74,7 +77,11 @@
       return;
     }
 
-    var analyzeMode = Boolean(spectrogramDataUrl && typeof SpectrogramRenderer !== 'undefined');
+    var analyzeMode = Boolean(
+      spectrogramDataUrl &&
+      typeof SpectrogramRenderer !== 'undefined' &&
+      (playerMode === 'analyze' || playerMode === '')
+    );
     var height = analyzeMode ? 384 : this._height;
 
     // Build plugins
@@ -119,7 +126,10 @@
     this._loadPeaks(audioUrl, peaksUrl);
 
     if (analyzeMode) {
-      this._loadSpectrogram(spectrogramDataUrl, height);
+      var self = this;
+      this.wavesurfer.on('ready', function () {
+        if (!self._destroyed) self._loadSpectrogram(spectrogramDataUrl, height);
+      });
     }
   };
 
@@ -237,6 +247,13 @@
     var currentTimeEl = this._q('[data-ap-current-time]');
     var durationEl = this._q('[data-ap-duration]');
     var loadingEl = this._q('[data-ap-loading]');
+    var hideLoading = function () {
+      if (loadingEl) loadingEl.classList.add('hidden');
+      if (self._loadingFallbackTimer) {
+        clearTimeout(self._loadingFallbackTimer);
+        self._loadingFallbackTimer = null;
+      }
+    };
 
     // For dashboard-style text toggle (Play/Pause text button)
     var playToggleText = this._q('[data-ap-play-toggle-text]');
@@ -252,11 +269,16 @@
     };
 
     ws.on('ready', function () {
-      if (loadingEl) loadingEl.classList.add('hidden');
+      hideLoading();
       if (durationEl) durationEl.textContent = self.formatTime(ws.getDuration());
     });
 
+    // Some WaveSurfer backends/setups surface usability via decode/timeupdate
+    // before emitting ready consistently. Clear overlay as soon as playback data is flowing.
+    ws.on('decode', function () { hideLoading(); });
+
     ws.on('timeupdate', function (time) {
+      hideLoading();
       if (currentTimeEl) currentTimeEl.textContent = self.formatTime(time);
       if (self._selectionPlaybackActive && self._selectionEndTime !== null && time >= self._selectionEndTime) {
         self._selectionPlaybackActive = false;
@@ -280,6 +302,11 @@
         loadingEl.innerHTML = '<span class="text-error">Error loading audio</span>';
       }
     });
+
+    // Safety net: never keep the overlay forever if events are delayed/missed.
+    this._loadingFallbackTimer = setTimeout(function () {
+      hideLoading();
+    }, 3000);
   };
 
   // ─── Regions (selection) ──────────────────────────────────────────────
@@ -411,22 +438,78 @@
 
   AudioPlayer.prototype._loadSpectrogram = function (url, height) {
     var self = this;
-    fetch(url)
+    if (this._spectrogramFetchController) {
+      this._spectrogramFetchController.abort();
+      this._spectrogramFetchController = null;
+    }
+
+    var cache = AudioPlayer._spectrogramCache || (AudioPlayer._spectrogramCache = new Map());
+    var cacheKey = this._spectrogramCacheKey(url);
+    var cached = cache.get(cacheKey);
+    if (cached) {
+      // Keep cache entry hot (simple LRU behavior).
+      cache.delete(cacheKey);
+      cache.set(cacheKey, cached);
+      if (!self.wavesurfer || self._destroyed) return;
+      self._spectrogramRenderer = new SpectrogramRenderer(self.wavesurfer, cached, { height: height });
+      return;
+    }
+
+    if (typeof AbortController !== 'undefined') {
+      this._spectrogramFetchController = new AbortController();
+    }
+    var controller = this._spectrogramFetchController;
+
+    fetch(url, controller ? { signal: controller.signal } : undefined)
       .then(function (resp) { if (!resp.ok) throw new Error(resp.status); return resp.arrayBuffer(); })
       .then(function (buffer) {
         if (!self.wavesurfer || self._destroyed) return;
-        if (buffer.byteLength < 6) return;
-        var view = new DataView(buffer);
-        var nFrames = view.getUint32(0, true);
-        var nBins = view.getUint16(4, true);
-        var body = new Uint8Array(buffer, 6);
-        var data = [];
-        for (var i = 0; i < nFrames; i++) {
-          data.push(body.subarray(i * nBins, (i + 1) * nBins));
+        var parsed = self._parseSpectrogramBuffer(buffer);
+        if (!parsed) return;
+
+        cache.set(cacheKey, parsed);
+        // Cap cache size to avoid unbounded memory growth.
+        while (cache.size > 3) {
+          var oldestKey = cache.keys().next().value;
+          cache.delete(oldestKey);
         }
-        self._spectrogramRenderer = new SpectrogramRenderer(self.wavesurfer, data, { height: height });
+
+        self._spectrogramRenderer = new SpectrogramRenderer(self.wavesurfer, parsed, { height: height });
       })
-      .catch(function (err) { console.warn('Spectrogram data unavailable:', err); });
+      .catch(function (err) {
+        if (err && err.name === 'AbortError') return;
+        console.warn('Spectrogram data unavailable:', err);
+      })
+      .finally(function () {
+        if (self._spectrogramFetchController === controller) {
+          self._spectrogramFetchController = null;
+        }
+      });
+  };
+
+  AudioPlayer.prototype._spectrogramCacheKey = function (url) {
+    if (typeof url !== 'string') return String(url);
+    var qIdx = url.indexOf('?');
+    return qIdx === -1 ? url : url.slice(0, qIdx);
+  };
+
+  AudioPlayer.prototype._parseSpectrogramBuffer = function (buffer) {
+    if (!buffer || buffer.byteLength < 6) return null;
+
+    var view = new DataView(buffer);
+    var nFrames = view.getUint32(0, true);
+    var nBins = view.getUint16(4, true);
+    if (!nFrames || !nBins) return null;
+
+    var expectedLen = nFrames * nBins;
+    var body = new Uint8Array(buffer, 6);
+    if (body.byteLength < expectedLen) return null;
+
+    return {
+      nFrames: nFrames,
+      nBins: nBins,
+      flat: body.subarray(0, expectedLen),
+    };
   };
 
   // ─── Cleanup ──────────────────────────────────────────────────────────
@@ -438,6 +521,11 @@
     if (this._spectrogramRenderer) {
       this._spectrogramRenderer.destroy();
       this._spectrogramRenderer = null;
+    }
+
+    if (this._spectrogramFetchController) {
+      this._spectrogramFetchController.abort();
+      this._spectrogramFetchController = null;
     }
 
     if (this.wavesurfer) {

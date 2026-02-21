@@ -9,6 +9,25 @@
         {% endif %}
     </div>
     <div class="flex items-center gap-2">
+        {% if viewer_type == "audio" and spectrogram_available %}
+            {% if player_mode == "analyze" %}
+                <button type="button"
+                        class="btn btn-sm btn-ghost"
+                        hx-get="{% url 'storage:file_viewer_htmx' bucket_type=bucket_type object_path=object_path %}"
+                        hx-target="#file-viewer-content"
+                        hx-swap="innerHTML">
+                    Waveform
+                </button>
+            {% else %}
+                <button type="button"
+                        class="btn btn-sm btn-secondary"
+                        hx-get="{% url 'storage:file_viewer_htmx' bucket_type=bucket_type object_path=object_path %}?player_mode=analyze"
+                        hx-target="#file-viewer-content"
+                        hx-swap="innerHTML">
+                    Analyze
+                </button>
+            {% endif %}
+        {% endif %}
         <a href="{{ download_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-primary">Open in new tab</a>
         <button type="button" class="btn btn-sm btn-ghost" onclick="closeFileViewer()">✕</button>
     </div>
@@ -27,6 +46,7 @@
 {% elif viewer_type == "audio" %}
     <div class="space-y-3"
          data-audio-url="{{ download_url }}"
+         data-player-mode="{{ player_mode|default:'simple' }}"
          {% if peaks_url %}data-peaks-url="{{ peaks_url }}"{% endif %}
          {% if spectrogram_data_url %}data-spectrogram-data-url="{{ spectrogram_data_url }}"{% endif %}>
         <audio id="audioPlayer"

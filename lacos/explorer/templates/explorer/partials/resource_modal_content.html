@@ -9,9 +9,30 @@
         <p class="text-sm text-slate-500 mt-1">{{ resource_description }}</p>
       {% endif %}
     </div>
-    <button type="button" class="btn btn-sm btn-circle btn-ghost" aria-label="{% translate 'Close media viewer' %}" data-modal-close>
-      ✕
-    </button>
+    <div class="flex items-center gap-2">
+      {% if media_type == 'audio' and spectrogram_available %}
+        {% if player_mode == 'analyze' %}
+          <a href="{{ resource_play_url }}"
+             hx-get="{{ resource_play_url }}"
+             hx-target="#resource-modal-content"
+             hx-swap="innerHTML"
+             class="btn btn-sm btn-ghost">
+            {% translate "Waveform" %}
+          </a>
+        {% else %}
+          <a href="{{ resource_analyze_url }}"
+             hx-get="{{ resource_analyze_url }}"
+             hx-target="#resource-modal-content"
+             hx-swap="innerHTML"
+             class="btn btn-sm btn-secondary">
+            {% translate "Analyze" %}
+          </a>
+        {% endif %}
+      {% endif %}
+      <button type="button" class="btn btn-sm btn-circle btn-ghost" aria-label="{% translate 'Close media viewer' %}" data-modal-close>
+        ✕
+      </button>
+    </div>
   </div>
 
   <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
@@ -117,7 +138,7 @@
             </div>
 
             <!-- Loading state -->
-            <div id="player-loading" data-ap-loading class="absolute inset-0 bg-base-100/80 flex items-center justify-center rounded-lg">
+            <div data-ap-loading class="absolute inset-0 bg-base-100/80 flex items-center justify-center rounded-lg pointer-events-none">
               <span class="loading loading-spinner loading-lg text-primary"></span>
             </div>
           </div>

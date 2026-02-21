@@ -11,10 +11,19 @@
 
 function createMockWaveSurfer() {
     const eventHandlers = {};
+    const emit = (event, ...args) => {
+        const handlers = eventHandlers[event] || [];
+        handlers.forEach(handler => handler(...args));
+    };
     return {
         create: jest.fn(() => ({
-            on: jest.fn((event, handler) => { eventHandlers[event] = handler; }),
-            load: jest.fn(),
+            on: jest.fn((event, handler) => {
+                eventHandlers[event] = eventHandlers[event] || [];
+                eventHandlers[event].push(handler);
+            }),
+            load: jest.fn(() => {
+                setTimeout(() => emit('ready'), 0);
+            }),
             destroy: jest.fn(),
             playPause: jest.fn(),
             play: jest.fn(),
@@ -59,6 +68,11 @@ function buildSpectrogramBinary(nFrames, nBins) {
     return buf;
 }
 
+async function flushAsyncWork() {
+    await new Promise(resolve => setTimeout(resolve, 0));
+    await new Promise(resolve => setTimeout(resolve, 0));
+}
+
 // ─── DOM helpers ────────────────────────────────────────────────────────
 
 function buildContainer(opts) {
@@ -68,6 +82,7 @@ function buildContainer(opts) {
     if (opts.audioUrl) container.dataset.audioUrl = opts.audioUrl;
     if (opts.peaksUrl) container.dataset.peaksUrl = opts.peaksUrl;
     if (opts.spectrogramDataUrl) container.dataset.spectrogramDataUrl = opts.spectrogramDataUrl;
+    if (opts.playerMode) container.dataset.playerMode = opts.playerMode;
 
     // Audio element (omit with audioElement: false for explorer pattern)
     if (opts.audioElement !== false) {
@@ -342,12 +357,13 @@ describe('AudioPlayer', () => {
             audioUrl: 'https://example.com/audio.wav',
             peaksUrl: 'https://example.com/peaks.json',
             spectrogramDataUrl: 'https://example.com/spectrogram.bin',
+            playerMode: 'analyze',
         });
 
         const player = new AudioPlayer(container);
 
         // Wait for async fetch calls to resolve
-        await new Promise(resolve => setTimeout(resolve, 0));
+        await flushAsyncWork();
 
         expect(global.SpectrogramRenderer).toHaveBeenCalledTimes(1);
         expect(player._spectrogramRenderer).toBeTruthy();
@@ -360,6 +376,7 @@ describe('AudioPlayer', () => {
             audioUrl: 'https://example.com/audio.wav',
             peaksUrl: 'https://example.com/peaks.json',
             spectrogramDataUrl: 'https://example.com/spectrogram.bin',
+            playerMode: 'analyze',
         });
 
         new AudioPlayer(container);
@@ -425,10 +442,11 @@ describe('AudioPlayer', () => {
             audioUrl: 'https://example.com/audio.wav',
             peaksUrl: 'https://example.com/peaks.json',
             spectrogramDataUrl: 'https://example.com/spectrogram.bin',
+            playerMode: 'analyze',
         });
 
         const player = new AudioPlayer(container);
-        await new Promise(resolve => setTimeout(resolve, 0));
+        await flushAsyncWork();
 
         const wsDestroy = player.wavesurfer.destroy;
         const srDestroy = player._spectrogramRenderer.destroy;
@@ -480,7 +498,7 @@ describe('AudioPlayer', () => {
         });
 
         const player = new AudioPlayer(container);
-        await new Promise(resolve => setTimeout(resolve, 0));
+        await flushAsyncWork();
 
         expect(global.fetch).toHaveBeenCalledWith('https://example.com/peaks.json');
         expect(player.wavesurfer.load).toHaveBeenCalledWith(
@@ -488,5 +506,26 @@ describe('AudioPlayer', () => {
             [[0.1, 0.2, 0.3]],
             120
         );
+    });
+
+    test('passes flat binary spectrogram data to SpectrogramRenderer', async () => {
+        const container = buildContainer({
+            audioUrl: 'https://example.com/audio.wav',
+            peaksUrl: 'https://example.com/peaks.json',
+            spectrogramDataUrl: 'https://example.com/spectrogram.bin',
+            playerMode: 'analyze',
+        });
+
+        new AudioPlayer(container);
+        await flushAsyncWork();
+
+        const args = global.SpectrogramRenderer.mock.calls[0];
+        expect(args).toBeTruthy();
+        expect(args[1]).toEqual(expect.objectContaining({
+            nFrames: 10,
+            nBins: 128,
+        }));
+        expect(args[1].flat).toBeInstanceOf(Uint8Array);
+        expect(Array.isArray(args[1])).toBe(false);
     });
 });
