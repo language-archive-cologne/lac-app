@@ -38,6 +38,7 @@ services:
       SAML_DJANGO_USER_MAIN_ATTRIBUTE: "username"
       SAML_USE_NAME_ID_AS_USERNAME: "false"
       GUIDELINES_REPO_URL: /app/lac-guidelines
+      LAC_MEDIA_TMP_DIR: "/app/.tmp/media-processing"
     ports:
       - '127.0.0.1:8102:8000'
     command: /start
@@ -120,6 +121,8 @@ services:
       SAML_USE_NAME_ID_AS_USERNAME: "false"
       DB_BACKUP_ENABLED: "false"
       HUEY_IMMEDIATE: "false"
+      HUEY_WORKERS: "1"
+      LAC_MEDIA_TMP_DIR: "/app/.tmp/media-processing"
     command: /bin/sh -c "python manage.py run_huey"
     networks:
       - lacos_dev_network

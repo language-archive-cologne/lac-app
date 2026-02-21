@@ -32,6 +32,7 @@ services:
       SAML_USE_NAME_ID_AS_USERNAME: "false"
       SAML_SP_BASE_URL: "http://localhost:8101"
       SAML_IDP_METADATA_LOCAL: "/app/shibboleth.xml"
+      LAC_MEDIA_TMP_DIR: "/app/.tmp/media-processing"
     ports:
       - '127.0.0.1:8101:8000'
     command: /bin/bash -lc "python manage.py migrate && uvicorn config.asgi:application --host 0.0.0.0 --reload --reload-include '*.html' --no-access-log"
@@ -115,6 +116,8 @@ services:
       SAML_SP_BASE_URL: "http://localhost:8101"
       SAML_IDP_METADATA_LOCAL: "/app/shibboleth.xml"
       DB_BACKUP_ENABLED: "false"
+      HUEY_WORKERS: "1"
+      LAC_MEDIA_TMP_DIR: "/app/.tmp/media-processing"
     command: /bin/sh -c "python manage.py run_huey"
     networks:
       - lacos_network_ws

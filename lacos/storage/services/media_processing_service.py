@@ -4,10 +4,12 @@ Uses BBC's audiowaveform CLI for peak data and numpy STFT for spectrogram
 frequency bins that match WaveSurfer.js Spectrogram plugin output exactly.
 """
 
+import errno
 import gzip
 import json
 import logging
 import os
+import shutil
 import struct
 import subprocess
 import tempfile
@@ -29,6 +31,10 @@ N_MELS = 256
 TARGET_SAMPLE_RATE = 44100
 HOP_DIVISOR = 4  # hop = n_fft // 4 → 75% overlap
 STFT_CHUNK_FRAMES = 2048  # STFT frames per chunk (~50 MB peak RAM per chunk)
+MEDIA_TMP_DIR_ENV = "LAC_MEDIA_TMP_DIR"
+MEDIA_TMP_MIN_FREE_BYTES_ENV = "LAC_MEDIA_TMP_MIN_FREE_BYTES"
+DEFAULT_MEDIA_TMP_MIN_FREE_BYTES = 512 * 1024 * 1024  # 512 MiB reserve
+MIN_TMP_WORKING_SET_BYTES = 64 * 1024 * 1024  # 64 MiB minimum working set
 
 
 def _hz_to_mel(hz):
@@ -67,6 +73,116 @@ class MediaProcessingService:
 
     def __init__(self, bucket_service: BucketService | None = None) -> None:
         self.bucket_service = bucket_service or BucketService()
+        self._tmp_dir = self._resolve_tmp_dir()
+        self._tmp_min_free_bytes = self._resolve_min_free_bytes()
+
+    def _resolve_tmp_dir(self) -> str | None:
+        """Resolve optional tmp directory for audio derivative processing."""
+        configured = os.getenv(MEDIA_TMP_DIR_ENV, "").strip()
+        if not configured:
+            return None
+
+        path = Path(configured)
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            logger.warning(
+                "Configured %s path is unusable (%s): %s; using default temp dir",
+                MEDIA_TMP_DIR_ENV,
+                path,
+                exc,
+            )
+            return None
+
+        return str(path)
+
+    def _resolve_min_free_bytes(self) -> int:
+        raw = os.getenv(MEDIA_TMP_MIN_FREE_BYTES_ENV, "").strip()
+        if not raw:
+            return DEFAULT_MEDIA_TMP_MIN_FREE_BYTES
+        try:
+            value = int(raw)
+            return max(0, value)
+        except ValueError:
+            logger.warning(
+                "Invalid %s=%r; using default %d bytes",
+                MEDIA_TMP_MIN_FREE_BYTES_ENV,
+                raw,
+                DEFAULT_MEDIA_TMP_MIN_FREE_BYTES,
+            )
+            return DEFAULT_MEDIA_TMP_MIN_FREE_BYTES
+
+    def _tmp_root(self) -> str:
+        return self._tmp_dir or tempfile.gettempdir()
+
+    def _tmp_free_bytes(self) -> int | None:
+        try:
+            return int(shutil.disk_usage(self._tmp_root()).free)
+        except OSError as exc:
+            logger.warning("Could not determine tmp free space for %s: %s", self._tmp_root(), exc)
+            return None
+
+    def _insufficient_space_error(self, required_bytes: int, free_bytes: int | None, phase: str) -> dict:
+        if free_bytes is None:
+            msg = (
+                f"Unable to verify free space for temporary files in {self._tmp_root()} "
+                f"before {phase}. Please check disk space."
+            )
+        else:
+            required_mb = required_bytes / (1024 * 1024)
+            free_mb = free_bytes / (1024 * 1024)
+            reserve_mb = self._tmp_min_free_bytes / (1024 * 1024)
+            msg = (
+                f"Insufficient temporary disk space in {self._tmp_root()} before {phase}: "
+                f"required ~{required_mb:.1f} MiB, free {free_mb:.1f} MiB "
+                f"(reserve {reserve_mb:.1f} MiB)."
+            )
+        return {
+            "success": False,
+            "error_code": "no_space",
+            "error": msg,
+        }
+
+    def _preflight_tmp_space(self, required_bytes: int, phase: str) -> dict | None:
+        free_bytes = self._tmp_free_bytes()
+        if free_bytes is None:
+            # Proceed if space check is unavailable; runtime checks still catch ENOSPC.
+            return None
+
+        if free_bytes < required_bytes + self._tmp_min_free_bytes:
+            logger.warning(
+                "Temporary disk preflight failed for %s: free=%d required=%d reserve=%d root=%s",
+                phase,
+                free_bytes,
+                required_bytes,
+                self._tmp_min_free_bytes,
+                self._tmp_root(),
+            )
+            return self._insufficient_space_error(required_bytes, free_bytes, phase)
+
+        return None
+
+    def _get_source_size(self, bucket: str, s3_key: str) -> int | None:
+        info = self.bucket_service.get_file_info(bucket, s3_key)
+        if not isinstance(info, dict) or not info.get("success"):
+            return None
+
+        raw_size = info.get("file_size")
+        try:
+            return max(0, int(raw_size))
+        except (TypeError, ValueError):
+            return None
+
+    def _estimate_spectrogram_temp_bytes(self, duration: float) -> int:
+        if duration <= 0:
+            return 0
+        n_samples = int(duration * TARGET_SAMPLE_RATE)
+        if n_samples < FFT_SAMPLES:
+            return 0
+        hop_size = max(64, FFT_SAMPLES // HOP_DIVISOR)
+        n_frames = (n_samples - FFT_SAMPLES) // hop_size + 1
+        # float32 memmap of [n_frames, N_MELS]
+        return max(0, n_frames) * N_MELS * 4
 
     def generate_peaks(self, bucket: str, s3_key: str, *, force: bool = False) -> dict:
         """Download audio from S3 and generate peaks + spectrogram sidecars.
@@ -79,6 +195,7 @@ class MediaProcessingService:
         source_etag = self._get_source_etag(bucket, s3_key)
         if not source_etag:
             return {"success": False, "error": f"Source file not found: {s3_key}"}
+        source_size = self._get_source_size(bucket, s3_key)
 
         if not force:
             peaks_current = self._artifact_is_current(bucket, peaks_key, source_etag)
@@ -98,74 +215,112 @@ class MediaProcessingService:
                 "skipped": True,
             }
 
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp_path = Path(tmp_dir)
-            input_path = tmp_path / Path(s3_key).name
-            peaks_output_path = tmp_path / "peaks.json"
+        # Guard before any write-heavy operations in tmp space.
+        preflight_required = MIN_TMP_WORKING_SET_BYTES
+        if source_size is not None:
+            preflight_required = max(preflight_required, source_size * 2)
+        preflight_error = self._preflight_tmp_space(preflight_required, phase="audio download")
+        if preflight_error:
+            return preflight_error
 
-            try:
-                self.bucket_service.s3_client.download_file(
-                    bucket, s3_key, str(input_path)
+        try:
+            with tempfile.TemporaryDirectory(dir=self._tmp_dir) as tmp_dir:
+                tmp_path = Path(tmp_dir)
+                input_path = tmp_path / Path(s3_key).name
+                peaks_output_path = tmp_path / "peaks.json"
+
+                try:
+                    self.bucket_service.s3_client.download_file(
+                        bucket, s3_key, str(input_path)
+                    )
+                except ClientError as exc:
+                    logger.error("Failed to download %s/%s: %s", bucket, s3_key, exc)
+                    return {"success": False, "error": f"Download failed: {exc}"}
+
+                duration = self._get_duration(input_path)
+                if duration <= 0:
+                    return {"success": False, "error": "Could not determine audio duration"}
+
+                if not spectrogram_data_current:
+                    spectrogram_required = preflight_required + self._estimate_spectrogram_temp_bytes(duration)
+                    spectrogram_preflight_error = self._preflight_tmp_space(
+                        spectrogram_required,
+                        phase="spectrogram generation",
+                    )
+                    if spectrogram_preflight_error:
+                        return spectrogram_preflight_error
+
+                if not peaks_current:
+                    try:
+                        self._run_audiowaveform(input_path, peaks_output_path, duration)
+                    except subprocess.CalledProcessError as exc:
+                        logger.error("audiowaveform failed for %s: %s", s3_key, exc.stderr)
+                        return {"success": False, "error": f"audiowaveform error: {exc.stderr}"}
+                    except FileNotFoundError:
+                        logger.error("audiowaveform binary not found")
+                        return {"success": False, "error": "audiowaveform not installed"}
+
+                    try:
+                        raw_json = json.loads(peaks_output_path.read_text())
+                    except (json.JSONDecodeError, FileNotFoundError) as exc:
+                        return {"success": False, "error": f"Failed to read peaks output: {exc}"}
+
+                    peaks_data = self._transform_peaks_for_wavesurfer(raw_json, duration)
+                    peaks_bytes = json.dumps(peaks_data, separators=(",", ":")).encode()
+
+                    try:
+                        self.bucket_service.s3_client.put_object(
+                            Bucket=bucket,
+                            Key=peaks_key,
+                            Body=peaks_bytes,
+                            ContentType="application/json",
+                            Metadata={"source-etag": source_etag},
+                        )
+                    except ClientError as exc:
+                        logger.error("Failed to upload peaks for %s: %s", s3_key, exc)
+                        return {"success": False, "error": f"Upload failed: {exc}"}
+
+                if not spectrogram_data_current:
+                    try:
+                        spectrogram_data = self._compute_spectrogram(input_path)
+                    except Exception as exc:
+                        if "No space left on device" in str(exc):
+                            return {
+                                "success": False,
+                                "error_code": "no_space",
+                                "error": f"Spectrogram computation failed: {exc}",
+                            }
+                        logger.error(
+                            "Failed to compute spectrogram for %s: %s", s3_key, exc,
+                        )
+                        return {"success": False, "error": f"Spectrogram computation failed: {exc}"}
+
+                    try:
+                        self.bucket_service.s3_client.put_object(
+                            Bucket=bucket,
+                            Key=spectrogram_data_key,
+                            Body=gzip.compress(spectrogram_data),
+                            ContentType="application/octet-stream",
+                            ContentEncoding="gzip",
+                            Metadata={"source-etag": source_etag},
+                        )
+                    except ClientError as exc:
+                        logger.error("Failed to upload spectrogram data for %s: %s", s3_key, exc)
+                        return {"success": False, "error": f"Upload failed: {exc}"}
+        except OSError as exc:
+            if exc.errno == errno.ENOSPC:
+                logger.error(
+                    "No space left while generating audio derivatives for %s/%s (tmp_dir=%s)",
+                    bucket,
+                    s3_key,
+                    self._tmp_dir or tempfile.gettempdir(),
                 )
-            except ClientError as exc:
-                logger.error("Failed to download %s/%s: %s", bucket, s3_key, exc)
-                return {"success": False, "error": f"Download failed: {exc}"}
-
-            duration = self._get_duration(input_path)
-            if duration <= 0:
-                return {"success": False, "error": "Could not determine audio duration"}
-
-            if not peaks_current:
-                try:
-                    self._run_audiowaveform(input_path, peaks_output_path, duration)
-                except subprocess.CalledProcessError as exc:
-                    logger.error("audiowaveform failed for %s: %s", s3_key, exc.stderr)
-                    return {"success": False, "error": f"audiowaveform error: {exc.stderr}"}
-                except FileNotFoundError:
-                    logger.error("audiowaveform binary not found")
-                    return {"success": False, "error": "audiowaveform not installed"}
-
-                try:
-                    raw_json = json.loads(peaks_output_path.read_text())
-                except (json.JSONDecodeError, FileNotFoundError) as exc:
-                    return {"success": False, "error": f"Failed to read peaks output: {exc}"}
-
-                peaks_data = self._transform_peaks_for_wavesurfer(raw_json, duration)
-                peaks_bytes = json.dumps(peaks_data, separators=(",", ":")).encode()
-
-                try:
-                    self.bucket_service.s3_client.put_object(
-                        Bucket=bucket,
-                        Key=peaks_key,
-                        Body=peaks_bytes,
-                        ContentType="application/json",
-                        Metadata={"source-etag": source_etag},
-                    )
-                except ClientError as exc:
-                    logger.error("Failed to upload peaks for %s: %s", s3_key, exc)
-                    return {"success": False, "error": f"Upload failed: {exc}"}
-
-            if not spectrogram_data_current:
-                try:
-                    spectrogram_data = self._compute_spectrogram(input_path)
-                except Exception as exc:
-                    logger.error(
-                        "Failed to compute spectrogram for %s: %s", s3_key, exc,
-                    )
-                    return {"success": False, "error": f"Spectrogram computation failed: {exc}"}
-
-                try:
-                    self.bucket_service.s3_client.put_object(
-                        Bucket=bucket,
-                        Key=spectrogram_data_key,
-                        Body=gzip.compress(spectrogram_data),
-                        ContentType="application/octet-stream",
-                        ContentEncoding="gzip",
-                        Metadata={"source-etag": source_etag},
-                    )
-                except ClientError as exc:
-                    logger.error("Failed to upload spectrogram data for %s: %s", s3_key, exc)
-                    return {"success": False, "error": f"Upload failed: {exc}"}
+                return {
+                    "success": False,
+                    "error_code": "no_space",
+                    "error": "No space left on device while creating temporary files for peaks generation",
+                }
+            raise
 
         logger.info(
             "Generated audio derivatives for %s/%s -> peaks=%s spectrogram_data=%s",
@@ -266,8 +421,11 @@ class MediaProcessingService:
 
         # Pass 1: compute mel dB in chunks, store to disk-backed array.
         db_path = None
+        db_mm = None
         try:
-            db_fd, db_path = tempfile.mkstemp(suffix=".f32", prefix="lac_db_")
+            db_fd, db_path = tempfile.mkstemp(
+                suffix=".f32", prefix="lac_db_", dir=self._tmp_dir,
+            )
             os.close(db_fd)
             db_mm = np.memmap(
                 db_path, dtype=np.float32, mode="w+", shape=(n_frames, N_MELS),
@@ -313,8 +471,13 @@ class MediaProcessingService:
 
             header = struct.pack("<IH", n_frames, N_MELS)
             return header + uint8_data.tobytes()
+        except OSError as exc:
+            if exc.errno == errno.ENOSPC:
+                raise RuntimeError("No space left on device while writing spectrogram temp data") from exc
+            raise
         finally:
-            del db_mm
+            if db_mm is not None:
+                del db_mm
             if db_path is not None:
                 try:
                     os.remove(db_path)

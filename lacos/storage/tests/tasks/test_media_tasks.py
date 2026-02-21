@@ -1,8 +1,9 @@
 """Tests for media processing tasks (scan_and_generate_peaks_task)."""
 
-from unittest.mock import MagicMock, patch, call
+import errno
+from unittest.mock import MagicMock, patch
 
-from lacos.storage.media_tasks import scan_and_generate_peaks_task
+from lacos.storage.media_tasks import generate_peaks_task, scan_and_generate_peaks_task
 
 
 def _make_s3_page(keys):
@@ -29,10 +30,9 @@ def test_enqueues_audio_files(MockBucketService, mock_gen_task):
     )
 
     assert result["success"] is True
-    assert result["enqueued"] == 2
-    assert result["audio_files"] == 2
-    mock_gen_task.assert_any_call("test-bucket", "folder/track1.wav")
-    mock_gen_task.assert_any_call("test-bucket", "folder/track2.mp3")
+    assert result["enqueued"] == 1
+    assert result["audio_files"] == 1
+    mock_gen_task.assert_any_call("test-bucket", "folder/track1.wav", force=False)
 
 
 @patch("lacos.storage.media_tasks.generate_peaks_task")
@@ -53,7 +53,7 @@ def test_skips_peaks_json_files(MockBucketService, mock_gen_task):
     )
 
     assert result["enqueued"] == 1
-    mock_gen_task.assert_called_once_with("b", "folder/track.wav")
+    mock_gen_task.assert_called_once_with("b", "folder/track.wav", force=False)
 
 
 @patch("lacos.storage.media_tasks.generate_peaks_task")
@@ -152,3 +152,28 @@ def test_no_prefix_when_folder_path_empty(MockBucketService, mock_gen_task):
     )
 
     paginator.paginate.assert_called_once_with(Bucket="b")
+
+
+@patch("lacos.storage.media_tasks.MediaProcessingService")
+def test_generate_peaks_task_returns_no_space_error_without_raising(MockService):
+    mock_service = MockService.return_value
+    mock_service.generate_peaks.side_effect = OSError(errno.ENOSPC, "No space left on device")
+
+    result = generate_peaks_task.call_local("bucket", "audio.wav")
+
+    assert result["success"] is False
+    assert result["error_code"] == "no_space"
+    assert "No space left on device" in result["error"]
+
+
+@patch("lacos.storage.media_tasks.MediaProcessingService")
+def test_generate_peaks_task_re_raises_non_space_oserror(MockService):
+    mock_service = MockService.return_value
+    mock_service.generate_peaks.side_effect = OSError(errno.EIO, "I/O error")
+
+    try:
+        generate_peaks_task.call_local("bucket", "audio.wav")
+    except OSError as exc:
+        assert exc.errno == errno.EIO
+    else:
+        raise AssertionError("Expected non-ENOSPC OSError to be re-raised")

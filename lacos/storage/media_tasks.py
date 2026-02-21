@@ -1,5 +1,6 @@
 """Huey tasks for media processing (audio sidecar generation)."""
 
+import errno
 import logging
 
 from huey.contrib.djhuey import db_task
@@ -85,7 +86,26 @@ def generate_peaks_task(
         BackgroundTaskService.mark_running(tracking_id, message="Generating audio sidecars")
 
     service = MediaProcessingService()
-    result = service.generate_peaks(bucket_name, s3_key, force=force)
+    try:
+        result = service.generate_peaks(bucket_name, s3_key, force=force)
+    except OSError as exc:
+        if exc.errno == errno.ENOSPC:
+            result = {
+                "success": False,
+                "error_code": "no_space",
+                "error": "No space left on device while generating peaks sidecars",
+            }
+        else:
+            raise
+    except Exception as exc:
+        if "No space left on device" in str(exc):
+            result = {
+                "success": False,
+                "error_code": "no_space",
+                "error": f"No space left on device while generating peaks sidecars: {exc}",
+            }
+        else:
+            raise
 
     if tracking_id:
         if result.get("success"):

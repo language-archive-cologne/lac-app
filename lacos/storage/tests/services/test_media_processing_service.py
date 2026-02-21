@@ -1,3 +1,4 @@
+import errno
 import struct
 from unittest.mock import MagicMock, patch
 
@@ -137,3 +138,35 @@ def test_derivatives_current_uses_artifact_is_current_for_both():
 def test_spectrogram_data_key_suffix():
     service = MediaProcessingService(bucket_service=MagicMock())
     assert service._spectrogram_data_key("folder/audio.wav") == "folder/audio.wav.spectrogram.bin"
+
+
+def test_generate_peaks_returns_clean_error_when_tmp_dir_has_no_space():
+    service = MediaProcessingService(bucket_service=MagicMock())
+    with (
+        patch.object(service, "_get_source_etag", return_value="etag-1"),
+        patch.object(service, "_artifact_is_current", return_value=False),
+        patch("lacos.storage.services.media_processing_service.tempfile.TemporaryDirectory") as mock_tmp,
+    ):
+        mock_tmp.side_effect = OSError(errno.ENOSPC, "No space left on device")
+        result = service.generate_peaks("bucket", "folder/audio.wav")
+
+    assert result["success"] is False
+    assert result["error_code"] == "no_space"
+    assert "No space left on device" in result["error"]
+
+
+def test_generate_peaks_preflight_stops_when_tmp_space_is_too_low():
+    bucket_service = MagicMock()
+    service = MediaProcessingService(bucket_service=bucket_service)
+
+    with (
+        patch.object(service, "_get_source_etag", return_value="etag-1"),
+        patch.object(service, "_get_source_size", return_value=1024 * 1024 * 1024),
+        patch.object(service, "_artifact_is_current", return_value=False),
+        patch.object(service, "_tmp_free_bytes", return_value=50 * 1024 * 1024),
+    ):
+        result = service.generate_peaks("bucket", "folder/audio.wav")
+
+    assert result["success"] is False
+    assert result["error_code"] == "no_space"
+    bucket_service.s3_client.download_file.assert_not_called()

@@ -304,6 +304,7 @@ LOGGING = {
 REDIS_URL = env("REDIS_URL", default="redis://redis:6379/0")
 REDIS_SSL = REDIS_URL.startswith("rediss://")
 HUEY_IMMEDIATE = env.bool("HUEY_IMMEDIATE", default=DEBUG)
+HUEY_WORKERS = env.int("HUEY_WORKERS", default=2)
 
 # Huey (Task Queue) Configuration
 # ------------------------------------------------------------------------------
@@ -319,7 +320,7 @@ HUEY = {
         'url': REDIS_URL,
     },
     'consumer': {
-        'workers': 2,
+        'workers': HUEY_WORKERS,
         'worker_type': 'thread',
         'initial_delay': 0.1,  # Smallest polling interval
         'backoff': 1.15,  # Exponential backoff rate
