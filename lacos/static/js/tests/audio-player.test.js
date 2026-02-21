@@ -304,6 +304,37 @@ describe('AudioPlayer', () => {
         expect(audio.controls).toBe(true);
     });
 
+    test('falls back to native audio and removes waveform wrapper when WaveSurfer is missing', () => {
+        delete global.WaveSurfer;
+
+        // Re-require to pick up missing WaveSurfer
+        jest.resetModules();
+        const AP = require('../src/audio-player');
+
+        const container = document.createElement('div');
+        container.dataset.audioUrl = 'https://example.com/audio.wav';
+        container.dataset.peaksUrl = 'https://example.com/peaks.json';
+
+        const audio = document.createElement('audio');
+        audio.src = container.dataset.audioUrl;
+        audio.classList.add('hidden');
+        container.appendChild(audio);
+
+        const waveformWrapper = document.createElement('div');
+        waveformWrapper.setAttribute('data-ap-waveform-player', '');
+        const waveform = document.createElement('div');
+        waveform.setAttribute('data-ap-waveform', '');
+        waveformWrapper.appendChild(waveform);
+        container.appendChild(waveformWrapper);
+
+        const player = new AP(container);
+
+        expect(player.wavesurfer).toBeNull();
+        expect(audio.controls).toBe(true);
+        expect(audio.classList.contains('hidden')).toBe(false);
+        expect(container.querySelector('[data-ap-waveform-player]')).toBeNull();
+    });
+
     // ── Analyze mode: creates SpectrogramRenderer ──
 
     test('creates SpectrogramRenderer when spectrogram URL is provided', async () => {
