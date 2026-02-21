@@ -7,6 +7,7 @@ import logging
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.template.loader import render_to_string
+from django.utils.text import slugify
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.http import require_http_methods
@@ -268,30 +269,50 @@ class BucketSelectHTMXView(HtmxTemplateHelperMixin, View):
 
 @archivist_required
 def file_info_htmx(request, bucket_type, object_path):
-    """
-    Get file information for display.
-
-    Used to show file details in a modal or sidebar.
-    """
+    """Provide file metadata details via HTMX."""
     bucket_service = BucketService(skip_bucket_check=True)
+    target_id = request.GET.get("target_id") or request.GET.get("targetId")
 
-    try:
-        file_info = bucket_service.get_file_info(bucket_type, object_path)
+    if not target_id:
+        target_id = slugify(f"file-info-{object_path}")
 
-        return render(
-            request,
-            "dashboard/partials/file_info.html",
-            {
-                "bucket_name": bucket_type,
-                "file_info": file_info,
-                "object_path": object_path,
-            },
-        )
-    except Exception as e:
-        logger.error(f"Error getting file info for {object_path}: {str(e)}")
+    if request.GET.get("clear"):
         html = render_to_string(
-            "dashboard/partials/error.html",
-            {"error": f"Failed to load file info: {str(e)}"},
+            "dashboard/partials/file_info_placeholder.html",
+            {"target_id": target_id},
             request=request,
         )
-        return HttpResponse(html, status=500)
+        return HttpResponse(html)
+
+    accessible_buckets = set(bucket_service.get_all_accessible_buckets())
+
+    if bucket_type in accessible_buckets:
+        bucket_name = bucket_type
+    elif bucket_type == "ingest":
+        bucket_name = bucket_service.ingest_bucket
+    elif bucket_type == "production":
+        bucket_name = bucket_service.production_bucket
+    else:
+        return HttpResponse(status=404)
+
+    info_result = bucket_service.get_file_info(bucket_name, object_path)
+
+    context = {
+        "target_id": target_id,
+        "bucket_type": bucket_type,
+        "object_path": object_path,
+        "file_name": info_result.get("file_name") or object_path.rstrip("/").split("/")[-1],
+        "file_size_formatted": info_result.get("file_size_formatted"),
+        "content_type": info_result.get("content_type"),
+        "last_modified": info_result.get("last_modified"),
+        "metadata": info_result.get("metadata", {}),
+        "success": info_result.get("success", False),
+        "error": info_result.get("error"),
+    }
+
+    html = render_to_string(
+        "dashboard/partials/file_info_panel.html",
+        context,
+        request=request,
+    )
+    return HttpResponse(html)

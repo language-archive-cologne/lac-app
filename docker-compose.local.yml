@@ -13,6 +13,8 @@ services:
     build:
       context: .
       dockerfile: ./compose/local/django/Dockerfile
+      target: web-run-stage
+      network: host
     image: lacos_local_django
     restart: unless-stopped
     depends_on:
@@ -41,6 +43,7 @@ services:
     build:
       context: .
       dockerfile: ./compose/production/postgres/Dockerfile
+      network: host
     image: lacos_production_postgres
     volumes:
       - lacos_local_postgres_data:/var/lib/postgresql/data
@@ -51,7 +54,7 @@ services:
       - lacos_network_ws
 
   minio:
-    image: minio/minio
+    image: minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
     ports:
       - "127.0.0.1:9100:9000"
       - "127.0.0.1:9101:9001"
@@ -81,7 +84,7 @@ services:
 
 
   redis:
-    image: "redis:latest"
+    image: "redis:8.2-alpine@sha256:a308ca111032fa8f306a2dc7be7ba5deb8b777ed5d258c733cddba48a1fd7904"
     volumes:
       - lacos_local_redis_data:/data
     ports:
@@ -94,6 +97,8 @@ services:
     build:
       context: .
       dockerfile: ./compose/local/django/Dockerfile
+      target: worker-run-stage
+      network: host
     image: lacos_local_huey
     depends_on:
       - django
@@ -101,8 +106,7 @@ services:
     volumes:
       - .:/app:z
       - ../lac-guidelines:/lac-guidelines:ro
-      - lacos_local_postgres_data_backups:/backups
-      - /var/run/docker.sock:/var/run/docker.sock
+      - lacos_local_postgres_data_backups:/backups:ro
     env_file:
       - ./.envs/.local/.django
       - ./.envs/.local/.postgres
@@ -113,12 +117,13 @@ services:
       SAML_USE_NAME_ID_AS_USERNAME: "false"
       SAML_SP_BASE_URL: "http://localhost:8101"
       SAML_IDP_METADATA_LOCAL: "/app/shibboleth.xml"
+      DB_BACKUP_ENABLED: "false"
     command: /bin/sh -c "python manage.py run_huey"
     networks:
       - lacos_network_ws
 
   node:
-    image: node:latest
+    image: node:22-alpine
     depends_on:
       - django
     working_dir: /app/theme/static_src

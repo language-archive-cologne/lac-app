@@ -83,6 +83,10 @@ class UploadVerificationService:
         if bucket_name and total_verified > 0:
             self._invalidate_affected_folders(bucket_name, s3_keys)
 
+        # Enqueue media processing for verified audio files
+        if upload_session and total_verified > 0:
+            self._enqueue_media_processing(upload_session)
+
         return {
             "success": success,
             "results": results,
@@ -151,6 +155,26 @@ class UploadVerificationService:
         except Exception as exc:  # pragma: no cover - fallback safety
             logger.warning("Failed to format size %s: %s", size_bytes, exc)
             return f"{size_bytes} B"
+
+    def _enqueue_media_processing(self, session: UploadSession) -> None:
+        """Enqueue audio sidecar generation for verified audio files in the session."""
+        try:
+            from lacos.storage.media_tasks import generate_peaks_task
+
+            for file_obj in session.files.filter(status="verified"):
+                file_name = file_obj.file_name or ""
+                if not file_name.lower().endswith(".wav"):
+                    continue
+                bucket = file_obj.bucket_name or session.bucket_name
+                if bucket and file_obj.s3_key:
+                        generate_peaks_task(bucket, file_obj.s3_key)
+                        logger.info(
+                            "Enqueued audio sidecar generation for %s/%s",
+                            bucket,
+                            file_obj.s3_key,
+                        )
+        except Exception as exc:
+            logger.warning("Failed to enqueue media processing: %s", exc)
 
     def _invalidate_affected_folders(self, bucket_name: str, s3_keys: list) -> None:
         """Invalidate folder cache for all parent folders of uploaded files."""

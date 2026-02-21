@@ -269,11 +269,21 @@
     </div>
 </div>
 
+<!-- Generate Peaks Modal -->
+<input type="checkbox" id="generate-peaks-modal" class="modal-toggle" />
+<div class="modal" role="dialog">
+    <div class="modal-box">
+        <div id="generate-peaks-modal-content">
+            <!-- Content loaded via HTMX -->
+        </div>
+    </div>
+</div>
+
 <script>
 (function () {
     const modal = document.getElementById('file-viewer-modal');
     const content = document.getElementById('file-viewer-content');
-    let waveSurferInstance = null;
+    let dashboardPlayer = null;
 
     function cleanupMedia() {
         if (!modal) return;
@@ -281,25 +291,24 @@
         if (audio) { audio.pause(); audio.currentTime = 0; }
         const video = modal.querySelector('#videoPlayer');
         if (video) { video.pause(); video.currentTime = 0; }
-        if (waveSurferInstance) { waveSurferInstance.destroy(); waveSurferInstance = null; }
+        if (dashboardPlayer) { dashboardPlayer.destroy(); dashboardPlayer = null; }
     }
 
     function initialiseWaveform(container) {
-        const waveformTarget = container.querySelector('#waveform');
-        const audioElement = container.querySelector('#audioPlayer');
-        if (!waveformTarget || !audioElement || !window.WaveSurfer) return;
-        waveSurferInstance = WaveSurfer.create({
-            container: waveformTarget,
-            waveColor: '#4F46E5',
-            progressColor: '#818CF8',
-            cursorColor: '#C7D2FE',
-            barWidth: 2,
-            barRadius: 3,
-            cursorWidth: 1,
-            height: 80,
-            barGap: 2,
-        });
-        waveSurferInstance.load(audioElement.src);
+        // Find the audio player container with data attributes
+        const playerContainer = container.querySelector('[data-audio-url]') || container.closest('[data-audio-url]');
+        if (!playerContainer) {
+            const audioElement = container.querySelector('#audioPlayer');
+            if (audioElement) { audioElement.controls = true; audioElement.classList.remove('hidden'); }
+            return;
+        }
+        if (!window.AudioPlayer) {
+            const audioElement = playerContainer.querySelector('#audioPlayer');
+            if (audioElement) { audioElement.controls = true; audioElement.classList.remove('hidden'); }
+            return;
+        }
+
+        dashboardPlayer = new AudioPlayer(playerContainer);
     }
 
     function updateActiveBucketInput() {

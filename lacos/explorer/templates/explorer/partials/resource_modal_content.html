@@ -1,7 +1,7 @@
 {% load i18n %}
 {% load static %}
 
-<div class="space-y-4" data-viewer-type="{{ media_type }}">
+<div class="space-y-4" data-viewer-type="{{ media_type }}" data-player-mode="{{ player_mode|default:'simple' }}">
   <div class="flex items-start justify-between gap-4">
     <div>
       <h2 class="text-lg font-semibold text-slate-800">{{ resource_name }}</h2>
@@ -16,20 +16,15 @@
 
   <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
     {% if media_type == 'audio' %}
-      <!-- Native audio element (fast stream) -->
-      <div class="bg-base-100 border border-base-300 rounded-lg p-3">
-        <audio controls preload="metadata" class="w-full">
-          <source src="{{ stream_url }}" type="{{ source_mime_type }}">
-          <p>{% translate "Your browser does not support the audio element." %}</p>
-        </audio>
-      </div>
-
-      <!-- WaveSurfer player (disabled for now) -->
-      <div id="linguist-audio-player" data-audio-url="{{ stream_url }}" data-player-enabled="false" class="hidden" aria-hidden="true">
+      <div id="linguist-audio-player"
+           data-audio-url="{{ stream_url }}"
+           data-player-mode="{{ player_mode|default:'simple' }}"
+           {% if peaks_url %}data-peaks-url="{{ peaks_url }}"{% endif %}
+           {% if spectrogram_data_url %}data-spectrogram-data-url="{{ spectrogram_data_url }}"{% endif %}>
         <!-- Controls bar -->
         <div class="bg-base-200 rounded-t-lg p-3 flex items-center gap-3 flex-wrap">
           <div class="flex items-center gap-2">
-            <button type="button" class="btn btn-sm btn-circle btn-primary" id="play-pause-btn" title="{% translate 'Play/Pause' %}">
+            <button type="button" class="btn btn-sm btn-circle btn-primary" id="play-pause-btn" data-ap-play-pause title="{% translate 'Play/Pause' %}">
               <svg class="play-icon w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"/>
               </svg>
@@ -37,7 +32,7 @@
                 <path d="M5.75 3a.75.75 0 00-.75.75v12.5c0 .414.336.75.75.75h1.5a.75.75 0 00.75-.75V3.75A.75.75 0 007.25 3h-1.5zM12.75 3a.75.75 0 00-.75.75v12.5c0 .414.336.75.75.75h1.5a.75.75 0 00.75-.75V3.75a.75.75 0 00-.75-.75h-1.5z"/>
               </svg>
             </button>
-            <button type="button" class="btn btn-sm btn-circle btn-ghost" id="stop-btn" title="{% translate 'Stop' %}">
+            <button type="button" class="btn btn-sm btn-circle btn-ghost" id="stop-btn" data-ap-stop title="{% translate 'Stop' %}">
               <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                 <rect x="4" y="4" width="12" height="12" rx="1"/>
               </svg>
@@ -45,9 +40,9 @@
           </div>
 
           <div class="flex items-center gap-2 text-sm">
-            <span id="current-time" class="font-mono text-base-content/70">0:00.000</span>
+            <span id="current-time" data-ap-current-time class="font-mono text-base-content/70">0:00.000</span>
             <span class="text-base-content/50">/</span>
-            <span id="duration" class="font-mono text-base-content/70">0:00.000</span>
+            <span id="duration" data-ap-duration class="font-mono text-base-content/70">0:00.000</span>
           </div>
 
           <div class="divider divider-horizontal mx-1 hidden sm:flex"></div>
@@ -55,9 +50,9 @@
           <!-- Zoom controls -->
           <div class="flex items-center gap-2">
             <span class="text-xs text-base-content/60 hidden sm:inline">{% translate 'Zoom' %}:</span>
-            <button type="button" class="btn btn-xs btn-ghost" id="zoom-out-btn">−</button>
-            <input type="range" id="zoom-slider" class="range range-xs range-primary w-16 sm:w-20" min="10" max="500" value="50">
-            <button type="button" class="btn btn-xs btn-ghost" id="zoom-in-btn">+</button>
+            <button type="button" class="btn btn-xs btn-ghost" id="zoom-out-btn" data-ap-zoom-out>−</button>
+            <input type="range" id="zoom-slider" data-ap-zoom-slider class="range range-xs range-primary w-16 sm:w-20" min="100" max="2000" value="500">
+            <button type="button" class="btn btn-xs btn-ghost" id="zoom-in-btn" data-ap-zoom-in>+</button>
           </div>
 
           <div class="divider divider-horizontal mx-1 hidden sm:flex"></div>
@@ -65,7 +60,7 @@
           <!-- Speed controls -->
           <div class="flex items-center gap-2">
             <span class="text-xs text-base-content/60 hidden sm:inline">{% translate 'Speed' %}:</span>
-            <select id="speed-select" class="select select-xs select-bordered">
+            <select id="speed-select" data-ap-speed class="select select-xs select-bordered">
               <option value="0.25">0.25x</option>
               <option value="0.5">0.5x</option>
               <option value="0.75">0.75x</option>
@@ -77,38 +72,57 @@
           </div>
 
           <div class="divider divider-horizontal mx-1 hidden sm:flex"></div>
-
-          <!-- Selection controls -->
           <div class="flex items-center gap-2">
             <span class="text-xs text-base-content/60 hidden sm:inline">{% translate 'Selection' %}:</span>
-            <button type="button" class="btn btn-xs btn-ghost" id="select-toggle-btn" aria-pressed="false" title="{% translate 'Select segment' %}">
+            <button type="button"
+                    class="btn btn-xs btn-outline btn-primary"
+                    id="select-toggle-btn"
+                    data-ap-select-toggle
+                    aria-pressed="true"
+                    title="{% translate 'Select segment' %}">
               {% translate 'Select' %}
             </button>
-            <button type="button" class="btn btn-xs btn-ghost" id="play-selection-btn" title="{% translate 'Play selection' %}" disabled>
+            <button type="button"
+                    class="btn btn-xs btn-outline btn-primary"
+                    id="play-selection-btn"
+                    data-ap-play-selection
+                    title="{% translate 'Play selection' %}"
+                    disabled>
               {% translate 'Play' %}
             </button>
-            <button type="button" class="btn btn-xs btn-ghost" id="clear-selection-btn" title="{% translate 'Clear selection' %}" disabled>
+            <button type="button"
+                    class="btn btn-xs btn-outline btn-primary"
+                    id="clear-selection-btn"
+                    data-ap-clear-selection
+                    title="{% translate 'Clear selection' %}"
+                    disabled>
               {% translate 'Clear' %}
             </button>
           </div>
 
         </div>
 
-        <!-- Waveform -->
         <div class="bg-base-100 border-x border-base-300">
-          <div id="waveform" style="min-height: 128px;"></div>
+          <div id="waveform" data-ap-waveform style="min-height: 128px;"></div>
         </div>
 
         <!-- Timeline -->
         <div class="bg-base-200 rounded-b-lg border-x border-b border-base-300">
-          <div id="timeline" style="height: 24px;"></div>
+          <div id="timeline" data-ap-timeline style="height: 24px;"></div>
         </div>
 
         <!-- Loading state -->
-        <div id="player-loading" class="absolute inset-0 bg-base-100/80 flex items-center justify-center rounded-lg">
+        <div id="player-loading" data-ap-loading class="absolute inset-0 bg-base-100/80 flex items-center justify-center rounded-lg">
           <span class="loading loading-spinner loading-lg text-primary"></span>
         </div>
       </div>
+
+      <noscript>
+        <audio controls preload="metadata" class="w-full">
+          <source src="{{ stream_url }}" type="{{ source_mime_type }}">
+          <p>{% translate "Your browser does not support the audio element." %}</p>
+        </audio>
+      </noscript>
 
     {% elif media_type == 'video' %}
       <video controls preload="metadata" class="w-full rounded-lg" style="max-height: 70vh">

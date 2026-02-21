@@ -62,6 +62,18 @@ Nested folder contents returned via HTMX when a folder is expanded.
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm0 2c-2.21 0-4 1.79-4 4v3h8v-3c0-2.21-1.79-4-4-4zm-7 7a1 1 0 011-1h12a1 1 0 011 1v2H5v-2z" />
                         </svg>
                     </label>
+                    <label class="btn btn-ghost btn-xs text-purple-600"
+                           onclick="event.stopPropagation();"
+                           for="generate-peaks-modal"
+                           title="Generate audio peaks and spectrograms"
+                           hx-get="{% url 'storage:generate_peaks_folder_modal' bucket_name=bucket_type folder_path=item.path %}"
+                           hx-target="#generate-peaks-modal-content"
+                           hx-swap="innerHTML"
+                           hx-indicator="#indicator">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 18V9m4 9V6m4 12v-4m4 4V10m4 8V4" />
+                        </svg>
+                    </label>
                     <label class="btn btn-ghost btn-xs"
                            onclick="event.stopPropagation();"
                            for="ocfl-conversion-modal"

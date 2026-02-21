@@ -25,11 +25,42 @@
         Your browser does not support HTML5 video.
     </video>
 {% elif viewer_type == "audio" %}
-    <div class="space-y-3">
-        <div id="waveform" class="hidden md:block h-20 rounded-lg bg-base-200"></div>
-        <audio id="audioPlayer" class="w-full" controls src="{{ download_url }}">
+    <div class="space-y-3"
+         data-audio-url="{{ download_url }}"
+         {% if peaks_url %}data-peaks-url="{{ peaks_url }}"{% endif %}
+         {% if spectrogram_data_url %}data-spectrogram-data-url="{{ spectrogram_data_url }}"{% endif %}>
+        <audio id="audioPlayer"
+               class="w-full {% if peaks_url %}hidden{% endif %}"
+               {% if not peaks_url %}controls{% endif %}
+               preload="metadata"
+               src="{{ download_url }}">
             Your browser does not support the audio element.
         </audio>
+        {% if peaks_url %}
+        <div id="waveform-player" data-ap-waveform-player class="card bg-base-200/60 border border-base-300">
+            <div class="card-body gap-4 p-4">
+                <div id="waveform-stage"
+                     class="rounded-lg bg-base-100 border border-base-300 overflow-hidden">
+                    <div id="waveform" data-ap-waveform></div>
+                </div>
+                <div id="waveform-timeline" data-ap-timeline class="text-base-content/60"></div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <button type="button" id="wave-play-toggle" data-ap-play-pause data-ap-play-toggle-text class="btn btn-sm btn-primary min-w-20">Play</button>
+                    <button type="button" id="wave-back-10" data-ap-skip-back="-10" class="btn btn-sm btn-ghost">-10s</button>
+                    <button type="button" id="wave-forward-10" data-ap-skip-forward="10" class="btn btn-sm btn-ghost">+10s</button>
+                    <div class="divider divider-horizontal hidden md:flex"></div>
+                    <button type="button" id="wave-select-toggle" data-ap-select-toggle class="btn btn-sm btn-ghost" aria-pressed="false">Select</button>
+                    <button type="button" id="wave-play-selection" data-ap-play-selection class="btn btn-sm btn-ghost" disabled>Play selection</button>
+                    <button type="button" id="wave-clear-selection" data-ap-clear-selection class="btn btn-sm btn-ghost" disabled>Clear</button>
+                    <div class="ml-auto flex items-center gap-2 text-sm">
+                        <span id="wave-current-time" data-ap-current-time class="badge badge-outline">00:00</span>
+                        <span class="text-base-content/50">/</span>
+                        <span id="wave-total-time" data-ap-duration class="badge badge-outline">00:00</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 {% elif viewer_type == "json" or viewer_type == "xml" %}
     {% if file_content %}

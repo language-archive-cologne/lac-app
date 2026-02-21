@@ -3,7 +3,7 @@ stages:
 
 .deploy_base:
   stage: deploy
-  image: alpine:latest
+  image: alpine:3.21
   tags:
     - charch
   before_script:
@@ -27,6 +27,8 @@ deploy_dev_full:
     - if: '$CI_COMMIT_BRANCH == "dev"'
       changes:
         - "requirements/**/*"
+        - "docker-compose.dev.yml"
+        - ".dockerignore"
         - "compose/**/*"
         - "**/migrations/**/*"
   script:
@@ -38,6 +40,8 @@ deploy_dev_fast:
     - if: '$CI_COMMIT_BRANCH == "dev"'
       changes:
         - "requirements/**/*"
+        - "docker-compose.dev.yml"
+        - ".dockerignore"
         - "compose/**/*"
         - "**/migrations/**/*"
       when: never

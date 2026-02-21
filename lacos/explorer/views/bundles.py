@@ -297,8 +297,6 @@ class ResourceAccessView(View):
         if hasattr(bundle, 'structural_info') and bundle.structural_info.first():
             collection_for_path = bundle.structural_info.first().is_member_of_collection
         action = request.GET.get('action', 'view')
-        if action == 'analyze':
-            action = 'play'
 
         try:
 
@@ -359,16 +357,35 @@ class ResourceAccessView(View):
             if action == 'download':
                 raise Http404("Direct downloads are not available")
 
-            if is_htmx and action in {'play', 'view'}:
+            # Resolve precomputed visualization sidecars for audio files
+            peaks_url = None
+            spectrogram_data_url = None
+            if detected_media_type == 'audio':
+                peaks_url = self._resolve_peaks_url(resource_service, bucket_name, object_key)
+                spectrogram_data_url = self._resolve_spectrogram_data_url(
+                    resource_service,
+                    bucket_name,
+                    object_key,
+                )
+            player_mode = 'simple'
+            if detected_media_type == 'audio':
+                has_precomputed_spectrogram = bool(spectrogram_data_url)
+                if action == 'analyze' or (action == 'play' and has_precomputed_spectrogram):
+                    player_mode = 'analyze'
+
+            if is_htmx and action in {'play', 'view', 'analyze'}:
                 return self._render_htmx_modal(
                     request, resource, mime_type, detected_media_type, source_mime_type,
                     presigned_url, download_url, elan_context, is_elan,
                     xml_preview=xml_preview,
                     download_bucket=bucket_name,
                     download_key=object_key,
+                    peaks_url=peaks_url,
+                    spectrogram_data_url=spectrogram_data_url,
+                    player_mode=player_mode,
                 )
 
-            if action in {'play', 'view'}:
+            if action in {'play', 'view', 'analyze'}:
                 return redirect(
                     'explorer:bundle_detail_by_handle',
                     handle=bundle.identifier,
@@ -425,7 +442,11 @@ class ResourceAccessView(View):
         self, request, resource, mime_type, detected_media_type, source_mime_type,
         presigned_url, download_url, elan_context, is_elan,
         xml_preview=None,
-        download_bucket=None, download_key=None
+        download_bucket=None,
+        download_key=None,
+        peaks_url=None,
+        spectrogram_data_url=None,
+        player_mode='simple',
     ):
         """Render the HTMX modal response for play/view actions."""
         media_type = 'elan' if is_elan else detected_media_type
@@ -444,6 +465,9 @@ class ResourceAccessView(View):
             'download_filename': getattr(resource, 'file_name', None),
             'elan_context': elan_context,
             'xml_content': xml_preview,
+            'peaks_url': peaks_url,
+            'spectrogram_data_url': spectrogram_data_url,
+            'player_mode': player_mode,
         }
 
         response = render(
@@ -453,6 +477,24 @@ class ResourceAccessView(View):
         )
         response['HX-Trigger'] = json.dumps({'showResourceModal': True})
         return response
+
+    def _resolve_peaks_url(self, resource_service, bucket_name, object_key):
+        """Check if pre-computed peaks exist and return a presigned URL."""
+        peaks_key = f"{object_key}.peaks.json"
+        try:
+            resource_service.s3_client.head_object(Bucket=bucket_name, Key=peaks_key)
+            return resource_service.generate_presigned_url(bucket_name, peaks_key)
+        except Exception:
+            return None
+
+    def _resolve_spectrogram_data_url(self, resource_service, bucket_name, object_key):
+        """Check if pre-computed spectrogram frequencies exist and return a presigned URL."""
+        spectrogram_data_key = f"{object_key}.spectrogram.bin"
+        try:
+            resource_service.s3_client.head_object(Bucket=bucket_name, Key=spectrogram_data_key)
+            return resource_service.generate_presigned_url(bucket_name, spectrogram_data_key)
+        except Exception:
+            return None
 
 
 class BundleJsonLdView(View):

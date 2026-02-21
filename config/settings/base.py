@@ -362,6 +362,8 @@ S3_OCFL_BUCKETS = env.list("S3_OCFL_BUCKETS", default=["lacos-ingest", "lacos-pr
 # These map to the actual bucket names used by the legacy configuration
 S3_INGEST_BUCKET = env("S3_INGEST_BUCKET", default="lacos-ingest")
 S3_PRODUCTION_BUCKET = env("S3_PRODUCTION_BUCKET", default="lacos-production")
+# Increase botocore HTTP pool size to avoid connection pool saturation under Huey/media load.
+AWS_S3_MAX_POOL_CONNECTIONS = env.int("AWS_S3_MAX_POOL_CONNECTIONS", default=50)
 
 # Cache configuration for storage subsystems
 STORAGE_ACL_CACHE_TIMEOUT = env.int("STORAGE_ACL_CACHE_TIMEOUT", default=900)

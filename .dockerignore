@@ -10,3 +10,16 @@
 venv
 .git
 .envs/
+.venv
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+node_modules/
+theme/static_src/node_modules/
+aws/dist/
+.devcontainer/

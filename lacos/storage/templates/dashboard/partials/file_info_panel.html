@@ -1,51 +1,58 @@
-<div id="{{ target_id }}" class="file-info-panel mt-2 rounded-lg border border-base-300 bg-base-200/80 p-3 text-sm text-base-content/80">
-    <div class="flex items-start justify-between gap-4">
-        <div>
-            <p class="font-semibold text-base text-base-content">{{ file_name }}</p>
-            {% if success and last_modified %}
-                <p class="text-xs text-base-content/60">Last updated {{ last_modified }}</p>
-            {% endif %}
-        </div>
+<div id="{{ target_id }}" class="file-info-panel card mt-2 border border-base-300 bg-base-200">
+    <div class="card-body relative p-3">
         <button type="button"
-                class="btn btn-ghost btn-xs"
+                class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
+                aria-label="Hide file info"
                 hx-get="{% url 'storage:file_info_htmx' bucket_type object_path %}?clear=1"
                 hx-target="#{{ target_id }}"
                 hx-swap="outerHTML"
                 hx-vals='{"target_id": "{{ target_id }}"}'
-                hx-indicator="#indicator">
-            Hide
-        </button>
-    </div>
+                hx-indicator="#indicator">✕</button>
 
-    {% if success %}
-        <dl class="mt-3 space-y-1">
-            <div class="flex items-center justify-between gap-4">
-                <dt class="text-xs uppercase tracking-wide text-base-content/60">Size</dt>
-                <dd class="font-medium">{{ file_size_formatted|default:"0 B" }}</dd>
+        <div class="pr-10">
+            <h3 class="card-title text-base">{{ file_name }}</h3>
+            {% if success and last_modified %}
+                <p class="text-sm opacity-70">Last updated {{ last_modified }}</p>
+            {% endif %}
+        </div>
+
+        {% if success %}
+            <div class="stats stats-vertical mt-2 border border-base-300 bg-base-100 shadow-sm">
+                <div class="stat py-2">
+                    <div class="stat-title">Size</div>
+                    <div class="stat-value text-base">{{ file_size_formatted|default:"0 B" }}</div>
+                </div>
+                <div class="stat py-2">
+                    <div class="stat-title">Type</div>
+                    <div class="stat-value text-base">{{ content_type|default:"application/octet-stream" }}</div>
+                </div>
             </div>
-            <div class="flex items-center justify-between gap-4">
-                <dt class="text-xs uppercase tracking-wide text-base-content/60">Type</dt>
-                <dd class="font-medium">{{ content_type|default:"application/octet-stream" }}</dd>
-            </div>
+
             {% if metadata %}
-                <div>
-                    <dt class="text-xs uppercase tracking-wide text-base-content/60">Metadata</dt>
-                    <dd class="mt-1 rounded bg-base-100 p-2 text-xs text-base-content/70 space-y-1">
-                        {% for key, value in metadata.items %}
-                            <div class="flex items-start justify-between gap-4">
-                                <span class="font-medium">{{ key }}</span>
-                                <span class="text-right">{{ value }}</span>
-                            </div>
-                        {% empty %}
-                            <span>No custom metadata set.</span>
-                        {% endfor %}
-                    </dd>
+                <div class="mt-2">
+                    <div class="mb-1 text-sm font-medium opacity-70">Metadata</div>
+                    <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+                        <table class="table table-xs">
+                            <tbody>
+                                {% for key, value in metadata.items %}
+                                    <tr>
+                                        <th class="w-1/3 align-top">{{ key }}</th>
+                                        <td class="break-all text-right">{{ value }}</td>
+                                    </tr>
+                                {% empty %}
+                                    <tr>
+                                        <td colspan="2">No custom metadata set.</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             {% endif %}
-        </dl>
-    {% else %}
-        <div class="alert alert-error mt-3">
-            <span>{{ error|default:"Unable to fetch file information." }}</span>
-        </div>
-    {% endif %}
+        {% else %}
+            <div role="alert" class="alert alert-error mt-2">
+                <span>{{ error|default:"Unable to fetch file information." }}</span>
+            </div>
+        {% endif %}
+    </div>
 </div>
