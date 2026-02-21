@@ -33,6 +33,7 @@
     this._disableDragSelection = null;
     this._selectionEndTime = null;
     this._selectionPlaybackActive = false;
+    this._selectionPlayStartedAt = 0;
     this._spectrogramFetchController = null;
     this._loadingFallbackTimer = null;
     this._destroyed = false;
@@ -162,6 +163,17 @@
     var playPauseBtn = this._q('[data-ap-play-pause]');
     if (playPauseBtn) {
       playPauseBtn.addEventListener('click', function () {
+        if (!ws.isPlaying() && self._activeRegion) {
+          var start = Math.min(self._activeRegion.start, self._activeRegion.end);
+          var end = Math.max(self._activeRegion.start, self._activeRegion.end);
+          if (end > start) {
+            self._selectionEndTime = end;
+            self._selectionPlaybackActive = true;
+            self._selectionPlayStartedAt = Date.now();
+            ws.play(start);
+            return;
+          }
+        }
         if (!self._selectionPlaybackActive) {
           self._selectionEndTime = null;
         }
@@ -281,8 +293,9 @@
       hideLoading();
       if (currentTimeEl) currentTimeEl.textContent = self.formatTime(time);
       if (self._selectionPlaybackActive && self._selectionEndTime !== null && time >= self._selectionEndTime) {
+        // Skip end-check briefly after play(start) to let the seek take effect
+        if (Date.now() - self._selectionPlayStartedAt < 150) return;
         self._selectionPlaybackActive = false;
-        self._selectionEndTime = null;
         ws.pause();
       }
     });
@@ -344,8 +357,8 @@
       if (end <= start) return;
       self._selectionEndTime = end;
       self._selectionPlaybackActive = true;
-      self.wavesurfer.setTime(start);
-      self.wavesurfer.play();
+      self._selectionPlayStartedAt = Date.now();
+      self.wavesurfer.play(start);
     };
 
     rp.on('region-created', function (region) {
