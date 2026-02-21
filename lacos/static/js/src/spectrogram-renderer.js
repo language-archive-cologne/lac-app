@@ -1,16 +1,18 @@
 /**
- * SpectrogramRenderer — vanilla canvas renderer for precomputed spectrogram data.
+ * SpectrogramRenderer — viewport-based canvas renderer for precomputed spectrogram data.
  *
- * Renders a 2D uint8 spectrogram array (igray colormap) onto a <canvas> that is
- * appended to the WaveSurfer wrapper, scrolling in sync with the waveform.
+ * Renders only the visible portion of a 2D uint8 spectrogram array directly from
+ * raw data, avoiding full-width offscreen canvases that exceed browser limits on
+ * long files (131K+ frames).
  *
- * Usage:
- *   const renderer = new SpectrogramRenderer(wavesurfer, data, { height: 256 });
- *   // later…
- *   renderer.destroy();
+ * Optimizations:
+ * - Flattened data array for cache-friendly access
+ * - Sliding-window frame accumulator (incremental, not per-pixel recompute)
+ * - Packed 32-bit Inferno LUT writes via Uint32Array
+ * - Precomputed Y-to-bin map for vertical scaling + Y-flip
  *
- * @param {Object} wavesurfer - WaveSurfer instance (must already be created)
- * @param {Array<Uint8Array>|number[][]} data - [n_frames][n_bins] uint8 spectrogram values
+ * @param {Object} wavesurfer - WaveSurfer v7 instance
+ * @param {Array<Uint8Array>|number[][]} data - [n_frames][n_bins] uint8 values
  * @param {Object} [opts]
  * @param {number} [opts.height=384] - Display height in CSS pixels
  */
@@ -54,121 +56,315 @@
     [243,246,138],[244,248,142],[245,249,146],[246,250,150],[248,251,154],[249,252,157],[250,253,161],[252,255,164]
   ];
 
-  var MAX_CANVAS_WIDTH = 16384;
+  // Build packed 32-bit LUT for fast pixel writes via Uint32Array.
+  var IS_LITTLE_ENDIAN = new Uint8Array(new Uint32Array([0x11223344]).buffer)[0] === 0x44;
+  var LUT32 = new Uint32Array(256);
+  for (var li = 0; li < 256; li++) {
+    var c = INFERNO_LUT[li];
+    LUT32[li] = IS_LITTLE_ENDIAN
+      ? ((255 << 24) | (c[2] << 16) | (c[1] << 8) | c[0])
+      : ((c[0] << 24) | (c[1] << 16) | (c[2] << 8) | 255);
+  }
 
   function SpectrogramRenderer(wavesurfer, data, opts) {
     opts = opts || {};
     this._ws = wavesurfer;
-    this._data = data;
-    this._height = opts.height || 384;
+    this._height = (opts.height || 384) | 0;
     this._wrapper = null;
     this._canvas = null;
-    this._offscreen = null;
+    this._ctx = null;
+    this._scrollEl = null;
     this._unsubs = [];
     this._destroyed = false;
+    this._rafId = null;
+    this._retryTimer = null;
+    this._retryCount = 0;
+    this._lastVP = null;
+    this._forceNext = true;
+    this._imgData = null;
+    this._imgW = 0;
+    this._imgH = 0;
+    this._yToBin = null;
 
-    this._offscreen = this._createOffscreenImage(data);
+    // Flatten data for cache-friendly access.
+    this._nFrames = data.length;
+    this._nBins = data[0].length;
+    this._flat = this._flattenData(data);
+    this._sums = new Int32Array(this._nBins);
+
     this._mount();
-    this.render();
     this._listen();
+    this._scheduleRender(true);
   }
 
-  /**
-   * Build an off-screen canvas at native data resolution.
-   * Each pixel column = one frame, each row = one frequency bin.
-   * Y is flipped so low frequencies are at the bottom.
-   */
-  SpectrogramRenderer.prototype._createOffscreenImage = function (data) {
-    var nFrames = data.length;
-    var nBins = data[0].length;
-    var canvas = document.createElement('canvas');
-    canvas.width = nFrames;
-    canvas.height = nBins;
-    var ctx = canvas.getContext('2d');
-    var img = ctx.createImageData(nFrames, nBins);
-    var pixels = img.data;
+  /** Flatten [nFrames][nBins] into a contiguous Uint8Array. */
+  SpectrogramRenderer.prototype._flattenData = function (data) {
+    var nF = this._nFrames;
+    var nB = this._nBins;
 
-    for (var frame = 0; frame < nFrames; frame++) {
-      var col = data[frame];
-      for (var bin = 0; bin < nBins; bin++) {
-        // Flip Y: bin 0 (lowest freq) → bottom row
-        var y = nBins - 1 - bin;
-        var idx = (y * nFrames + frame) * 4;
-        var rgb = INFERNO_LUT[col[bin]];
-        pixels[idx] = rgb[0];
-        pixels[idx + 1] = rgb[1];
-        pixels[idx + 2] = rgb[2];
-        pixels[idx + 3] = 255;
+    // Check if already contiguous (subarray views into one buffer).
+    var first = data[0];
+    if (first.buffer && first.byteOffset !== undefined) {
+      var contiguous = true;
+      for (var i = 1; i < nF; i++) {
+        if (data[i].buffer !== first.buffer ||
+            data[i].byteOffset !== first.byteOffset + i * nB) {
+          contiguous = false;
+          break;
+        }
+      }
+      if (contiguous) {
+        return new Uint8Array(first.buffer, first.byteOffset, nF * nB);
       }
     }
 
-    ctx.putImageData(img, 0, 0);
-    return canvas;
+    var flat = new Uint8Array(nF * nB);
+    for (var f = 0; f < nF; f++) {
+      flat.set(data[f], f * nB);
+    }
+    return flat;
   };
 
-  /** Create DOM elements and append to WaveSurfer wrapper. */
+  /** Build Y-pixel to frequency-bin map (with Y-flip: bin 0 at bottom). */
+  SpectrogramRenderer.prototype._ensureYMap = function () {
+    if (this._yToBin && this._yToBin.length === this._height) return;
+    var map = new Uint16Array(this._height);
+    for (var y = 0; y < this._height; y++) {
+      var flipped = this._height - 1 - y;
+      var bin = (flipped * this._nBins / this._height) | 0;
+      if (bin >= this._nBins) bin = this._nBins - 1;
+      map[y] = bin;
+    }
+    this._yToBin = map;
+  };
+
+  /** Find the actual scrollable parent element. */
+  SpectrogramRenderer.prototype._findScrollEl = function (mountEl) {
+    if (!mountEl) return null;
+    // WaveSurfer v7: getWrapper() returns the content div; its parent is the scroll container.
+    var parent = mountEl.parentElement;
+    if (parent) {
+      var style = window.getComputedStyle(parent);
+      var ox = style.overflowX || style.overflow;
+      if (ox === 'auto' || ox === 'scroll') return parent;
+    }
+    return mountEl;
+  };
+
+  /** Get content width from WaveSurfer's children, excluding our wrapper. */
+  SpectrogramRenderer.prototype._getContentWidth = function () {
+    var mountEl = this._wrapper ? this._wrapper.parentElement : null;
+    if (!mountEl) return 0;
+
+    // Measure from sibling canvases (WaveSurfer's waveform) to avoid feedback loops.
+    var maxRight = 0;
+    var child = mountEl.firstElementChild;
+    while (child) {
+      if (child !== this._wrapper) {
+        var w = Math.max(child.scrollWidth | 0, child.offsetWidth | 0);
+        var r = (child.offsetLeft | 0) + w;
+        if (r > maxRight) maxRight = r;
+      }
+      child = child.nextElementSibling;
+    }
+    return maxRight || (mountEl.scrollWidth | 0);
+  };
+
   SpectrogramRenderer.prototype._mount = function () {
-    var wsWrapper = this._ws.getWrapper();
-    if (!wsWrapper) return;
+    var mountEl = this._ws.getWrapper();
+    if (!mountEl) return;
+
+    this._scrollEl = this._findScrollEl(mountEl);
 
     var wrapper = document.createElement('div');
     wrapper.style.position = 'relative';
-    wrapper.style.width = '100%';
+    wrapper.style.display = 'block';
+    wrapper.style.width = '0px';
     wrapper.style.height = this._height + 'px';
     wrapper.style.overflow = 'hidden';
+    wrapper.style.pointerEvents = 'none';
 
     var canvas = document.createElement('canvas');
     canvas.style.position = 'absolute';
     canvas.style.top = '0';
     canvas.style.left = '0';
     canvas.style.height = '100%';
+    canvas.style.display = 'block';
 
     wrapper.appendChild(canvas);
-    wsWrapper.appendChild(wrapper);
+    mountEl.appendChild(wrapper);
 
     this._wrapper = wrapper;
     this._canvas = canvas;
+    this._ctx = canvas.getContext('2d');
   };
 
-  /** Draw from off-screen canvas to display canvas, scaled to WaveSurfer width. */
+  /**
+   * Render the visible viewport of the spectrogram.
+   * Uses a sliding-window accumulator over frames for O(width * bins) work.
+   */
   SpectrogramRenderer.prototype.render = function () {
-    if (this._destroyed || !this._canvas || !this._offscreen || !this._ws) return;
+    if (this._destroyed || !this._canvas || !this._scrollEl) return false;
 
-    var wsWrapper = this._ws.getWrapper();
-    if (!wsWrapper) return;
+    var fullWidth = this._getContentWidth();
+    var scrollEl = this._scrollEl;
+    var viewLeft = scrollEl.scrollLeft | 0;
+    var viewWidth = scrollEl.clientWidth | 0;
 
-    // scrollWidth gives the full content width (respects zoom)
-    var fullWidth = wsWrapper.scrollWidth;
-    var pixelWidth = Math.min(fullWidth, MAX_CANVAS_WIDTH);
+    if (fullWidth <= 0 || viewWidth <= 0) {
+      this._retryCount++;
+      return false;
+    }
 
-    this._canvas.width = pixelWidth;
-    this._canvas.height = this._height;
-    // CSS width must match the scrollable content width for alignment
-    this._canvas.style.width = fullWidth + 'px';
+    var visibleWidth = Math.min(viewWidth, Math.max(0, fullWidth - viewLeft));
+    if (visibleWidth <= 0) return false;
 
-    var ctx = this._canvas.getContext('2d');
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(this._offscreen, 0, 0, pixelWidth, this._height);
+    var vp = fullWidth + '|' + viewLeft + '|' + visibleWidth;
+    if (!this._forceNext && vp === this._lastVP) return true;
+    this._forceNext = false;
+    this._lastVP = vp;
+    this._retryCount = 0;
+
+    // Size wrapper to match waveform content width.
+    this._wrapper.style.width = fullWidth + 'px';
+
+    // Position canvas at scroll offset within the wrapper.
+    this._canvas.style.left = viewLeft + 'px';
+    this._canvas.style.width = visibleWidth + 'px';
+
+    if (this._canvas.width !== visibleWidth || this._canvas.height !== this._height) {
+      this._canvas.width = visibleWidth;
+      this._canvas.height = this._height;
+      this._imgData = null;
+    }
+
+    this._ensureYMap();
+
+    if (!this._imgData || this._imgW !== visibleWidth || this._imgH !== this._height) {
+      this._imgData = this._ctx.createImageData(visibleWidth, this._height);
+      this._imgW = visibleWidth;
+      this._imgH = this._height;
+    }
+
+    var pixels32 = new Uint32Array(this._imgData.data.buffer);
+    this._paintViewport(pixels32, visibleWidth, this._height, viewLeft, fullWidth);
+    this._ctx.putImageData(this._imgData, 0, 0);
+
+    return true;
   };
 
-  /** Subscribe to WaveSurfer events that require a re-render. */
+  /** Paint the visible columns using a sliding-window frame accumulator. */
+  SpectrogramRenderer.prototype._paintViewport = function (pixels32, width, height, viewLeft, fullWidth) {
+    var nBins = this._nBins;
+    var nFrames = this._nFrames;
+    var flat = this._flat;
+    var sums = this._sums;
+    var yToBin = this._yToBin;
+    var framesPerPx = nFrames / fullWidth;
+
+    // Seed the accumulator for the first pixel column.
+    var prevStart = Math.max(0, Math.floor(viewLeft * framesPerPx));
+    var prevEnd = Math.min(nFrames, Math.floor((viewLeft + 1) * framesPerPx));
+    if (prevEnd <= prevStart) prevEnd = prevStart + 1;
+    if (prevEnd > nFrames) prevEnd = nFrames;
+
+    var bin, f, off;
+    for (bin = 0; bin < nBins; bin++) sums[bin] = 0;
+    for (f = prevStart; f < prevEnd; f++) {
+      off = f * nBins;
+      for (bin = 0; bin < nBins; bin++) sums[bin] += flat[off + bin];
+    }
+
+    for (var px = 0; px < width; px++) {
+      if (px > 0) {
+        var worldX = viewLeft + px;
+        var curStart = Math.max(0, Math.floor(worldX * framesPerPx));
+        var curEnd = Math.min(nFrames, Math.floor((worldX + 1) * framesPerPx));
+        if (curEnd <= curStart) curEnd = curStart + 1;
+        if (curEnd > nFrames) curEnd = nFrames;
+
+        // Slide window: subtract frames that left, add frames that entered.
+        for (f = prevStart; f < curStart; f++) {
+          off = f * nBins;
+          for (bin = 0; bin < nBins; bin++) sums[bin] -= flat[off + bin];
+        }
+        for (f = prevEnd; f < curEnd; f++) {
+          off = f * nBins;
+          for (bin = 0; bin < nBins; bin++) sums[bin] += flat[off + bin];
+        }
+
+        prevStart = curStart;
+        prevEnd = curEnd;
+      }
+
+      // Compute averaged color per bin.
+      var count = prevEnd - prevStart;
+      if (count < 1) count = 1;
+
+      // Fill this x-column (top to bottom), using the precomputed Y-to-bin map.
+      var outIdx = px;
+      for (var y = 0; y < height; y++) {
+        var val = ((sums[yToBin[y]] + (count >> 1)) / count) | 0;
+        pixels32[outIdx] = LUT32[val];
+        outIdx += width;
+      }
+    }
+  };
+
+  SpectrogramRenderer.prototype._scheduleRender = function (force) {
+    if (this._destroyed) return;
+    if (force) this._forceNext = true;
+    if (this._rafId) return;
+
+    var self = this;
+    this._rafId = requestAnimationFrame(function () {
+      self._rafId = null;
+      var ok = self.render();
+
+      // Retry if WaveSurfer hasn't laid out yet.
+      if (!ok && self._retryCount <= 10 && !self._destroyed) {
+        if (self._retryTimer) clearTimeout(self._retryTimer);
+        self._retryTimer = setTimeout(function () {
+          self._retryTimer = null;
+          self._scheduleRender(true);
+        }, 50);
+      }
+    });
+  };
+
   SpectrogramRenderer.prototype._listen = function () {
     var self = this;
-    var redraw = function () { self.render(); };
 
-    var unsub = this._ws.on('redraw', redraw);
-    this._unsubs.push(unsub);
+    var unsub1 = this._ws.on('redraw', function () { self._scheduleRender(true); });
+    this._unsubs.push(unsub1);
+
+    var unsub2 = this._ws.on('ready', function () { self._scheduleRender(true); });
+    this._unsubs.push(unsub2);
+
+    if (this._scrollEl) {
+      var onScroll = function () { self._scheduleRender(false); };
+      this._scrollEl.addEventListener('scroll', onScroll, { passive: true });
+      this._unsubs.push(function () {
+        self._scrollEl && self._scrollEl.removeEventListener('scroll', onScroll);
+      });
+    }
   };
 
-  /** Clean up DOM and event subscriptions. */
   SpectrogramRenderer.prototype.destroy = function () {
     if (this._destroyed) return;
     this._destroyed = true;
 
+    if (this._rafId) {
+      cancelAnimationFrame(this._rafId);
+      this._rafId = null;
+    }
+    if (this._retryTimer) {
+      clearTimeout(this._retryTimer);
+      this._retryTimer = null;
+    }
+
     for (var i = 0; i < this._unsubs.length; i++) {
-      if (typeof this._unsubs[i] === 'function') {
-        this._unsubs[i]();
-      }
+      if (typeof this._unsubs[i] === 'function') this._unsubs[i]();
     }
     this._unsubs = [];
 
@@ -176,11 +372,16 @@
       this._wrapper.parentNode.removeChild(this._wrapper);
     }
 
+    this._ws = null;
     this._wrapper = null;
     this._canvas = null;
-    this._offscreen = null;
-    this._ws = null;
-    this._data = null;
+    this._ctx = null;
+    this._scrollEl = null;
+    this._flat = null;
+    this._sums = null;
+    this._yToBin = null;
+    this._imgData = null;
+    this._lastVP = null;
   };
 
   window.SpectrogramRenderer = SpectrogramRenderer;
