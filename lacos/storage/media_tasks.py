@@ -12,7 +12,8 @@ logger = logging.getLogger(__name__)
 
 @db_task(retries=1, retry_delay=60)
 def scan_and_generate_peaks_task(
-    bucket_name: str, folder_path: str = "", tracking_id: str | None = None
+    bucket_name: str, folder_path: str = "", tracking_id: str | None = None,
+    force: bool = False,
 ) -> dict:
     """Scan a bucket/folder for audio files and enqueue sidecar generation.
 
@@ -20,7 +21,6 @@ def scan_and_generate_peaks_task(
     Individual files are dispatched to generate_peaks_task which handles
     ETag-based idempotency (stale peaks are regenerated).
     """
-    from lacos.explorer.media_utils import determine_media_type
     from lacos.storage.services.bucket_service import BucketService
 
     if tracking_id:
@@ -43,15 +43,10 @@ def scan_and_generate_peaks_task(
         for page in paginator.paginate(**page_kwargs):
             for obj in page.get("Contents", []):
                 key = obj["Key"]
-                if (
-                    key.endswith(".peaks.json")
-                    or key.endswith(".spectrogram.bin")
-                ):
-                    continue
-                if determine_media_type(None, key) != "audio":
+                if not key.lower().endswith(".wav"):
                     continue
                 scanned += 1
-                generate_peaks_task(bucket_name, key)
+                generate_peaks_task(bucket_name, key, force=force)
                 enqueued += 1
     except Exception as exc:
         msg = f"Scan failed after enqueueing {enqueued} of {scanned} audio files: {exc}"
@@ -80,7 +75,8 @@ def scan_and_generate_peaks_task(
 
 @db_task(retries=2, retry_delay=120)
 def generate_peaks_task(
-    bucket_name: str, s3_key: str, tracking_id: str | None = None
+    bucket_name: str, s3_key: str, tracking_id: str | None = None,
+    force: bool = False,
 ) -> dict:
     """Generate audio sidecars (peaks + spectrogram) for a single audio file."""
     logger.info("Generating audio sidecars for %s/%s", bucket_name, s3_key)
@@ -89,7 +85,7 @@ def generate_peaks_task(
         BackgroundTaskService.mark_running(tracking_id, message="Generating audio sidecars")
 
     service = MediaProcessingService()
-    result = service.generate_peaks(bucket_name, s3_key)
+    result = service.generate_peaks(bucket_name, s3_key, force=force)
 
     if tracking_id:
         if result.get("success"):

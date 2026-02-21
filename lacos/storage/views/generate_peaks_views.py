@@ -30,6 +30,8 @@ class GeneratePeaksView(ArchivistRequiredMixin, View):
 
     def post(self, request, bucket_name, folder_path=""):
         try:
+            force = request.POST.get("force") == "on"
+
             bucket_service = BucketService()
             if not bucket_service.ensure_bucket_exists(bucket_name):
                 return HttpResponse(
@@ -41,10 +43,12 @@ class GeneratePeaksView(ArchivistRequiredMixin, View):
             scope = folder_path or bucket_name
             task_record = BackgroundTaskService.create(
                 task_name="generate_peaks",
-                description=f"Generate peaks for {scope}",
+                description=f"Generate peaks for {scope}"
+                + (" (force)" if force else ""),
                 metadata={
                     "bucket_name": bucket_name,
                     "folder_path": folder_path,
+                    "force": force,
                 },
             )
 
@@ -52,6 +56,7 @@ class GeneratePeaksView(ArchivistRequiredMixin, View):
                 bucket_name=bucket_name,
                 folder_path=folder_path,
                 tracking_id=str(task_record.id),
+                force=force,
             )
 
             task_id = getattr(task_result, "id", None)

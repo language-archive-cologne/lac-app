@@ -4,7 +4,6 @@ import logging
 
 from django.core.management.base import BaseCommand
 
-from lacos.explorer.media_utils import determine_media_type
 from lacos.storage.media_tasks import generate_peaks_task
 from lacos.storage.services.bucket_service import BucketService
 from lacos.storage.services.media_processing_service import MediaProcessingService
@@ -36,12 +35,18 @@ class Command(BaseCommand):
             action="store_true",
             help="Process inline instead of via task queue",
         )
+        parser.add_argument(
+            "--force",
+            action="store_true",
+            help="Force regeneration even if sidecars are current",
+        )
 
     def handle(self, *args, **options):
         bucket = options["bucket"]
         prefix = options["prefix"]
         dry_run = options["dry_run"]
         inline = options["inline"]
+        force = options["force"]
 
         bucket_service = BucketService()
         media_service = MediaProcessingService(bucket_service)
@@ -57,14 +62,7 @@ class Command(BaseCommand):
         for page in paginator.paginate(**page_kwargs):
             for obj in page.get("Contents", []):
                 key = obj["Key"]
-                if (
-                    key.endswith(".peaks.json")
-                    or key.endswith(".spectrogram.bin")
-                ):
-                    continue
-                # list_objects_v2 doesn't return ContentType, rely on extension
-                media_type = determine_media_type(None, key)
-                if media_type == "audio":
+                if key.lower().endswith(".wav"):
                     audio_keys.append(key)
 
         self.stdout.write(f"Found {len(audio_keys)} audio files")
@@ -73,7 +71,7 @@ class Command(BaseCommand):
         skipped = 0
 
         for key in audio_keys:
-            if media_service.derivatives_current(bucket, key):
+            if not force and media_service.derivatives_current(bucket, key):
                 skipped += 1
                 if dry_run:
                     self.stdout.write(f"  [SKIP] {key} (sidecars current)")
@@ -85,11 +83,11 @@ class Command(BaseCommand):
                 continue
 
             if inline:
-                result = media_service.generate_peaks(bucket, key)
+                result = media_service.generate_peaks(bucket, key, force=force)
                 status = "OK" if result.get("success") else f"FAIL: {result.get('error')}"
                 self.stdout.write(f"  [{status}] {key}")
             else:
-                generate_peaks_task(bucket, key)
+                generate_peaks_task(bucket, key, force=force)
                 self.stdout.write(f"  [ENQUEUED] {key}")
             enqueued += 1
 

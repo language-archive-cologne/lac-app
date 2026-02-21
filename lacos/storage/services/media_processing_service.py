@@ -68,7 +68,7 @@ class MediaProcessingService:
     def __init__(self, bucket_service: BucketService | None = None) -> None:
         self.bucket_service = bucket_service or BucketService()
 
-    def generate_peaks(self, bucket: str, s3_key: str) -> dict:
+    def generate_peaks(self, bucket: str, s3_key: str, *, force: bool = False) -> dict:
         """Download audio from S3 and generate peaks + spectrogram sidecars.
 
         Returns dict with 'success', sidecar keys, and optional 'error'.
@@ -80,10 +80,14 @@ class MediaProcessingService:
         if not source_etag:
             return {"success": False, "error": f"Source file not found: {s3_key}"}
 
-        peaks_current = self._artifact_is_current(bucket, peaks_key, source_etag)
-        spectrogram_data_current = self._artifact_is_current(
-            bucket, spectrogram_data_key, source_etag,
-        )
+        if not force:
+            peaks_current = self._artifact_is_current(bucket, peaks_key, source_etag)
+            spectrogram_data_current = self._artifact_is_current(
+                bucket, spectrogram_data_key, source_etag,
+            )
+        else:
+            peaks_current = False
+            spectrogram_data_current = False
 
         if peaks_current and spectrogram_data_current:
             logger.info("Audio derivatives already current for %s/%s", bucket, s3_key)

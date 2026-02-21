@@ -9,6 +9,13 @@
     <p class="text-sm text-gray-600">Files with current sidecars (peaks + spectrogram) will be skipped automatically.</p>
 </div>
 
+<div class="form-control mb-4">
+    <label class="label cursor-pointer justify-start gap-2">
+        <input type="checkbox" id="force-regenerate" name="force" class="checkbox checkbox-sm" />
+        <span class="label-text">Force regenerate all (overwrite existing sidecars)</span>
+    </label>
+</div>
+
 <div id="generate-peaks-status" class="mb-4">
     <!-- Status messages will appear here -->
 </div>
@@ -20,6 +27,7 @@
         class="btn btn-primary"
         hx-post="{% if folder_path %}{% url 'storage:generate_peaks_folder' bucket_name=bucket_name folder_path=folder_path %}{% else %}{% url 'storage:generate_peaks' bucket_name=bucket_name %}{% endif %}"
         hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+        hx-include="#force-regenerate"
         hx-target="#generate-peaks-status"
         hx-swap="innerHTML"
         hx-indicator="#indicator"
