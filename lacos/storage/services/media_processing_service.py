@@ -6,6 +6,7 @@ frequency bins that match WaveSurfer.js Spectrogram plugin output exactly.
 
 import json
 import logging
+import struct
 import subprocess
 import tempfile
 from pathlib import Path
@@ -21,12 +22,12 @@ AUDIOWAVEFORM_BIN = "audiowaveform"
 FFPROBE_BIN = "ffprobe"
 FFMPEG_BIN = "ffmpeg"
 # FFT / mel parameters for spectrogram pipeline.
-FFT_SAMPLES = 1024
-N_MELS = 128
+FFT_SAMPLES = 2048
+N_MELS = 256
 TARGET_SAMPLE_RATE = 44100
-# Cap spectrogram frames to keep JSON under ~5 MB.
-# 8000 frames * 128 bins * ~3 bytes ≈ 3 MB.
-MAX_SPECTROGRAM_FRAMES = 8000
+# Cap spectrogram frames to keep binary sidecar under ~4 MB.
+# 16000 frames * 256 bins * 1 byte + 6-byte header ≈ 4 MB.
+MAX_SPECTROGRAM_FRAMES = 16000
 
 
 def _hz_to_mel(hz):
@@ -148,16 +149,12 @@ class MediaProcessingService:
                     )
                     return {"success": False, "error": f"Spectrogram computation failed: {exc}"}
 
-                spectrogram_bytes = json.dumps(
-                    spectrogram_data, separators=(",", ":")
-                ).encode()
-
                 try:
                     self.bucket_service.s3_client.put_object(
                         Bucket=bucket,
                         Key=spectrogram_data_key,
-                        Body=spectrogram_bytes,
-                        ContentType="application/json",
+                        Body=spectrogram_data,
+                        ContentType="application/octet-stream",
                         Metadata={"source-etag": source_etag},
                     )
                 except ClientError as exc:
@@ -232,13 +229,17 @@ class MediaProcessingService:
         )
         return np.frombuffer(result.stdout, dtype=np.float32)
 
-    def _compute_spectrogram(self, input_path: Path) -> list[list[int]]:
+    def _compute_spectrogram(self, input_path: Path) -> bytes:
         """Compute mel-scale spectrogram with adaptive dB scaling.
 
+        Returns binary payload: 6-byte header (uint32 LE n_frames + uint16 LE
+        n_bins) followed by n_frames * n_bins raw uint8 bytes in row-major
+        (frame-major) order.
+
         Pipeline:
-        1. Hann window of size FFT_SAMPLES (1024)
+        1. Hann window of size FFT_SAMPLES (2048)
         2. RFFT → magnitude spectrum, normalized 2/N
-        3. Mel filterbank projection (N_MELS=128 bins)
+        3. Mel filterbank projection (N_MELS=256 bins)
         4. dB conversion: 20 * log10(max(1e-12, mel_mag))
         5. Adaptive percentile-based 0-255 scaling per file
         """
@@ -247,7 +248,7 @@ class MediaProcessingService:
         n_samples = len(samples)
 
         if n_samples < n_fft:
-            return []
+            return b""
 
         # Hann window
         window = np.hanning(n_fft).astype(np.float32)
@@ -289,7 +290,9 @@ class MediaProcessingService:
         scaled = np.clip((db - lower) / (upper - lower) * 255.0, 0, 255)
         uint8_data = np.round(scaled).astype(np.uint8)
 
-        return uint8_data.tolist()
+        n_frames_out, n_bins_out = uint8_data.shape
+        header = struct.pack("<IH", n_frames_out, n_bins_out)
+        return header + uint8_data.tobytes()
 
     # ------------------------------------------------------------------
     # Duration
@@ -322,7 +325,7 @@ class MediaProcessingService:
         return f"{s3_key}.peaks.json"
 
     def _spectrogram_data_key(self, s3_key: str) -> str:
-        return f"{s3_key}.spectrogram.json"
+        return f"{s3_key}.spectrogram.bin"
 
     # ------------------------------------------------------------------
     # Freshness checks

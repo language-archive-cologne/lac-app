@@ -739,7 +739,7 @@ class CollectionResourcesView(View):
 
     def _resolve_spectrogram_data_url(self, resource_service, bucket_name, object_key):
         """Check if pre-computed spectrogram frequencies exist and return a presigned URL."""
-        spectrogram_data_key = f"{object_key}.spectrogram.json"
+        spectrogram_data_key = f"{object_key}.spectrogram.bin"
         try:
             resource_service.s3_client.head_object(Bucket=bucket_name, Key=spectrogram_data_key)
             return resource_service.generate_presigned_url(bucket_name, spectrogram_data_key)

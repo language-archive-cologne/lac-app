@@ -13,7 +13,7 @@
  *
  * @param {HTMLElement} container - DOM element containing <audio>, [data-ap-waveform], and controls
  * @param {Object} [opts]
- * @param {number} [opts.height=128] - Waveform height (overridden to 256 in analyze mode)
+ * @param {number} [opts.height=128] - Waveform height (overridden to 384 in analyze mode)
  * @param {number} [opts.minPxPerSec=100] - Initial zoom level
  */
 (function () {
@@ -75,7 +75,7 @@
     }
 
     var analyzeMode = Boolean(spectrogramDataUrl && typeof SpectrogramRenderer !== 'undefined');
-    var height = analyzeMode ? 256 : this._height;
+    var height = analyzeMode ? 384 : this._height;
 
     // Build plugins
     var plugins = [];
@@ -412,9 +412,18 @@
   AudioPlayer.prototype._loadSpectrogram = function (url, height) {
     var self = this;
     fetch(url)
-      .then(function (resp) { if (!resp.ok) throw new Error(resp.status); return resp.json(); })
-      .then(function (data) {
+      .then(function (resp) { if (!resp.ok) throw new Error(resp.status); return resp.arrayBuffer(); })
+      .then(function (buffer) {
         if (!self.wavesurfer || self._destroyed) return;
+        if (buffer.byteLength < 6) return;
+        var view = new DataView(buffer);
+        var nFrames = view.getUint32(0, true);
+        var nBins = view.getUint16(4, true);
+        var body = new Uint8Array(buffer, 6);
+        var data = [];
+        for (var i = 0; i < nFrames; i++) {
+          data.push(body.subarray(i * nBins, (i + 1) * nBins));
+        }
         self._spectrogramRenderer = new SpectrogramRenderer(self.wavesurfer, data, { height: height });
       })
       .catch(function (err) { console.warn('Spectrogram data unavailable:', err); });

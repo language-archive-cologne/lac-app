@@ -10,9 +10,9 @@
  *   renderer.destroy();
  *
  * @param {Object} wavesurfer - WaveSurfer instance (must already be created)
- * @param {number[][]} data - [n_frames][n_bins] uint8 spectrogram values
+ * @param {Array<Uint8Array>|number[][]} data - [n_frames][n_bins] uint8 spectrogram values
  * @param {Object} [opts]
- * @param {number} [opts.height=256] - Display height in CSS pixels
+ * @param {number} [opts.height=384] - Display height in CSS pixels
  */
 (function () {
   'use strict';
@@ -60,7 +60,7 @@
     opts = opts || {};
     this._ws = wavesurfer;
     this._data = data;
-    this._height = opts.height || 256;
+    this._height = opts.height || 384;
     this._wrapper = null;
     this._canvas = null;
     this._offscreen = null;

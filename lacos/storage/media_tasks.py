@@ -45,7 +45,7 @@ def scan_and_generate_peaks_task(
                 key = obj["Key"]
                 if (
                     key.endswith(".peaks.json")
-                    or key.endswith(".spectrogram.json")
+                    or key.endswith(".spectrogram.bin")
                 ):
                     continue
                 if determine_media_type(None, key) != "audio":

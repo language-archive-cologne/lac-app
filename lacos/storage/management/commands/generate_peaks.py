@@ -59,7 +59,7 @@ class Command(BaseCommand):
                 key = obj["Key"]
                 if (
                     key.endswith(".peaks.json")
-                    or key.endswith(".spectrogram.json")
+                    or key.endswith(".spectrogram.bin")
                 ):
                     continue
                 # list_objects_v2 doesn't return ContentType, rely on extension

@@ -45,6 +45,20 @@ function createMockSpectrogramRenderer() {
     });
 }
 
+/**
+ * Build a minimal binary spectrogram payload for testing.
+ * 6-byte header (uint32 LE n_frames + uint16 LE n_bins) + raw uint8 body.
+ */
+function buildSpectrogramBinary(nFrames, nBins) {
+    var buf = new ArrayBuffer(6 + nFrames * nBins);
+    var view = new DataView(buf);
+    view.setUint32(0, nFrames, true);
+    view.setUint16(4, nBins, true);
+    var body = new Uint8Array(buf, 6);
+    for (var i = 0; i < body.length; i++) body[i] = i % 256;
+    return buf;
+}
+
 // ─── DOM helpers ────────────────────────────────────────────────────────
 
 function buildContainer(opts) {
@@ -179,14 +193,20 @@ describe('AudioPlayer', () => {
         global.WaveSurfer = createMockWaveSurfer();
         global.SpectrogramRenderer = createMockSpectrogramRenderer();
 
-        // Mock fetch to resolve with valid peaks data
+        // Mock fetch: return ArrayBuffer for .bin URLs, JSON for everything else
         origFetch = global.fetch;
-        global.fetch = jest.fn(() =>
-            Promise.resolve({
+        global.fetch = jest.fn((url) => {
+            if (typeof url === 'string' && url.endsWith('.bin')) {
+                return Promise.resolve({
+                    ok: true,
+                    arrayBuffer: () => Promise.resolve(buildSpectrogramBinary(10, 128)),
+                });
+            }
+            return Promise.resolve({
                 ok: true,
                 json: () => Promise.resolve({ data: [0.1, 0.2, 0.3], duration: 120 }),
-            })
-        );
+            });
+        });
 
         // Load the module (it writes to window.AudioPlayer or module.exports)
         AudioPlayer = require('../src/audio-player');
@@ -290,7 +310,7 @@ describe('AudioPlayer', () => {
         const container = buildContainer({
             audioUrl: 'https://example.com/audio.wav',
             peaksUrl: 'https://example.com/peaks.json',
-            spectrogramDataUrl: 'https://example.com/spectrogram.json',
+            spectrogramDataUrl: 'https://example.com/spectrogram.bin',
         });
 
         const player = new AudioPlayer(container);
@@ -302,19 +322,19 @@ describe('AudioPlayer', () => {
         expect(player._spectrogramRenderer).toBeTruthy();
     });
 
-    // ── Analyze mode: uses 256px height ──
+    // ── Analyze mode: uses 384px height ──
 
-    test('uses 256px height in analyze mode', () => {
+    test('uses 384px height in analyze mode', () => {
         const container = buildContainer({
             audioUrl: 'https://example.com/audio.wav',
             peaksUrl: 'https://example.com/peaks.json',
-            spectrogramDataUrl: 'https://example.com/spectrogram.json',
+            spectrogramDataUrl: 'https://example.com/spectrogram.bin',
         });
 
         new AudioPlayer(container);
 
         const createCall = global.WaveSurfer.create.mock.calls[0][0];
-        expect(createCall.height).toBe(256);
+        expect(createCall.height).toBe(384);
     });
 
     // ── Control binding: play/pause ──
@@ -373,7 +393,7 @@ describe('AudioPlayer', () => {
         const container = buildContainer({
             audioUrl: 'https://example.com/audio.wav',
             peaksUrl: 'https://example.com/peaks.json',
-            spectrogramDataUrl: 'https://example.com/spectrogram.json',
+            spectrogramDataUrl: 'https://example.com/spectrogram.bin',
         });
 
         const player = new AudioPlayer(container);

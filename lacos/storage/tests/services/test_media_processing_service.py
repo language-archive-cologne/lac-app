@@ -1,5 +1,4 @@
-import json
-import wave
+import struct
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -24,20 +23,31 @@ def _make_silence(duration=0.5, sample_rate=44100):
     return np.zeros(n_samples, dtype=np.float32)
 
 
+def _parse_spectrogram_binary(data):
+    """Parse binary spectrogram payload into (n_frames, n_bins, uint8_array)."""
+    assert len(data) >= 6, "Binary payload must be at least 6 bytes"
+    n_frames, n_bins = struct.unpack_from("<IH", data)
+    body = data[6:]
+    assert len(body) == n_frames * n_bins
+    arr = np.frombuffer(body, dtype=np.uint8).reshape(n_frames, n_bins)
+    return n_frames, n_bins, arr
+
+
 def test_compute_spectrogram_produces_correct_shape():
-    """Output should be [n_frames][n_bins] with values 0-255."""
+    """Output should be binary with [n_frames][n_bins] uint8 values 0-255."""
     samples = _make_samples(duration=0.5)
 
     service = MediaProcessingService(bucket_service=MagicMock())
     with patch.object(service, "_decode_audio_to_pcm", return_value=samples):
         result = service._compute_spectrogram("dummy.wav")
 
-    assert len(result) > 0
-    assert len(result[0]) == N_MELS
+    assert isinstance(result, bytes)
+    n_frames, n_bins, arr = _parse_spectrogram_binary(result)
 
-    for frame in result:
-        for val in frame:
-            assert 0 <= val <= 255
+    assert n_frames > 0
+    assert n_bins == N_MELS
+    assert arr.min() >= 0
+    assert arr.max() <= 255
 
 
 def test_compute_spectrogram_silence_is_uniform():
@@ -48,8 +58,10 @@ def test_compute_spectrogram_silence_is_uniform():
     with patch.object(service, "_decode_audio_to_pcm", return_value=samples):
         result = service._compute_spectrogram("dummy.wav")
 
-    flat = np.array([v for frame in result for v in frame], dtype=np.float64)
-    std = float(np.std(flat))
+    assert isinstance(result, bytes)
+    _n_frames, _n_bins, arr = _parse_spectrogram_binary(result)
+
+    std = float(np.std(arr.astype(np.float64)))
     assert std < 1.0, f"Silence should be uniform but std was {std}"
 
 
@@ -61,19 +73,32 @@ def test_compute_spectrogram_tone_has_energy():
     with patch.object(service, "_decode_audio_to_pcm", return_value=samples):
         result = service._compute_spectrogram("dummy.wav")
 
+    assert isinstance(result, bytes)
+    _n_frames, _n_bins, arr = _parse_spectrogram_binary(result)
+
     # Compute expected mel bin for 1 kHz tone
     mel_max = _hz_to_mel(TARGET_SAMPLE_RATE / 2.0)
     expected_mel_bin = int(N_MELS * _hz_to_mel(1000.0) / mel_max)
-    tone_values = [frame[expected_mel_bin] for frame in result]
-    max_val = max(tone_values)
+    tone_values = arr[:, expected_mel_bin]
+    max_val = int(tone_values.max())
     assert max_val > 100, f"1kHz tone should have strong energy but max was {max_val}"
+
+
+def test_compute_spectrogram_short_audio_returns_empty():
+    """Audio shorter than FFT window should return empty bytes."""
+    samples = np.zeros(100, dtype=np.float32)
+
+    service = MediaProcessingService(bucket_service=MagicMock())
+    with patch.object(service, "_decode_audio_to_pcm", return_value=samples):
+        result = service._compute_spectrogram("dummy.wav")
+
+    assert result == b""
 
 
 def test_derivatives_current_uses_artifact_is_current_for_both():
     service = MediaProcessingService(bucket_service=MagicMock())
 
     calls = []
-    original = service._artifact_is_current
 
     def tracking_artifact_is_current(bucket, key, etag):
         calls.append(key)
@@ -88,9 +113,9 @@ def test_derivatives_current_uses_artifact_is_current_for_both():
 
     assert len(calls) == 2
     assert any(k.endswith(".peaks.json") for k in calls)
-    assert any(k.endswith(".spectrogram.json") for k in calls)
+    assert any(k.endswith(".spectrogram.bin") for k in calls)
 
 
 def test_spectrogram_data_key_suffix():
     service = MediaProcessingService(bucket_service=MagicMock())
-    assert service._spectrogram_data_key("folder/audio.wav") == "folder/audio.wav.spectrogram.json"
+    assert service._spectrogram_data_key("folder/audio.wav") == "folder/audio.wav.spectrogram.bin"

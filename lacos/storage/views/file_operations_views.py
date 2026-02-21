@@ -132,7 +132,7 @@ def file_viewer_htmx(request, bucket_type, object_path):
             if peaks_presigned.get("success"):
                 peaks_url = peaks_presigned["url"]
 
-        spectrogram_data_key = f"{object_path}.spectrogram.json"
+        spectrogram_data_key = f"{object_path}.spectrogram.bin"
         spectrogram_data_info = bucket_service.get_file_info(bucket_name, spectrogram_data_key)
         if spectrogram_data_info.get("success"):
             spectrogram_data_presigned = bucket_service.generate_presigned_download_url(
