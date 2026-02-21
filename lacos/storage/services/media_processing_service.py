@@ -20,10 +20,6 @@ logger = logging.getLogger(__name__)
 AUDIOWAVEFORM_BIN = "audiowaveform"
 FFPROBE_BIN = "ffprobe"
 FFMPEG_BIN = "ffmpeg"
-# Bump style version to force regeneration with new FFT pipeline.
-SPECTROGRAM_STYLE_VERSION = "5"
-SPECTROGRAM_DATA_VERSION = "5"
-
 # FFT / mel parameters for spectrogram pipeline.
 FFT_SAMPLES = 1024
 N_MELS = 128
@@ -83,7 +79,7 @@ class MediaProcessingService:
             return {"success": False, "error": f"Source file not found: {s3_key}"}
 
         peaks_current = self._artifact_is_current(bucket, peaks_key, source_etag)
-        spectrogram_data_current = self._spectrogram_data_is_current(
+        spectrogram_data_current = self._artifact_is_current(
             bucket, spectrogram_data_key, source_etag,
         )
 
@@ -162,11 +158,7 @@ class MediaProcessingService:
                         Key=spectrogram_data_key,
                         Body=spectrogram_bytes,
                         ContentType="application/json",
-                        Metadata={
-                            "source-etag": source_etag,
-                            "spectrogram-style-version": SPECTROGRAM_STYLE_VERSION,
-                            "spectrogram-data-version": SPECTROGRAM_DATA_VERSION,
-                        },
+                        Metadata={"source-etag": source_etag},
                     )
                 except ClientError as exc:
                     logger.error("Failed to upload spectrogram data for %s: %s", s3_key, exc)
@@ -329,9 +321,6 @@ class MediaProcessingService:
     def _peaks_key(self, s3_key: str) -> str:
         return f"{s3_key}.peaks.json"
 
-    def _spectrogram_key(self, s3_key: str) -> str:
-        return f"{s3_key}.spectrogram.png"
-
     def _spectrogram_data_key(self, s3_key: str) -> str:
         return f"{s3_key}.spectrogram.json"
 
@@ -366,42 +355,6 @@ class MediaProcessingService:
                 return False
             raise
 
-    def _spectrogram_is_current(
-        self, bucket: str, spectrogram_key: str, source_etag: str
-    ) -> bool:
-        try:
-            response = self.bucket_service.s3_client.head_object(
-                Bucket=bucket, Key=spectrogram_key,
-            )
-            metadata = response.get("Metadata", {})
-            stored_etag = metadata.get("source-etag", "")
-            style_version = metadata.get("spectrogram-style-version", "")
-            return (
-                stored_etag == source_etag
-                and style_version == SPECTROGRAM_STYLE_VERSION
-            )
-        except ClientError:
-            return False
-
-    def _spectrogram_data_is_current(
-        self, bucket: str, spectrogram_data_key: str, source_etag: str,
-    ) -> bool:
-        try:
-            response = self.bucket_service.s3_client.head_object(
-                Bucket=bucket, Key=spectrogram_data_key,
-            )
-            metadata = response.get("Metadata", {})
-            stored_etag = metadata.get("source-etag", "")
-            style_version = metadata.get("spectrogram-style-version", "")
-            data_version = metadata.get("spectrogram-data-version", "")
-            return (
-                stored_etag == source_etag
-                and style_version == SPECTROGRAM_STYLE_VERSION
-                and data_version == SPECTROGRAM_DATA_VERSION
-            )
-        except ClientError:
-            return False
-
     def peaks_exist(self, bucket: str, s3_key: str) -> bool:
         return self._artifact_exists(bucket, self._peaks_key(s3_key))
 
@@ -418,7 +371,7 @@ class MediaProcessingService:
 
         return (
             self._artifact_is_current(bucket, self._peaks_key(s3_key), source_etag)
-            and self._spectrogram_data_is_current(
+            and self._artifact_is_current(
                 bucket, self._spectrogram_data_key(s3_key), source_etag
             )
         )

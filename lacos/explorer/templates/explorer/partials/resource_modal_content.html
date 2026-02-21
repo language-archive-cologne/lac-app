@@ -20,7 +20,6 @@
            data-audio-url="{{ stream_url }}"
            data-player-mode="{{ player_mode|default:'simple' }}"
            {% if peaks_url %}data-peaks-url="{{ peaks_url }}"{% endif %}
-           {% if spectrogram_url %}data-spectrogram-url="{{ spectrogram_url }}"{% endif %}
            {% if spectrogram_data_url %}data-spectrogram-data-url="{{ spectrogram_data_url }}"{% endif %}>
         <!-- Controls bar -->
         <div class="bg-base-200 rounded-t-lg p-3 flex items-center gap-3 flex-wrap">

@@ -69,15 +69,26 @@ def test_compute_spectrogram_tone_has_energy():
     assert max_val > 100, f"1kHz tone should have strong energy but max was {max_val}"
 
 
-def test_derivatives_current_checks_spectrogram_data():
+def test_derivatives_current_uses_artifact_is_current_for_both():
     service = MediaProcessingService(bucket_service=MagicMock())
+
+    calls = []
+    original = service._artifact_is_current
+
+    def tracking_artifact_is_current(bucket, key, etag):
+        calls.append(key)
+        # peaks current, spectrogram not
+        return key.endswith(".peaks.json")
 
     with (
         patch.object(service, "_get_source_etag", return_value="etag-1"),
-        patch.object(service, "_artifact_is_current", return_value=True),
-        patch.object(service, "_spectrogram_data_is_current", return_value=False),
+        patch.object(service, "_artifact_is_current", side_effect=tracking_artifact_is_current),
     ):
         assert service.derivatives_current("bucket", "audio.wav") is False
+
+    assert len(calls) == 2
+    assert any(k.endswith(".peaks.json") for k in calls)
+    assert any(k.endswith(".spectrogram.json") for k in calls)
 
 
 def test_spectrogram_data_key_suffix():

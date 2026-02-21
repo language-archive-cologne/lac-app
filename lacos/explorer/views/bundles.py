@@ -359,11 +359,9 @@ class ResourceAccessView(View):
 
             # Resolve precomputed visualization sidecars for audio files
             peaks_url = None
-            spectrogram_url = None
             spectrogram_data_url = None
             if detected_media_type == 'audio':
                 peaks_url = self._resolve_peaks_url(resource_service, bucket_name, object_key)
-                spectrogram_url = self._resolve_spectrogram_url(resource_service, bucket_name, object_key)
                 spectrogram_data_url = self._resolve_spectrogram_data_url(
                     resource_service,
                     bucket_name,
@@ -383,7 +381,6 @@ class ResourceAccessView(View):
                     download_bucket=bucket_name,
                     download_key=object_key,
                     peaks_url=peaks_url,
-                    spectrogram_url=spectrogram_url,
                     spectrogram_data_url=spectrogram_data_url,
                     player_mode=player_mode,
                 )
@@ -448,7 +445,6 @@ class ResourceAccessView(View):
         download_bucket=None,
         download_key=None,
         peaks_url=None,
-        spectrogram_url=None,
         spectrogram_data_url=None,
         player_mode='simple',
     ):
@@ -470,7 +466,6 @@ class ResourceAccessView(View):
             'elan_context': elan_context,
             'xml_content': xml_preview,
             'peaks_url': peaks_url,
-            'spectrogram_url': spectrogram_url,
             'spectrogram_data_url': spectrogram_data_url,
             'player_mode': player_mode,
         }
@@ -489,15 +484,6 @@ class ResourceAccessView(View):
         try:
             resource_service.s3_client.head_object(Bucket=bucket_name, Key=peaks_key)
             return resource_service.generate_presigned_url(bucket_name, peaks_key)
-        except Exception:
-            return None
-
-    def _resolve_spectrogram_url(self, resource_service, bucket_name, object_key):
-        """Check if pre-computed spectrogram exists and return a presigned URL."""
-        spectrogram_key = f"{object_key}.spectrogram.png"
-        try:
-            resource_service.s3_client.head_object(Bucket=bucket_name, Key=spectrogram_key)
-            return resource_service.generate_presigned_url(bucket_name, spectrogram_key)
         except Exception:
             return None
 

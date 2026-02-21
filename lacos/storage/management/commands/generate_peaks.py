@@ -59,7 +59,6 @@ class Command(BaseCommand):
                 key = obj["Key"]
                 if (
                     key.endswith(".peaks.json")
-                    or key.endswith(".spectrogram.png")
                     or key.endswith(".spectrogram.json")
                 ):
                     continue
