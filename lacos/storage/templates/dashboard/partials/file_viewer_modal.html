@@ -16,7 +16,7 @@
                         hx-get="{% url 'storage:file_viewer_htmx' bucket_type=bucket_type object_path=object_path %}"
                         hx-target="#file-viewer-content"
                         hx-swap="innerHTML">
-                    Waveform
+                    Oscillogram
                 </button>
             {% else %}
                 <button type="button"
