@@ -11,23 +11,22 @@
     </div>
     <div class="flex items-center gap-2">
       {% if media_type == 'audio' and spectrogram_available %}
-        {% if player_mode == 'analyze' %}
+        <div class="join">
           <a href="{{ resource_play_url }}"
              hx-get="{{ resource_play_url }}"
              hx-target="#resource-modal-content"
              hx-swap="innerHTML"
-             class="btn btn-sm btn-ghost">
+             class="btn btn-sm join-item {% if player_mode != 'analyze' %}btn-secondary{% else %}btn-ghost{% endif %}">
             {% translate "Oscillogram" %}
           </a>
-        {% else %}
           <a href="{{ resource_analyze_url }}"
              hx-get="{{ resource_analyze_url }}"
              hx-target="#resource-modal-content"
              hx-swap="innerHTML"
-             class="btn btn-sm btn-secondary">
+             class="btn btn-sm join-item {% if player_mode == 'analyze' %}btn-secondary{% else %}btn-ghost{% endif %}">
             {% translate "Spectrogram" %}
           </a>
-        {% endif %}
+        </div>
       {% endif %}
       <button type="button" class="btn btn-sm btn-circle btn-ghost" aria-label="{% translate 'Close media viewer' %}" data-modal-close>
         ✕

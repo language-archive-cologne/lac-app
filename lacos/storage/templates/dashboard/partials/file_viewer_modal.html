@@ -10,23 +10,22 @@
     </div>
     <div class="flex items-center gap-2">
         {% if viewer_type == "audio" and spectrogram_available %}
-            {% if player_mode == "analyze" %}
+            <div class="join">
                 <button type="button"
-                        class="btn btn-sm btn-ghost"
+                        class="btn btn-sm join-item {% if player_mode != 'analyze' %}btn-secondary{% else %}btn-ghost{% endif %}"
                         hx-get="{% url 'storage:file_viewer_htmx' bucket_type=bucket_type object_path=object_path %}"
                         hx-target="#file-viewer-content"
                         hx-swap="innerHTML">
                     Oscillogram
                 </button>
-            {% else %}
                 <button type="button"
-                        class="btn btn-sm btn-secondary"
+                        class="btn btn-sm join-item {% if player_mode == 'analyze' %}btn-secondary{% else %}btn-ghost{% endif %}"
                         hx-get="{% url 'storage:file_viewer_htmx' bucket_type=bucket_type object_path=object_path %}?player_mode=analyze"
                         hx-target="#file-viewer-content"
                         hx-swap="innerHTML">
                     Spectrogram
                 </button>
-            {% endif %}
+            </div>
         {% endif %}
         <a href="{{ download_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-primary">Open in new tab</a>
         <button type="button" class="btn btn-sm btn-ghost" onclick="closeFileViewer()">✕</button>
