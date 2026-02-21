@@ -267,10 +267,10 @@ class MediaProcessingService:
         # Pass 1: compute mel dB in chunks, store to disk-backed array.
         db_path = None
         try:
-            db_fd, db_path = tempfile.mkstemp(suffix=".f64", prefix="lac_db_")
+            db_fd, db_path = tempfile.mkstemp(suffix=".f32", prefix="lac_db_")
             os.close(db_fd)
             db_mm = np.memmap(
-                db_path, dtype=np.float64, mode="w+", shape=(n_frames, N_MELS),
+                db_path, dtype=np.float32, mode="w+", shape=(n_frames, N_MELS),
             )
 
             for chunk_start in range(0, n_frames, STFT_CHUNK_FRAMES):
