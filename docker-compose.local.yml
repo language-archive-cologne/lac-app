@@ -14,7 +14,6 @@ services:
       context: .
       dockerfile: ./compose/local/django/Dockerfile
       target: web-run-stage
-      network: host
     image: lacos_local_django
     restart: unless-stopped
     depends_on:
@@ -43,7 +42,6 @@ services:
     build:
       context: .
       dockerfile: ./compose/production/postgres/Dockerfile
-      network: host
     image: lacos_production_postgres
     volumes:
       - lacos_local_postgres_data:/var/lib/postgresql/data
@@ -98,7 +96,6 @@ services:
       context: .
       dockerfile: ./compose/local/django/Dockerfile
       target: worker-run-stage
-      network: host
     image: lacos_local_huey
     depends_on:
       - django

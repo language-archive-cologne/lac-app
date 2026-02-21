@@ -13,7 +13,6 @@ services:
       context: .
       dockerfile: ./compose/local/django/Dockerfile
       target: web-run-stage
-      network: host
     image: lacos_dev_django
     container_name: lacos_dev_django
     restart: unless-stopped
@@ -55,7 +54,6 @@ services:
     build:
       context: .
       dockerfile: ./compose/production/postgres/Dockerfile
-      network: host
     image: lacos_dev_postgres
     container_name: lacos_dev_postgres
     restart: unless-stopped
@@ -96,7 +94,6 @@ services:
       context: .
       dockerfile: ./compose/local/django/Dockerfile
       target: worker-run-stage
-      network: host
     image: lacos_dev_huey
     container_name: lacos_dev_huey
     restart: unless-stopped
