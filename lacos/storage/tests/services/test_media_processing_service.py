@@ -4,6 +4,8 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 
 from lacos.storage.services.media_processing_service import (
+    FFT_SAMPLES,
+    HOP_DIVISOR,
     N_MELS,
     TARGET_SAMPLE_RATE,
     MediaProcessingService,
@@ -93,6 +95,22 @@ def test_compute_spectrogram_short_audio_returns_empty():
         result = service._compute_spectrogram("dummy.wav")
 
     assert result == b""
+
+
+def test_compute_spectrogram_uniform_resolution():
+    """Short and long files should produce the same frames-per-second."""
+    service = MediaProcessingService(bucket_service=MagicMock())
+    hop = max(64, FFT_SAMPLES // HOP_DIVISOR)
+
+    for duration in (0.5, 5.0, 30.0):
+        samples = _make_samples(duration=duration)
+        with patch.object(service, "_decode_audio_to_pcm", return_value=samples):
+            result = service._compute_spectrogram("dummy.wav")
+        n_frames, _, _ = _parse_spectrogram_binary(result)
+        expected = (len(samples) - FFT_SAMPLES) // hop + 1
+        assert n_frames == expected, (
+            f"duration={duration}s: got {n_frames} frames, expected {expected}"
+        )
 
 
 def test_derivatives_current_uses_artifact_is_current_for_both():

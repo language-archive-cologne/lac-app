@@ -4,6 +4,7 @@ Uses BBC's audiowaveform CLI for peak data and numpy STFT for spectrogram
 frequency bins that match WaveSurfer.js Spectrogram plugin output exactly.
 """
 
+import gzip
 import json
 import logging
 import struct
@@ -25,9 +26,7 @@ FFMPEG_BIN = "ffmpeg"
 FFT_SAMPLES = 2048
 N_MELS = 256
 TARGET_SAMPLE_RATE = 44100
-# Cap spectrogram frames to keep binary sidecar under ~4 MB.
-# 16000 frames * 256 bins * 1 byte + 6-byte header ≈ 4 MB.
-MAX_SPECTROGRAM_FRAMES = 16000
+HOP_DIVISOR = 4  # hop = n_fft // 4 → 75% overlap
 
 
 def _hz_to_mel(hz):
@@ -153,8 +152,9 @@ class MediaProcessingService:
                     self.bucket_service.s3_client.put_object(
                         Bucket=bucket,
                         Key=spectrogram_data_key,
-                        Body=spectrogram_data,
+                        Body=gzip.compress(spectrogram_data),
                         ContentType="application/octet-stream",
+                        ContentEncoding="gzip",
                         Metadata={"source-etag": source_etag},
                     )
                 except ClientError as exc:
@@ -230,14 +230,14 @@ class MediaProcessingService:
         return np.frombuffer(result.stdout, dtype=np.float32)
 
     def _compute_spectrogram(self, input_path: Path) -> bytes:
-        """Compute mel-scale spectrogram with adaptive dB scaling.
+        """Compute mel-scale spectrogram with fixed 75% overlap.
 
         Returns binary payload: 6-byte header (uint32 LE n_frames + uint16 LE
         n_bins) followed by n_frames * n_bins raw uint8 bytes in row-major
-        (frame-major) order.
+        (frame-major) order.  The caller gzip-compresses before upload.
 
         Pipeline:
-        1. Hann window of size FFT_SAMPLES (2048)
+        1. Hann window of size FFT_SAMPLES (2048), hop = n_fft // 4
         2. RFFT → magnitude spectrum, normalized 2/N
         3. Mel filterbank projection (N_MELS=256 bins)
         4. dB conversion: 20 * log10(max(1e-12, mel_mag))
@@ -253,15 +253,7 @@ class MediaProcessingService:
         # Hann window
         window = np.hanning(n_fft).astype(np.float32)
 
-        # Adaptive hop: native 75% overlap for short files,
-        # larger hop for long files to cap at MAX_SPECTROGRAM_FRAMES.
-        native_hop = max(64, n_fft // 4)
-        native_frames = (n_samples - n_fft) // native_hop + 1
-        if native_frames <= MAX_SPECTROGRAM_FRAMES:
-            hop_size = native_hop
-        else:
-            hop_size = max(native_hop, (n_samples - n_fft) // MAX_SPECTROGRAM_FRAMES)
-
+        hop_size = max(64, n_fft // HOP_DIVISOR)
         n_frames = (n_samples - n_fft) // hop_size + 1
 
         # Vectorised STFT
