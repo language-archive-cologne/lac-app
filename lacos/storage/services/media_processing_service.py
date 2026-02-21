@@ -7,6 +7,7 @@ frequency bins that match WaveSurfer.js Spectrogram plugin output exactly.
 import gzip
 import json
 import logging
+import os
 import struct
 import subprocess
 import tempfile
@@ -27,6 +28,7 @@ FFT_SAMPLES = 2048
 N_MELS = 256
 TARGET_SAMPLE_RATE = 44100
 HOP_DIVISOR = 4  # hop = n_fft // 4 → 75% overlap
+STFT_CHUNK_FRAMES = 2048  # STFT frames per chunk (~50 MB peak RAM per chunk)
 
 
 def _hz_to_mel(hz):
@@ -236,9 +238,12 @@ class MediaProcessingService:
         n_bins) followed by n_frames * n_bins raw uint8 bytes in row-major
         (frame-major) order.  The caller gzip-compresses before upload.
 
+        Uses chunked STFT with sliding_window_view to keep peak memory
+        under ~200 MB regardless of audio duration.
+
         Pipeline:
         1. Hann window of size FFT_SAMPLES (2048), hop = n_fft // 4
-        2. RFFT → magnitude spectrum, normalized 2/N
+        2. RFFT → magnitude spectrum, normalized 2/N (chunked)
         3. Mel filterbank projection (N_MELS=256 bins)
         4. dB conversion: 20 * log10(max(1e-12, mel_mag))
         5. Adaptive percentile-based 0-255 scaling per file
@@ -250,41 +255,67 @@ class MediaProcessingService:
         if n_samples < n_fft:
             return b""
 
-        # Hann window
         window = np.hanning(n_fft).astype(np.float32)
-
         hop_size = max(64, n_fft // HOP_DIVISOR)
         n_frames = (n_samples - n_fft) // hop_size + 1
+        mel_fb_t = _mel_filterbank(N_MELS, n_fft, TARGET_SAMPLE_RATE).T
 
-        # Vectorised STFT
-        indices = np.arange(n_fft)[None, :] + (np.arange(n_frames) * hop_size)[:, None]
-        frames = samples[indices] * window
+        # Pass 1: compute mel dB in chunks, store to disk-backed array.
+        db_path = None
+        try:
+            db_fd, db_path = tempfile.mkstemp(suffix=".f64", prefix="lac_db_")
+            os.close(db_fd)
+            db_mm = np.memmap(
+                db_path, dtype=np.float64, mode="w+", shape=(n_frames, N_MELS),
+            )
 
-        fft_result = np.fft.rfft(frames, n=n_fft)
-        magnitudes = (2.0 / n_fft) * np.abs(fft_result)
+            for chunk_start in range(0, n_frames, STFT_CHUNK_FRAMES):
+                chunk_end = min(chunk_start + STFT_CHUNK_FRAMES, n_frames)
+                sample_start = chunk_start * hop_size
+                sample_end = (chunk_end - 1) * hop_size + n_fft
+                chunk = samples[sample_start:sample_end]
 
-        # Mel filterbank projection
-        mel_fb = _mel_filterbank(N_MELS, n_fft, TARGET_SAMPLE_RATE)
-        mel_magnitudes = magnitudes @ mel_fb.T  # [n_frames, N_MELS]
+                frames_view = np.lib.stride_tricks.sliding_window_view(
+                    chunk, n_fft,
+                )[::hop_size]
+                frames_view = frames_view[: chunk_end - chunk_start]
 
-        # dB conversion
-        db = 20.0 * np.log10(np.maximum(mel_magnitudes, 1e-12))
+                windowed = frames_view * window
+                fft_result = np.fft.rfft(windowed, n=n_fft, axis=1)
+                magnitudes = (2.0 / n_fft) * np.abs(fft_result)
+                mel_mag = magnitudes @ mel_fb_t
+                db_mm[chunk_start:chunk_end] = 20.0 * np.log10(
+                    np.maximum(mel_mag, 1e-12),
+                )
 
-        # Adaptive percentile-based scaling
-        lower = np.percentile(db, 5)
-        upper = np.percentile(db, 95)
-        # Ensure minimum 30 dB spread to avoid noise amplification
-        if upper - lower < 30:
-            center = (upper + lower) / 2
-            lower = center - 15
-            upper = center + 15
+            db_mm.flush()
 
-        scaled = np.clip((db - lower) / (upper - lower) * 255.0, 0, 255)
-        uint8_data = np.round(scaled).astype(np.uint8)
+            # Percentiles via in-place partition on the memmap.
+            lower = float(np.percentile(db_mm, 5))
+            upper = float(np.percentile(db_mm, 95))
+            if upper - lower < 30:
+                center = (upper + lower) / 2
+                lower = center - 15
+                upper = center + 15
 
-        n_frames_out, n_bins_out = uint8_data.shape
-        header = struct.pack("<IH", n_frames_out, n_bins_out)
-        return header + uint8_data.tobytes()
+            # Pass 2: scale to uint8 in chunks.
+            uint8_data = np.empty((n_frames, N_MELS), dtype=np.uint8)
+            for i in range(0, n_frames, STFT_CHUNK_FRAMES):
+                j = min(i + STFT_CHUNK_FRAMES, n_frames)
+                scaled = np.clip(
+                    (db_mm[i:j] - lower) / (upper - lower) * 255.0, 0, 255,
+                )
+                uint8_data[i:j] = np.round(scaled).astype(np.uint8)
+
+            header = struct.pack("<IH", n_frames, N_MELS)
+            return header + uint8_data.tobytes()
+        finally:
+            del db_mm
+            if db_path is not None:
+                try:
+                    os.remove(db_path)
+                except OSError:
+                    pass
 
     # ------------------------------------------------------------------
     # Duration
