@@ -60,7 +60,7 @@ def clear_all_filters_url(context):
     params = request.GET.copy()
 
     for key in list(params.keys()):
-        if key in FACET_PARAM_NAMES or key in ("q", "page") or key.startswith("field_"):
+        if key in FACET_PARAM_NAMES or key in ("q", "page") or key.startswith("row_"):
             del params[key]
 
     return f"?{params.urlencode()}" if params else "?"

@@ -1,0 +1,169 @@
+{% extends "explorer_base.html" %}
+{% load i18n %}
+{% load explorer_extras %}
+
+{% block title %}{% translate "Field Search - Collections" %} - {{ block.super }}{% endblock title %}
+
+{% block explorer_content %}
+  <style>
+    .field-search-loading .fs-dimmable { opacity: .4; pointer-events: none; transition: opacity 80ms ease; }
+    .field-search-loading .fs-spinner  { display: flex; }
+    .fs-spinner { display: none; }
+  </style>
+  <script>
+    (function () {
+      function getRoot() { return document.getElementById('field-search-root'); }
+      function setLoading(v) { var r = getRoot(); if (r) r.classList.toggle('field-search-loading', Boolean(v)); }
+      function isTarget(e) { var d = e && e.detail, t = d && d.target; return Boolean(t && t.id === 'faceted-results'); }
+      document.addEventListener('htmx:beforeRequest', function (e) { if (isTarget(e)) setLoading(true); });
+      document.addEventListener('htmx:afterSwap', function (e) { if (isTarget(e)) setLoading(false); });
+      document.addEventListener('htmx:historyRestore', function () { setLoading(false); });
+      window.addEventListener('pageshow', function () { setLoading(false); });
+    })();
+  </script>
+  <meta name="htmx-config" content='{"refreshOnHistoryMiss":true}'>
+
+  <!-- Top tabs: Collections | Bundles -->
+  <div role="tablist" class="tabs tabs-border mb-2">
+    <a role="tab" class="tab tab-active font-semibold">{% translate "Collections" %}</a>
+    <a role="tab" class="tab" href="{% url 'bundle_field_search' %}">{% translate "Bundles" %}</a>
+  </div>
+
+  <!-- Sub tabs: Faceted Search | Field Search -->
+  <div role="tablist" class="tabs tabs-border tabs-sm mb-6">
+    <a role="tab" class="tab" href="{% url 'faceted_search' %}">{% translate "Faceted Search" %}</a>
+    <a role="tab" class="tab tab-active font-semibold">{% translate "Field Search" %}</a>
+  </div>
+
+  <!-- Dynamic query builder -->
+  <form id="field-search-form" method="get" action="{% url 'field_search' %}" class="mb-6">
+    <div id="search-rows" class="space-y-2">
+      {% for row in search_rows %}
+        <div class="search-row flex items-center gap-2" data-row-index="{{ row.index }}">
+          <select name="row_{{ row.index }}_field" class="select select-bordered select-sm w-44 field-select">
+            {% for defn in field_definitions %}
+              <option value="{{ defn.key }}" data-placeholder="{{ defn.placeholder }}" {% if defn.key == row.field_key %}selected{% endif %}>{{ defn.label }}</option>
+            {% endfor %}
+          </select>
+          <input type="text" name="row_{{ row.index }}_value" value="{{ row.value }}"
+                 class="input input-bordered input-sm flex-1"
+                 placeholder="{{ row.field_key|default:'' }}">
+          <button type="button" class="btn btn-ghost btn-sm btn-square remove-row" aria-label="{% translate 'Remove row' %}">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+      {% empty %}
+        <div class="search-row flex items-center gap-2" data-row-index="0">
+          <select name="row_0_field" class="select select-bordered select-sm w-44 field-select">
+            {% for defn in field_definitions %}
+              <option value="{{ defn.key }}" data-placeholder="{{ defn.placeholder }}">{{ defn.label }}</option>
+            {% endfor %}
+          </select>
+          <input type="text" name="row_0_value" value=""
+                 class="input input-bordered input-sm flex-1"
+                 placeholder="{{ field_definitions.0.placeholder }}">
+          <button type="button" class="btn btn-ghost btn-sm btn-square remove-row" aria-label="{% translate 'Remove row' %}">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+      {% endfor %}
+    </div>
+
+    <div class="flex items-center gap-2 mt-3">
+      <button type="button" id="add-row-btn" class="btn btn-ghost btn-sm gap-1">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+        </svg>
+        {% translate "Add field" %}
+      </button>
+      <button type="submit" class="btn btn-primary btn-sm">{% translate "Search" %}</button>
+      {% if has_search_rows %}
+        <a href="{% url 'field_search' %}" class="btn btn-ghost btn-sm">{% translate "Clear" %}</a>
+      {% endif %}
+    </div>
+  </form>
+
+  <!-- Results area -->
+  <div id="field-search-root">
+    <div id="faceted-results" class="relative">
+      <div class="fs-spinner absolute inset-0 z-20 items-center justify-center pt-24">
+        <span class="loading loading-spinner loading-md text-primary"></span>
+      </div>
+      <div class="fs-dimmable">
+        {% include "explorer/partials/faceted_search_table.html" %}
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var container = document.getElementById('search-rows');
+      var addBtn = document.getElementById('add-row-btn');
+      var form = document.getElementById('field-search-form');
+
+      function getNextIndex() {
+        var rows = container.querySelectorAll('.search-row');
+        var max = -1;
+        rows.forEach(function (row) {
+          var idx = parseInt(row.getAttribute('data-row-index'), 10);
+          if (idx > max) max = idx;
+        });
+        return max + 1;
+      }
+
+      function buildRow(index) {
+        var firstRow = container.querySelector('.search-row');
+        if (!firstRow) return null;
+        var clone = firstRow.cloneNode(true);
+        clone.setAttribute('data-row-index', index);
+        var select = clone.querySelector('select');
+        select.name = 'row_' + index + '_field';
+        select.selectedIndex = 0;
+        var input = clone.querySelector('input[type="text"]');
+        input.name = 'row_' + index + '_value';
+        input.value = '';
+        updatePlaceholder(select, input);
+        return clone;
+      }
+
+      function updatePlaceholder(select, input) {
+        var opt = select.options[select.selectedIndex];
+        input.placeholder = (opt && opt.getAttribute('data-placeholder')) || '';
+      }
+
+      addBtn.addEventListener('click', function () {
+        var row = buildRow(getNextIndex());
+        if (row) {
+          container.appendChild(row);
+          row.querySelector('input[type="text"]').focus();
+        }
+      });
+
+      container.addEventListener('click', function (e) {
+        var btn = e.target.closest('.remove-row');
+        if (!btn) return;
+        var rows = container.querySelectorAll('.search-row');
+        if (rows.length <= 1) {
+          // Don't remove last row, just clear it
+          var row = rows[0];
+          row.querySelector('select').selectedIndex = 0;
+          var input = row.querySelector('input[type="text"]');
+          input.value = '';
+          updatePlaceholder(row.querySelector('select'), input);
+          return;
+        }
+        btn.closest('.search-row').remove();
+      });
+
+      container.addEventListener('change', function (e) {
+        if (!e.target.classList.contains('field-select')) return;
+        var row = e.target.closest('.search-row');
+        if (row) updatePlaceholder(e.target, row.querySelector('input[type="text"]'));
+      });
+    })();
+  </script>
+{% endblock explorer_content %}

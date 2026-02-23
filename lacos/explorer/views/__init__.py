@@ -7,6 +7,7 @@ from .bundles import BundleDetailView, BundleJsonLdView, BundleResourcesView, Bu
 from .collections import CollectionDetailView, CollectionJsonLdView, CollectionListView, CollectionResourcesView, CollectionXmlView
 from .bundle_faceted_search import BundleFacetedSearchView
 from .faceted_search import FacetedSearchView
+from .field_search import BundleFieldSearchView, FieldSearchView
 from .utils import map_popup_view
 
 
@@ -20,6 +21,9 @@ __all__ = [
     # Faceted search
     "BundleFacetedSearchView",
     "FacetedSearchView",
+    # Field search
+    "BundleFieldSearchView",
+    "FieldSearchView",
     # Bundle views
     "BundleDetailView",
     "BundleJsonLdView",

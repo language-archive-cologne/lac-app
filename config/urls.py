@@ -14,7 +14,13 @@ from rest_framework.authtoken.views import obtain_auth_token
 from lacos.oaipmh.views import OAIPMHOverviewView
 from lacos.sitemaps import sitemaps
 from lacos.common.views import guideline_view
-from lacos.explorer.views import BundleFacetedSearchView, CollectionListView, FacetedSearchView
+from lacos.explorer.views import (
+    BundleFacetedSearchView,
+    BundleFieldSearchView,
+    CollectionListView,
+    FacetedSearchView,
+    FieldSearchView,
+)
 
 urlpatterns = [
     path(
@@ -31,6 +37,16 @@ urlpatterns = [
         "search/bundles/",
         BundleFacetedSearchView.as_view(),
         name="bundle_faceted_search",
+    ),
+    path(
+        "search/fields/",
+        FieldSearchView.as_view(),
+        name="field_search",
+    ),
+    path(
+        "search/bundles/fields/",
+        BundleFieldSearchView.as_view(),
+        name="bundle_field_search",
     ),
     # Crawler control files
     path(

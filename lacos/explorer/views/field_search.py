@@ -3,6 +3,7 @@
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import CharField, Count, Min, OuterRef, Subquery
 from django.db.models.functions import Cast
+from django.shortcuts import render
 from django.views.generic import ListView
 
 from lacos.blam.models import Bundle, Collection
@@ -91,6 +92,15 @@ class FieldSearchView(ListView):
         context["field_definitions"] = COLLECTION_FIELD_DEFINITIONS
         return context
 
+    def render_to_response(self, context, **kwargs):
+        if self.request.headers.get("HX-Request"):
+            return render(
+                self.request,
+                "explorer/partials/field_search_results.html",
+                context,
+            )
+        return super().render_to_response(context, **kwargs)
+
 
 class BundleFieldSearchView(ListView):
     """Bundle search using dynamic per-field query builder."""
@@ -161,3 +171,12 @@ class BundleFieldSearchView(ListView):
         context["has_search_rows"] = bool(rows)
         context["field_definitions"] = BUNDLE_FIELD_DEFINITIONS
         return context
+
+    def render_to_response(self, context, **kwargs):
+        if self.request.headers.get("HX-Request"):
+            return render(
+                self.request,
+                "explorer/partials/bundle_field_search_results.html",
+                context,
+            )
+        return super().render_to_response(context, **kwargs)

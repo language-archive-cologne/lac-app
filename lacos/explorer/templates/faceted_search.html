@@ -62,10 +62,16 @@
     })();
   </script>
 
-  <!-- Search type tabs -->
-  <div role="tablist" class="tabs tabs-border mb-6">
+  <!-- Top tabs: Collections | Bundles -->
+  <div role="tablist" class="tabs tabs-border mb-2">
     <a role="tab" class="tab tab-active font-semibold">{% translate "Collections" %}</a>
     <a role="tab" class="tab" href="{% url 'bundle_faceted_search' %}{% if search_query %}?q={{ search_query|urlencode }}{% endif %}">{% translate "Bundles" %}</a>
+  </div>
+
+  <!-- Sub tabs: Faceted Search | Field Search -->
+  <div role="tablist" class="tabs tabs-border tabs-sm mb-6">
+    <a role="tab" class="tab tab-active font-semibold">{% translate "Faceted Search" %}</a>
+    <a role="tab" class="tab" href="{% url 'field_search' %}">{% translate "Field Search" %}</a>
   </div>
 
   <!-- Search bar -->
