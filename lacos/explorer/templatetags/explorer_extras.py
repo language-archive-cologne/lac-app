@@ -170,6 +170,15 @@ def is_media_type(resource, target_type: str) -> bool:
 
 
 @register.filter
+def file_extension(resource):
+    """Return the uppercased file extension from a resource's file_name (e.g. 'WAV')."""
+    file_name = getattr(resource, "file_name", None) or ""
+    if "." in file_name:
+        return file_name.rsplit(".", 1)[-1].upper()
+    return ""
+
+
+@register.filter
 @stringfilter
 def render_search_snippet(text):
     """Render search snippets while allowing only <mark> tags."""

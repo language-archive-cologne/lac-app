@@ -180,11 +180,11 @@
                                 data-size="{{ resource.size_bytes|default:0 }}">
                               <input type="checkbox" class="checkbox checkbox-xs bundle-resource-checkbox mr-1.5" />
                               <span class="truncate max-w-[120px] mr-1 text-base-content" title="{{ resource.file_name }}">{{ resource.file_name }}</span>
-                              {% if resource.mime_type %}
-                                <span class="inline-flex items-center text-base-content/40 hover:text-base-content/70 cursor-help" title="{{ resource.mime_type }}">
-                                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                </span>
-                              {% endif %}
+                              {% with ext=resource|file_extension %}
+                                {% if ext %}
+                                  <span class="badge badge-xs badge-ghost font-mono text-base-content/60" title="{{ resource.mime_type }}">{{ ext }}</span>
+                                {% endif %}
+                              {% endwith %}
                               <div class="flex space-x-1">
                                 <button
                                    type="button"
@@ -197,30 +197,16 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                   </svg>
                                 </button>
-                                {% if resource|is_media_type:"audio" %}
+                                {% if resource|is_media_type:"audio" or resource|is_media_type:"video" %}
                                   <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play"
                                      hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play"
                                      hx-target="#resource-modal-content"
                                      hx-swap="innerHTML"
                                      hx-push-url="false"
-                                     class="btn btn-xs btn-ghost text-success"
+                                     class="btn btn-circle btn-success btn-xs"
                                      title="{% translate 'Play' %}">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                  </a>
-                                {% elif resource|is_media_type:"video" %}
-                                  <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play"
-                                     hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play"
-                                     hx-target="#resource-modal-content"
-                                     hx-swap="innerHTML"
-                                     hx-push-url="false"
-                                     class="btn btn-xs btn-ghost text-success"
-                                     title="{% translate 'Play' %}">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-[1em]">
+                                      <path d="M8 5.14v14.72a1 1 0 001.5.86l11-7.36a1 1 0 000-1.72l-11-7.36A1 1 0 008 5.14z" />
                                     </svg>
                                   </a>
                                 {% endif %}
@@ -243,11 +229,11 @@
                                 data-size="{{ resource.size_bytes|default:0 }}">
                               <input type="checkbox" class="checkbox checkbox-xs bundle-resource-checkbox mr-1.5" />
                               <span class="truncate max-w-[120px] mr-1 text-base-content" title="{{ resource.file_name }}">{{ resource.file_name }}</span>
-                              {% if resource.mime_type %}
-                                <span class="inline-flex items-center text-base-content/40 hover:text-base-content/70 cursor-help" title="{{ resource.mime_type }}">
-                                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                </span>
-                              {% endif %}
+                              {% with ext=resource|file_extension %}
+                                {% if ext %}
+                                  <span class="badge badge-xs badge-ghost font-mono text-base-content/60" title="{{ resource.mime_type }}">{{ ext }}</span>
+                                {% endif %}
+                              {% endwith %}
                               <div class="flex space-x-1">
                                 <button
                                    type="button"
@@ -266,11 +252,10 @@
                                      hx-target="#resource-modal-content"
                                      hx-swap="innerHTML"
                                      hx-push-url="false"
-                                     class="btn btn-xs btn-ghost text-success"
+                                     class="btn btn-circle btn-success btn-xs"
                                      title="{% translate 'Play' %}">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-[1em]">
+                                      <path d="M8 5.14v14.72a1 1 0 001.5.86l11-7.36a1 1 0 000-1.72l-11-7.36A1 1 0 008 5.14z" />
                                     </svg>
                                   </a>
                                 {% elif resource|is_media_type:"pdf" or resource|is_media_type:"xml" %}
@@ -306,11 +291,11 @@
                                 data-size="{{ resource.size_bytes|default:0 }}">
                               <input type="checkbox" class="checkbox checkbox-xs bundle-resource-checkbox mr-1.5" />
                               <span class="truncate max-w-[120px] mr-1 text-base-content" title="{{ resource.file_name }}">{{ resource.file_name }}</span>
-                              {% if resource.mime_type %}
-                                <span class="inline-flex items-center text-base-content/40 hover:text-base-content/70 cursor-help" title="{{ resource.mime_type }}">
-                                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                </span>
-                              {% endif %}
+                              {% with ext=resource|file_extension %}
+                                {% if ext %}
+                                  <span class="badge badge-xs badge-ghost font-mono text-base-content/60" title="{{ resource.mime_type }}">{{ ext }}</span>
+                                {% endif %}
+                              {% endwith %}
                               <div class="flex space-x-1">
                                 <button
                                    type="button"
@@ -342,11 +327,11 @@
                                 data-size="{{ resource.size_bytes|default:0 }}">
                               <input type="checkbox" class="checkbox checkbox-xs bundle-resource-checkbox mr-1.5" />
                               <span class="truncate max-w-[120px] mr-1 text-base-content" title="{{ resource.file_name }}">{{ resource.file_name }}</span>
-                              {% if resource.mime_type %}
-                                <span class="inline-flex items-center text-base-content/40 hover:text-base-content/70 cursor-help" title="{{ resource.mime_type }}">
-                                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                </span>
-                              {% endif %}
+                              {% with ext=resource|file_extension %}
+                                {% if ext %}
+                                  <span class="badge badge-xs badge-ghost font-mono text-base-content/60" title="{{ resource.mime_type }}">{{ ext }}</span>
+                                {% endif %}
+                              {% endwith %}
                               <div class="flex space-x-1">
                                 <button
                                    type="button"
