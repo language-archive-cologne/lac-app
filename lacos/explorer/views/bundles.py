@@ -27,6 +27,7 @@ from .utils import (
     annotate_resource,
     build_content_disposition,
     find_resource_in_bundle,
+    find_subtitle_for_video,
     get_formatted_location,
     get_object_by_pk_or_handle,
     HandleLookupMixin,
@@ -380,6 +381,12 @@ class ResourceAccessView(View):
                 if action == 'analyze' and has_precomputed_spectrogram:
                     player_mode = 'analyze'
 
+            subtitle_url = None
+            if detected_media_type == 'video':
+                subtitle_url = find_subtitle_for_video(
+                    bundle, resource, resource_service, collection_for_path,
+                )
+
             resource_play_url = f"{request.path}?action=play"
             resource_analyze_url = f"{request.path}?action=analyze"
 
@@ -396,6 +403,7 @@ class ResourceAccessView(View):
                     spectrogram_available=spectrogram_available,
                     resource_play_url=resource_play_url,
                     resource_analyze_url=resource_analyze_url,
+                    subtitle_url=subtitle_url,
                 )
 
             if action in {'play', 'view', 'analyze'}:
@@ -463,6 +471,7 @@ class ResourceAccessView(View):
         spectrogram_available=False,
         resource_play_url=None,
         resource_analyze_url=None,
+        subtitle_url=None,
     ):
         """Render the HTMX modal response for play/view actions."""
         media_type = 'elan' if is_elan else detected_media_type
@@ -487,6 +496,7 @@ class ResourceAccessView(View):
             'spectrogram_available': spectrogram_available,
             'resource_play_url': resource_play_url,
             'resource_analyze_url': resource_analyze_url,
+            'subtitle_url': subtitle_url,
         }
 
         response = render(

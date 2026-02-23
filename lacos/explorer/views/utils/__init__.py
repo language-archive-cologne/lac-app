@@ -30,6 +30,9 @@ from .storage import (
     resolve_existing_object,
     resolve_resource_to_presigned,
 )
+from .subtitle import (
+    find_subtitle_for_video,
+)
 from .lookup import (
     get_object_by_pk_or_handle,
     HandleLookupMixin,
@@ -62,6 +65,8 @@ __all__ = [
     "load_xml_preview",
     "resolve_existing_object",
     "resolve_resource_to_presigned",
+    # Subtitle utilities
+    "find_subtitle_for_video",
     # Lookup utilities
     "get_object_by_pk_or_handle",
     "HandleLookupMixin",

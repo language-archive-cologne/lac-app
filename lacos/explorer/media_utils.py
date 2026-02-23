@@ -52,6 +52,7 @@ IMAGE_EXTENSIONS = {
 PDF_EXTENSIONS = {".pdf"}
 XML_EXTENSIONS = {".xml", ".imdi", ".cmdi"}
 ANNOTATION_EXTENSIONS = {".eaf", ".elan"}
+SUBTITLE_EXTENSIONS = {".srt", ".vtt", ".sub"}
 
 
 def _normalize_mime(mime_type: Optional[str]) -> str:
@@ -126,6 +127,18 @@ def is_annotation_file(
         return True
     ext = _extract_extension(file_name)
     return ext in ANNOTATION_EXTENSIONS
+
+
+def is_subtitle_file(
+    mime_type: Optional[str],
+    file_name: Optional[str],
+) -> bool:
+    """Return True when the resource is a subtitle file (.srt/.vtt/.sub)."""
+    normalized = _normalize_mime(mime_type)
+    if normalized in {"text/srt", "text/vtt", "application/x-subrip"}:
+        return True
+    ext = _extract_extension(file_name)
+    return ext in SUBTITLE_EXTENSIONS
 
 
 def guess_source_mime_type(
