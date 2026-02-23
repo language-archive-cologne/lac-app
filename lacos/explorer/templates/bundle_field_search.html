@@ -39,40 +39,40 @@
   <form id="field-search-form" method="get" action="{% url 'bundle_field_search' %}" class="mb-6">
     <div id="search-rows" class="space-y-2">
       {% for row in search_rows %}
-        <div class="search-row flex items-center gap-2" data-row-index="{{ row.index }}">
-          <div class="join flex-1">
-            <select name="row_{{ row.index }}_field" class="select select-bordered select-sm join-item w-44 field-select">
+        <div class="search-row" data-row-index="{{ row.index }}">
+          <div class="join w-full">
+            <select name="row_{{ row.index }}_field" class="select select-bordered join-item w-48 field-select">
               {% for defn in field_definitions %}
                 <option value="{{ defn.key }}" data-placeholder="{{ defn.placeholder }}" {% if defn.key == row.field_key %}selected{% endif %}>{{ defn.label }}</option>
               {% endfor %}
             </select>
             <input type="text" name="row_{{ row.index }}_value" value="{{ row.value }}"
-                   class="input input-bordered input-sm join-item flex-1"
+                   class="input input-bordered join-item flex-1"
                    placeholder="{{ row.field_key|default:'' }}">
+            <button type="button" class="btn btn-ghost join-item remove-row" aria-label="{% translate 'Remove row' %}">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
           </div>
-          <button type="button" class="btn btn-ghost btn-sm btn-square remove-row" aria-label="{% translate 'Remove row' %}">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-          </button>
         </div>
       {% empty %}
-        <div class="search-row flex items-center gap-2" data-row-index="0">
-          <div class="join flex-1">
-            <select name="row_0_field" class="select select-bordered select-sm join-item w-44 field-select">
+        <div class="search-row" data-row-index="0">
+          <div class="join w-full">
+            <select name="row_0_field" class="select select-bordered join-item w-48 field-select">
               {% for defn in field_definitions %}
                 <option value="{{ defn.key }}" data-placeholder="{{ defn.placeholder }}">{{ defn.label }}</option>
               {% endfor %}
             </select>
             <input type="text" name="row_0_value" value=""
-                   class="input input-bordered input-sm join-item flex-1"
+                   class="input input-bordered join-item flex-1"
                    placeholder="{{ field_definitions.0.placeholder }}">
+            <button type="button" class="btn btn-ghost join-item remove-row" aria-label="{% translate 'Remove row' %}">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
           </div>
-          <button type="button" class="btn btn-ghost btn-sm btn-square remove-row" aria-label="{% translate 'Remove row' %}">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-          </button>
         </div>
       {% endfor %}
     </div>
