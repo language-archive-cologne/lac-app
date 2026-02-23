@@ -248,10 +248,10 @@
                 <div class="space-y-1">
                   <div class="text-[11px] text-base-content/60">Bundles: {{ summary.total_bundles|default:0 }}</div>
                   <div class="flex flex-wrap gap-1">
-                    <span class="badge badge-success badge-xs">Public {{ summary.public_count|default:0 }}</span>
-                    <span class="badge badge-warning badge-xs">Academic {{ summary.academic_count|default:0 }}</span>
-                    <span class="badge badge-xs bg-amber-600 text-white border-amber-600">Restricted {{ summary.restricted_count|default:0 }}</span>
-                    <span class="badge badge-error badge-outline badge-xs">Missing {{ summary.missing_acl_count|default:0 }}</span>
+                    {% if summary.public_count %}<span class="badge badge-success badge-xs">Public {{ summary.public_count }}</span>{% endif %}
+                    {% if summary.academic_count %}<span class="badge badge-warning badge-xs">Academic {{ summary.academic_count }}</span>{% endif %}
+                    {% if summary.restricted_count %}<span class="badge badge-xs bg-amber-600 text-white border-amber-600">Restricted {{ summary.restricted_count }}</span>{% endif %}
+                    {% if summary.missing_acl_count %}<span class="badge badge-error badge-outline badge-xs">Missing {{ summary.missing_acl_count }}</span>{% endif %}
                   </div>
                 </div>
               {% endwith %}

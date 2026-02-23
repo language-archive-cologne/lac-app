@@ -111,9 +111,9 @@
               {% with summary=collection.bundle_access_summary %}
                 {% if summary.total %}
                   <div class="flex max-w-[13rem] flex-wrap items-center gap-1.5">
-                    <span class="badge badge-success badge-sm whitespace-nowrap" title="{% translate 'Public bundles' %}">{% translate "Public" %} {{ summary.public }}</span>
-                    <span class="badge badge-warning badge-sm whitespace-nowrap" title="{% translate 'Academic bundles' %}">{% translate "Academic" %} {{ summary.academic }}</span>
-                    <span class="badge badge-sm bg-amber-600 text-white border-amber-600 whitespace-nowrap" title="{% translate 'Restricted bundles' %}">{% translate "Restricted" %} {{ summary.restricted }}</span>
+                    {% if summary.public %}<span class="badge badge-success badge-sm whitespace-nowrap" title="{% translate 'Public bundles' %}">{% translate "Public" %} {{ summary.public }}</span>{% endif %}
+                    {% if summary.academic %}<span class="badge badge-warning badge-sm whitespace-nowrap" title="{% translate 'Academic bundles' %}">{% translate "Academic" %} {{ summary.academic }}</span>{% endif %}
+                    {% if summary.restricted %}<span class="badge badge-sm bg-amber-600 text-white border-amber-600 whitespace-nowrap" title="{% translate 'Restricted bundles' %}">{% translate "Restricted" %} {{ summary.restricted }}</span>{% endif %}
                   </div>
                 {% else %}
                   <span class="text-xs text-base-content/50">{% translate "No bundles" %}</span>
