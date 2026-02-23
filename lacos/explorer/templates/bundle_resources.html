@@ -107,7 +107,7 @@
                           </svg>
                           {% translate "Play" %}
                         </a>
-                        {% elif resource|is_media_type:"image" or resource|is_media_type:"pdf" or resource|is_media_type:"xml" or resource.mime_type == "text/x-eaf+xml" or resource.file_name|lower|slice:"-4:" == ".eaf" or resource.file_name|lower|slice:"-5:" == ".elan" %}
+                        {% elif resource|is_media_type:"image" or resource|is_media_type:"pdf" or resource|is_media_type:"xml" %}
                         <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view" 
                            hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view"
                            hx-target="#resource-modal-content"
@@ -164,7 +164,7 @@
                           </svg>
                           {% translate "Download" %}
                         </a>
-                        {% if resource.mime_type == "text/x-eaf+xml" or resource.file_name|lower|slice:"-4:" == ".eaf" or resource.file_name|lower|slice:"-5:" == ".elan" %}
+                        {% if resource|is_annotation %}
                         <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play"
                            hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play"
                            hx-target="#resource-modal-content"

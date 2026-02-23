@@ -8,6 +8,7 @@ from django.template.defaultfilters import stringfilter
 from lacos.explorer.identifier_display import format_identifier_html
 from lacos.explorer.media_utils import (
     determine_media_type,
+    is_annotation_file as media_utils_is_annotation_file,
     is_media_type as media_utils_is_media_type,
 )
 
@@ -166,6 +167,17 @@ def is_media_type(resource, target_type: str) -> bool:
         getattr(resource, "mime_type", None),
         getattr(resource, "file_name", None),
         target_type,
+    )
+
+
+@register.filter
+def is_annotation(resource) -> bool:
+    """Return True when the resource is an ELAN annotation file (.eaf/.elan)."""
+    if not resource:
+        return False
+    return media_utils_is_annotation_file(
+        getattr(resource, "mime_type", None),
+        getattr(resource, "file_name", None),
     )
 
 

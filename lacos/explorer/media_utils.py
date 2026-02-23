@@ -51,6 +51,7 @@ IMAGE_EXTENSIONS = {
 
 PDF_EXTENSIONS = {".pdf"}
 XML_EXTENSIONS = {".xml", ".imdi", ".cmdi"}
+ANNOTATION_EXTENSIONS = {".eaf", ".elan"}
 
 
 def _normalize_mime(mime_type: Optional[str]) -> str:
@@ -113,6 +114,18 @@ def is_media_type(
         return False
     detected = determine_media_type(mime_type, file_name)
     return detected == target_type.strip().lower()
+
+
+def is_annotation_file(
+    mime_type: Optional[str],
+    file_name: Optional[str],
+) -> bool:
+    """Return True when the resource is an ELAN annotation file (.eaf/.elan)."""
+    normalized = _normalize_mime(mime_type)
+    if normalized == "text/x-eaf+xml":
+        return True
+    ext = _extract_extension(file_name)
+    return ext in ANNOTATION_EXTENSIONS
 
 
 def guess_source_mime_type(

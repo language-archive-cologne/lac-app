@@ -7,7 +7,7 @@ from urllib.parse import unquote
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Q
 
-from lacos.explorer.media_utils import determine_media_type
+from lacos.explorer.media_utils import determine_media_type, is_annotation_file
 from lacos.storage.models.s3_resource_location import S3ResourceLocation
 
 
@@ -133,13 +133,26 @@ def prepare_resource_lists(
     written = [res for res in written if res]
     other = [res for res in other if res]
 
-    media_candidates = [
+    # Move audio/video from other -> media
+    media_from_other = [
         res for res in other
         if getattr(res, "detected_media_type", None) in {"audio", "video"}
     ]
-    if media_candidates:
-        media.extend(media_candidates)
-        other = [res for res in other if res not in media_candidates]
+    if media_from_other:
+        media.extend(media_from_other)
+        other = [res for res in other if res not in media_from_other]
+
+    # Move ELAN annotation files (.eaf/.elan) from written -> media
+    annotations_from_written = [
+        res for res in written
+        if is_annotation_file(
+            getattr(res, "mime_type", None),
+            getattr(res, "file_name", None),
+        )
+    ]
+    if annotations_from_written:
+        media.extend(annotations_from_written)
+        written = [res for res in written if res not in annotations_from_written]
 
     return media, written, other
 
