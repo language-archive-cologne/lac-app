@@ -209,6 +209,19 @@
                                       <path d="M8 5.14v14.72a1 1 0 001.5.86l11-7.36a1 1 0 000-1.72l-11-7.36A1 1 0 008 5.14z" />
                                     </svg>
                                   </a>
+                                {% elif resource|is_media_type:"image" or resource|is_media_type:"pdf" or resource|is_media_type:"xml" %}
+                                  <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view"
+                                     hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view"
+                                     hx-target="#resource-modal-content"
+                                     hx-swap="innerHTML"
+                                     hx-push-url="false"
+                                     class="btn btn-circle btn-secondary btn-xs"
+                                     title="{% translate 'View' %}">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-[1em]">
+                                      <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
+                                      <path fill-rule="evenodd" d="M1.323 11.447C2.811 6.976 7.028 3.75 12.001 3.75c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113-1.487 4.471-5.705 7.697-10.677 7.697-4.97 0-9.186-3.223-10.675-7.69a1.762 1.762 0 010-1.113zM17.25 12a5.25 5.25 0 11-10.5 0 5.25 5.25 0 0110.5 0z" clip-rule="evenodd" />
+                                    </svg>
+                                  </a>
                                 {% endif %}
                               </div>
                             </li>
@@ -350,11 +363,11 @@
                                      hx-target="#resource-modal-content"
                                      hx-swap="innerHTML"
                                      hx-push-url="false"
-                                     class="btn btn-xs btn-ghost text-secondary"
-                                     title="View">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                     class="btn btn-circle btn-secondary btn-xs"
+                                     title="{% translate 'View' %}">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-[1em]">
+                                      <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
+                                      <path fill-rule="evenodd" d="M1.323 11.447C2.811 6.976 7.028 3.75 12.001 3.75c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113-1.487 4.471-5.705 7.697-10.677 7.697-4.97 0-9.186-3.223-10.675-7.69a1.762 1.762 0 010-1.113zM17.25 12a5.25 5.25 0 11-10.5 0 5.25 5.25 0 0110.5 0z" clip-rule="evenodd" />
                                     </svg>
                                   </a>
                                 {% endif %}
