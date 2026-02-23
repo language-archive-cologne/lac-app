@@ -5,7 +5,7 @@ from django.http import QueryDict
 from lacos.explorer.advanced_search import (
     BUNDLE_FIELD_DEFINITIONS,
     COLLECTION_FIELD_DEFINITIONS,
-    parse_advanced_params,
+    parse_search_rows,
 )
 
 
@@ -14,20 +14,20 @@ class TestCollectionFieldDefinitions:
         assert len(COLLECTION_FIELD_DEFINITIONS) > 0
 
     def test_expected_fields_present(self):
-        names = [d.param_name for d in COLLECTION_FIELD_DEFINITIONS]
-        assert "field_title" in names
-        assert "field_description" in names
-        assert "field_keyword" in names
-        assert "field_language" in names
-        assert "field_location" in names
-        assert "field_creator" in names
-        assert "field_contributor" in names
-        assert "field_grant_id" in names
-        assert "field_data_provider" in names
+        keys = [d.key for d in COLLECTION_FIELD_DEFINITIONS]
+        assert "title" in keys
+        assert "description" in keys
+        assert "keyword" in keys
+        assert "language" in keys
+        assert "location" in keys
+        assert "creator" in keys
+        assert "contributor" in keys
+        assert "grant_id" in keys
+        assert "data_provider" in keys
 
     def test_all_have_required_attributes(self):
         for defn in COLLECTION_FIELD_DEFINITIONS:
-            assert defn.param_name
+            assert defn.key
             assert defn.label
             assert defn.orm_lookups
 
@@ -37,56 +37,92 @@ class TestBundleFieldDefinitions:
         assert len(BUNDLE_FIELD_DEFINITIONS) > 0
 
     def test_bundle_specific_fields_present(self):
-        names = [d.param_name for d in BUNDLE_FIELD_DEFINITIONS]
-        assert "field_collection" in names
-        assert "field_topic" in names
+        keys = [d.key for d in BUNDLE_FIELD_DEFINITIONS]
+        assert "collection" in keys
+        assert "topic" in keys
 
     def test_no_data_provider(self):
-        names = [d.param_name for d in BUNDLE_FIELD_DEFINITIONS]
-        assert "field_data_provider" not in names
+        keys = [d.key for d in BUNDLE_FIELD_DEFINITIONS]
+        assert "data_provider" not in keys
 
 
-class TestParseAdvancedParams:
+class TestParseSearchRows:
     def test_empty_params(self):
-        result = parse_advanced_params(QueryDict(""), COLLECTION_FIELD_DEFINITIONS)
-        assert result == {}
+        result = parse_search_rows(QueryDict(""), COLLECTION_FIELD_DEFINITIONS)
+        assert result == []
 
-    def test_extracts_field_params(self):
-        result = parse_advanced_params(
-            QueryDict("field_title=Senufo&field_description=music"),
+    def test_single_row(self):
+        result = parse_search_rows(
+            QueryDict("row_0_field=title&row_0_value=Senufo"),
             COLLECTION_FIELD_DEFINITIONS,
         )
-        assert result["field_title"] == "Senufo"
-        assert result["field_description"] == "music"
+        assert len(result) == 1
+        assert result[0].field_key == "title"
+        assert result[0].value == "Senufo"
+        assert result[0].index == 0
 
-    def test_ignores_non_field_params(self):
-        result = parse_advanced_params(
-            QueryDict("q=test&sort=name&field_title=X"),
+    def test_multiple_rows(self):
+        result = parse_search_rows(
+            QueryDict("row_0_field=title&row_0_value=Senufo&row_1_field=language&row_1_value=Bambara"),
             COLLECTION_FIELD_DEFINITIONS,
         )
-        assert "q" not in result
-        assert "sort" not in result
-        assert result["field_title"] == "X"
-
-    def test_strips_whitespace(self):
-        result = parse_advanced_params(
-            QueryDict("field_title=+Senufo+"),
-            COLLECTION_FIELD_DEFINITIONS,
-        )
-        assert result["field_title"] == "Senufo"
+        assert len(result) == 2
+        assert result[0].field_key == "title"
+        assert result[0].value == "Senufo"
+        assert result[1].field_key == "language"
+        assert result[1].value == "Bambara"
 
     def test_skips_empty_values(self):
-        result = parse_advanced_params(
-            QueryDict("field_title=&field_description=music"),
+        result = parse_search_rows(
+            QueryDict("row_0_field=title&row_0_value=&row_1_field=language&row_1_value=Bambara"),
             COLLECTION_FIELD_DEFINITIONS,
         )
-        assert "field_title" not in result
-        assert result["field_description"] == "music"
+        assert len(result) == 1
+        assert result[0].field_key == "language"
 
-    def test_ignores_unknown_field_params(self):
-        result = parse_advanced_params(
-            QueryDict("field_bogus=test&field_title=X"),
+    def test_skips_invalid_field_keys(self):
+        result = parse_search_rows(
+            QueryDict("row_0_field=bogus&row_0_value=test&row_1_field=title&row_1_value=X"),
             COLLECTION_FIELD_DEFINITIONS,
         )
-        assert "field_bogus" not in result
-        assert result["field_title"] == "X"
+        assert len(result) == 1
+        assert result[0].field_key == "title"
+
+    def test_strips_whitespace(self):
+        result = parse_search_rows(
+            QueryDict("row_0_field=title&row_0_value=+Senufo+"),
+            COLLECTION_FIELD_DEFINITIONS,
+        )
+        assert len(result) == 1
+        assert result[0].value == "Senufo"
+
+    def test_ignores_non_row_params(self):
+        result = parse_search_rows(
+            QueryDict("q=test&sort=name&row_0_field=title&row_0_value=X"),
+            COLLECTION_FIELD_DEFINITIONS,
+        )
+        assert len(result) == 1
+        assert result[0].field_key == "title"
+
+    def test_handles_gaps_in_indices(self):
+        result = parse_search_rows(
+            QueryDict("row_0_field=title&row_0_value=A&row_5_field=language&row_5_value=B"),
+            COLLECTION_FIELD_DEFINITIONS,
+        )
+        assert len(result) == 2
+        assert result[0].index == 0
+        assert result[1].index == 5
+
+    def test_skips_row_missing_field(self):
+        result = parse_search_rows(
+            QueryDict("row_0_value=Senufo"),
+            COLLECTION_FIELD_DEFINITIONS,
+        )
+        assert result == []
+
+    def test_skips_row_missing_value(self):
+        result = parse_search_rows(
+            QueryDict("row_0_field=title"),
+            COLLECTION_FIELD_DEFINITIONS,
+        )
+        assert result == []

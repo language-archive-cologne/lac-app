@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from functools import reduce
 from operator import or_
@@ -12,41 +13,50 @@ from django.http import QueryDict
 
 @dataclass(frozen=True)
 class AdvancedFieldDefinition:
-    """Maps a GET param to one or more ORM icontains lookups."""
+    """Maps a field key to one or more ORM icontains lookups."""
 
-    param_name: str
+    key: str
     label: str
     orm_lookups: list[str] = field(default_factory=list)
     placeholder: str = ""
 
 
+@dataclass
+class SearchRow:
+    """A single row in the dynamic query builder."""
+
+    field_key: str
+    value: str
+    index: int = 0
+
+
 COLLECTION_FIELD_DEFINITIONS: list[AdvancedFieldDefinition] = [
     AdvancedFieldDefinition(
-        param_name="field_title",
+        key="title",
         label="Title",
         orm_lookups=["general_info__display_title__icontains"],
         placeholder="e.g. Senufo",
     ),
     AdvancedFieldDefinition(
-        param_name="field_description",
+        key="description",
         label="Description",
         orm_lookups=["general_info__description__icontains"],
         placeholder="e.g. music recordings",
     ),
     AdvancedFieldDefinition(
-        param_name="field_keyword",
+        key="keyword",
         label="Keyword",
         orm_lookups=["general_info__keywords__value__icontains"],
         placeholder="e.g. phonetics",
     ),
     AdvancedFieldDefinition(
-        param_name="field_language",
+        key="language",
         label="Language",
         orm_lookups=["general_info__object_languages__name__icontains"],
         placeholder="e.g. Bambara",
     ),
     AdvancedFieldDefinition(
-        param_name="field_location",
+        key="location",
         label="Location / Country",
         orm_lookups=[
             "general_info__location__location_name__icontains",
@@ -57,7 +67,7 @@ COLLECTION_FIELD_DEFINITIONS: list[AdvancedFieldDefinition] = [
         placeholder="e.g. Mali",
     ),
     AdvancedFieldDefinition(
-        param_name="field_creator",
+        key="creator",
         label="Creator",
         orm_lookups=[
             "publication_info__creators__family_name__icontains",
@@ -66,7 +76,7 @@ COLLECTION_FIELD_DEFINITIONS: list[AdvancedFieldDefinition] = [
         placeholder="e.g. Vydrin",
     ),
     AdvancedFieldDefinition(
-        param_name="field_contributor",
+        key="contributor",
         label="Contributor",
         orm_lookups=[
             "publication_info__contributors__family_name__icontains",
@@ -76,13 +86,13 @@ COLLECTION_FIELD_DEFINITIONS: list[AdvancedFieldDefinition] = [
         placeholder="e.g. annotator",
     ),
     AdvancedFieldDefinition(
-        param_name="field_grant_id",
+        key="grant_id",
         label="Grant ID",
         orm_lookups=["project_infos__funder_infos__grant_identifier__icontains"],
         placeholder="e.g. DFG-123",
     ),
     AdvancedFieldDefinition(
-        param_name="field_data_provider",
+        key="data_provider",
         label="Data Provider",
         orm_lookups=["publication_info__data_provider__icontains"],
         placeholder="e.g. ELAR",
@@ -92,31 +102,31 @@ COLLECTION_FIELD_DEFINITIONS: list[AdvancedFieldDefinition] = [
 
 BUNDLE_FIELD_DEFINITIONS: list[AdvancedFieldDefinition] = [
     AdvancedFieldDefinition(
-        param_name="field_title",
+        key="title",
         label="Title",
         orm_lookups=["general_info__display_title__icontains"],
         placeholder="e.g. Senufo",
     ),
     AdvancedFieldDefinition(
-        param_name="field_description",
+        key="description",
         label="Description",
         orm_lookups=["general_info__description__icontains"],
         placeholder="e.g. music recordings",
     ),
     AdvancedFieldDefinition(
-        param_name="field_keyword",
+        key="keyword",
         label="Keyword",
         orm_lookups=["general_info__keywords__value__icontains"],
         placeholder="e.g. phonetics",
     ),
     AdvancedFieldDefinition(
-        param_name="field_language",
+        key="language",
         label="Language",
         orm_lookups=["general_info__object_languages__name__icontains"],
         placeholder="e.g. Bambara",
     ),
     AdvancedFieldDefinition(
-        param_name="field_location",
+        key="location",
         label="Location / Country",
         orm_lookups=[
             "general_info__location__location_facet__icontains",
@@ -126,7 +136,7 @@ BUNDLE_FIELD_DEFINITIONS: list[AdvancedFieldDefinition] = [
         placeholder="e.g. Mali",
     ),
     AdvancedFieldDefinition(
-        param_name="field_creator",
+        key="creator",
         label="Creator",
         orm_lookups=[
             "publication_info__creators__family_name__icontains",
@@ -135,7 +145,7 @@ BUNDLE_FIELD_DEFINITIONS: list[AdvancedFieldDefinition] = [
         placeholder="e.g. Vydrin",
     ),
     AdvancedFieldDefinition(
-        param_name="field_contributor",
+        key="contributor",
         label="Contributor",
         orm_lookups=[
             "publication_info__contributors__family_name__icontains",
@@ -146,13 +156,13 @@ BUNDLE_FIELD_DEFINITIONS: list[AdvancedFieldDefinition] = [
         placeholder="e.g. annotator",
     ),
     AdvancedFieldDefinition(
-        param_name="field_grant_id",
+        key="grant_id",
         label="Grant ID",
         orm_lookups=["projects__funder_infos__grant_identifier__icontains"],
         placeholder="e.g. DFG-123",
     ),
     AdvancedFieldDefinition(
-        param_name="field_collection",
+        key="collection",
         label="Collection",
         orm_lookups=[
             "structural_info__is_member_of_collection__identifier__icontains",
@@ -161,54 +171,66 @@ BUNDLE_FIELD_DEFINITIONS: list[AdvancedFieldDefinition] = [
         placeholder="e.g. Dogon Languages",
     ),
     AdvancedFieldDefinition(
-        param_name="field_topic",
+        key="topic",
         label="Topic",
         orm_lookups=["structural_info__bundle_topics__name__icontains"],
         placeholder="e.g. narrative",
     ),
 ]
 
+# Regex to match row_N_field / row_N_value params
+_ROW_PARAM_RE = re.compile(r"^row_(\d+)_(field|value)$")
 
-def parse_advanced_params(
+
+def parse_search_rows(
     params: QueryDict,
     definitions: list[AdvancedFieldDefinition],
-) -> dict[str, str]:
-    """Extract advanced field values from query params.
+) -> list[SearchRow]:
+    """Parse dynamic query builder rows from GET params.
 
-    Returns a dict mapping param_name -> stripped value for non-empty fields.
+    Expects pairs: row_0_field=title, row_0_value=Senufo, row_1_field=language, ...
+    Returns list of SearchRow with valid, non-empty field+value pairs.
     """
-    known = {d.param_name for d in definitions}
-    result: dict[str, str] = {}
-    for key in params:
-        if key not in known:
+    valid_keys = {d.key for d in definitions}
+    raw: dict[int, dict[str, str]] = {}
+
+    for param_key in params:
+        match = _ROW_PARAM_RE.match(param_key)
+        if not match:
             continue
-        value = params.get(key, "").strip()
-        if value:
-            result[key] = value
-    return result
+        index = int(match.group(1))
+        part = match.group(2)  # "field" or "value"
+        raw.setdefault(index, {})[part] = params.get(param_key, "").strip()
+
+    rows: list[SearchRow] = []
+    for index in sorted(raw):
+        field_key = raw[index].get("field", "")
+        value = raw[index].get("value", "")
+        if field_key in valid_keys and value:
+            rows.append(SearchRow(field_key=field_key, value=value, index=index))
+    return rows
 
 
-def apply_advanced_filters(
+def apply_search_rows(
     qs: QuerySet,
-    params: QueryDict,
+    rows: list[SearchRow],
     definitions: list[AdvancedFieldDefinition],
 ) -> QuerySet:
-    """Apply per-field icontains filters to the queryset.
+    """Apply dynamic search rows to the queryset.
 
-    Each non-empty field_* param narrows the queryset (AND between fields).
+    Each row narrows the queryset (AND between rows).
     When a field maps to multiple ORM lookups, they are OR-combined.
     """
-    parsed = parse_advanced_params(params, definitions)
-    if not parsed:
+    if not rows:
         return qs
 
-    lookup_map = {d.param_name: d.orm_lookups for d in definitions}
+    lookup_map = {d.key: d.orm_lookups for d in definitions}
 
-    for param_name, value in parsed.items():
-        lookups = lookup_map.get(param_name, [])
+    for row in rows:
+        lookups = lookup_map.get(row.field_key, [])
         if not lookups:
             continue
-        q = reduce(or_, (Q(**{lookup: value}) for lookup in lookups))
+        q = reduce(or_, (Q(**{lookup: row.value}) for lookup in lookups))
         qs = qs.filter(q)
 
     return qs.distinct()
