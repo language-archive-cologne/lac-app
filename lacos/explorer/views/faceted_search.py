@@ -7,11 +7,6 @@ from django.shortcuts import render
 from django.views.generic import ListView
 
 from lacos.blam.models import Collection
-from lacos.explorer.advanced_search import (
-    COLLECTION_FIELD_DEFINITIONS,
-    apply_advanced_filters,
-    parse_advanced_params,
-)
 from lacos.explorer.facets import FACET_CACHE_KEY, FacetService, FacetedSearchResult
 from lacos.explorer.text_search import apply_text_search
 from lacos.storage.models.acl_permissions import ACLPermissions
@@ -47,11 +42,8 @@ class FacetedSearchView(ListView):
         if search_query:
             base_qs = apply_text_search(base_qs, search_query)
 
-        base_qs = apply_advanced_filters(base_qs, self.request.GET, COLLECTION_FIELD_DEFINITIONS)
-
-        # Cache facet counts when there is no text search or advanced filters.
-        advanced_values = parse_advanced_params(self.request.GET, COLLECTION_FIELD_DEFINITIONS)
-        facet_cache_key = FACET_CACHE_KEY if not search_query and not advanced_values else None
+        # Cache facet counts when there is no text search (base case).
+        facet_cache_key = FACET_CACHE_KEY if not search_query else None
         self._faceted_result = FacetService().search(
             self.request.GET, base_qs, cache_key=facet_cache_key
         )
@@ -100,18 +92,6 @@ class FacetedSearchView(ListView):
         context["current_sort"] = self.request.GET.get("sort", "name")
         context["current_order"] = self.request.GET.get("order", "asc")
         context["current_params"] = self.request.GET.copy()
-        advanced_values = parse_advanced_params(self.request.GET, COLLECTION_FIELD_DEFINITIONS)
-        context["advanced_fields"] = [
-            {"param_name": d.param_name, "label": d.label, "placeholder": d.placeholder, "value": advanced_values.get(d.param_name, "")}
-            for d in COLLECTION_FIELD_DEFINITIONS
-        ]
-        context["is_advanced_active"] = bool(advanced_values)
-        context["advanced_active_filters"] = [
-            {"param_name": k, "label": next((d.label for d in COLLECTION_FIELD_DEFINITIONS if d.param_name == k), k), "value": v}
-            for k, v in advanced_values.items()
-        ]
-        if advanced_values:
-            context["has_active_filters"] = True
         return context
 
     def render_to_response(self, context, **kwargs):

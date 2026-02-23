@@ -7,11 +7,6 @@ from django.shortcuts import render
 from django.views.generic import ListView
 
 from lacos.blam.models import Bundle
-from lacos.explorer.advanced_search import (
-    BUNDLE_FIELD_DEFINITIONS,
-    apply_advanced_filters,
-    parse_advanced_params,
-)
 from lacos.explorer.facets import (
     BUNDLE_FACET_CACHE_KEY,
     BUNDLE_FACET_DEFINITIONS,
@@ -50,10 +45,7 @@ class BundleFacetedSearchView(ListView):
         if search_query:
             base_qs = apply_text_search(base_qs, search_query)
 
-        base_qs = apply_advanced_filters(base_qs, self.request.GET, BUNDLE_FIELD_DEFINITIONS)
-
-        advanced_values = parse_advanced_params(self.request.GET, BUNDLE_FIELD_DEFINITIONS)
-        facet_cache_key = BUNDLE_FACET_CACHE_KEY if not search_query and not advanced_values else None
+        facet_cache_key = BUNDLE_FACET_CACHE_KEY if not search_query else None
         self._faceted_result = FacetService(
             definitions=BUNDLE_FACET_DEFINITIONS
         ).search(self.request.GET, base_qs, cache_key=facet_cache_key)
@@ -108,18 +100,6 @@ class BundleFacetedSearchView(ListView):
         context["current_sort"] = self.request.GET.get("sort", "name")
         context["current_order"] = self.request.GET.get("order", "asc")
         context["current_params"] = self.request.GET.copy()
-        advanced_values = parse_advanced_params(self.request.GET, BUNDLE_FIELD_DEFINITIONS)
-        context["advanced_fields"] = [
-            {"param_name": d.param_name, "label": d.label, "placeholder": d.placeholder, "value": advanced_values.get(d.param_name, "")}
-            for d in BUNDLE_FIELD_DEFINITIONS
-        ]
-        context["is_advanced_active"] = bool(advanced_values)
-        context["advanced_active_filters"] = [
-            {"param_name": k, "label": next((d.label for d in BUNDLE_FIELD_DEFINITIONS if d.param_name == k), k), "value": v}
-            for k, v in advanced_values.items()
-        ]
-        if advanced_values:
-            context["has_active_filters"] = True
         return context
 
     def render_to_response(self, context, **kwargs):
