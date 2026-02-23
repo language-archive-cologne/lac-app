@@ -388,14 +388,14 @@
                   {% if can_read_bundle %}
                   <div class="flex space-x-2">
                     <button type="button"
-                       class="btn btn-primary btn-xs single-download-btn"
+                       class="btn btn-circle btn-primary btn-sm single-download-btn"
+                       title="{% translate 'Download' %}"
                        data-bucket="{{ resource.s3_location.s3_bucket|default:'' }}"
                        data-key="{{ resource.s3_location.s3_key|default:'' }}"
                        data-filename="{{ resource.file_name }}">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="size-[1.2em]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                       </svg>
-                      {% translate "Download" %}
                     </button>
 
                     {% if resource|is_media_type:"audio" or resource|is_media_type:"video" or resource|is_annotation %}
@@ -416,12 +416,12 @@
                        hx-target="#resource-modal-content"
                        hx-swap="innerHTML"
                        hx-push-url="false"
-                       class="btn btn-secondary btn-xs">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                       class="btn btn-circle btn-secondary btn-sm"
+                       title="{% translate 'View' %}">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="size-[1.2em]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                       </svg>
-                    {% translate "View" %}
                   </a>
                   {% endif %}
                   </div>
@@ -491,14 +491,14 @@
                   {% if can_read_bundle %}
                   <div class="flex space-x-2">
                     <button type="button"
-                       class="btn btn-primary btn-xs single-download-btn"
+                       class="btn btn-circle btn-primary btn-sm single-download-btn"
+                       title="{% translate 'Download' %}"
                        data-bucket="{{ resource.s3_location.s3_bucket|default:'' }}"
                        data-key="{{ resource.s3_location.s3_key|default:'' }}"
                        data-filename="{{ resource.file_name }}">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="size-[1.2em]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                       </svg>
-                      {% translate "Download" %}
                     </button>
 
                     {% if resource|is_media_type:"audio" or resource|is_media_type:"video" or resource|is_annotation %}
@@ -519,12 +519,12 @@
                        hx-target="#resource-modal-content"
                        hx-swap="innerHTML"
                        hx-push-url="false"
-                       class="btn btn-secondary btn-xs">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                       class="btn btn-circle btn-secondary btn-sm"
+                       title="{% translate 'View' %}">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="size-[1.2em]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                       </svg>
-                      {% translate "View" %}
                     </a>
                     {% endif %}
                   </div>
@@ -598,14 +598,14 @@
                   {% if can_read_bundle %}
                   <div class="flex space-x-2">
                     <button type="button"
-                       class="btn btn-primary btn-xs single-download-btn"
+                       class="btn btn-circle btn-primary btn-sm single-download-btn"
+                       title="{% translate 'Download' %}"
                        data-bucket="{{ resource.s3_location.s3_bucket|default:'' }}"
                        data-key="{{ resource.s3_location.s3_key|default:'' }}"
                        data-filename="{{ resource.file_name }}">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="size-[1.2em]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                       </svg>
-                      {% translate "Download" %}
                     </button>
 
                     {% if resource|is_media_type:"audio" or resource|is_media_type:"video" %}
@@ -626,12 +626,12 @@
                        hx-target="#resource-modal-content"
                        hx-swap="innerHTML"
                        hx-push-url="false"
-                       class="btn btn-secondary btn-xs">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                       class="btn btn-circle btn-secondary btn-sm"
+                       title="{% translate 'View' %}">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="size-[1.2em]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                       </svg>
-                      {% translate "View" %}
                     </a>
                     {% endif %}
                   </div>
@@ -732,15 +732,15 @@
                   {% if can_read_bundle %}
                     <button
                        type="button"
-                       class="btn btn-primary btn-sm single-download-btn"
+                       class="btn btn-circle btn-primary btn-sm single-download-btn"
+                       title="{% translate 'Download' %}"
                        data-bucket="{{ metadata_file.s3_location.s3_bucket|default:'' }}"
                        data-key="{{ metadata_file.s3_location.s3_key|default:'' }}"
                        data-filename="{{ metadata_file.file_name }}"
                        data-resource-url="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=metadata_file.id %}">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="size-[1.2em]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                       </svg>
-                      <span class="hidden sm:inline ml-1">{% translate "Download" %}</span>
                     </button>
 
                     {% if metadata_file|is_media_type:"audio" or metadata_file|is_media_type:"video" or metadata_file|is_annotation %}
@@ -761,12 +761,12 @@
                        hx-target="#resource-modal-content"
                        hx-swap="innerHTML"
                        hx-push-url="false"
-                       class="btn btn-secondary btn-sm">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                       class="btn btn-circle btn-secondary btn-sm"
+                       title="{% translate 'View' %}">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="size-[1.2em]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                       </svg>
-                      <span class="hidden sm:inline ml-1">{% translate "View" %}</span>
                     </a>
                     {% endif %}
                   {% else %}
