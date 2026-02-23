@@ -65,7 +65,7 @@ def parse_elan_text(elan_text: str) -> dict:
         if media_url:
             media_files.append(media_url.strip())
 
-    tier_headers: set[str] = set()
+    tier_headers: dict[str, None] = {}
     annotations_map: dict[str, dict] = {}
 
     def ensure_entry(annotation_id: str) -> dict:
@@ -85,9 +85,16 @@ def parse_elan_text(elan_text: str) -> dict:
             return None
         return (value or 0) / 1000
 
+    # Maps each REF_ANNOTATION's own ID to its ANNOTATION_REF target.
+    # Used to resolve multi-level chains (grandchild -> child -> root).
+    ref_chain: dict[str, str] = {}
+    # Deferred REF_ANNOTATION data: (tier_id, reference_id, value_text).
+    # Processed after all tiers so the full reference chain is available.
+    deferred_refs: list[tuple[str, str, str]] = []
+
     for tier in root.findall("TIER"):
         tier_id = tier.attrib.get("TIER_ID", "Tier")
-        tier_headers.add(tier_id)
+        tier_headers[tier_id] = None
 
         for annotation in tier.findall("./ANNOTATION"):
             alignable = annotation.find("ALIGNABLE_ANNOTATION")
@@ -116,11 +123,13 @@ def parse_elan_text(elan_text: str) -> dict:
                     entry.setdefault("tiers", {})[tier_id] = value_text
 
             elif ref_annotation is not None:
+                ann_id = ref_annotation.attrib.get("ANNOTATION_ID")
                 reference_id = ref_annotation.attrib.get("ANNOTATION_REF")
                 if not reference_id:
                     continue
 
-                entry = ensure_entry(reference_id)
+                if ann_id:
+                    ref_chain[ann_id] = reference_id
 
                 value_element = ref_annotation.find("ANNOTATION_VALUE")
                 value_text = (
@@ -130,14 +139,28 @@ def parse_elan_text(elan_text: str) -> dict:
                 )
 
                 if value_text:
-                    entry.setdefault("tiers", {})[tier_id] = value_text
+                    deferred_refs.append((tier_id, reference_id, value_text))
+
+    # Resolve multi-level reference chains to the root ALIGNABLE_ANNOTATION.
+    def resolve_root(ref_id: str) -> str:
+        visited: set[str] = set()
+        current = ref_id
+        while current in ref_chain and current not in visited:
+            visited.add(current)
+            current = ref_chain[current]
+        return current
+
+    for tier_id, reference_id, value_text in deferred_refs:
+        root_id = resolve_root(reference_id)
+        entry = ensure_entry(root_id)
+        entry.setdefault("tiers", {})[tier_id] = value_text
 
     annotations = list(annotations_map.values())
 
     if "Tier" in tier_headers and len(tier_headers) > 1:
-        tier_headers.discard("Tier")
+        del tier_headers["Tier"]
 
-    tier_list = sorted(tier_headers)
+    tier_list = list(tier_headers)
 
     for entry in annotations:
         entry['ordered_tiers'] = [

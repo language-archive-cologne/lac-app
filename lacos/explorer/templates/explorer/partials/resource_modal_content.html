@@ -227,8 +227,7 @@
             <span>{% translate "Annotations" %}</span>
             <span class="text-xs text-slate-400">{{ elan_context.annotations|length }} {% translate "segments" %}</span>
           </div>
-          <div class="overflow-x-auto">
-            <div class="max-h-[65vh] overflow-y-auto">
+          <div class="max-h-[65vh] overflow-auto">
             {% if elan_context and elan_context.annotations %}
               <table class="min-w-full divide-y divide-slate-200 text-sm whitespace-nowrap">
                 <thead class="bg-slate-50 sticky top-0 z-10 shadow-sm">
@@ -291,7 +290,6 @@
             {% else %}
               <p class="px-4 py-6 text-sm text-slate-500">{% translate "No annotations were found in this ELAN file." %}</p>
             {% endif %}
-            </div>
           </div>
         </div>
       </div>
