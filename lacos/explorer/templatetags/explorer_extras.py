@@ -55,12 +55,12 @@ def facet_remove_url(context, facet_name, value):
 
 @register.simple_tag(takes_context=True)
 def clear_all_filters_url(context):
-    """Remove all facet params and q, keep sort/order only."""
+    """Remove all facet params, field_* params, and q; keep sort/order only."""
     request = context["request"]
     params = request.GET.copy()
 
     for key in list(params.keys()):
-        if key in FACET_PARAM_NAMES or key in ("q", "page"):
+        if key in FACET_PARAM_NAMES or key in ("q", "page") or key.startswith("field_"):
             del params[key]
 
     return f"?{params.urlencode()}" if params else "?"
