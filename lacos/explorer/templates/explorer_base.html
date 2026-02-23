@@ -61,17 +61,67 @@
         }
       };
 
+      // Shared helper: highlight the annotation row matching current playback time
+      const bindAnnotationHighlighting = (viewerRoot) => {
+        const rows = viewerRoot.querySelectorAll('tr[data-annotation-start]');
+        if (!rows.length) return () => {};
+        let activeRow = null;
+        return (currentTime) => {
+          let matched = null;
+          for (const row of rows) {
+            const s = parseFloat(row.dataset.annotationStart);
+            const e = parseFloat(row.dataset.annotationEnd);
+            if (!Number.isNaN(s) && !Number.isNaN(e) && currentTime >= s && currentTime < e) {
+              matched = row;
+              break;
+            }
+          }
+          if (matched !== activeRow) {
+            if (activeRow) activeRow.classList.remove('bg-blue-100');
+            activeRow = matched;
+            if (activeRow) {
+              activeRow.classList.add('bg-blue-100');
+              activeRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+          }
+        };
+      };
+
       const initializeElanControls = () => {
         const viewerRoot = modalContent.querySelector('[data-viewer-type]');
-        if (!viewerRoot || viewerRoot.dataset.viewerType !== 'elan') {
+        if (!viewerRoot || viewerRoot.dataset.viewerType !== 'elan') return;
+
+        // Try AudioPlayer first (when peaks data is available)
+        const playerInitialized = initializeAudioPlayer();
+
+        if (playerInitialized && audioPlayer && audioPlayer.wavesurfer) {
+          const ws = audioPlayer.wavesurfer;
+          const highlight = bindAnnotationHighlighting(viewerRoot);
+
+          // Wire annotation play buttons to WaveSurfer
+          viewerRoot.querySelectorAll('button[data-annotation-start]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              const start = parseFloat(btn.dataset.annotationStart || '');
+              const end = parseFloat(btn.dataset.annotationEnd || '');
+              if (Number.isNaN(start)) return;
+
+              audioPlayer._selectionEndTime = Number.isNaN(end) ? null : end;
+              audioPlayer._selectionPlaybackActive = !Number.isNaN(end);
+              audioPlayer._selectionPlayStartedAt = Date.now();
+              ws.setTime(start);
+              ws.play();
+            });
+          });
+
+          ws.on('timeupdate', highlight);
           return;
         }
 
+        // Fallback: native audio controls (no peaks available)
         const audioElement = viewerRoot.querySelector('audio');
-        if (!audioElement) {
-          return;
-        }
+        if (!audioElement) return;
 
+        const highlight = bindAnnotationHighlighting(viewerRoot);
         let segmentEndTime = null;
         let timeUpdateHandler = null;
 
@@ -82,27 +132,23 @@
           }
         };
 
-        viewerRoot.querySelectorAll('[data-annotation-start]').forEach((button) => {
-          button.addEventListener('click', () => {
-            const start = parseFloat(button.dataset.annotationStart || '');
-            const end = parseFloat(button.dataset.annotationEnd || '');
+        audioElement.addEventListener('timeupdate', () => highlight(audioElement.currentTime));
 
-            if (Number.isNaN(start)) {
-              return;
-            }
+        viewerRoot.querySelectorAll('button[data-annotation-start]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const start = parseFloat(btn.dataset.annotationStart || '');
+            const end = parseFloat(btn.dataset.annotationEnd || '');
+            if (Number.isNaN(start)) return;
 
             try {
               if (timeUpdateHandler) {
                 audioElement.removeEventListener('timeupdate', timeUpdateHandler);
               }
-
               segmentEndTime = Number.isNaN(end) ? null : end;
-
               if (segmentEndTime !== null) {
                 timeUpdateHandler = stopAtSegmentEnd;
                 audioElement.addEventListener('timeupdate', timeUpdateHandler);
               }
-
               audioElement.currentTime = Math.max(start, 0);
               const playPromise = audioElement.play();
               if (playPromise && typeof playPromise.catch === 'function') {
@@ -114,9 +160,7 @@
           }, { once: false });
         });
 
-        audioElement.addEventListener('ended', () => {
-          segmentEndTime = null;
-        });
+        audioElement.addEventListener('ended', () => { segmentEndTime = null; });
       };
 
       const openModal = () => {

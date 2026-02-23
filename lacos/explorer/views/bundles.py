@@ -359,24 +359,34 @@ class ResourceAccessView(View):
                 raise Http404("Direct downloads are not available")
 
             # Resolve precomputed visualization sidecars for audio files
+            # Also resolve for ELAN files that have a linked audio resource
             peaks_url = None
             spectrogram_data_url = None
             spectrogram_available = False
+            sidecar_bucket = None
+            sidecar_key = None
             if detected_media_type == 'audio':
-                peaks_url = self._resolve_peaks_url(resource_service, bucket_name, object_key)
+                sidecar_bucket = bucket_name
+                sidecar_key = object_key
+            elif is_elan and elan_context and elan_context.get('audio_bucket'):
+                sidecar_bucket = elan_context['audio_bucket']
+                sidecar_key = elan_context['audio_key']
+
+            if sidecar_bucket and sidecar_key:
+                peaks_url = self._resolve_peaks_url(resource_service, sidecar_bucket, sidecar_key)
                 spectrogram_available = self._spectrogram_data_exists(
                     resource_service,
-                    bucket_name,
-                    object_key,
+                    sidecar_bucket,
+                    sidecar_key,
                 )
                 if action == 'analyze':
                     if spectrogram_available:
                         spectrogram_data_url = resource_service.generate_presigned_url(
-                            bucket_name,
-                            f"{object_key}.spectrogram.bin",
+                            sidecar_bucket,
+                            f"{sidecar_key}.spectrogram.bin",
                         )
             player_mode = 'simple'
-            if detected_media_type == 'audio':
+            if sidecar_bucket and sidecar_key:
                 has_precomputed_spectrogram = bool(spectrogram_data_url)
                 if action == 'analyze' and has_precomputed_spectrogram:
                     player_mode = 'analyze'
@@ -440,6 +450,8 @@ class ResourceAccessView(View):
 
         audio_url = None
         audio_file_name = None
+        audio_bucket = None
+        audio_key = None
         if audio_resource:
             audio_resolution = resolve_resource_to_presigned(
                 resource_service,
@@ -450,12 +462,16 @@ class ResourceAccessView(View):
             if audio_resolution:
                 audio_url = audio_resolution['url']
                 audio_file_name = getattr(audio_resource, 'file_name', '')
+                audio_bucket = audio_resolution['bucket']
+                audio_key = audio_resolution['key']
 
         return {
             'annotations': elan_data.get('annotations', []),
             'media_files': elan_data.get('media_files', []),
             'audio_url': audio_url,
             'audio_file_name': audio_file_name,
+            'audio_bucket': audio_bucket,
+            'audio_key': audio_key,
             'tier_headers': elan_data.get('tier_headers', []),
         }
 
