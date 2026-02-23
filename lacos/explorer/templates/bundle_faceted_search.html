@@ -62,16 +62,16 @@
     })();
   </script>
 
-  <!-- Top tabs: Collections | Bundles -->
-  <div class="join mb-2">
-    <a href="{% url 'faceted_search' %}{% if search_query %}?q={{ search_query|urlencode }}{% endif %}" class="btn btn-sm join-item btn-ghost">{% translate "Collections" %}</a>
-    <a class="btn btn-sm join-item btn-secondary">{% translate "Bundles" %}</a>
-  </div>
-
-  <!-- Sub tabs: Faceted Search | Field Search -->
-  <div class="join mb-6">
-    <a class="btn btn-sm join-item btn-secondary">{% translate "Faceted Search" %}</a>
-    <a href="{% url 'bundle_field_search' %}" class="btn btn-sm join-item btn-ghost">{% translate "Field Search" %}</a>
+  <!-- Navigation -->
+  <div class="flex flex-col items-start gap-2 mb-6">
+    <div class="join">
+      <a href="{% url 'faceted_search' %}{% if search_query %}?q={{ search_query|urlencode }}{% endif %}" class="btn btn-sm join-item btn-ghost">{% translate "Collections" %}</a>
+      <a class="btn btn-sm join-item btn-secondary">{% translate "Bundles" %}</a>
+    </div>
+    <div class="join">
+      <a class="btn btn-sm join-item btn-secondary">{% translate "Faceted Search" %}</a>
+      <a href="{% url 'bundle_field_search' %}" class="btn btn-sm join-item btn-ghost">{% translate "Field Search" %}</a>
+    </div>
   </div>
 
   <!-- Search bar -->
