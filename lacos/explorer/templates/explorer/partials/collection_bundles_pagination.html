@@ -7,13 +7,6 @@
           Showing {{ start }}–{{ end }} of {{ total }} bundles
         {% endblocktrans %}
       </div>
-      <div class="flex items-center gap-2 text-xs text-base-content/60">
-        <span class="uppercase tracking-widest">{% translate "Sort" %}</span>
-        <span class="rounded-full border border-base-300 bg-base-100 px-2 py-0.5 text-base-content/70">
-          {% if bundle_current_sort == 'access' %}{% translate "Access" %}{% else %}{% translate "Bundle Name" %}{% endif %}
-          {% if bundle_current_order == 'asc' %}↑{% else %}↓{% endif %}
-        </span>
-      </div>
     </div>
     <div class="flex gap-2">
       <button
