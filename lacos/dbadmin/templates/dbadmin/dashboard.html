@@ -1,15 +1,306 @@
 {% extends "base.html" %}
+{% load humanize %}
 
 {% block title %}{{ title }}{% endblock %}
 
 {% block content %}
 <div class="container mx-auto px-4 py-6">
+    <script>
+        document.body.addEventListener('htmx:configRequest', function(evt) {
+            evt.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
+        });
+    </script>
+
     <div class="mb-8">
         <h1 class="text-3xl font-bold">{{ title }}</h1>
         <p class="text-lg text-base-content/70">PostgreSQL stats, tasks, and database management</p>
     </div>
-    <div class="alert alert-info">
-        <span>Dashboard scaffold — tabs coming next.</span>
+
+    <!-- Stats Row -->
+    <div class="stats stats-vertical lg:stats-horizontal shadow w-full mb-8">
+        <div class="stat">
+            <div class="stat-title">Database Size</div>
+            <div class="stat-value text-lg">{{ pg_stats.db_size_pretty }}</div>
+        </div>
+        <div class="stat">
+            <div class="stat-title">Tables</div>
+            <div class="stat-value text-lg">{{ pg_stats.table_count }}</div>
+        </div>
+        <div class="stat">
+            <div class="stat-title">Connections</div>
+            <div class="stat-value text-lg">{{ pg_stats.active_connections }}</div>
+        </div>
+        <div class="stat">
+            <div class="stat-title">Last Backup</div>
+            <div class="stat-value text-lg">
+                {% if backup_summary.last_backup_time %}
+                    {{ backup_summary.last_backup_time|naturaltime }}
+                {% else %}
+                    <span class="text-warning">Never</span>
+                {% endif %}
+            </div>
+            {% if backup_summary.last_status %}
+            <div class="stat-desc">
+                <span class="badge badge-sm {% if backup_summary.last_status == 'success' %}badge-success{% elif backup_summary.last_status == 'failed' %}badge-error{% else %}badge-info{% endif %}">
+                    {{ backup_summary.last_status }}
+                </span>
+            </div>
+            {% endif %}
+        </div>
+        <div class="stat">
+            <div class="stat-title">Uptime</div>
+            <div class="stat-value text-lg">{{ pg_stats.uptime }}</div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs tabs-lifted" role="tablist">
+        <input type="radio" name="dbadmin_tabs" role="tab" class="tab" aria-label="Overview" checked />
+        <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-6">
+            <div
+                id="overview-stats"
+                hx-get="{% url 'dbadmin:stats' %}"
+                hx-trigger="load, every 30s"
+                hx-target="#overview-stats"
+                hx-swap="innerHTML"
+            >
+                <div class="flex items-center justify-center py-10">
+                    <span class="loading loading-spinner loading-md"></span>
+                    <span class="ml-3 text-sm text-base-content/60">Loading overview...</span>
+                </div>
+            </div>
+        </div>
+
+        <input type="radio" name="dbadmin_tabs" role="tab" class="tab" aria-label="Tasks" />
+        <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-6">
+            <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                <!-- Task trigger buttons -->
+                <div class="lg:col-span-2">
+                    <div class="card bg-base-100 shadow">
+                        <div class="card-body">
+                            <h3 class="card-title text-base">Queue Tasks</h3>
+                            <p class="text-sm text-base-content/60 mb-2">Trigger background tasks and monitor them live.</p>
+                            <div class="space-y-2">
+                                <button
+                                    hx-post="{% url 'dbadmin:task_enqueue' 'reindex' %}"
+                                    hx-target="#active-task-list"
+                                    hx-swap="afterbegin"
+                                    class="btn btn-sm btn-primary w-full">
+                                    Reindex search vectors
+                                </button>
+                                <button
+                                    hx-post="{% url 'dbadmin:task_enqueue' 'backup' %}"
+                                    hx-target="#active-task-list"
+                                    hx-swap="afterbegin"
+                                    class="btn btn-sm btn-success w-full">
+                                    Backup database to S3
+                                </button>
+                                <button
+                                    hx-post="{% url 'dbadmin:task_enqueue' 'reindex-collections' %}"
+                                    hx-target="#active-task-list"
+                                    hx-swap="afterbegin"
+                                    class="btn btn-sm btn-secondary w-full">
+                                    Reindex collections from S3 XML
+                                </button>
+                                <button
+                                    hx-post="{% url 'dbadmin:task_enqueue' 'generate-peaks' %}"
+                                    hx-target="#active-task-list"
+                                    hx-swap="afterbegin"
+                                    class="btn btn-sm btn-warning w-full">
+                                    Generate audio sidecars
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Active tasks -->
+                <div class="lg:col-span-3">
+                    <div class="card bg-base-100 shadow">
+                        <div class="card-body">
+                            <h3 class="card-title text-base">Active Tasks</h3>
+                            <div id="active-task-list" class="space-y-3">
+                                {% for task in active_tasks %}
+                                    {% include "dbadmin/partials/task_status.html" with task=task %}
+                                {% empty %}
+                                    <p class="text-sm text-base-content/60">No active tasks.</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Task History -->
+            <div class="mt-6">
+                <div
+                    id="task-history"
+                    hx-get="{% url 'dbadmin:task_history' %}"
+                    hx-trigger="load"
+                    hx-target="#task-history"
+                    hx-swap="innerHTML"
+                >
+                    <div class="flex items-center justify-center py-10">
+                        <span class="loading loading-spinner loading-md"></span>
+                        <span class="ml-3 text-sm text-base-content/60">Loading task history...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <input type="radio" name="dbadmin_tabs" role="tab" class="tab" aria-label="Management" />
+        <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-6">
+            <!-- Metadata stats cards -->
+            <h3 class="text-lg font-semibold mb-4">Metadata Statistics</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="card bg-base-100 shadow">
+                    <div class="card-body">
+                        <h4 class="font-semibold">Collections</h4>
+                        <ul class="mt-3 divide-y divide-base-300 text-sm">
+                            <li class="flex justify-between items-center py-2">
+                                <span>Total</span>
+                                <span class="badge badge-primary badge-sm">{{ metadata_stats.collections.total }}</span>
+                            </li>
+                            <li class="flex justify-between items-center py-2">
+                                <span>With bundles</span>
+                                <span class="badge badge-primary badge-sm">{{ metadata_stats.collections.with_bundles }}</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="card bg-base-100 shadow">
+                    <div class="card-body">
+                        <h4 class="font-semibold">Bundles</h4>
+                        <ul class="mt-3 divide-y divide-base-300 text-sm">
+                            <li class="flex justify-between items-center py-2">
+                                <span>Total</span>
+                                <span class="badge badge-primary badge-sm">{{ metadata_stats.bundles.total }}</span>
+                            </li>
+                            <li class="flex justify-between items-center py-2">
+                                <span>With collections</span>
+                                <span class="badge badge-primary badge-sm">{{ metadata_stats.bundles.with_collections }}</span>
+                            </li>
+                            <li class="flex justify-between items-center py-2">
+                                <span>Without collections</span>
+                                <span class="badge badge-primary badge-sm">{{ metadata_stats.bundles.without_collections }}</span>
+                            </li>
+                            <li class="flex justify-between items-center py-2">
+                                <span>With resources</span>
+                                <span class="badge badge-primary badge-sm">{{ metadata_stats.bundles.with_resources }}</span>
+                            </li>
+                            <li class="flex justify-between items-center py-2">
+                                <span>Without resources</span>
+                                <span class="badge badge-primary badge-sm">{{ metadata_stats.bundles.without_resources }}</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="card bg-base-100 shadow">
+                    <div class="card-body">
+                        <h4 class="font-semibold">Resources</h4>
+                        <ul class="mt-3 divide-y divide-base-300 text-sm">
+                            <li class="flex justify-between items-center py-2">
+                                <span>Containers</span>
+                                <span class="badge badge-primary badge-sm">{{ metadata_stats.resources.total_containers }}</span>
+                            </li>
+                            <li class="flex justify-between items-center py-2">
+                                <span>Empty containers</span>
+                                <span class="badge badge-primary badge-sm">{{ metadata_stats.resources.empty_containers }}</span>
+                            </li>
+                            <li class="flex justify-between items-center py-2">
+                                <span>Media</span>
+                                <span class="badge badge-primary badge-sm">{{ metadata_stats.resources.media_resources }}</span>
+                            </li>
+                            <li class="flex justify-between items-center py-2">
+                                <span>Written</span>
+                                <span class="badge badge-primary badge-sm">{{ metadata_stats.resources.written_resources }}</span>
+                            </li>
+                            <li class="flex justify-between items-center py-2">
+                                <span>Other</span>
+                                <span class="badge badge-primary badge-sm">{{ metadata_stats.resources.other_resources }}</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Maintenance and Destructive Operations -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="card bg-base-100 shadow">
+                    <div class="card-body">
+                        <h4 class="card-title text-base">Database Maintenance</h4>
+                        <p class="text-sm text-base-content/60 mb-3">Clean up and fix issues in the database models.</p>
+                        <button
+                            hx-post="{% url 'dbadmin:cleanup' %}"
+                            hx-target="#results-container"
+                            hx-swap="innerHTML"
+                            hx-indicator="#cleanup-indicator"
+                            class="btn btn-error btn-sm">
+                            Cleanup Database
+                            <span id="cleanup-indicator" class="loading loading-spinner loading-xs htmx-indicator"></span>
+                        </button>
+                    </div>
+                </div>
+                <div class="card bg-base-100 shadow border-error/20 border">
+                    <div class="card-body">
+                        <h4 class="card-title text-base text-error">Destructive Operations</h4>
+                        <p class="text-sm text-base-content/60 mb-3">
+                            <strong>CAUTION:</strong> These actions delete data and cannot be undone.
+                        </p>
+                        <div class="space-y-2">
+                            <button
+                                hx-post="{% url 'dbadmin:delete_collections' %}"
+                                hx-target="#confirm-modal"
+                                hx-swap="innerHTML"
+                                class="btn btn-warning btn-sm w-full">
+                                Delete Collections Only
+                            </button>
+                            <button
+                                hx-post="{% url 'dbadmin:delete_bundles' %}"
+                                hx-target="#confirm-modal"
+                                hx-swap="innerHTML"
+                                class="btn btn-warning btn-sm w-full">
+                                Delete Bundles Only
+                            </button>
+                            <div class="divider my-1"></div>
+                            <button
+                                hx-post="{% url 'dbadmin:delete_all' %}"
+                                hx-target="#confirm-modal"
+                                hx-swap="innerHTML"
+                                class="btn btn-error btn-sm w-full">
+                                Delete All Data
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results container -->
+            <div id="results-container" class="mt-6"></div>
+
+            <!-- Confirm Modal -->
+            <div id="confirm-modal-wrapper" class="hidden fixed inset-0 flex items-center justify-center z-50 bg-black/50">
+                <div id="confirm-modal" class="bg-base-100 rounded-lg shadow-lg p-6 max-w-lg w-full mx-4">
+                </div>
+            </div>
+        </div>
     </div>
 </div>
+
+<script>
+    document.body.addEventListener('htmx:afterSwap', function(event) {
+        if (event.detail.target.id === 'confirm-modal') {
+            document.getElementById('confirm-modal-wrapper').classList.remove('hidden');
+        }
+    });
+    document.getElementById('confirm-modal-wrapper')?.addEventListener('click', function(event) {
+        if (event.target === this) {
+            this.classList.add('hidden');
+        }
+    });
+</script>
+
+<style>
+    .htmx-indicator { display: none; }
+    .htmx-request .htmx-indicator { display: inline; }
+    .htmx-request.htmx-indicator { display: inline; }
+</style>
 {% endblock %}

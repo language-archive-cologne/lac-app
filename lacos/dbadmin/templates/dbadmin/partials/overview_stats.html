@@ -1,0 +1,106 @@
+{% load humanize %}
+
+<!-- Health Warnings -->
+{% if health_warnings %}
+<div class="space-y-2 mb-6">
+    {% for warning in health_warnings %}
+    <div class="alert {% if warning.level == 'error' %}alert-error{% elif warning.level == 'warning' %}alert-warning{% else %}alert-info{% endif %} alert-sm">
+        <span class="text-sm">{{ warning.message }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- PostgreSQL Info -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="card bg-base-100 shadow">
+        <div class="card-body">
+            <h3 class="card-title text-base">PostgreSQL Server</h3>
+            <ul class="mt-2 divide-y divide-base-300 text-sm">
+                <li class="flex justify-between items-center py-2">
+                    <span>Database Size</span>
+                    <span class="font-mono">{{ pg_stats.db_size_pretty }}</span>
+                </li>
+                <li class="flex justify-between items-center py-2">
+                    <span>Tables</span>
+                    <span class="font-mono">{{ pg_stats.table_count }}</span>
+                </li>
+                <li class="flex justify-between items-center py-2">
+                    <span>Active Connections</span>
+                    <span class="font-mono">{{ pg_stats.active_connections }}</span>
+                </li>
+                <li class="flex justify-between items-center py-2">
+                    <span>Uptime</span>
+                    <span class="font-mono">{{ pg_stats.uptime }}</span>
+                </li>
+                <li class="flex justify-between items-center py-2">
+                    <span>Server Version</span>
+                    <span class="font-mono text-xs">{{ pg_stats.server_version|truncatewords:5 }}</span>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="card bg-base-100 shadow">
+        <div class="card-body">
+            <h3 class="card-title text-base">Backup Status</h3>
+            <ul class="mt-2 divide-y divide-base-300 text-sm">
+                <li class="flex justify-between items-center py-2">
+                    <span>Last Backup</span>
+                    <span>
+                        {% if backup_summary.last_backup_time %}
+                            {{ backup_summary.last_backup_time|naturaltime }}
+                        {% else %}
+                            <span class="text-warning font-semibold">Never</span>
+                        {% endif %}
+                    </span>
+                </li>
+                <li class="flex justify-between items-center py-2">
+                    <span>Last Status</span>
+                    <span>
+                        {% if backup_summary.last_status %}
+                            <span class="badge badge-sm {% if backup_summary.last_status == 'success' %}badge-success{% elif backup_summary.last_status == 'failed' %}badge-error{% else %}badge-info{% endif %}">
+                                {{ backup_summary.last_status }}
+                            </span>
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </span>
+                </li>
+                <li class="flex justify-between items-center py-2">
+                    <span>Total Backups</span>
+                    <span class="font-mono">{{ backup_summary.total_backups }}</span>
+                </li>
+                <li class="flex justify-between items-center py-2">
+                    <span>Successful</span>
+                    <span class="font-mono">{{ backup_summary.successful_backups }}</span>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- Table Sizes -->
+<div class="mt-6">
+    <h3 class="text-lg font-semibold mb-3">Table Sizes</h3>
+    <div class="overflow-x-auto">
+        <table class="table table-sm table-zebra">
+            <thead>
+                <tr>
+                    <th>Table</th>
+                    <th class="text-right">Rows (est.)</th>
+                    <th class="text-right">Size</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in table_sizes %}
+                <tr>
+                    <td class="font-mono text-xs">{{ t.table_name }}</td>
+                    <td class="text-right font-mono text-xs">{{ t.row_estimate|intcomma }}</td>
+                    <td class="text-right font-mono text-xs">{{ t.total_size_pretty }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>

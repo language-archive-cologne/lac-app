@@ -6,8 +6,10 @@ app_name = "dbadmin"
 
 urlpatterns = [
     path("", views.DashboardView.as_view(), name="dashboard"),
+    path("stats/", views.OverviewStatsView.as_view(), name="stats"),
     path("tasks/enqueue/<slug:action>/", views.TaskEnqueueView.as_view(), name="task_enqueue"),
     path("tasks/<uuid:task_id>/status/", views.TaskStatusView.as_view(), name="task_status"),
+    path("tasks/history/", views.TaskHistoryView.as_view(), name="task_history"),
     # Database management
     path("cleanup/", views.DatabaseCleanupView.as_view(), name="cleanup"),
     path("delete/all/", views.DatabaseDeleteAllView.as_view(), name="delete_all"),

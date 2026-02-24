@@ -3,6 +3,7 @@ import logging
 from dataclasses import dataclass
 
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.core.paginator import Paginator
 from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
@@ -12,6 +13,7 @@ from django.views import View
 from django.views.generic import TemplateView
 
 from lacos.blam.services.cleanup_service import CleanupService
+from lacos.dbadmin.services import DatabaseStatsService
 from lacos.blam.tasks import (
     backup_database_task,
     generate_all_peaks_task,
@@ -35,6 +37,12 @@ class DashboardView(SuperuserRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["title"] = "Database Dashboard"
+        context["pg_stats"] = DatabaseStatsService.get_pg_stats()
+        context["backup_summary"] = DatabaseStatsService.get_backup_summary()
+        context["active_tasks"] = BackgroundTask.objects.filter(
+            status__in=[BackgroundTask.Status.QUEUED, BackgroundTask.Status.RUNNING]
+        ).order_by("-created_at")[:10]
+        context["metadata_stats"] = CleanupService.get_database_statistics()
         return context
 
 
@@ -337,5 +345,60 @@ class DatabaseDeleteBundlesConfirmView(SuperuserRequiredMixin, View):
                 "errors": errors,
                 "operation": "bundles",
             },
+        )
+        return HttpResponse(html)
+
+
+# ---------------------------------------------------------------------------
+# Overview stats / Task history (HTMX partials)
+# ---------------------------------------------------------------------------
+
+
+class OverviewStatsView(SuperuserRequiredMixin, View):
+    def get(self, request, *args, **kwargs):
+        pg_stats = DatabaseStatsService.get_pg_stats()
+        table_sizes = DatabaseStatsService.get_table_sizes()
+        health_warnings = DatabaseStatsService.get_health_warnings()
+        backup_summary = DatabaseStatsService.get_backup_summary()
+        html = render_to_string(
+            "dbadmin/partials/overview_stats.html",
+            {
+                "pg_stats": pg_stats,
+                "table_sizes": table_sizes,
+                "health_warnings": health_warnings,
+                "backup_summary": backup_summary,
+            },
+            request=request,
+        )
+        return HttpResponse(html)
+
+
+class TaskHistoryView(SuperuserRequiredMixin, View):
+    def get(self, request, *args, **kwargs):
+        qs = BackgroundTask.objects.all().order_by("-created_at")
+        status_filter = request.GET.get("status", "")
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        type_filter = request.GET.get("type", "")
+        if type_filter:
+            qs = qs.filter(task_name=type_filter)
+        paginator = Paginator(qs, 20)
+        page = paginator.get_page(request.GET.get("page", 1))
+        task_names = (
+            BackgroundTask.objects.values_list("task_name", flat=True)
+            .distinct()
+            .order_by("task_name")
+        )
+        html = render_to_string(
+            "dbadmin/partials/task_history.html",
+            {
+                "tasks": page,
+                "page_obj": page,
+                "status_filter": status_filter,
+                "type_filter": type_filter,
+                "task_names": list(task_names),
+                "status_choices": BackgroundTask.Status.choices,
+            },
+            request=request,
         )
         return HttpResponse(html)

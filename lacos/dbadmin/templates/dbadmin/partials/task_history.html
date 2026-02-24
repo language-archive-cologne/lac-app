@@ -1,0 +1,94 @@
+{% load humanize %}
+
+<div class="card bg-base-100 shadow">
+    <div class="card-body">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <h3 class="card-title text-base">Task History</h3>
+            <div class="flex gap-2">
+                <select
+                    name="status"
+                    hx-get="{% url 'dbadmin:task_history' %}"
+                    hx-target="#task-history"
+                    hx-swap="innerHTML"
+                    hx-include="[name='type']"
+                    class="select select-bordered select-sm">
+                    <option value="">All statuses</option>
+                    {% for value, label in status_choices %}
+                    <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <select
+                    name="type"
+                    hx-get="{% url 'dbadmin:task_history' %}"
+                    hx-target="#task-history"
+                    hx-swap="innerHTML"
+                    hx-include="[name='status']"
+                    class="select select-bordered select-sm">
+                    <option value="">All types</option>
+                    {% for name in task_names %}
+                    <option value="{{ name }}" {% if type_filter == name %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Task</th>
+                        <th>Status</th>
+                        <th>Started</th>
+                        <th>Message</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for task in tasks %}
+                    <tr>
+                        <td class="text-xs">{{ task.description|default:task.task_name }}</td>
+                        <td>
+                            <span class="badge badge-sm {% if task.status == 'success' %}badge-success{% elif task.status == 'failed' %}badge-error{% elif task.status == 'running' %}badge-info{% else %}badge-ghost{% endif %}">
+                                {{ task.status }}
+                            </span>
+                        </td>
+                        <td class="text-xs">{{ task.created_at|naturaltime }}</td>
+                        <td class="text-xs max-w-xs truncate">{{ task.message|default:"-" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="text-center text-base-content/60">No tasks found.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if page_obj.has_other_pages %}
+        <div class="flex justify-center mt-4">
+            <div class="join">
+                {% if page_obj.has_previous %}
+                <button
+                    hx-get="{% url 'dbadmin:task_history' %}?page={{ page_obj.previous_page_number }}&status={{ status_filter }}&type={{ type_filter }}"
+                    hx-target="#task-history"
+                    hx-swap="innerHTML"
+                    class="join-item btn btn-sm">
+                    Previous
+                </button>
+                {% endif %}
+                <button class="join-item btn btn-sm btn-disabled">
+                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                </button>
+                {% if page_obj.has_next %}
+                <button
+                    hx-get="{% url 'dbadmin:task_history' %}?page={{ page_obj.next_page_number }}&status={{ status_filter }}&type={{ type_filter }}"
+                    hx-target="#task-history"
+                    hx-swap="innerHTML"
+                    class="join-item btn btn-sm">
+                    Next
+                </button>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
