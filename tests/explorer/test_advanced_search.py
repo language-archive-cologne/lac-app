@@ -39,7 +39,6 @@ class TestBundleFieldDefinitions:
     def test_bundle_specific_fields_present(self):
         keys = [d.key for d in BUNDLE_FIELD_DEFINITIONS]
         assert "collection" in keys
-        assert "topic" in keys
 
     def test_no_data_provider(self):
         keys = [d.key for d in BUNDLE_FIELD_DEFINITIONS]

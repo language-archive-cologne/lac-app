@@ -90,7 +90,7 @@ class FieldSearchView(ListView):
         context["search_rows"] = rows
         context["has_search_rows"] = bool(rows)
         context["field_definitions"] = COLLECTION_FIELD_DEFINITIONS
-        context["search_query"] = ""
+        context["search_query"] = "|".join(r.value for r in rows if r.value)
         return context
 
     def render_to_response(self, context, **kwargs):
@@ -170,7 +170,7 @@ class BundleFieldSearchView(ListView):
         context["search_rows"] = rows
         context["has_search_rows"] = bool(rows)
         context["field_definitions"] = BUNDLE_FIELD_DEFINITIONS
-        context["search_query"] = ""
+        context["search_query"] = "|".join(r.value for r in rows if r.value)
         return context
 
     def render_to_response(self, context, **kwargs):
