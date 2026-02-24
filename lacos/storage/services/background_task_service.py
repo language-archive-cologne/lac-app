@@ -2,6 +2,7 @@ import logging
 from typing import Any, Dict, Optional
 
 from django.utils import timezone
+from huey.contrib.djhuey import revoke_by_id
 
 from lacos.storage.models import BackgroundTask
 
@@ -62,6 +63,19 @@ class BackgroundTaskService:
         if not task:
             return
         task.mark_failed(error_message, result)
+
+    @staticmethod
+    def cancel(task_id: str | BackgroundTask) -> None:
+        task = BackgroundTaskService._get_task_or_none(task_id)
+        if not task:
+            return
+        terminal = {BackgroundTask.Status.SUCCESS, BackgroundTask.Status.FAILED, BackgroundTask.Status.CANCELLED}
+        if task.status in terminal:
+            raise ValueError(f"Cannot cancel task in {task.status} status")
+        if task.status == BackgroundTask.Status.QUEUED and task.huey_task_id:
+            revoke_by_id(task.huey_task_id)
+        task.mark_cancelled("Cancelled by admin")
+        logger.info("Cancelled background task %s (%s)", task.id, task.task_name)
 
     @staticmethod
     def touch(task_id: str | BackgroundTask, *, message: Optional[str] = None) -> None:

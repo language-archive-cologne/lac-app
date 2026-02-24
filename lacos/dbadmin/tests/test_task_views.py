@@ -8,6 +8,7 @@ import pytest
 from django.urls import reverse
 
 from lacos.storage.models import BackgroundTask
+from lacos.storage.services.background_task_service import BackgroundTaskService
 from lacos.users.tests.factories import UserFactory
 
 
@@ -172,3 +173,42 @@ def test_background_task_mark_cancelled():
     task.refresh_from_db()
     assert task.status == BackgroundTask.Status.CANCELLED
     assert task.message == "Cancelled by admin"
+
+
+@pytest.mark.django_db
+def test_cancel_queued_task_revokes_huey_and_marks_cancelled():
+    task = BackgroundTask.objects.create(
+        task_name="test_task",
+        status=BackgroundTask.Status.QUEUED,
+        huey_task_id="huey-abc",
+    )
+    with patch("lacos.storage.services.background_task_service.revoke_by_id") as mock_revoke:
+        BackgroundTaskService.cancel(task)
+    task.refresh_from_db()
+    assert task.status == BackgroundTask.Status.CANCELLED
+    assert "Cancelled" in task.message
+    mock_revoke.assert_called_once_with("huey-abc")
+
+
+@pytest.mark.django_db
+def test_cancel_running_task_marks_cancelled_without_huey_revoke():
+    task = BackgroundTask.objects.create(
+        task_name="test_task",
+        status=BackgroundTask.Status.RUNNING,
+        huey_task_id="huey-def",
+    )
+    with patch("lacos.storage.services.background_task_service.revoke_by_id") as mock_revoke:
+        BackgroundTaskService.cancel(task)
+    task.refresh_from_db()
+    assert task.status == BackgroundTask.Status.CANCELLED
+    mock_revoke.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_cancel_completed_task_raises_value_error():
+    task = BackgroundTask.objects.create(
+        task_name="test_task",
+        status=BackgroundTask.Status.SUCCESS,
+    )
+    with pytest.raises(ValueError, match="Cannot cancel"):
+        BackgroundTaskService.cancel(task)
