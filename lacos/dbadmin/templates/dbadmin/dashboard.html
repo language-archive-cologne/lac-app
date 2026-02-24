@@ -30,9 +30,9 @@
     </div>
 
     <!-- Tabs -->
-    <div class="tabs tabs-lifted" role="tablist">
-        <input type="radio" name="dbadmin_tabs" role="tab" class="tab" aria-label="Overview" checked />
-        <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-6">
+    <div class="tabs tabs-lift">
+        <input type="radio" name="dbadmin_tabs" class="tab" aria-label="Overview" checked="checked" />
+        <div class="tab-content bg-base-100 border-base-300 p-6">
             <div
                 id="overview-stats"
                 hx-get="{% url 'dbadmin:stats' %}"
@@ -47,8 +47,8 @@
             </div>
         </div>
 
-        <input type="radio" name="dbadmin_tabs" role="tab" class="tab" aria-label="Tasks" />
-        <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-6">
+        <input type="radio" name="dbadmin_tabs" class="tab" aria-label="Tasks" />
+        <div class="tab-content bg-base-100 border-base-300 p-6">
             <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
                 <!-- Task trigger buttons -->
                 <div class="lg:col-span-2">
@@ -122,8 +122,8 @@
             </div>
         </div>
 
-        <input type="radio" name="dbadmin_tabs" role="tab" class="tab" aria-label="Management" />
-        <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-6">
+        <input type="radio" name="dbadmin_tabs" class="tab" aria-label="Management" />
+        <div class="tab-content bg-base-100 border-base-300 p-6">
             <!-- Metadata stats cards -->
             <h3 class="text-lg font-semibold mb-4">Metadata Statistics</h3>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
