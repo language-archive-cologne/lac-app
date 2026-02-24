@@ -138,11 +138,53 @@ class DatabaseBackupService:
         command.extend(["-f", self.compose_file, "run", "--rm", "postgres", "backup"])
         return command
 
+    def _remove_backup_command(self, filename: str) -> Sequence[str]:
+        command = ["docker", "compose"]
+        if self.compose_project_name:
+            command.extend(["-p", self.compose_project_name])
+        command.extend(["-f", self.compose_file, "run", "--rm", "postgres", "rmbackup", filename])
+        return command
+
+    def _legacy_remove_backup_command(self, filename: str) -> Sequence[str]:
+        command = ["docker-compose"]
+        if self.compose_project_name:
+            command.extend(["-p", self.compose_project_name])
+        command.extend(["-f", self.compose_file, "run", "--rm", "postgres", "rmbackup", filename])
+        return command
+
     def _exec_backup_command(self) -> Sequence[str]:
         container_name = self._find_postgres_container_name()
         if not container_name:
             return ["false"]
         return ["docker", "exec", container_name, "backup"]
+
+    def _exec_remove_backup_command(self, filename: str) -> Sequence[str]:
+        container_name = self._find_postgres_container_name()
+        if not container_name:
+            return ["false"]
+        return ["docker", "exec", container_name, "rmbackup", filename]
+
+    def _run_remove_backup_command(self, filename: str) -> CompletedProcess[str]:
+        result = self._run_command(self._remove_backup_command(filename), "primary compose cleanup")
+        if result.returncode == 0:
+            return result
+        if not self._is_compose_tooling_error(result):
+            return result
+
+        legacy_result = self._run_command(self._legacy_remove_backup_command(filename), "legacy compose cleanup")
+        if legacy_result.returncode == 0:
+            return legacy_result
+        if self._docker_cli_missing(result, legacy_result):
+            return CompletedProcess(
+                self._legacy_remove_backup_command(filename),
+                127,
+                stdout="",
+                stderr="Command not found: docker and docker-compose",
+            )
+        if not self._should_try_exec_fallback(legacy_result):
+            return legacy_result
+
+        return self._run_command(self._exec_remove_backup_command(filename), "docker exec cleanup fallback")
 
     def _find_postgres_container_name(self) -> str | None:
         command = [
@@ -278,6 +320,16 @@ class DatabaseBackupService:
     def _remove_local_backups(self) -> int:
         removed = 0
         for backup_file in self.backup_dir.glob("backup_*.sql.gz"):
+            command_result = self._run_remove_backup_command(backup_file.name)
+            if command_result.returncode == 0:
+                removed += 1
+                continue
+            logger.warning(
+                "Compose cleanup failed for backup file %s with code %s: %s",
+                backup_file,
+                command_result.returncode,
+                (command_result.stderr or "").strip(),
+            )
             try:
                 backup_file.unlink(missing_ok=True)
                 removed += 1

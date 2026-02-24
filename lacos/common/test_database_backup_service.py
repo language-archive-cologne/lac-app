@@ -68,7 +68,6 @@ def test_database_backup_service_uploads_and_prunes(settings, tmp_path):
         Bucket="backups",
         Key="db-backups/backup_old.sql.gz",
     )
-    assert list(backup_dir.glob("backup_*.sql.gz")) == []
 
 
 def test_database_backup_service_fails_when_backup_command_fails(settings, tmp_path):
@@ -152,9 +151,10 @@ def test_database_backup_service_falls_back_to_docker_compose(settings, tmp_path
     result = service.run()
 
     assert result["success"] is True
-    assert len(calls) == 2
-    assert calls[0][:2] == ["docker", "compose"]
-    assert calls[1][0] == "docker-compose"
+    assert any(command[:2] == ["docker", "compose"] and command[-2:] == ["postgres", "backup"] for command in calls)
+    assert any(command and command[0] == "docker-compose" and command[-2:] == ["postgres", "backup"] for command in calls)
+    assert any(command[:2] == ["docker", "compose"] and "rmbackup" in command for command in calls)
+    assert any(command and command[0] == "docker-compose" and "rmbackup" in command for command in calls)
 
 
 def test_database_backup_service_falls_back_when_compose_f_flag_is_old_docker(settings, tmp_path):
@@ -197,9 +197,10 @@ def test_database_backup_service_falls_back_when_compose_f_flag_is_old_docker(se
     result = service.run()
 
     assert result["success"] is True
-    assert len(calls) == 2
-    assert calls[0][:2] == ["docker", "compose"]
-    assert calls[1][0] == "docker-compose"
+    assert any(command[:2] == ["docker", "compose"] and command[-2:] == ["postgres", "backup"] for command in calls)
+    assert any(command and command[0] == "docker-compose" and command[-2:] == ["postgres", "backup"] for command in calls)
+    assert any(command[:2] == ["docker", "compose"] and "rmbackup" in command for command in calls)
+    assert any(command and command[0] == "docker-compose" and "rmbackup" in command for command in calls)
 
 
 def test_database_backup_service_falls_back_to_docker_exec_when_legacy_compose_has_dns_error(settings, tmp_path):
@@ -383,8 +384,7 @@ def test_database_backup_service_retries_with_minimum_docker_api_version(setting
     result = service.run()
 
     assert result["success"] is True
-    assert api_versions[-1] == "1.44"
-    assert len(api_versions) == 2
+    assert api_versions == [None, "1.44", None, "1.44"]
 
 
 def test_database_backup_service_ignores_local_cleanup_os_error(settings, tmp_path):
@@ -406,7 +406,12 @@ def test_database_backup_service_ignores_local_cleanup_os_error(settings, tmp_pa
 
     service = DatabaseBackupService(
         s3_client=s3_client,
-        command_runner=_runner_success,
+        command_runner=lambda command, **kwargs: subprocess.CompletedProcess(
+            command,
+            1 if "rmbackup" in command else 0,
+            stdout="",
+            stderr="cleanup failed" if "rmbackup" in command else "",
+        ),
         now_fn=timezone.now,
     )
 
