@@ -7,6 +7,9 @@ FROM docker.io/python:3.12-slim-trixie@sha256:9e01bf1ae5db7649a236da7be1e94ffbbb
 FROM python AS python-build-stage
 ARG BUILD_ENVIRONMENT=local
 
+# Make apt resilient in bridged networks (DNS/IPv6 hiccups are common in Docker builds).
+RUN printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\nAcquire::ForceIPv4 "true";\n' > /etc/apt/apt.conf.d/99-network-retries
+
 # Install apt packages
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
@@ -34,6 +37,9 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV BUILD_ENV=${BUILD_ENVIRONMENT}
 WORKDIR ${APP_HOME}
+
+# Keep apt behavior robust in the runtime stage too.
+RUN printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\nAcquire::ForceIPv4 "true";\n' > /etc/apt/apt.conf.d/99-network-retries
 
 # Install common runtime dependencies
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -80,6 +86,11 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     ffmpeg \
     # Docker CLI for database backup (shells out to host via mounted socket)
     docker.io
+
+# Ensure compose plugin path exists and provide docker-compose compatibility wrapper.
+RUN mkdir -p /usr/libexec/docker/cli-plugins \
+    && printf '#!/bin/sh\nexec docker compose "$@"\n' > /usr/local/bin/docker-compose \
+    && chmod +x /usr/local/bin/docker-compose
 
 # Install audiowaveform from upstream .deb (not in Debian repos)
 ARG AUDIOWAVEFORM_VERSION=1.10.2

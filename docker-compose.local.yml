@@ -104,7 +104,12 @@ services:
     volumes:
       - .:/app:z
       - ../lac-guidelines:/lac-guidelines:ro
-      - lacos_local_postgres_data_backups:/backups:ro
+      - lacos_local_postgres_data_backups:/backups
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${HOST_DOCKER_BIN:-/usr/bin/docker}:/usr/bin/docker:ro
+      - ${HOST_DOCKER_COMPOSE_PLUGIN:-/usr/libexec/docker/cli-plugins/docker-compose}:/usr/libexec/docker/cli-plugins/docker-compose:ro
+    group_add:
+      - "${DOCKER_GID:-999}"
     env_file:
       - ./.envs/.local/.django
       - ./.envs/.local/.postgres

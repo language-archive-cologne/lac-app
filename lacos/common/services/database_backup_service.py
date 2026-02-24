@@ -278,8 +278,11 @@ class DatabaseBackupService:
     def _remove_local_backups(self) -> int:
         removed = 0
         for backup_file in self.backup_dir.glob("backup_*.sql.gz"):
-            backup_file.unlink(missing_ok=True)
-            removed += 1
+            try:
+                backup_file.unlink(missing_ok=True)
+                removed += 1
+            except OSError as exc:
+                logger.warning("Could not remove local backup file %s: %s", backup_file, exc)
         logger.info("Removed %s local backup files from %s", removed, self.backup_dir)
         return removed
 

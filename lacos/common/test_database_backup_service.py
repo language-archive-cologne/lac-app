@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 from datetime import timedelta
 from unittest.mock import Mock
+from unittest.mock import patch
 
 from django.utils import timezone
 
@@ -384,3 +385,34 @@ def test_database_backup_service_retries_with_minimum_docker_api_version(setting
     assert result["success"] is True
     assert api_versions[-1] == "1.44"
     assert len(api_versions) == 2
+
+
+def test_database_backup_service_ignores_local_cleanup_os_error(settings, tmp_path):
+    settings.DB_BACKUP_COMPOSE_FILE = "docker-compose.local.yml"
+    settings.DB_BACKUP_COMPOSE_PROJECT_DIR = str(tmp_path)
+    settings.DB_BACKUP_BACKUP_DIR = str(tmp_path / "backups")
+    settings.DB_BACKUP_S3_BUCKET = "backups"
+    settings.DB_BACKUP_S3_PREFIX = "db-backups"
+
+    backup_dir = tmp_path / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    dump_file = backup_dir / "backup_2026_02_24T11_37_24.sql.gz"
+    dump_file.write_bytes(b"dump")
+
+    paginator = Mock()
+    paginator.paginate.return_value = [{"Contents": []}]
+    s3_client = Mock()
+    s3_client.get_paginator.return_value = paginator
+
+    service = DatabaseBackupService(
+        s3_client=s3_client,
+        command_runner=_runner_success,
+        now_fn=timezone.now,
+    )
+
+    with patch("pathlib.Path.unlink", side_effect=OSError("Read-only file system")):
+        result = service.run()
+
+    assert result["success"] is True
+    assert result["local_removed"] == 0
+    assert dump_file.exists()

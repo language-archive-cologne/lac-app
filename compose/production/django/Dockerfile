@@ -7,6 +7,9 @@ FROM python AS python-build-stage
 
 ARG BUILD_ENVIRONMENT=production
 
+# Make apt resilient in bridged networks (DNS/IPv6 hiccups are common in Docker builds).
+RUN printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\nAcquire::ForceIPv4 "true";\n' > /etc/apt/apt.conf.d/99-network-retries
+
 # Install apt packages
 RUN apt-get update && apt-get install --no-install-recommends -y \
   # dependencies for building Python packages
@@ -34,6 +37,9 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV BUILD_ENV=${BUILD_ENVIRONMENT}
 
 WORKDIR ${APP_HOME}
+
+# Keep apt behavior robust in the runtime stage too.
+RUN printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\nAcquire::ForceIPv4 "true";\n' > /etc/apt/apt.conf.d/99-network-retries
 
 RUN addgroup --system django \
   && adduser --system --ingroup django django

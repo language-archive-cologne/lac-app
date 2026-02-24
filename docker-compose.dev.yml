@@ -109,8 +109,12 @@ services:
     volumes:
       - .:/app:z
       - /etc/shibboleth:/etc/shibboleth:ro
-      - lacos_dev_postgres_data_backups:/backups:ro
+      - lacos_dev_postgres_data_backups:/backups
       - /var/run/docker.sock:/var/run/docker.sock
+      - ${HOST_DOCKER_BIN:-/usr/bin/docker}:/usr/bin/docker:ro
+      - ${HOST_DOCKER_COMPOSE_PLUGIN:-/usr/libexec/docker/cli-plugins/docker-compose}:/usr/libexec/docker/cli-plugins/docker-compose:ro
+    group_add:
+      - "${DOCKER_GID:-999}"
     env_file:
       - ./.envs/.dev/.django
       - ./.envs/.dev/.postgres
@@ -121,6 +125,9 @@ services:
       SAML_DJANGO_USER_MAIN_ATTRIBUTE: "username"
       SAML_USE_NAME_ID_AS_USERNAME: "false"
       DB_BACKUP_ENABLED: "true"
+      DB_BACKUP_COMPOSE_FILE: "docker-compose.dev.yml"
+      DB_BACKUP_COMPOSE_PROJECT_DIR: "/app"
+      DB_BACKUP_COMPOSE_PROJECT_NAME: "${COMPOSE_PROJECT_NAME:-lac-app}"
       HUEY_IMMEDIATE: "false"
       HUEY_WORKERS: "4"
       LAC_MEDIA_TMP_DIR: "/app/.tmp/media-processing"
