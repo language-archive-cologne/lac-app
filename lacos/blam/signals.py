@@ -285,11 +285,6 @@ def invalidate_cache_on_bundle_general_info_m2m_change(sender, instance, **kwarg
     _invalidate_explorer_caches()
 
 
-@receiver(m2m_changed, sender=BundleStructuralInfo.bundle_topics.through)
-def invalidate_cache_on_bundle_topics_change(sender, instance, **kwargs):
-    """Invalidate explorer caches when bundle topics change."""
-    _invalidate_explorer_caches()
-
 
 @receiver(m2m_changed, sender=BundleAdministrativeInfo.licenses.through)
 def invalidate_cache_on_bundle_licenses_change(sender, instance, **kwargs):

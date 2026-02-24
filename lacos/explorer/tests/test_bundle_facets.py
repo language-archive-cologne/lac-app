@@ -16,10 +16,7 @@ from lacos.blam.models.bundle.bundle_general_info import (
     BundleObjectLanguage,
 )
 from lacos.blam.models.bundle.bundle_publication_info import BundlePublicationInfo
-from lacos.blam.models.bundle.bundle_structural_info import (
-    BundleStructuralInfo,
-    BundleTopic,
-)
+from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
 from lacos.blam.models.collection.collection_general_info import (
     CollectionGeneralInfo,
     CollectionLocation,
@@ -57,7 +54,6 @@ def _create_bundle(
     languages: list[tuple[str, str]] | None = None,
     country: str | None = None,
     region: str | None = None,
-    topics: list[str] | None = None,
     description: str | None = None,
 ) -> Bundle:
     """Helper to create a bundle with related metadata."""
@@ -94,11 +90,6 @@ def _create_bundle(
         bundle=bundle,
         is_member_of_collection=collection,
     )
-    if topics:
-        for topic_name in topics:
-            topic, _ = BundleTopic.objects.get_or_create(name=topic_name)
-            structural_info.bundle_topics.add(topic)
-
     BundlePublicationInfo.objects.create(
         bundle=bundle,
         publication_year=2024,
@@ -153,8 +144,8 @@ def test_single_language_filter():
 @pytest.mark.django_db
 def test_topic_filter():
     coll = _create_collection("C1", "Test Collection")
-    b1 = _create_bundle("B1", "Alpha", coll, topics=["narrative"])
-    _create_bundle("B2", "Beta", coll, topics=["elicitation"])
+    b1 = _create_bundle("B1", "Alpha", coll)
+    _create_bundle("B2", "Beta", coll)
 
     result = _service().search(
         _make_params(topic=["narrative"]), Bundle.objects.all()
@@ -186,15 +177,15 @@ def test_cross_facet_and_logic():
     coll = _create_collection("C1", "Test Collection")
     b1 = _create_bundle(
         "B1", "Alpha", coll,
-        languages=[("Akan", "aka")], country="Ghana", topics=["narrative"],
+        languages=[("Akan", "aka")], country="Ghana",
     )
     _create_bundle(
         "B2", "Beta", coll,
-        languages=[("Akan", "aka")], country="Germany", topics=["elicitation"],
+        languages=[("Akan", "aka")], country="Germany",
     )
     _create_bundle(
         "B3", "Gamma", coll,
-        languages=[("Senufo", "sef")], country="Ghana", topics=["narrative"],
+        languages=[("Senufo", "sef")], country="Ghana",
     )
 
     result = _service().search(
@@ -233,9 +224,9 @@ def test_cross_facet_counts_exclude_own_facet():
 @pytest.mark.django_db
 def test_topic_facet_counts():
     coll = _create_collection("C1", "Test Collection")
-    _create_bundle("B1", "Alpha", coll, topics=["narrative", "elicitation"])
-    _create_bundle("B2", "Beta", coll, topics=["narrative"])
-    _create_bundle("B3", "Gamma", coll, topics=["wordlist"])
+    _create_bundle("B1", "Alpha", coll)
+    _create_bundle("B2", "Beta", coll)
+    _create_bundle("B3", "Gamma", coll)
 
     result = _service().search(_make_params(), Bundle.objects.all())
 
@@ -347,7 +338,7 @@ def test_text_search_with_facet_filter(client):
     coll = _create_collection("C1", "Test Collection")
     b1 = _create_bundle(
         "B1", "Senufo Stories", coll,
-        languages=[("Senufo", "sef")], country="Mali", topics=["narrative"],
+        languages=[("Senufo", "sef")], country="Mali",
     )
     b2 = _create_bundle(
         "B2", "Senufo Proverbs", coll,

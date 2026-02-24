@@ -826,13 +826,6 @@ class BundleJsonLdSerializer:
         """Serialize bundle structural info."""
         data = {}
 
-        # Bundle topics
-        topics = info.bundle_topics.all()
-        if topics:
-            data["BundleTopics"] = {
-                "BundleTopic": [{"Name": t.name} for t in topics]
-            }
-
         # Collection membership
         if info.is_member_of_collection:
             collection = info.is_member_of_collection

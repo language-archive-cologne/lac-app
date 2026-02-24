@@ -59,7 +59,6 @@ class BundleDetailView(HandleLookupMixin, ACLPermissionMixin, DetailView):
             "publication_info__creators",
             "publication_info__contributors",
             "structural_info",
-            "structural_info__bundle_topics",
             "structural_info__additional_metadata_files",
             "administrative_info",
             "administrative_info__licenses",
@@ -573,7 +572,6 @@ class BundleJsonLdView(View):
             "administrative_info__rights_holders__rights_holder_identifiers",
             "administrative_info__is_identical_to",
             "structural_info",
-            "structural_info__bundle_topics",
             "structural_info__is_member_of_collection",
             "structural_info__is_member_of_collection__general_info",
             "structural_info__additional_metadata_files",
@@ -637,7 +635,6 @@ class BundleXmlView(View):
             "administrative_info__rights_holders__rights_holder_identifiers",
             "administrative_info__is_identical_to",
             "structural_info",
-            "structural_info__bundle_topics",
             "structural_info__additional_metadata_files",
         )
 

@@ -1,0 +1,223 @@
+{% extends "explorer_base.html" %}
+{% load i18n %}
+{% load explorer_extras %}
+
+{% block title %}{% translate "Field Search - Bundles" %} - {{ block.super }}{% endblock title %}
+
+{% block explorer_content %}
+  <style>
+    .field-search-loading .fs-dimmable { opacity: .4; pointer-events: none; transition: opacity 80ms ease; }
+    .field-search-loading .fs-spinner  { display: flex; }
+    .fs-spinner { display: none; }
+  </style>
+  <script>
+    (function () {
+      function getRoot() { return document.getElementById('field-search-root'); }
+      function setLoading(v) { var r = getRoot(); if (r) r.classList.toggle('field-search-loading', Boolean(v)); }
+      function isTarget(e) { var d = e && e.detail, t = d && d.target; return Boolean(t && t.id === 'faceted-results'); }
+      document.addEventListener('htmx:beforeRequest', function (e) { if (isTarget(e)) setLoading(true); });
+      document.addEventListener('htmx:afterSwap', function (e) { if (isTarget(e)) setLoading(false); });
+      document.addEventListener('htmx:historyRestore', function () { setLoading(false); });
+      window.addEventListener('pageshow', function () { setLoading(false); });
+    })();
+  </script>
+  <meta name="htmx-config" content='{"refreshOnHistoryMiss":true}'>
+
+  <!-- Navigation -->
+  <div class="flex flex-wrap items-center gap-x-4 gap-y-2 mb-6">
+    <div class="join">
+      <a href="{% url 'field_search' %}" class="btn btn-sm join-item btn-outline">{% translate "Collections" %}</a>
+      <a class="btn btn-sm join-item btn-primary">{% translate "Bundles" %}</a>
+    </div>
+    <span class="text-base-content/20 hidden sm:inline">|</span>
+    <div class="join">
+      <a href="{% url 'bundle_faceted_search' %}" class="btn btn-sm join-item btn-outline">{% translate "Faceted Search" %}</a>
+      <a class="btn btn-sm join-item btn-primary">{% translate "Field Search" %}</a>
+    </div>
+  </div>
+
+  <!-- Dynamic query builder -->
+  <form id="field-search-form" method="get" action="{% url 'bundle_field_search' %}" class="mb-6">
+    <fieldset class="fieldset bg-base-200/50 border-base-300 rounded-box border p-4">
+      <legend class="fieldset-legend text-sm">{% translate "Search by field" %}</legend>
+
+      <input type="hidden" name="logic" id="logic-value" value="{{ search_logic|default:'and' }}">
+
+      <div id="search-rows">
+        {% for row in search_rows %}
+          {% if not forloop.first %}
+            <div class="logic-connector flex items-center gap-2 my-1 ml-4">
+              <span class="logic-label text-xs font-semibold uppercase tracking-wider text-primary/70">{{ search_logic|default:"and" }}</span>
+              <span class="flex-1 border-t border-base-300"></span>
+            </div>
+          {% endif %}
+          <div class="search-row" data-row-index="{{ row.index }}">
+            <div class="join w-full">
+              <select name="row_{{ row.index }}_field" class="select join-item w-48 field-select">
+                {% for defn in field_definitions %}
+                  <option value="{{ defn.key }}" data-placeholder="{{ defn.placeholder }}" {% if defn.key == row.field_key %}selected{% endif %}>{{ defn.label }}</option>
+                {% endfor %}
+              </select>
+              <input type="text" name="row_{{ row.index }}_value" value="{{ row.value }}"
+                     class="input join-item flex-1"
+                     placeholder="{{ row.field_key|default:'' }}">
+              <button type="button" class="btn btn-ghost join-item remove-row" aria-label="{% translate 'Remove row' %}">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        {% empty %}
+          <div class="search-row" data-row-index="0">
+            <div class="join w-full">
+              <select name="row_0_field" class="select join-item w-48 field-select">
+                {% for defn in field_definitions %}
+                  <option value="{{ defn.key }}" data-placeholder="{{ defn.placeholder }}">{{ defn.label }}</option>
+                {% endfor %}
+              </select>
+              <input type="text" name="row_0_value" value=""
+                     class="input join-item flex-1"
+                     placeholder="{{ field_definitions.0.placeholder }}">
+              <button type="button" class="btn btn-ghost join-item remove-row" aria-label="{% translate 'Remove row' %}">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      <div class="flex items-center gap-2 mt-3">
+        <button type="button" id="add-row-btn" class="btn btn-ghost btn-sm gap-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+          </svg>
+          {% translate "Add field" %}
+        </button>
+        <div class="join" id="logic-toggle">
+          <input type="radio" name="logic-radio" value="and" class="btn btn-sm join-item checked:btn-primary" aria-label="AND" {% if search_logic != "or" %}checked{% endif %}>
+          <input type="radio" name="logic-radio" value="or" class="btn btn-sm join-item checked:btn-primary" aria-label="OR" {% if search_logic == "or" %}checked{% endif %}>
+        </div>
+        <div class="flex-1"></div>
+        {% if has_search_rows %}
+          <a href="{% url 'bundle_field_search' %}" class="btn btn-ghost btn-sm">{% translate "Clear" %}</a>
+        {% endif %}
+        <button type="submit" class="btn btn-primary btn-sm">{% translate "Search" %}</button>
+      </div>
+    </fieldset>
+  </form>
+
+  <!-- Results area -->
+  <div id="field-search-root">
+    <div id="faceted-results" class="relative">
+      <div class="fs-spinner absolute inset-0 z-20 items-center justify-center pt-24">
+        <span class="loading loading-spinner loading-md text-primary"></span>
+      </div>
+      <div class="fs-dimmable">
+        {% include "explorer/partials/bundle_faceted_search_table.html" %}
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var container = document.getElementById('search-rows');
+      var addBtn = document.getElementById('add-row-btn');
+      var logicHidden = document.getElementById('logic-value');
+      var logicToggle = document.getElementById('logic-toggle');
+
+      function getLogic() { return logicHidden.value; }
+
+      function getNextIndex() {
+        var rows = container.querySelectorAll('.search-row');
+        var max = -1;
+        rows.forEach(function (row) {
+          var idx = parseInt(row.getAttribute('data-row-index'), 10);
+          if (idx > max) max = idx;
+        });
+        return max + 1;
+      }
+
+      function makeConnector() {
+        var div = document.createElement('div');
+        div.className = 'logic-connector flex items-center gap-2 my-1 ml-4';
+        div.innerHTML = '<span class="logic-label text-xs font-semibold uppercase tracking-wider text-primary/70">' + getLogic() + '</span><span class="flex-1 border-t border-base-300"></span>';
+        return div;
+      }
+
+      function syncConnectors() {
+        var label = getLogic();
+        container.querySelectorAll('.logic-label').forEach(function (el) { el.textContent = label; });
+        var items = Array.from(container.children);
+        for (var i = items.length - 1; i >= 0; i--) {
+          var el = items[i];
+          if (!el.classList.contains('logic-connector')) continue;
+          var prev = items[i - 1];
+          var next = items[i + 1];
+          if (!prev || !prev.classList.contains('search-row') || !next || !next.classList.contains('search-row')) {
+            el.remove();
+          }
+        }
+      }
+
+      function buildRow(index) {
+        var firstRow = container.querySelector('.search-row');
+        if (!firstRow) return null;
+        var clone = firstRow.cloneNode(true);
+        clone.setAttribute('data-row-index', index);
+        var select = clone.querySelector('select');
+        select.name = 'row_' + index + '_field';
+        select.selectedIndex = 0;
+        var input = clone.querySelector('input[type="text"]');
+        input.name = 'row_' + index + '_value';
+        input.value = '';
+        updatePlaceholder(select, input);
+        return clone;
+      }
+
+      function updatePlaceholder(select, input) {
+        var opt = select.options[select.selectedIndex];
+        input.placeholder = (opt && opt.getAttribute('data-placeholder')) || '';
+      }
+
+      addBtn.addEventListener('click', function () {
+        var row = buildRow(getNextIndex());
+        if (row) {
+          container.appendChild(makeConnector());
+          container.appendChild(row);
+          row.querySelector('input[type="text"]').focus();
+        }
+      });
+
+      container.addEventListener('click', function (e) {
+        var btn = e.target.closest('.remove-row');
+        if (!btn) return;
+        var rows = container.querySelectorAll('.search-row');
+        if (rows.length <= 1) {
+          var row = rows[0];
+          row.querySelector('select').selectedIndex = 0;
+          var input = row.querySelector('input[type="text"]');
+          input.value = '';
+          updatePlaceholder(row.querySelector('select'), input);
+          return;
+        }
+        var rowEl = btn.closest('.search-row');
+        rowEl.remove();
+        syncConnectors();
+      });
+
+      container.addEventListener('change', function (e) {
+        if (!e.target.classList.contains('field-select')) return;
+        var row = e.target.closest('.search-row');
+        if (row) updatePlaceholder(e.target, row.querySelector('input[type="text"]'));
+      });
+
+      logicToggle.addEventListener('change', function (e) {
+        logicHidden.value = e.target.value;
+        syncConnectors();
+      });
+    })();
+  </script>
+{% endblock explorer_content %}

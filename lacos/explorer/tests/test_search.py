@@ -14,7 +14,6 @@ from lacos.blam.models.bundle.bundle_general_info import BundleObjectLanguage
 from lacos.blam.models.bundle.bundle_general_info import BundleObjectLanguageAlternativeName
 from lacos.blam.models.bundle.bundle_structural_info import BundleResources
 from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
-from lacos.blam.models.bundle.bundle_structural_info import BundleTopic
 from lacos.blam.models.bundle.bundle_structural_info import MediaResource
 from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo
 from lacos.blam.models.collection.collection_general_info import CollectionKeyword
@@ -184,7 +183,6 @@ def test_bundle_search_matches_topics_and_parent_collection():
         location=bundle_location,
         version="1.0",
     )
-    topic = BundleTopic.objects.create(name="oral history")
     bundle_keyword = BundleKeyword.objects.create(value="storytelling")
     bundle_language = BundleObjectLanguage.objects.create(
         display_name="Akan",
@@ -199,8 +197,6 @@ def test_bundle_search_matches_topics_and_parent_collection():
         bundle=bundle,
         is_member_of_collection=collection,
     )
-    structural_info.bundle_topics.add(topic)
-
     bundle_resources = BundleResources.objects.create(bundle=bundle)
     media_resource = MediaResource.objects.create(
         file_name="story_evening_01.wav",

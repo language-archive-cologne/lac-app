@@ -15,9 +15,7 @@ class BundleStructuralInfo(StructuralInfo):
     )
     is_member_of_collection = models.ForeignKey('blam.Collection', on_delete=models.CASCADE, related_name='bundle_collection')
     additional_metadata_files = models.ManyToManyField('BundleAdditionalMetadataFile', blank=True)
-    bundle_topics = models.ManyToManyField('BundleTopic', blank=True)
 
-    
     class Meta:
         verbose_name = "Bundle Structural Info"
         verbose_name_plural = "Bundle Structural Info"
@@ -29,47 +27,6 @@ class BundleAdditionalMetadataFile(AdditionalMetadataFile):
     class Meta:
         verbose_name = "Bundle Additional Metadata File"
         verbose_name_plural = "Bundle Additional Metadata Files"
-
-
-class BundleTopic(BaseModel):
-    """
-    A term that occurs as a BundleKeyword in a subset of bundles and defines 
-    a meaningful subsection of the bundle.
-    
-    """
-    name = models.CharField(
-        max_length=255,
-        null=False,
-        help_text="Topic term that defines a meaningful subsection of the bundle"
-    )
-    
-    class Meta:
-        verbose_name = "Bundle Topic"
-        verbose_name_plural = "Bundle Topics"
-
-    def __str__(self):
-        return self.name
-
-
-class BundleTopics(BaseModel):
-    """
-    Model for managing topics associated with a bundle.
-    """
-    bundle = models.ForeignKey(
-        'Bundle',
-        on_delete=models.CASCADE,
-        related_name='bundle_topics',
-        help_text="Bundle associated with these topics"
-    )
-    topics = models.ManyToManyField(
-        'BundleTopic',
-        related_name='bundle_topics',
-        help_text="Topics associated with the bundle"
-    )
-
-    class Meta:
-        verbose_name = "Bundle Topics"
-        verbose_name_plural = "Bundle Topics"
 
 
 class BundleMembers(BaseModel):

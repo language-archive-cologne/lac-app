@@ -66,7 +66,6 @@ def bundle_queryset_for_collection(collection, search_query=None, sort="name", o
         BundleStructuralInfo.objects.filter(is_member_of_collection=collection)
         .select_related("bundle", "is_member_of_collection")
         .prefetch_related(
-            "bundle_topics",
             "additional_metadata_files",
             Prefetch(
                 "bundle__resources",
@@ -182,7 +181,6 @@ def build_bundle_context(
         for res in struct_info.additional_metadata_files.all()
     ]
     metadata_files = [res for res in metadata_files if res]
-    topics = list(struct_info.bundle_topics.all())
 
     return {
         "structural_info": struct_info,
@@ -192,7 +190,6 @@ def build_bundle_context(
         "written_resources": written_resources,
         "other_resources": other_resources,
         "metadata_files": metadata_files,
-        "topics": topics,
     }
 
 

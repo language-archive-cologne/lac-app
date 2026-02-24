@@ -289,20 +289,6 @@
           </div>
         {% endif %}
 
-        {% if bundle.structural_info.first and bundle.structural_info.first.bundle_topics.all %}
-          <div>
-            <dt class="text-sm font-semibold text-base-content/70 mb-1.5">{% translate "Topics" %}</dt>
-            <dd>
-              <div class="flex flex-wrap gap-1.5">
-                {% for topic in bundle.structural_info.first.bundle_topics.all %}
-                  <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-base-200 text-base-content border border-base-300">
-                    {{ topic.name }}
-                  </span>
-                {% endfor %}
-              </div>
-            </dd>
-          </div>
-        {% endif %}
       </dl>
     </div>
   </div>

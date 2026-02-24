@@ -55,12 +55,12 @@ def facet_remove_url(context, facet_name, value):
 
 @register.simple_tag(takes_context=True)
 def clear_all_filters_url(context):
-    """Remove all facet params and q, keep sort/order only."""
+    """Remove all facet params, field_* params, and q; keep sort/order only."""
     request = context["request"]
     params = request.GET.copy()
 
     for key in list(params.keys()):
-        if key in FACET_PARAM_NAMES or key in ("q", "page"):
+        if key in FACET_PARAM_NAMES or key in ("q", "page") or key.startswith("row_"):
             del params[key]
 
     return f"?{params.urlencode()}" if params else "?"
@@ -234,20 +234,31 @@ def normalize_role(value):
 
 @register.filter
 def highlight_query(text, query):
-    """Highlight literal query matches in plain text, escaping other HTML."""
+    """Highlight literal query matches in plain text, escaping other HTML.
+
+    Supports multiple terms separated by ``|`` so field-search views can
+    highlight each per-field value independently.
+    """
     text = text or ""
     query = (query or "").strip()
     escaped = conditional_escape(text)
     if not query:
         return mark_safe(escaped)
 
-    pattern = re.compile(re.escape(query), flags=re.IGNORECASE)
+    terms = [t.strip() for t in query.split("|") if t.strip()]
+    if not terms:
+        return mark_safe(escaped)
+
+    pattern = re.compile("|".join(re.escape(t) for t in terms), flags=re.IGNORECASE)
     rendered = pattern.sub(lambda match: f"<mark>{match.group(0)}</mark>", str(escaped))
     return mark_safe(rendered)
 
 
 def _tokenize_query(query: str) -> list[str]:
-    return [token.lower() for token in query.split() if token.strip()]
+    tokens: list[str] = []
+    for part in query.split("|"):
+        tokens.extend(t.lower() for t in part.split() if t.strip())
+    return tokens
 
 
 def _text_matches_query(text: str, tokens: list[str]) -> bool:
