@@ -100,6 +100,7 @@ urlpatterns = [
     path("storage/", include("lacos.storage.urls", namespace="storage")),
     path("blam/", include("lacos.blam.urls")),
     path("explorer/", include("lacos.explorer.urls", namespace="explorer")),
+    path("dbadmin/", include("lacos.dbadmin.urls")),
     path("oai/", include("lacos.oaipmh.urls", namespace="oaipmh")),
 
     # Media files
