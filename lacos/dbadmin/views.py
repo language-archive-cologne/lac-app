@@ -171,6 +171,23 @@ class TaskEnqueueView(SuperuserRequiredMixin, View):
             )
 
 
+class TaskCancelView(SuperuserRequiredMixin, View):
+    def post(self, request, task_id, *args, **kwargs):
+        task = get_object_or_404(BackgroundTask, pk=task_id)
+        try:
+            BackgroundTaskService.cancel(task)
+        except ValueError as exc:
+            return HttpResponse(str(exc), status=400)
+        task.refresh_from_db()
+        return HttpResponse(
+            render_to_string(
+                "dbadmin/partials/task_status.html",
+                {"task": task},
+                request=request,
+            )
+        )
+
+
 class TaskStatusView(SuperuserRequiredMixin, View):
     def get(self, request, task_id, *args, **kwargs):
         task = get_object_or_404(BackgroundTask, pk=task_id)

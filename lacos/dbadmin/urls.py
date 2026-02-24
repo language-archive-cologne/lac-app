@@ -9,6 +9,7 @@ urlpatterns = [
     path("stats/", views.OverviewStatsView.as_view(), name="stats"),
     path("tasks/enqueue/<slug:action>/", views.TaskEnqueueView.as_view(), name="task_enqueue"),
     path("tasks/<uuid:task_id>/status/", views.TaskStatusView.as_view(), name="task_status"),
+    path("tasks/<uuid:task_id>/cancel/", views.TaskCancelView.as_view(), name="task_cancel"),
     path("tasks/history/", views.TaskHistoryView.as_view(), name="task_history"),
     # Database management
     path("cleanup/", views.DatabaseCleanupView.as_view(), name="cleanup"),

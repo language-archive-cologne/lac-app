@@ -212,3 +212,44 @@ def test_cancel_completed_task_raises_value_error():
     )
     with pytest.raises(ValueError, match="Cannot cancel"):
         BackgroundTaskService.cancel(task)
+
+
+@pytest.mark.django_db
+def test_task_cancel_view_cancels_queued_task(superuser_client):
+    task = BackgroundTask.objects.create(
+        task_name="test_task",
+        status=BackgroundTask.Status.QUEUED,
+    )
+    with patch("lacos.dbadmin.views.BackgroundTaskService.cancel"):
+        response = superuser_client.post(
+            reverse("dbadmin:task_cancel", kwargs={"task_id": task.id}),
+            HTTP_HX_REQUEST="true",
+        )
+    assert response.status_code == 200
+    assert f"dbadmin-task-{task.id}" in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_task_cancel_view_returns_error_for_completed_task(superuser_client):
+    task = BackgroundTask.objects.create(
+        task_name="test_task",
+        status=BackgroundTask.Status.SUCCESS,
+    )
+    response = superuser_client.post(
+        reverse("dbadmin:task_cancel", kwargs={"task_id": task.id}),
+        HTTP_HX_REQUEST="true",
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.django_db
+def test_task_cancel_view_requires_superuser(non_superuser_client):
+    task = BackgroundTask.objects.create(
+        task_name="test_task",
+        status=BackgroundTask.Status.QUEUED,
+    )
+    response = non_superuser_client.post(
+        reverse("dbadmin:task_cancel", kwargs={"task_id": task.id}),
+        HTTP_HX_REQUEST="true",
+    )
+    assert response.status_code == 403
