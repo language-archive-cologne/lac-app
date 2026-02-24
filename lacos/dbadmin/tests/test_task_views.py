@@ -159,3 +159,16 @@ def test_task_enqueue_requires_superuser(non_superuser_client):
     )
 
     assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_background_task_mark_cancelled():
+    task = BackgroundTask.objects.create(
+        task_name="test_task",
+        status=BackgroundTask.Status.RUNNING,
+        message="Processing...",
+    )
+    task.mark_cancelled("Cancelled by admin")
+    task.refresh_from_db()
+    assert task.status == BackgroundTask.Status.CANCELLED
+    assert task.message == "Cancelled by admin"

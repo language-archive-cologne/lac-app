@@ -9,6 +9,7 @@ class BackgroundTask(UUIDTimestampModel):
         RUNNING = "running", "Running"
         SUCCESS = "success", "Success"
         FAILED = "failed", "Failed"
+        CANCELLED = "cancelled", "Cancelled"
 
     task_name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
@@ -42,3 +43,9 @@ class BackgroundTask(UUIDTimestampModel):
         if result is not None:
             self.result = result
         self.save(update_fields=["status", "error", "result", "updated_at"])
+
+    def mark_cancelled(self, message: str | None = None):
+        self.status = self.Status.CANCELLED
+        if message is not None:
+            self.message = message
+        self.save(update_fields=["status", "message", "updated_at"])
