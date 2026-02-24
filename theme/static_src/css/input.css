@@ -5,6 +5,7 @@
 /* Content sources for class detection */
 @source "../../../lacos/templates/**/*.html";
 @source "../../../lacos/blam/templates/**/*.html";
+@source "../../../lacos/dbadmin/templates/**/*.html";
 @source "../../../lacos/explorer/templates/**/*.html";
 @source "../../../lacos/storage/templates/**/*.html";
 
