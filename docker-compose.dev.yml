@@ -110,6 +110,7 @@ services:
       - .:/app:z
       - /etc/shibboleth:/etc/shibboleth:ro
       - lacos_dev_postgres_data_backups:/backups:ro
+      - /var/run/docker.sock:/var/run/docker.sock
     env_file:
       - ./.envs/.dev/.django
       - ./.envs/.dev/.postgres
@@ -119,9 +120,9 @@ services:
       SAML_LOGIN_ENABLED: "true"
       SAML_DJANGO_USER_MAIN_ATTRIBUTE: "username"
       SAML_USE_NAME_ID_AS_USERNAME: "false"
-      DB_BACKUP_ENABLED: "false"
+      DB_BACKUP_ENABLED: "true"
       HUEY_IMMEDIATE: "false"
-      HUEY_WORKERS: "1"
+      HUEY_WORKERS: "4"
       LAC_MEDIA_TMP_DIR: "/app/.tmp/media-processing"
     command: /bin/sh -c "python manage.py run_huey"
     networks:
