@@ -5,11 +5,9 @@ from django.views import View
 from django.views.generic import TemplateView
 from django.template.loader import render_to_string
 
-from lacos.blam.services.cleanup_service import CleanupService
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.common.mixins import HtmxTemplateHelperMixin
-from lacos.storage.models import BackgroundTask
 
 
 class ArchivistMetadataPanelView(LoginRequiredMixin, UserPassesTestMixin, HtmxTemplateHelperMixin, View):
@@ -18,7 +16,6 @@ class ArchivistMetadataPanelView(LoginRequiredMixin, UserPassesTestMixin, HtmxTe
     """
 
     def test_func(self):
-        """Only allow staff users to access this view."""
         return self.request.user.is_staff
 
     def get(self, request, *args, **kwargs):
@@ -95,30 +92,12 @@ class ArchivistMetadataPanelView(LoginRequiredMixin, UserPassesTestMixin, HtmxTe
 
 
 class ArchivistDashboardView(HtmxTemplateHelperMixin, LoginRequiredMixin, UserPassesTestMixin, TemplateView):
-    """
-    Archivist dashboard view.
-    Shows administration options for archivists.
-    """
-    template_name = 'blam/dashboard/archivist_control_panel.html'
-    
+    template_name = "blam/dashboard/archivist_control_panel.html"
+
     def test_func(self):
-        """Only allow staff users to access this view."""
         return self.request.user.is_staff
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        
-        # Get database statistics
-        context['stats'] = CleanupService.get_database_statistics()
-        
-        # Add any other context data needed for the dashboard
-        context['title'] = 'BLAM Control Panel'
-        context['dashboard_tasks'] = BackgroundTask.objects.filter(
-            task_name__in=[
-                "blam_reindex_search_vectors",
-                "blam_database_backup",
-                "blam_reindex_collections",
-            ]
-        )[:10]
-        
-        return context 
+        context["title"] = "BLAM Control Panel"
+        return context

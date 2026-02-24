@@ -5,7 +5,6 @@
 
 {% block content %}
 <div class="container mx-auto px-4 py-6" hx-boost="true">
-    <!-- Configure HTMX to include CSRF token in all requests -->
     <script>
         document.body.addEventListener('htmx:configRequest', function(evt) {
             evt.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
@@ -14,299 +13,36 @@
     <div class="mb-8 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
             <h1 class="text-3xl font-bold">{{ title }}</h1>
-            <p class="text-lg text-base-content/70">Metadata operations and database tools</p>
+            <p class="text-lg text-base-content/70">Metadata operations</p>
         </div>
     </div>
 
-    <div class="tabs tabs-lifted" role="tablist">
-        <input type="radio" name="blam_dashboard_tabs" role="tab" class="tab" aria-label="Metadata" checked />
-        <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-6">
-            <div class="card bg-base-100 shadow">
-                <div class="card-body space-y-4">
-                    <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                        <div>
-                            <h2 class="card-title">Metadata workspace</h2>
-                            <p class="text-sm text-base-content/60">Search and open editors without leaving the dashboard.</p>
-                        </div>
-                        <div id="metadata-meta" class="text-xs text-base-content/60">
-                            <span class="loading loading-spinner loading-xs"></span>
-                        </div>
-                    </div>
-                    <div
-                        id="metadata-panel"
-                        hx-get="{% url 'blam:blam_metadata_panel' %}"
-                        hx-trigger="load"
-                        hx-target="#metadata-panel"
-                        hx-swap="outerHTML"
-                    >
-                        <div class="flex items-center justify-center py-10">
-                            <span class="loading loading-spinner loading-md"></span>
-                            <span class="ml-3 text-sm text-base-content/60">Loading metadata...</span>
-                        </div>
-                    </div>
+    <div class="card bg-base-100 shadow">
+        <div class="card-body space-y-4">
+            <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <h2 class="card-title">Metadata workspace</h2>
+                    <p class="text-sm text-base-content/60">Search and open editors without leaving the dashboard.</p>
+                </div>
+                <div id="metadata-meta" class="text-xs text-base-content/60">
+                    <span class="loading loading-spinner loading-xs"></span>
                 </div>
             </div>
-        </div>
-
-        <input type="radio" name="blam_dashboard_tabs" role="tab" class="tab" aria-label="Database" />
-        <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-6">
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-xl font-semibold">Database statistics</h2>
-                <span class="text-xs text-base-content/60">Live snapshot</span>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="card bg-base-100 shadow">
-                    <div class="card-body">
-                        <h3 class="font-semibold">Collections</h3>
-                        <ul class="mt-3 divide-y divide-base-300 text-sm">
-                            <li class="flex justify-between items-center py-2">
-                                <span>Total collections</span>
-                                <span class="badge badge-primary badge-sm">{{ stats.collections.total }}</span>
-                            </li>
-                            <li class="flex justify-between items-center py-2">
-                                <span>With bundles</span>
-                                <span class="badge badge-primary badge-sm">{{ stats.collections.with_bundles }}</span>
-                            </li>
-                        </ul>
-                    </div>
-                </div>
-
-                <div class="card bg-base-100 shadow">
-                    <div class="card-body">
-                        <h3 class="font-semibold">Bundles</h3>
-                        <ul class="mt-3 divide-y divide-base-300 text-sm">
-                            <li class="flex justify-between items-center py-2">
-                                <span>Total bundles</span>
-                                <span class="badge badge-primary badge-sm">{{ stats.bundles.total }}</span>
-                            </li>
-                            <li class="flex justify-between items-center py-2">
-                                <span>With collections</span>
-                                <span class="badge badge-primary badge-sm">{{ stats.bundles.with_collections }}</span>
-                            </li>
-                            <li class="flex justify-between items-center py-2">
-                                <span>Without collections</span>
-                                <span class="badge badge-primary badge-sm">{{ stats.bundles.without_collections }}</span>
-                            </li>
-                            <li class="flex justify-between items-center py-2">
-                                <span>With structural info</span>
-                                <span class="badge badge-primary badge-sm">{{ stats.bundles.with_structural_info }}</span>
-                            </li>
-                            <li class="flex justify-between items-center py-2">
-                                <span>With resources</span>
-                                <span class="badge badge-primary badge-sm">{{ stats.bundles.with_resources }}</span>
-                            </li>
-                            <li class="flex justify-between items-center py-2">
-                                <span>Without resources</span>
-                                <span class="badge badge-primary badge-sm">{{ stats.bundles.without_resources }}</span>
-                            </li>
-                        </ul>
-                    </div>
-                </div>
-
-                <div class="card bg-base-100 shadow">
-                    <div class="card-body">
-                        <h3 class="font-semibold">Resources</h3>
-                        <ul class="mt-3 divide-y divide-base-300 text-sm">
-                            <li class="flex justify-between items-center py-2">
-                                <span>Resource containers</span>
-                                <span class="badge badge-primary badge-sm">{{ stats.resources.total_containers }}</span>
-                            </li>
-                            <li class="flex justify-between items-center py-2">
-                                <span>Empty containers</span>
-                                <span class="badge badge-primary badge-sm">{{ stats.resources.empty_containers }}</span>
-                            </li>
-                            <li class="flex justify-between items-center py-2">
-                                <span>Media resources</span>
-                                <span class="badge badge-primary badge-sm">{{ stats.resources.media_resources }}</span>
-                            </li>
-                            <li class="flex justify-between items-center py-2">
-                                <span>Written resources</span>
-                                <span class="badge badge-primary badge-sm">{{ stats.resources.written_resources }}</span>
-                            </li>
-                            <li class="flex justify-between items-center py-2">
-                                <span>Other resources</span>
-                                <span class="badge badge-primary badge-sm">{{ stats.resources.other_resources }}</span>
-                            </li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 mt-8">
-                <div class="lg:col-span-2">
-                    <div class="bg-base-100 rounded-lg shadow overflow-hidden">
-                        <div class="bg-emerald-600 text-white px-4 py-3">
-                            <h5 class="font-medium text-lg">Background tasks</h5>
-                        </div>
-                        <div class="p-4 space-y-3">
-                            <p class="text-sm text-base-content/70">
-                                Queue long-running actions and monitor them live.
-                            </p>
-                            <button
-                                hx-post="{% url 'blam:dashboard_task_enqueue' 'reindex' %}"
-                                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-                                hx-target="#blam-task-list"
-                                hx-swap="afterbegin"
-                                class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition"
-                            >
-                                Reindex search vectors
-                            </button>
-                            <button
-                                hx-post="{% url 'blam:dashboard_task_enqueue' 'backup' %}"
-                                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-                                hx-target="#blam-task-list"
-                                hx-swap="afterbegin"
-                                class="w-full px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-opacity-50 transition"
-                            >
-                                Backup database to S3
-                            </button>
-                            <button
-                                hx-post="{% url 'blam:dashboard_task_enqueue' 'reindex-collections' %}"
-                                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-                                hx-target="#blam-task-list"
-                                hx-swap="afterbegin"
-                                class="w-full px-4 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-opacity-50 transition"
-                            >
-                                Reindex all collections from S3 XML
-                            </button>
-                            <button
-                                hx-post="{% url 'blam:dashboard_task_enqueue' 'generate-peaks' %}"
-                                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-                                hx-target="#blam-task-list"
-                                hx-swap="afterbegin"
-                                class="w-full px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-opacity-50 transition"
-                            >
-                                Generate audio sidecars
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="lg:col-span-3">
-                    <div class="bg-base-100 rounded-lg shadow overflow-hidden">
-                        <div class="bg-base-300/70 px-4 py-3">
-                            <h5 class="font-medium text-lg">Recent task activity</h5>
-                        </div>
-                        <div id="blam-task-list" class="p-4 space-y-3">
-                            {% for task in dashboard_tasks %}
-                                {% include "blam/dashboard/partials/task_status.html" with task=task %}
-                            {% empty %}
-                                <p class="text-sm text-base-content/60">No task activity yet.</p>
-                            {% endfor %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-        <!-- Database Maintenance Card -->
-        <div>
-            <div class="bg-base-100 rounded-lg shadow overflow-hidden">
-                <div class="bg-blue-600 text-white px-4 py-3">
-                    <h5 class="font-medium text-lg">Database Maintenance</h5>
-                </div>
-                <div class="p-4">
-                    <p class="mb-4">Clean up and fix issues in the database models.</p>
-                    <button 
-                        hx-post="{% url 'blam:database_cleanup' %}"
-                        hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-                        hx-target="#results-container"
-                        hx-swap="innerHTML"
-                        hx-indicator="#cleanup-indicator"
-                        class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 transition">
-                        <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path>
-                        </svg>
-                        <span>Cleanup Database</span>
-                        <span id="cleanup-indicator" class="htmx-indicator">
-                            <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            Processing...
-                        </span>
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Database Reset Card -->
-        <div>
-            <div class="bg-base-100 rounded-lg shadow overflow-hidden">
-                <div class="bg-red-600 text-white px-4 py-3">
-                    <h5 class="font-medium text-lg">Database Management</h5>
-                </div>
-                <div class="p-4">
-                    <p class="mb-4">
-                        <strong>CAUTION:</strong> The following actions will delete data from the database.
-                        These actions cannot be undone!
-                    </p>
-
-                    <div class="flex flex-col space-y-3">
-                        <div>
-                            <h6 class="font-medium mb-1">Delete Collections Only</h6>
-                            <p class="text-sm text-base-content/60 mb-2">This will delete all collections but keep bundles. Bundles will be orphaned.</p>
-                            <button 
-                                hx-post="{% url 'blam:database_delete_collections' %}"
-                                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-                                hx-target="#confirm-modal"
-                                hx-swap="innerHTML"
-                                class="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-opacity-50 transition">
-                                <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                </svg>
-                                Delete Collections Only
-                            </button>
-                        </div>
-
-                        <div>
-                            <h6 class="font-medium mb-1">Delete Bundles Only</h6>
-                            <p class="text-sm text-base-content/60 mb-2">This will delete all bundles and their resources but keep collections.</p>
-                            <button 
-                                hx-post="{% url 'blam:database_delete_bundles' %}"
-                                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-                                hx-target="#confirm-modal"
-                                hx-swap="innerHTML"
-                                class="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-opacity-50 transition">
-                                <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                </svg>
-                                Delete Bundles Only
-                            </button>
-                        </div>
-
-                        <div class="border-t border-base-300 pt-3">
-                            <h6 class="font-medium mb-1">Delete All Data</h6>
-                            <p class="text-sm text-base-content/60 mb-2">This will delete all collections, bundles, and resources from the database.</p>
-                            <button 
-                                hx-post="{% url 'blam:database_delete_all' %}"
-                                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-                                hx-target="#confirm-modal"
-                                hx-swap="innerHTML"
-                                class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 transition">
-                                <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                </svg>
-                                Delete All Data
-                            </button>
-                        </div>
-                    </div>
+            <div
+                id="metadata-panel"
+                hx-get="{% url 'blam:blam_metadata_panel' %}"
+                hx-trigger="load"
+                hx-target="#metadata-panel"
+                hx-swap="outerHTML"
+            >
+                <div class="flex items-center justify-center py-10">
+                    <span class="loading loading-spinner loading-md"></span>
+                    <span class="ml-3 text-sm text-base-content/60">Loading metadata...</span>
                 </div>
             </div>
         </div>
     </div>
-    
-            <!-- Results container -->
-            <div id="results-container" class="mt-8"></div>
 
-            <!-- Confirm Modal -->
-            <div id="confirm-modal-wrapper" class="hidden fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
-                <div id="confirm-modal" class="bg-base-100 rounded-lg shadow-lg p-6 max-w-lg w-full mx-4">
-                    <!-- Content will be loaded here by HTMX -->
-                </div>
-            </div>
-        </div>
-    </div>
     <!-- Metadata Editor Modal -->
     <dialog id="metadata-editor-modal" class="modal"
         hx-on::before-history-update="if(this.open) event.preventDefault()"
@@ -327,7 +63,6 @@
                 hx-swap="outerHTML"
                 hx-on::after-swap="var d=this.closest('dialog'); if(d && !d.open) d.showModal()"
             >
-                <!-- Editor content injected here by HTMX -->
             </div>
         </div>
         <form method="dialog" class="modal-backdrop">
@@ -335,35 +70,4 @@
         </form>
     </dialog>
 </div>
-
-<script>
-    // Show confirm modal when content is loaded via HTMX
-    document.body.addEventListener('htmx:afterSwap', function(event) {
-        if (event.detail.target.id === 'confirm-modal') {
-            document.getElementById('confirm-modal-wrapper').classList.remove('hidden');
-        }
-    });
-
-    // Hide confirm modal when clicking outside of it
-    document.getElementById('confirm-modal-wrapper').addEventListener('click', function(event) {
-        if (event.target === this) {
-            this.classList.add('hidden');
-        }
-    });
-</script>
 {% endblock %}
-
-{% block extra_js %}
-<style>
-    /* HTMX indicator styles */
-    .htmx-indicator {
-        display: none;
-    }
-    .htmx-request .htmx-indicator {
-        display: inline;
-    }
-    .htmx-request.htmx-indicator {
-        display: inline;
-    }
-</style>
-{% endblock %} 
