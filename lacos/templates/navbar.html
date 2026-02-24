@@ -46,6 +46,11 @@
            {% if current_view == 'storage:acl_admin_dashboard' %}aria-current="page"{% endif %}>
           ACL
         </a>
+        <a href="{% url 'dbadmin:dashboard' %}"
+           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if 'dbadmin:' in current_view %}bg-slate-700/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-slate-700/70{% endif %}"
+           {% if 'dbadmin:' in current_view %}aria-current="page"{% endif %}>
+          Database
+        </a>
         {% endif %}
         {% if request.user.is_staff %}
         <a href="{% url 'admin:index' %}"
@@ -154,6 +159,11 @@
          class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if current_view == 'storage:acl_admin_dashboard' %}bg-slate-800 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}"
          {% if current_view == 'storage:acl_admin_dashboard' %}aria-current="page"{% endif %}>
         ACL
+      </a>
+      <a href="{% url 'dbadmin:dashboard' %}"
+         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if 'dbadmin:' in current_view %}bg-slate-800 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}"
+         {% if 'dbadmin:' in current_view %}aria-current="page"{% endif %}>
+        Database
       </a>
       {% endif %}
       {% if request.user.is_staff %}
