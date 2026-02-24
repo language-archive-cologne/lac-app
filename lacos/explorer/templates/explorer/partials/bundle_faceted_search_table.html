@@ -37,6 +37,7 @@
               {% endif %}
             </a>
           </th>
+          <th scope="col" class="px-4 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">{% translate "Access" %}</th>
           <th scope="col" class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">
             {% facet_sort_url "language" as sort_lang_url %}
             <a href="{{ sort_lang_url }}"
@@ -132,6 +133,15 @@
                   {% endwith %}
                 {% endif %}
               </div>
+            </td>
+            <td class="px-4 py-5 align-top">
+              {% if bundle.acl_access_level == 'public' %}
+                <span class="badge badge-success badge-sm">{% translate "Public" %}</span>
+              {% elif bundle.acl_access_level == 'academic' %}
+                <span class="badge badge-warning badge-sm">{% translate "Academic" %}</span>
+              {% elif bundle.acl_access_level %}
+                <span class="badge bg-amber-600 text-white border-amber-600 badge-sm">{% translate "Restricted" %}</span>
+              {% endif %}
             </td>
             <td class="px-6 py-5 align-top">
               {% if gi and gi.object_languages.all %}
