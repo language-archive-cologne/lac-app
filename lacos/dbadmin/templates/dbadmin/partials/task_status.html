@@ -1,8 +1,8 @@
 {% load humanize %}
 {% with status=task.status %}
 <div id="dbadmin-task-{{ task.id }}"
-     class="alert {% if status == 'failed' %}alert-error{% elif status == 'success' %}alert-success{% else %}alert-info{% endif %}"
-     {% if status != 'success' and status != 'failed' %}
+     class="alert {% if status == 'failed' %}alert-error{% elif status == 'success' %}alert-success{% elif status == 'cancelled' %}alert-warning{% else %}alert-info{% endif %}"
+     {% if status != 'success' and status != 'failed' and status != 'cancelled' %}
         hx-get="{% url 'dbadmin:task_status' task.id %}"
         hx-trigger="load, every 4s"
         hx-target="this"
@@ -30,7 +30,19 @@
             <div class="text-[11px] mt-2 break-words">{{ task.error }}</div>
             {% endif %}
         </div>
-        <span class="badge badge-outline badge-sm">{{ status }}</span>
+        <div class="flex items-center gap-2">
+            {% if status == 'queued' or status == 'running' %}
+            <button
+                hx-post="{% url 'dbadmin:task_cancel' task.id %}"
+                hx-target="#dbadmin-task-{{ task.id }}"
+                hx-swap="outerHTML"
+                class="btn btn-ghost btn-xs"
+                title="Cancel task">
+                ✕
+            </button>
+            {% endif %}
+            <span class="badge badge-outline badge-sm">{{ status }}</span>
+        </div>
     </div>
 </div>
 {% endwith %}
