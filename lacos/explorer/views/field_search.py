@@ -47,8 +47,8 @@ class FieldSearchView(ListView):
             )
         )
 
-        rows = parse_search_rows(self.request.GET, COLLECTION_FIELD_DEFINITIONS)
-        qs = apply_search_rows(qs, rows, COLLECTION_FIELD_DEFINITIONS)
+        rows, logic = parse_search_rows(self.request.GET, COLLECTION_FIELD_DEFINITIONS)
+        qs = apply_search_rows(qs, rows, COLLECTION_FIELD_DEFINITIONS, logic)
 
         qs = qs.annotate(
             bundles_count=Count("bundle_collection", distinct=True),
@@ -86,11 +86,12 @@ class FieldSearchView(ListView):
         context["current_order"] = self.request.GET.get("order", "asc")
         context["current_params"] = self.request.GET.copy()
 
-        rows = parse_search_rows(self.request.GET, COLLECTION_FIELD_DEFINITIONS)
+        rows, logic = parse_search_rows(self.request.GET, COLLECTION_FIELD_DEFINITIONS)
         context["search_rows"] = rows
         context["has_search_rows"] = bool(rows)
         context["field_definitions"] = COLLECTION_FIELD_DEFINITIONS
         context["search_query"] = "|".join(r.value for r in rows if r.value)
+        context["search_logic"] = logic
         return context
 
     def render_to_response(self, context, **kwargs):
@@ -122,8 +123,8 @@ class BundleFieldSearchView(ListView):
             )
         )
 
-        rows = parse_search_rows(self.request.GET, BUNDLE_FIELD_DEFINITIONS)
-        qs = apply_search_rows(qs, rows, BUNDLE_FIELD_DEFINITIONS)
+        rows, logic = parse_search_rows(self.request.GET, BUNDLE_FIELD_DEFINITIONS)
+        qs = apply_search_rows(qs, rows, BUNDLE_FIELD_DEFINITIONS, logic)
 
         sort_key = self.request.GET.get("sort", "name")
         order = self.request.GET.get("order", "asc")
@@ -166,11 +167,12 @@ class BundleFieldSearchView(ListView):
         context["current_order"] = self.request.GET.get("order", "asc")
         context["current_params"] = self.request.GET.copy()
 
-        rows = parse_search_rows(self.request.GET, BUNDLE_FIELD_DEFINITIONS)
+        rows, logic = parse_search_rows(self.request.GET, BUNDLE_FIELD_DEFINITIONS)
         context["search_rows"] = rows
         context["has_search_rows"] = bool(rows)
         context["field_definitions"] = BUNDLE_FIELD_DEFINITIONS
         context["search_query"] = "|".join(r.value for r in rows if r.value)
+        context["search_logic"] = logic
         return context
 
     def render_to_response(self, context, **kwargs):

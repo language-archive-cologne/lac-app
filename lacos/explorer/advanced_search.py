@@ -91,12 +91,6 @@ COLLECTION_FIELD_DEFINITIONS: list[AdvancedFieldDefinition] = [
         orm_lookups=["project_infos__funder_infos__grant_identifier__icontains"],
         placeholder="e.g. 502013233",
     ),
-    AdvancedFieldDefinition(
-        key="data_provider",
-        label="Data Provider",
-        orm_lookups=["publication_info__data_provider__icontains"],
-        placeholder="e.g. Language Archive Cologne",
-    ),
 ]
 
 
@@ -179,11 +173,12 @@ _ROW_PARAM_RE = re.compile(r"^row_(\d+)_(field|value)$")
 def parse_search_rows(
     params: QueryDict,
     definitions: list[AdvancedFieldDefinition],
-) -> list[SearchRow]:
+) -> tuple[list[SearchRow], str]:
     """Parse dynamic query builder rows from GET params.
 
     Expects pairs: row_0_field=title, row_0_value=Senufo, row_1_field=language, ...
-    Returns list of SearchRow with valid, non-empty field+value pairs.
+    Also reads ``logic`` param (``and`` or ``or``, default ``and``).
+    Returns tuple of (list of SearchRow, logic mode).
     """
     valid_keys = {d.key for d in definitions}
     raw: dict[int, dict[str, str]] = {}
@@ -202,29 +197,46 @@ def parse_search_rows(
         value = raw[index].get("value", "")
         if field_key in valid_keys and value:
             rows.append(SearchRow(field_key=field_key, value=value, index=index))
-    return rows
+
+    logic = params.get("logic", "and").lower()
+    if logic not in ("and", "or"):
+        logic = "and"
+
+    return rows, logic
 
 
 def apply_search_rows(
     qs: QuerySet,
     rows: list[SearchRow],
     definitions: list[AdvancedFieldDefinition],
+    logic: str = "and",
 ) -> QuerySet:
     """Apply dynamic search rows to the queryset.
 
-    Each row narrows the queryset (AND between rows).
-    When a field maps to multiple ORM lookups, they are OR-combined.
+    When ``logic`` is ``and`` each row narrows the queryset.
+    When ``logic`` is ``or`` rows are combined so any match qualifies.
+    Within a single row, multiple ORM lookups are always OR-combined.
     """
     if not rows:
         return qs
 
     lookup_map = {d.key: d.orm_lookups for d in definitions}
 
+    row_queries: list[Q] = []
     for row in rows:
         lookups = lookup_map.get(row.field_key, [])
         if not lookups:
             continue
-        q = reduce(or_, (Q(**{lookup: row.value}) for lookup in lookups))
-        qs = qs.filter(q)
+        row_queries.append(reduce(or_, (Q(**{lookup: row.value}) for lookup in lookups)))
+
+    if not row_queries:
+        return qs
+
+    if logic == "or":
+        combined = reduce(or_, row_queries)
+        qs = qs.filter(combined)
+    else:
+        for q in row_queries:
+            qs = qs.filter(q)
 
     return qs.distinct()

@@ -23,7 +23,6 @@ class TestCollectionFieldDefinitions:
         assert "creator" in keys
         assert "contributor" in keys
         assert "grant_id" in keys
-        assert "data_provider" in keys
 
     def test_all_have_required_attributes(self):
         for defn in COLLECTION_FIELD_DEFINITIONS:
@@ -47,11 +46,11 @@ class TestBundleFieldDefinitions:
 
 class TestParseSearchRows:
     def test_empty_params(self):
-        result = parse_search_rows(QueryDict(""), COLLECTION_FIELD_DEFINITIONS)
+        result, _ = parse_search_rows(QueryDict(""), COLLECTION_FIELD_DEFINITIONS)
         assert result == []
 
     def test_single_row(self):
-        result = parse_search_rows(
+        result, _ = parse_search_rows(
             QueryDict("row_0_field=title&row_0_value=Senufo"),
             COLLECTION_FIELD_DEFINITIONS,
         )
@@ -61,7 +60,7 @@ class TestParseSearchRows:
         assert result[0].index == 0
 
     def test_multiple_rows(self):
-        result = parse_search_rows(
+        result, _ = parse_search_rows(
             QueryDict("row_0_field=title&row_0_value=Senufo&row_1_field=language&row_1_value=Bambara"),
             COLLECTION_FIELD_DEFINITIONS,
         )
@@ -72,7 +71,7 @@ class TestParseSearchRows:
         assert result[1].value == "Bambara"
 
     def test_skips_empty_values(self):
-        result = parse_search_rows(
+        result, _ = parse_search_rows(
             QueryDict("row_0_field=title&row_0_value=&row_1_field=language&row_1_value=Bambara"),
             COLLECTION_FIELD_DEFINITIONS,
         )
@@ -80,7 +79,7 @@ class TestParseSearchRows:
         assert result[0].field_key == "language"
 
     def test_skips_invalid_field_keys(self):
-        result = parse_search_rows(
+        result, _ = parse_search_rows(
             QueryDict("row_0_field=bogus&row_0_value=test&row_1_field=title&row_1_value=X"),
             COLLECTION_FIELD_DEFINITIONS,
         )
@@ -88,7 +87,7 @@ class TestParseSearchRows:
         assert result[0].field_key == "title"
 
     def test_strips_whitespace(self):
-        result = parse_search_rows(
+        result, _ = parse_search_rows(
             QueryDict("row_0_field=title&row_0_value=+Senufo+"),
             COLLECTION_FIELD_DEFINITIONS,
         )
@@ -96,7 +95,7 @@ class TestParseSearchRows:
         assert result[0].value == "Senufo"
 
     def test_ignores_non_row_params(self):
-        result = parse_search_rows(
+        result, _ = parse_search_rows(
             QueryDict("q=test&sort=name&row_0_field=title&row_0_value=X"),
             COLLECTION_FIELD_DEFINITIONS,
         )
@@ -104,7 +103,7 @@ class TestParseSearchRows:
         assert result[0].field_key == "title"
 
     def test_handles_gaps_in_indices(self):
-        result = parse_search_rows(
+        result, _ = parse_search_rows(
             QueryDict("row_0_field=title&row_0_value=A&row_5_field=language&row_5_value=B"),
             COLLECTION_FIELD_DEFINITIONS,
         )
@@ -113,14 +112,14 @@ class TestParseSearchRows:
         assert result[1].index == 5
 
     def test_skips_row_missing_field(self):
-        result = parse_search_rows(
+        result, _ = parse_search_rows(
             QueryDict("row_0_value=Senufo"),
             COLLECTION_FIELD_DEFINITIONS,
         )
         assert result == []
 
     def test_skips_row_missing_value(self):
-        result = parse_search_rows(
+        result, _ = parse_search_rows(
             QueryDict("row_0_field=title"),
             COLLECTION_FIELD_DEFINITIONS,
         )
