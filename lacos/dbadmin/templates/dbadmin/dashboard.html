@@ -16,41 +16,17 @@
         <p class="text-lg text-base-content/70">PostgreSQL stats, tasks, and database management</p>
     </div>
 
-    <!-- Stats Row -->
-    <div class="stats stats-vertical lg:stats-horizontal shadow w-full mb-8">
-        <div class="stat">
-            <div class="stat-title">Database Size</div>
-            <div class="stat-value text-lg">{{ pg_stats.db_size_pretty }}</div>
-        </div>
-        <div class="stat">
-            <div class="stat-title">Tables</div>
-            <div class="stat-value text-lg">{{ pg_stats.table_count }}</div>
-        </div>
-        <div class="stat">
-            <div class="stat-title">Connections</div>
-            <div class="stat-value text-lg">{{ pg_stats.active_connections }}</div>
-        </div>
-        <div class="stat">
-            <div class="stat-title">Last Backup</div>
-            <div class="stat-value text-lg">
-                {% if backup_summary.last_backup_time %}
-                    {{ backup_summary.last_backup_time|naturaltime }}
-                {% else %}
-                    <span class="text-warning">Never</span>
-                {% endif %}
-            </div>
-            {% if backup_summary.last_status %}
-            <div class="stat-desc">
-                <span class="badge badge-sm {% if backup_summary.last_status == 'success' %}badge-success{% elif backup_summary.last_status == 'failed' %}badge-error{% else %}badge-info{% endif %}">
-                    {{ backup_summary.last_status }}
-                </span>
-            </div>
-            {% endif %}
-        </div>
-        <div class="stat">
-            <div class="stat-title">Uptime</div>
-            <div class="stat-value text-lg">{{ pg_stats.uptime }}</div>
-        </div>
+    <!-- Stats Bar -->
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-base-content/70 mb-6">
+        <span><span class="font-semibold text-base-content">{{ pg_stats.db_size_pretty }}</span> DB</span>
+        <span class="text-base-content/30">|</span>
+        <span><span class="font-semibold text-base-content">{{ pg_stats.table_count }}</span> tables</span>
+        <span class="text-base-content/30">|</span>
+        <span><span class="font-semibold text-base-content">{{ pg_stats.active_connections }}</span> conn</span>
+        <span class="text-base-content/30">|</span>
+        <span>backup {% if backup_summary.last_backup_time %}{{ backup_summary.last_backup_time|naturaltime }}{% else %}<span class="text-warning font-semibold">never</span>{% endif %}{% if backup_summary.last_status %} <span class="badge badge-xs {% if backup_summary.last_status == 'success' %}badge-success{% elif backup_summary.last_status == 'failed' %}badge-error{% else %}badge-info{% endif %}">{{ backup_summary.last_status }}</span>{% endif %}</span>
+        <span class="text-base-content/30">|</span>
+        <span>up {{ pg_stats.uptime }}</span>
     </div>
 
     <!-- Tabs -->
