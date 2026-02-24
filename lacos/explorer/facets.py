@@ -151,13 +151,6 @@ BUNDLE_FACET_DEFINITIONS: list[FacetDefinition] = [
         label_field="general_info__object_languages__name",
         filter_lookup="general_info__object_languages__iso_639_3_code__in",
     ),
-    # FacetDefinition(
-    #     name="topic",
-    #     label="Topic",
-    #     value_field="structural_info__bundle_topics__name",
-    #     label_field="structural_info__bundle_topics__name",
-    #     filter_lookup="structural_info__bundle_topics__name__in",
-    # ),
     FacetDefinition(
         name="collection",
         label="Collection",

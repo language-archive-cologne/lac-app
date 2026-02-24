@@ -35,25 +35,25 @@ COLLECTION_FIELD_DEFINITIONS: list[AdvancedFieldDefinition] = [
         key="title",
         label="Title",
         orm_lookups=["general_info__display_title__icontains"],
-        placeholder="e.g. Senufo",
+        placeholder="e.g. Interviews about Rock Art",
     ),
     AdvancedFieldDefinition(
         key="description",
         label="Description",
         orm_lookups=["general_info__description__icontains"],
-        placeholder="e.g. music recordings",
+        placeholder="e.g. video recordings",
     ),
     AdvancedFieldDefinition(
         key="keyword",
         label="Keyword",
         orm_lookups=["general_info__keywords__value__icontains"],
-        placeholder="e.g. phonetics",
+        placeholder="e.g. language acquisition",
     ),
     AdvancedFieldDefinition(
         key="language",
         label="Language",
         orm_lookups=["general_info__object_languages__name__icontains"],
-        placeholder="e.g. Bambara",
+        placeholder="e.g. Yuracaré",
     ),
     AdvancedFieldDefinition(
         key="location",
@@ -64,7 +64,7 @@ COLLECTION_FIELD_DEFINITIONS: list[AdvancedFieldDefinition] = [
             "general_info__location__country_facet__icontains",
             "general_info__location__region_facet__icontains",
         ],
-        placeholder="e.g. Mali",
+        placeholder="e.g. Papua New Guinea",
     ),
     AdvancedFieldDefinition(
         key="creator",
@@ -73,7 +73,7 @@ COLLECTION_FIELD_DEFINITIONS: list[AdvancedFieldDefinition] = [
             "publication_info__creators__family_name__icontains",
             "publication_info__creators__given_name__icontains",
         ],
-        placeholder="e.g. Vydrin",
+        placeholder="e.g. Hellwig",
     ),
     AdvancedFieldDefinition(
         key="contributor",
@@ -83,19 +83,19 @@ COLLECTION_FIELD_DEFINITIONS: list[AdvancedFieldDefinition] = [
             "publication_info__contributors__given_name__icontains",
             "publication_info__contributors__contributor_display_name__icontains",
         ],
-        placeholder="e.g. annotator",
+        placeholder="e.g. Compensis",
     ),
     AdvancedFieldDefinition(
         key="grant_id",
         label="Grant ID",
         orm_lookups=["project_infos__funder_infos__grant_identifier__icontains"],
-        placeholder="e.g. DFG-123",
+        placeholder="e.g. 502013233",
     ),
     AdvancedFieldDefinition(
         key="data_provider",
         label="Data Provider",
         orm_lookups=["publication_info__data_provider__icontains"],
-        placeholder="e.g. ELAR",
+        placeholder="e.g. Language Archive Cologne",
     ),
 ]
 
@@ -105,25 +105,25 @@ BUNDLE_FIELD_DEFINITIONS: list[AdvancedFieldDefinition] = [
         key="title",
         label="Title",
         orm_lookups=["general_info__display_title__icontains"],
-        placeholder="e.g. Senufo",
+        placeholder="e.g. Interviews about Rock Art",
     ),
     AdvancedFieldDefinition(
         key="description",
         label="Description",
         orm_lookups=["general_info__description__icontains"],
-        placeholder="e.g. music recordings",
+        placeholder="e.g. video recordings",
     ),
     AdvancedFieldDefinition(
         key="keyword",
         label="Keyword",
         orm_lookups=["general_info__keywords__value__icontains"],
-        placeholder="e.g. phonetics",
+        placeholder="e.g. language acquisition",
     ),
     AdvancedFieldDefinition(
         key="language",
         label="Language",
         orm_lookups=["general_info__object_languages__name__icontains"],
-        placeholder="e.g. Bambara",
+        placeholder="e.g. Yuracaré",
     ),
     AdvancedFieldDefinition(
         key="location",
@@ -133,7 +133,7 @@ BUNDLE_FIELD_DEFINITIONS: list[AdvancedFieldDefinition] = [
             "general_info__location__country_facet__icontains",
             "general_info__location__region_facet__icontains",
         ],
-        placeholder="e.g. Mali",
+        placeholder="e.g. Papua New Guinea",
     ),
     AdvancedFieldDefinition(
         key="creator",
@@ -142,7 +142,7 @@ BUNDLE_FIELD_DEFINITIONS: list[AdvancedFieldDefinition] = [
             "publication_info__creators__family_name__icontains",
             "publication_info__creators__given_name__icontains",
         ],
-        placeholder="e.g. Vydrin",
+        placeholder="e.g. Hellwig",
     ),
     AdvancedFieldDefinition(
         key="contributor",
@@ -153,13 +153,13 @@ BUNDLE_FIELD_DEFINITIONS: list[AdvancedFieldDefinition] = [
             "publication_info__contributors__contributor_name__contributor_family_name__icontains",
             "publication_info__contributors__contributor_name__contributor_given_name__icontains",
         ],
-        placeholder="e.g. annotator",
+        placeholder="e.g. Compensis",
     ),
     AdvancedFieldDefinition(
         key="grant_id",
         label="Grant ID",
         orm_lookups=["projects__funder_infos__grant_identifier__icontains"],
-        placeholder="e.g. DFG-123",
+        placeholder="e.g. 502013233",
     ),
     AdvancedFieldDefinition(
         key="collection",
@@ -168,13 +168,7 @@ BUNDLE_FIELD_DEFINITIONS: list[AdvancedFieldDefinition] = [
             "structural_info__is_member_of_collection__identifier__icontains",
             "structural_info__is_member_of_collection__general_info__display_title__icontains",
         ],
-        placeholder="e.g. Dogon Languages",
-    ),
-    AdvancedFieldDefinition(
-        key="topic",
-        label="Topic",
-        orm_lookups=["structural_info__bundle_topics__name__icontains"],
-        placeholder="e.g. narrative",
+        placeholder="e.g. Tima Archive Cologne",
     ),
 ]
 

@@ -131,10 +131,6 @@ def build_bundle_search_vector(bundle: Bundle) -> SearchVector:
     # Structural info
     structural_info = bundle.structural_info.first()
     if structural_info:
-        # Bundle topics (weight B)
-        for topic in structural_info.bundle_topics.all():
-            vectors.append(SearchVector(Value(topic.name or ""), weight="B", config="simple"))
-
         # Parent collection (weight D)
         if structural_info.is_member_of_collection:
             parent = structural_info.is_member_of_collection
@@ -269,7 +265,6 @@ def update_bundle_search_vector(bundle: Bundle) -> None:
                     setweight(to_tsvector('simple', COALESCE(b.identifier, '')), 'A') ||
                     setweight(to_tsvector('simple', COALESCE(gi.display_title, '')), 'A') ||
                     setweight(to_tsvector('simple', COALESCE(gi.description, '')), 'B') ||
-                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT bt.name, ' '), '')), 'B') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT kw.value, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT ol.name, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT ol.display_name, ' '), '')), 'C') ||
@@ -305,8 +300,6 @@ def update_bundle_search_vector(bundle: Bundle) -> None:
                 LEFT JOIN blam_bundleobjectlanguagelanguagefamily lf ON lf.id = oltlf.bundleobjectlanguagelanguagefamily_id
                 LEFT JOIN blam_bundlelocation loc ON loc.id = gi.location_id
                 LEFT JOIN blam_bundlestructuralinfo si ON si.bundle_id = b.id
-                LEFT JOIN blam_bundlestructuralinfo_bundle_topics sibt ON sibt.bundlestructuralinfo_id = si.id
-                LEFT JOIN blam_bundletopic bt ON bt.id = sibt.bundletopic_id
                 LEFT JOIN blam_collection pc ON pc.id = si.is_member_of_collection_id
                 LEFT JOIN blam_collectiongeneralinfo pcgi ON pcgi.collection_id = pc.id
                 LEFT JOIN blam_bundlepublicationinfo bpi ON bpi.bundle_id = b.id
@@ -406,7 +399,6 @@ def rebuild_all_search_vectors() -> tuple[int, int]:
                     setweight(to_tsvector('simple', COALESCE(b.identifier, '')), 'A') ||
                     setweight(to_tsvector('simple', COALESCE(gi.display_title, '')), 'A') ||
                     setweight(to_tsvector('simple', COALESCE(gi.description, '')), 'B') ||
-                    setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT bt.name, ' '), '')), 'B') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT kw.value, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT ol.name, ' '), '')), 'C') ||
                     setweight(to_tsvector('simple', COALESCE(string_agg(DISTINCT ol.display_name, ' '), '')), 'C') ||
@@ -443,8 +435,6 @@ def rebuild_all_search_vectors() -> tuple[int, int]:
                 LEFT JOIN blam_bundleobjectlanguagelanguagefamily lf ON lf.id = oltlf.bundleobjectlanguagelanguagefamily_id
                 LEFT JOIN blam_bundlelocation loc ON loc.id = gi.location_id
                 LEFT JOIN blam_bundlestructuralinfo si ON si.bundle_id = b.id
-                LEFT JOIN blam_bundlestructuralinfo_bundle_topics sibt ON sibt.bundlestructuralinfo_id = si.id
-                LEFT JOIN blam_bundletopic bt ON bt.id = sibt.bundletopic_id
                 LEFT JOIN blam_collection pc ON pc.id = si.is_member_of_collection_id
                 LEFT JOIN blam_collectiongeneralinfo pcgi ON pcgi.collection_id = pc.id
                 LEFT JOIN blam_bundlepublicationinfo bpi ON bpi.bundle_id = b.id

@@ -36,7 +36,6 @@ from lacos.blam.models.collection.collection_administrative_info import (
 )
 from lacos.blam.models.bundle.bundle_structural_info import (
     BundleAdditionalMetadataFile,
-    BundleTopic,
     MediaResource,
     WrittenResource,
     WrittenResourceAnnotation,
@@ -149,8 +148,6 @@ BundleAdditionalMetadataFileForm = build_reference_form(
     BundleAdditionalMetadataFile,
     ["file_name", "file_pid", "mime_type", "is_metadata_for", "file_description"],
 )
-
-BundleTopicForm = build_reference_form(BundleTopic, ["name"])
 
 MediaResourceForm = build_reference_form(
     MediaResource,

@@ -3,7 +3,6 @@ from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import (
     BundleAdditionalMetadataFile,
     BundleStructuralInfo,
-    BundleTopic,
 )
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.collection.collection_structural_info import (
@@ -39,16 +38,6 @@ BUNDLE_STRUCTURAL_REFERENCE_CONFIG = {
         "item_label": "Additional metadata file",
         "manage_url_name": "blam:metadata_reference_list",
         "manage_url_kwargs": {"reference_slug": "bundle-additional-metadata-files"},
-    },
-    "bundle-topics": {
-        "model": BundleTopic,
-        "form": reference_forms.BundleTopicForm,
-        "title": "Bundle topics",
-        "fields": ["name"],
-        "relation": "bundle_topics",
-        "item_label": "Topic",
-        "manage_url_name": "blam:metadata_reference_list",
-        "manage_url_kwargs": {"reference_slug": "bundle-topics"},
     },
 }
 

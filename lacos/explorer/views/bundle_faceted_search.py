@@ -78,7 +78,6 @@ class BundleFacetedSearchView(ListView):
             "general_info__object_languages",
             "general_info__location",
             "structural_info",
-            "structural_info__bundle_topics",
             "structural_info__is_member_of_collection",
             "structural_info__is_member_of_collection__general_info",
             "publication_info",

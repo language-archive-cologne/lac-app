@@ -430,7 +430,6 @@ def _search_bundles(query: SearchQuery, term: str, use_stored_vectors: bool = Tr
                     SearchVector("identifier", weight="A", config="simple")
                     + SearchVector("general_info__display_title", weight="A", config="simple")
                     + SearchVector("general_info__description", weight="B", config="simple")
-                    + SearchVector("structural_info__bundle_topics__name", weight="B", config="simple")
                     + SearchVector("general_info__keywords__value", weight="C", config="simple")
                     + SearchVector("general_info__object_languages__name", weight="C", config="simple")
                     + SearchVector("general_info__object_languages__display_name", weight="C", config="simple")
