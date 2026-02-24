@@ -7,9 +7,11 @@ from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
+from django.urls import reverse_lazy
 from django.views import View
 from django.views.generic import TemplateView
 
+from lacos.blam.services.cleanup_service import CleanupService
 from lacos.blam.tasks import (
     backup_database_task,
     generate_all_peaks_task,
@@ -182,3 +184,158 @@ class TaskStatusView(SuperuserRequiredMixin, View):
                 {"showMessage": {"message": msg, "level": "error"}}
             )
         return response
+
+
+# ---------------------------------------------------------------------------
+# Database management views (cleanup / delete)
+# ---------------------------------------------------------------------------
+
+
+class DatabaseCleanupView(SuperuserRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        results = CleanupService.run_full_cleanup()
+        bundle_results = results["bundle_resources"]
+        link_results = results["collection_bundle_links"]
+        fixed_resources = bundle_results.get("fixed_resources", 0)
+        fixed_links = link_results.get("fixed_links", 0)
+        message = (
+            f"Database cleanup completed. Fixed {fixed_resources} bundle resources "
+            f"and {fixed_links} collection-bundle links."
+        )
+        errors = bundle_results.get("errors", []) + link_results.get("errors", [])
+        if errors:
+            message += f" Encountered {len(errors)} errors during cleanup."
+        html = render_to_string(
+            "dbadmin/partials/cleanup_results.html",
+            {
+                "message": message,
+                "bundle_results": bundle_results,
+                "link_results": link_results,
+                "errors": errors,
+            },
+        )
+        return HttpResponse(html)
+
+
+class DatabaseDeleteAllView(SuperuserRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        stats = CleanupService.get_database_statistics()
+        html = render_to_string(
+            "dbadmin/partials/confirm_delete_all.html",
+            {
+                "stats": stats,
+                "action_url": reverse_lazy("dbadmin:delete_all_confirm"),
+            },
+        )
+        return HttpResponse(html)
+
+
+class DatabaseDeleteConfirmView(SuperuserRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        if "confirm" not in request.POST or not request.POST.get("confirm"):
+            html = render_to_string(
+                "dbadmin/partials/delete_results.html",
+                {
+                    "message": "Deletion not confirmed. Please check the confirmation checkbox.",
+                    "operation": "all",
+                    "errors": ["Confirmation checkbox not checked"],
+                },
+            )
+            return HttpResponse(html)
+        results = CleanupService.delete_all_data()
+        deleted = results["deleted"]
+        message = (
+            f"Database reset completed. Deleted {deleted['collections']} collections, "
+            f"{deleted['bundles']} bundles, and "
+            f"{deleted['media_resources'] + deleted['written_resources'] + deleted['other_resources']} resources."
+        )
+        errors = results.get("errors", [])
+        if errors:
+            message += f" Encountered {len(errors)} errors during deletion."
+        html = render_to_string(
+            "dbadmin/partials/delete_results.html",
+            {
+                "message": message,
+                "deleted": deleted,
+                "errors": errors,
+                "operation": "all",
+            },
+        )
+        return HttpResponse(html)
+
+
+class DatabaseDeleteCollectionsView(SuperuserRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        stats = CleanupService.get_database_statistics()
+        html = render_to_string(
+            "dbadmin/partials/confirm_delete_collections.html",
+            {
+                "stats": stats,
+                "action_url": reverse_lazy("dbadmin:delete_collections_confirm"),
+            },
+        )
+        return HttpResponse(html)
+
+
+class DatabaseDeleteCollectionsConfirmView(SuperuserRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        results = CleanupService.delete_collections_only()
+        deleted = results["deleted"]
+        orphaned = results["orphaned"]
+        message = (
+            f"Collections deletion completed. Deleted {deleted['collections']} collections "
+            f"and orphaned {orphaned['bundles']} bundles."
+        )
+        errors = results.get("errors", [])
+        if errors:
+            message += f" Encountered {len(errors)} errors during deletion."
+        html = render_to_string(
+            "dbadmin/partials/delete_results.html",
+            {
+                "message": message,
+                "deleted": deleted,
+                "orphaned": orphaned,
+                "errors": errors,
+                "operation": "collections",
+            },
+        )
+        return HttpResponse(html)
+
+
+class DatabaseDeleteBundlesView(SuperuserRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        stats = CleanupService.get_database_statistics()
+        html = render_to_string(
+            "dbadmin/partials/confirm_delete_bundles.html",
+            {
+                "stats": stats,
+                "action_url": reverse_lazy("dbadmin:delete_bundles_confirm"),
+            },
+        )
+        return HttpResponse(html)
+
+
+class DatabaseDeleteBundlesConfirmView(SuperuserRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        results = CleanupService.delete_bundles_only()
+        deleted = results["deleted"]
+        affected = results["affected"]
+        message = (
+            f"Bundles deletion completed. Deleted {deleted['bundles']} bundles and "
+            f"{deleted['media_resources'] + deleted['written_resources'] + deleted['other_resources']} resources. "
+            f"Affected {affected['collections']} collections."
+        )
+        errors = results.get("errors", [])
+        if errors:
+            message += f" Encountered {len(errors)} errors during deletion."
+        html = render_to_string(
+            "dbadmin/partials/delete_results.html",
+            {
+                "message": message,
+                "deleted": deleted,
+                "affected": affected,
+                "errors": errors,
+                "operation": "bundles",
+            },
+        )
+        return HttpResponse(html)
