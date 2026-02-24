@@ -78,6 +78,10 @@ class ACLPermissions(models.Model):
         verbose_name_plural = "ACL Permissions"
         indexes = [
             models.Index(fields=["content_type", "object_id"]),
+            models.Index(
+                fields=["content_type", "object_id", "access_level"],
+                name="acl_ct_obj_level_idx",
+            ),
         ]
 
     def __str__(self):
