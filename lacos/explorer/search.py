@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from dataclasses import replace
 import re
-import unicodedata
 from typing import Literal
 
 from django.contrib.postgres.search import SearchHeadline
@@ -27,6 +26,7 @@ from lacos.blam.models.bundle.bundle_publication_info import BundlePublicationIn
 from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
 from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo
 from lacos.blam.models.collection.collection_publication_info import CollectionPublicationInfo
+from lacos.explorer.text_search import sanitize_search_term
 
 
 SearchResultKind = Literal["collection", "bundle"]
@@ -219,12 +219,11 @@ def search_archives(term: str, *, limit: int | None = None, use_stored_vectors: 
         use_stored_vectors: If True, use pre-computed search vectors (fast).
                            If False, compute vectors on the fly (slow, for testing).
     """
-    normalized = unicodedata.normalize("NFC", term.strip())
+    normalized = term.strip()
     if not normalized:
         return []
 
-    # Keep only alphanumeric characters and underscores; everything else becomes a space
-    sanitized = re.sub(r"[^\w\s]", " ", normalized, flags=re.UNICODE)
+    sanitized = sanitize_search_term(normalized)
     words = sanitized.split()
     if not words:
         return []
