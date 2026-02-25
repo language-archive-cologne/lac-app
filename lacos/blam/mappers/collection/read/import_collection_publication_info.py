@@ -117,7 +117,7 @@ def import_creators(publication_info: CollectionPublicationInfo, publication_inf
         publication_info_schema: The publication info section of the BLAM collection repository schema.
     """
     if publication_info_schema.collection_creators:
-        for creator_schema in publication_info_schema.collection_creators.collection_creator:
+        for idx, creator_schema in enumerate(publication_info_schema.collection_creators.collection_creator):
             # Prepare creator data
             creator_data = {}
 
@@ -130,9 +130,8 @@ def import_creators(publication_info: CollectionPublicationInfo, publication_inf
                 else:
                     creator_data['given_name'] = ""  # Required field, use empty string if missing
 
-            # Set order if present
-            if hasattr(creator_schema, 'order') and creator_schema.order is not None:
-                creator_data['order'] = creator_schema.order
+            # Set order from position in XML list
+            creator_data['order'] = idx
 
             # Try to find an existing creator with the same name, or create a new one
             creator, created = CollectionCreator.objects.get_or_create(

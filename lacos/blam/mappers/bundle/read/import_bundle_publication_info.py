@@ -141,16 +141,17 @@ def import_creators(bundle_pub_info: BundlePublicationInfo, creators_data: List)
         bundle_pub_info: The BundlePublicationInfo object to link creators to
         creators_data: List of creator data from the CMD object
     """
-    for creator_data in creators_data:
+    for idx, creator_data in enumerate(creators_data):
         if not creator_data.creator_name:
             continue
-            
+
         # Get or create creator using family_name and given_name as unique identifiers
         creator, created = BundleCreator.objects.get_or_create(
             family_name=creator_data.creator_name.creator_family_name,
             given_name=creator_data.creator_name.creator_given_name or "",
             defaults={
-                'affiliation': None
+                'affiliation': None,
+                'order': idx,
             }
         )
         
@@ -167,7 +168,8 @@ def import_creators(bundle_pub_info: BundlePublicationInfo, creators_data: List)
         # Handle affiliation
         if creator_data.creator_affiliation:
             creator.affiliation = creator_data.creator_affiliation[0]
-            
+
+        creator.order = idx
         creator.save()
         bundle_pub_info.creators.add(creator)
 
