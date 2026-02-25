@@ -1,0 +1,8 @@
+{% load i18n %}
+{% for child in node.children %}
+  {% include "explorer/imdi/partials/tree_node.html" with node=child bucket=bucket key=parent_key child_index=forloop.counter0 depth=1 %}
+{% endfor %}
+
+{% if not node.children %}
+  <li class="px-2 py-1 text-xs text-base-content/50 italic">{% translate "No child nodes" %}</li>
+{% endif %}

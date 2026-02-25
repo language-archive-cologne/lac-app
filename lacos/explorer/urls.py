@@ -15,6 +15,21 @@ urlpatterns = [
         view=views.map_popup_view,
         name="map_popup",
     ),
+    path(
+        "collections/<uuid:pk>/imdi/",
+        view=views.ImdiBrowserView.as_view(),
+        name="imdi_browser",
+    ),
+    path(
+        "imdi/tree/",
+        view=views.ImdiTreeChildrenView.as_view(),
+        name="imdi_tree_children",
+    ),
+    path(
+        "imdi/detail/",
+        view=views.ImdiDetailView.as_view(),
+        name="imdi_detail",
+    ),
     # UUID-based patterns first (more specific, won't be caught by path:handle)
     path(
         "collections/<uuid:pk>/",

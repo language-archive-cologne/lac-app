@@ -1,0 +1,30 @@
+{% load i18n %}
+<li>
+  <details {% if depth == 0 %}open{% endif %}>
+    <summary class="flex items-center gap-2 hover:bg-base-200 rounded-lg px-2 py-1.5 cursor-pointer"
+             hx-get="{% url 'explorer:imdi_detail' %}?bucket={{ bucket }}&key={{ key }}{% if child_index is not None %}&child={{ child_index }}{% endif %}"
+             hx-target="#imdi-detail-panel"
+             hx-swap="innerHTML">
+      {% include "explorer/imdi/partials/node_icon.html" with node_type=node.node_type %}
+      <span class="text-sm font-medium truncate">{{ node.label }}</span>
+      {% if node.node_type == "CorpusLink" %}
+        <span class="badge badge-xs badge-ghost">{% translate "link" %}</span>
+      {% endif %}
+    </summary>
+
+    {% if node.node_type == "CorpusLink" and node.resolved_key %}
+      <ul hx-get="{% url 'explorer:imdi_tree_children' %}?bucket={{ bucket }}&key={{ node.resolved_key }}"
+          hx-trigger="toggle once from:closest details"
+          hx-swap="innerHTML"
+          class="ml-2">
+        <li><span class="loading loading-spinner loading-xs"></span></li>
+      </ul>
+    {% elif node.children %}
+      <ul class="ml-2">
+        {% for child in node.children %}
+          {% include "explorer/imdi/partials/tree_node.html" with node=child bucket=bucket key=key child_index=forloop.counter0 depth=depth|add:'1' %}
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </details>
+</li>
