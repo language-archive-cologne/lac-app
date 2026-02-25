@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from dataclasses import replace
 import re
+import unicodedata
 from typing import Literal
 
 from django.contrib.postgres.search import SearchHeadline
@@ -218,12 +219,18 @@ def search_archives(term: str, *, limit: int | None = None, use_stored_vectors: 
         use_stored_vectors: If True, use pre-computed search vectors (fast).
                            If False, compute vectors on the fly (slow, for testing).
     """
-    normalized = term.strip()
+    normalized = unicodedata.normalize("NFC", term.strip())
     if not normalized:
         return []
 
+    # Keep only alphanumeric characters and underscores; everything else becomes a space
+    sanitized = re.sub(r"[^\w\s]", " ", normalized, flags=re.UNICODE)
+    words = sanitized.split()
+    if not words:
+        return []
+
     # Add prefix matching (:*) to each word for partial word search
-    prefix_terms = " & ".join(f"{word}:*" for word in normalized.split())
+    prefix_terms = " & ".join(f"{word}:*" for word in words)
     query = SearchQuery(prefix_terms, config="simple", search_type="raw")
 
     collection_results = _search_collections(query, normalized, use_stored_vectors)
