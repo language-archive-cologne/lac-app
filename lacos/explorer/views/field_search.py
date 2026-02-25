@@ -92,6 +92,14 @@ class FieldSearchView(ListView):
         context["field_definitions"] = COLLECTION_FIELD_DEFINITIONS
         context["search_query"] = "|".join(r.value for r in rows if r.value)
         context["search_logic"] = logic
+
+        # Pass searched field labels so the template shows only the fields
+        # the user actually searched in, not all fields where the term appears.
+        label_map = {d.key: d.label for d in COLLECTION_FIELD_DEFINITIONS}
+        context["searched_field_labels"] = [
+            label_map[r.field_key] for r in rows if r.value and r.field_key in label_map
+        ]
+
         return context
 
     def render_to_response(self, context, **kwargs):
@@ -173,6 +181,12 @@ class BundleFieldSearchView(ListView):
         context["field_definitions"] = BUNDLE_FIELD_DEFINITIONS
         context["search_query"] = "|".join(r.value for r in rows if r.value)
         context["search_logic"] = logic
+
+        label_map = {d.key: d.label for d in BUNDLE_FIELD_DEFINITIONS}
+        context["searched_field_labels"] = [
+            label_map[r.field_key] for r in rows if r.value and r.field_key in label_map
+        ]
+
         return context
 
     def render_to_response(self, context, **kwargs):

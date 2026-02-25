@@ -119,18 +119,24 @@
                   {% endwith %}
                 {% endif %}
                 {% if search_query %}
-                  {% with reasons=bundle|bundle_match_reasons:search_query|split_csv %}
-                    {% if reasons %}
-                      <div class="mt-2 flex flex-wrap items-center gap-1.5 text-xs matched-in-row">
-                        <span class="text-[11px] uppercase tracking-wide text-base-content/50">{% translate "Matched in" %}</span>
+                  <div class="mt-2 flex flex-wrap items-center gap-1.5 text-xs matched-in-row">
+                    <span class="text-[11px] uppercase tracking-wide text-base-content/50">{% translate "Matched in" %}</span>
+                    {% if searched_field_labels %}
+                      {% for label in searched_field_labels %}
+                        <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-[11px] font-medium text-base-content/75">
+                          {{ label }}
+                        </span>
+                      {% endfor %}
+                    {% else %}
+                      {% with reasons=bundle|bundle_match_reasons:search_query|split_csv %}
                         {% for reason in reasons %}
                           <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-[11px] font-medium text-base-content/75">
                             {{ reason|capfirst }}
                           </span>
                         {% endfor %}
-                      </div>
+                      {% endwith %}
                     {% endif %}
-                  {% endwith %}
+                  </div>
                 {% endif %}
               </div>
             </td>
