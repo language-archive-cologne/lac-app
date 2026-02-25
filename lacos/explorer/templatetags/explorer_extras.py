@@ -297,6 +297,11 @@ def collection_match_reasons(collection, query):
             reasons.append("title")
         if _text_matches_query(getattr(gi, "description", ""), tokens):
             reasons.append("description")
+        keywords = getattr(gi, "keywords", None)
+        if keywords and any(
+            _text_matches_query(getattr(kw, "value", ""), tokens) for kw in keywords.all()
+        ):
+            reasons.append("keyword")
         location = getattr(gi, "location", None)
         if location:
             if _text_matches_query(getattr(location, "location_name", ""), tokens):
@@ -333,7 +338,7 @@ def collection_match_reasons(collection, query):
         ):
             reasons.append("contributor")
 
-    return ", ".join(_dedupe(reasons) or ["metadata"])
+    return ", ".join(_dedupe(reasons))
 
 
 @register.filter
@@ -353,6 +358,11 @@ def bundle_match_reasons(bundle, query):
             reasons.append("title")
         if _text_matches_query(getattr(gi, "description", ""), tokens):
             reasons.append("description")
+        keywords = getattr(gi, "keywords", None)
+        if keywords and any(
+            _text_matches_query(getattr(kw, "value", ""), tokens) for kw in keywords.all()
+        ):
+            reasons.append("keyword")
         location = getattr(gi, "location", None)
         if location:
             if (
@@ -408,4 +418,4 @@ def bundle_match_reasons(bundle, query):
         ):
             reasons.append("contributor")
 
-    return ", ".join(_dedupe(reasons) or ["metadata"])
+    return ", ".join(_dedupe(reasons))
