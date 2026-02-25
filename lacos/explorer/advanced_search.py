@@ -7,17 +7,20 @@ from dataclasses import dataclass, field
 from functools import reduce
 from operator import or_
 
+from django.contrib.postgres.search import SearchVector
 from django.db.models import Q, QuerySet
 from django.http import QueryDict
+
+from lacos.explorer.text_search import build_fts_query
 
 
 @dataclass(frozen=True)
 class AdvancedFieldDefinition:
-    """Maps a field key to one or more ORM icontains lookups."""
+    """Maps a field key to one or more ORM field paths for FTS."""
 
     key: str
     label: str
-    orm_lookups: list[str] = field(default_factory=list)
+    orm_fields: list[str] = field(default_factory=list)
     placeholder: str = ""
 
 
@@ -34,61 +37,61 @@ COLLECTION_FIELD_DEFINITIONS: list[AdvancedFieldDefinition] = [
     AdvancedFieldDefinition(
         key="title",
         label="Title",
-        orm_lookups=["general_info__display_title__icontains"],
+        orm_fields=["general_info__display_title"],
         placeholder="e.g. Interviews about Rock Art",
     ),
     AdvancedFieldDefinition(
         key="description",
         label="Description",
-        orm_lookups=["general_info__description__icontains"],
+        orm_fields=["general_info__description"],
         placeholder="e.g. video recordings",
     ),
     AdvancedFieldDefinition(
         key="keyword",
         label="Keyword",
-        orm_lookups=["general_info__keywords__value__icontains"],
+        orm_fields=["general_info__keywords__value"],
         placeholder="e.g. language acquisition",
     ),
     AdvancedFieldDefinition(
         key="language",
         label="Language",
-        orm_lookups=["general_info__object_languages__name__icontains"],
+        orm_fields=["general_info__object_languages__name"],
         placeholder="e.g. Yuracaré",
     ),
     AdvancedFieldDefinition(
         key="location",
         label="Location / Country",
-        orm_lookups=[
-            "general_info__location__location_name__icontains",
-            "general_info__location__country_name__icontains",
-            "general_info__location__country_facet__icontains",
-            "general_info__location__region_facet__icontains",
+        orm_fields=[
+            "general_info__location__location_name",
+            "general_info__location__country_name",
+            "general_info__location__country_facet",
+            "general_info__location__region_facet",
         ],
         placeholder="e.g. Papua New Guinea",
     ),
     AdvancedFieldDefinition(
         key="creator",
         label="Creator",
-        orm_lookups=[
-            "publication_info__creators__family_name__icontains",
-            "publication_info__creators__given_name__icontains",
+        orm_fields=[
+            "publication_info__creators__family_name",
+            "publication_info__creators__given_name",
         ],
         placeholder="e.g. Hellwig",
     ),
     AdvancedFieldDefinition(
         key="contributor",
         label="Contributor",
-        orm_lookups=[
-            "publication_info__contributors__family_name__icontains",
-            "publication_info__contributors__given_name__icontains",
-            "publication_info__contributors__contributor_display_name__icontains",
+        orm_fields=[
+            "publication_info__contributors__family_name",
+            "publication_info__contributors__given_name",
+            "publication_info__contributors__contributor_display_name",
         ],
         placeholder="e.g. Compensis",
     ),
     AdvancedFieldDefinition(
         key="grant_id",
         label="Grant ID",
-        orm_lookups=["project_infos__funder_infos__grant_identifier__icontains"],
+        orm_fields=["project_infos__funder_infos__grant_identifier"],
         placeholder="e.g. 502013233",
     ),
 ]
@@ -98,69 +101,69 @@ BUNDLE_FIELD_DEFINITIONS: list[AdvancedFieldDefinition] = [
     AdvancedFieldDefinition(
         key="title",
         label="Title",
-        orm_lookups=["general_info__display_title__icontains"],
+        orm_fields=["general_info__display_title"],
         placeholder="e.g. Interviews about Rock Art",
     ),
     AdvancedFieldDefinition(
         key="description",
         label="Description",
-        orm_lookups=["general_info__description__icontains"],
+        orm_fields=["general_info__description"],
         placeholder="e.g. video recordings",
     ),
     AdvancedFieldDefinition(
         key="keyword",
         label="Keyword",
-        orm_lookups=["general_info__keywords__value__icontains"],
+        orm_fields=["general_info__keywords__value"],
         placeholder="e.g. language acquisition",
     ),
     AdvancedFieldDefinition(
         key="language",
         label="Language",
-        orm_lookups=["general_info__object_languages__name__icontains"],
+        orm_fields=["general_info__object_languages__name"],
         placeholder="e.g. Yuracaré",
     ),
     AdvancedFieldDefinition(
         key="location",
         label="Location / Country",
-        orm_lookups=[
-            "general_info__location__location_facet__icontains",
-            "general_info__location__country_facet__icontains",
-            "general_info__location__region_facet__icontains",
+        orm_fields=[
+            "general_info__location__location_facet",
+            "general_info__location__country_facet",
+            "general_info__location__region_facet",
         ],
         placeholder="e.g. Papua New Guinea",
     ),
     AdvancedFieldDefinition(
         key="creator",
         label="Creator",
-        orm_lookups=[
-            "publication_info__creators__family_name__icontains",
-            "publication_info__creators__given_name__icontains",
+        orm_fields=[
+            "publication_info__creators__family_name",
+            "publication_info__creators__given_name",
         ],
         placeholder="e.g. Hellwig",
     ),
     AdvancedFieldDefinition(
         key="contributor",
         label="Contributor",
-        orm_lookups=[
-            "publication_info__contributors__family_name__icontains",
-            "publication_info__contributors__given_name__icontains",
-            "publication_info__contributors__contributor_name__contributor_family_name__icontains",
-            "publication_info__contributors__contributor_name__contributor_given_name__icontains",
+        orm_fields=[
+            "publication_info__contributors__family_name",
+            "publication_info__contributors__given_name",
+            "publication_info__contributors__contributor_name__contributor_family_name",
+            "publication_info__contributors__contributor_name__contributor_given_name",
         ],
         placeholder="e.g. Compensis",
     ),
     AdvancedFieldDefinition(
         key="grant_id",
         label="Grant ID",
-        orm_lookups=["projects__funder_infos__grant_identifier__icontains"],
+        orm_fields=["projects__funder_infos__grant_identifier"],
         placeholder="e.g. 502013233",
     ),
     AdvancedFieldDefinition(
         key="collection",
         label="Collection",
-        orm_lookups=[
-            "structural_info__is_member_of_collection__identifier__icontains",
-            "structural_info__is_member_of_collection__general_info__display_title__icontains",
+        orm_fields=[
+            "structural_info__is_member_of_collection__identifier",
+            "structural_info__is_member_of_collection__general_info__display_title",
         ],
         placeholder="e.g. Tima Archive Cologne",
     ),
@@ -211,26 +214,35 @@ def apply_search_rows(
     definitions: list[AdvancedFieldDefinition],
     logic: str = "and",
 ) -> QuerySet:
-    """Apply dynamic search rows to the queryset.
+    """Apply dynamic search rows to the queryset using full-text search.
 
     When ``logic`` is ``and`` each row narrows the queryset.
     When ``logic`` is ``or`` rows are combined so any match qualifies.
-    Within a single row, multiple ORM lookups are always OR-combined.
+    Within a single row, multiple ORM fields are combined into one SearchVector.
     """
     if not rows:
         return qs
 
-    lookup_map = {d.key: d.orm_lookups for d in definitions}
+    field_map = {d.key: d.orm_fields for d in definitions}
 
     row_queries: list[Q] = []
+    annotations: dict[str, SearchVector] = {}
     for row in rows:
-        lookups = lookup_map.get(row.field_key, [])
-        if not lookups:
+        fields = field_map.get(row.field_key, [])
+        if not fields:
             continue
-        row_queries.append(reduce(or_, (Q(**{lookup: row.value}) for lookup in lookups)))
+        fts_query = build_fts_query(row.value)
+        if fts_query is None:
+            continue
+        annotation_name = f"_fts_row_{row.index}"
+        vector = SearchVector(*fields, config="simple")
+        annotations[annotation_name] = vector
+        row_queries.append(Q(**{annotation_name: fts_query}))
 
     if not row_queries:
         return qs
+
+    qs = qs.annotate(**annotations)
 
     if logic == "or":
         combined = reduce(or_, row_queries)
