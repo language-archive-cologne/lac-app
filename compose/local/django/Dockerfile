@@ -83,9 +83,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install --no-install-recommends -y \
     # ffmpeg/ffprobe for media duration detection
-    ffmpeg \
-    # Docker CLI for database backup (shells out to host via mounted socket)
-    docker.io
+    ffmpeg
 
 # Ensure compose plugin path exists and provide docker-compose compatibility wrapper.
 RUN mkdir -p /usr/libexec/docker/cli-plugins \
