@@ -42,8 +42,10 @@ from .utils import (
     annotate_resource,
     get_formatted_location,
     get_object_by_pk_or_handle,
+    is_imdi_resource,
     load_xml_preview,
     paginate_bundle_contexts,
+    render_imdi_modal_response,
     summarize_bundle_access_levels_by_collection_ids,
     summarize_collection_bundle_access_levels,
 )
@@ -697,6 +699,17 @@ class CollectionResourcesView(View):
             )
 
             is_htmx = request.headers.get('HX-Request') == 'true'
+            if is_htmx and action in {'play', 'view'} and is_imdi_resource(file_name, mime_type):
+                imdi_modal_response = render_imdi_modal_response(
+                    request,
+                    s3_client=getattr(resource_service, "s3_client", None),
+                    bucket=location.s3_bucket,
+                    key=location.s3_key,
+                    collection=collection,
+                )
+                if imdi_modal_response is not None:
+                    return imdi_modal_response
+
             xml_preview = None
             if is_htmx and action in {'play', 'view'} and detected_media_type == 'xml':
                 xml_preview = load_xml_preview(

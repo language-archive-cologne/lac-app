@@ -31,10 +31,12 @@ from .utils import (
     get_formatted_location,
     get_object_by_pk_or_handle,
     HandleLookupMixin,
+    is_imdi_resource,
     load_xml_preview,
     parse_elan_document,
     pick_elan_audio_resource,
     prepare_resource_lists,
+    render_imdi_modal_response,
     resolve_existing_object,
     resolve_resource_to_presigned,
 )
@@ -350,6 +352,20 @@ class ResourceAccessView(View):
             )
 
             is_htmx = request.headers.get('HX-Request') == 'true'
+            if is_htmx and action in {'play', 'view'} and is_imdi_resource(
+                getattr(resource, 'file_name', None),
+                mime_type,
+            ):
+                imdi_modal_response = render_imdi_modal_response(
+                    request,
+                    s3_client=getattr(resource_service, "s3_client", None),
+                    bucket=bucket_name,
+                    key=object_key,
+                    collection=collection_for_path,
+                )
+                if imdi_modal_response is not None:
+                    return imdi_modal_response
+
             xml_preview = None
             if is_htmx and action in {'play', 'view'} and detected_media_type == 'xml' and not is_elan:
                 xml_preview = load_xml_preview(resource_service, bucket_name, object_key)

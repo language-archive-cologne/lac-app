@@ -18,6 +18,10 @@ from .location import (
     get_location_from_coordinates,
     map_popup_view,
 )
+from .imdi import (
+    is_imdi_resource,
+    render_imdi_modal_response,
+)
 from .resource import (
     annotate_resource,
     find_resource_in_bundle,
@@ -55,6 +59,9 @@ __all__ = [
     "get_formatted_location",
     "get_location_from_coordinates",
     "map_popup_view",
+    # IMDI utilities
+    "is_imdi_resource",
+    "render_imdi_modal_response",
     # Resource utilities
     "annotate_resource",
     "find_resource_in_bundle",

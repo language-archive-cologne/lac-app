@@ -23,7 +23,11 @@
           {% translate "IMDI Browser" %}
         </h1>
         <p class="mt-1 text-sm text-base-content/60">
-          {{ collection.get_general_info.display_title|default:collection.identifier }}
+          {% if collection %}
+            {{ collection.get_general_info.display_title|default:collection.identifier }}
+          {% else %}
+            {{ root_node.label }}
+          {% endif %}
         </p>
       </div>
       {% if in_modal %}

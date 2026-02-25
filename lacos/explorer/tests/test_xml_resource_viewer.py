@@ -13,10 +13,27 @@ from lacos.blam.models.collection.collection_structural_info import (
     CollectionAdditionalMetadataFile,
     CollectionStructuralInfo,
 )
+from lacos.explorer.services.imdi_parser import ImdiNode
+
+
+class _FakeS3Body:
+    def __init__(self, payload: bytes):
+        self._payload = payload
+
+    def read(self) -> bytes:
+        return self._payload
+
+
+class _FakeS3Client:
+    def __init__(self, payload: bytes):
+        self._payload = payload
+
+    def get_object(self, **_kwargs):
+        return {"Body": _FakeS3Body(self._payload)}
 
 
 @pytest.mark.django_db
-def test_bundle_imdi_resource_renders_xml_modal_for_htmx_view(client, monkeypatch):
+def test_bundle_imdi_resource_renders_imdi_modal_for_htmx_view(client, monkeypatch):
     collection = Collection.objects.create(identifier="hdl:test/collection-imdi-bundle")
     bundle = Bundle.objects.create(identifier="hdl:test/bundle-imdi-resource")
     structural_info = BundleStructuralInfo.objects.create(
@@ -32,6 +49,8 @@ def test_bundle_imdi_resource_renders_xml_modal_for_htmx_view(client, monkeypatc
     structural_info.additional_metadata_files.add(metadata_file)
 
     class DummyService:
+        s3_client = _FakeS3Client(b"<METATRANSCRIPT/>")
+
         def generate_presigned_url(self, _bucket, _key, response_headers=None):
             if response_headers:
                 return "https://example.test/download"
@@ -50,8 +69,8 @@ def test_bundle_imdi_resource_renders_xml_modal_for_htmx_view(client, monkeypatc
         },
     )
     monkeypatch.setattr(
-        "lacos.explorer.views.bundles.load_xml_preview",
-        lambda *_args, **_kwargs: "<IMDI><Session>Bundle</Session></IMDI>",
+        "lacos.explorer.views.utils.imdi.parse_imdi",
+        lambda *_args, **_kwargs: ImdiNode(node_type="Session", label="Bundle IMDI"),
     )
 
     response = client.get(
@@ -65,13 +84,12 @@ def test_bundle_imdi_resource_renders_xml_modal_for_htmx_view(client, monkeypatc
 
     assert response.status_code == 200
     page = response.content.decode("utf-8")
-    assert 'data-viewer-type="xml"' in page
-    assert "resource-xml-content" in page
-    assert "&lt;IMDI&gt;" in page
+    assert 'data-viewer-type="imdi"' in page
+    assert 'id="imdi-detail-panel"' in page
 
 
 @pytest.mark.django_db
-def test_collection_imdi_resource_renders_xml_modal_for_htmx_view(client, monkeypatch):
+def test_collection_imdi_resource_renders_imdi_modal_for_htmx_view(client, monkeypatch):
     collection = Collection.objects.create(identifier="hdl:test/collection-imdi-resource")
     structural_info = CollectionStructuralInfo.objects.create(collection=collection)
     metadata_file = CollectionAdditionalMetadataFile.objects.create(
@@ -83,6 +101,8 @@ def test_collection_imdi_resource_renders_xml_modal_for_htmx_view(client, monkey
     structural_info.additional_metadata_files.add(metadata_file)
 
     class DummyService:
+        s3_client = _FakeS3Client(b"<METATRANSCRIPT/>")
+
         def resolve_pid_to_s3(self, _pid):
             return SimpleNamespace(
                 s3_bucket="bucket-a",
@@ -99,8 +119,8 @@ def test_collection_imdi_resource_renders_xml_modal_for_htmx_view(client, monkey
         lambda: DummyService(),
     )
     monkeypatch.setattr(
-        "lacos.explorer.views.collections.load_xml_preview",
-        lambda *_args, **_kwargs: "<IMDI><Session>Collection</Session></IMDI>",
+        "lacos.explorer.views.utils.imdi.parse_imdi",
+        lambda *_args, **_kwargs: ImdiNode(node_type="Session", label="Collection IMDI"),
     )
 
     response = client.get(
@@ -117,6 +137,5 @@ def test_collection_imdi_resource_renders_xml_modal_for_htmx_view(client, monkey
 
     assert response.status_code == 200
     page = response.content.decode("utf-8")
-    assert 'data-viewer-type="xml"' in page
-    assert "resource-xml-content" in page
-    assert "&lt;IMDI&gt;" in page
+    assert 'data-viewer-type="imdi"' in page
+    assert 'id="imdi-detail-panel"' in page
