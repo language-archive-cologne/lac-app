@@ -46,13 +46,15 @@ def export_publication_info(publication_info: BundlePublicationInfo, cmd_data: C
 def export_creators(creators: QuerySet) -> BundleCreatorsType:
     """Export creators to schema format."""
     creators_data = BundleCreatorsType()
-    creators_data.bundle_creator = [export_creator(creator) for creator in creators]
+    sorted_creators = sorted(creators, key=lambda c: (c.order is None, c.order or 0))
+    creators_data.bundle_creator = [export_creator(creator, idx) for idx, creator in enumerate(sorted_creators)]
     return creators_data
 
 
-def export_creator(creator: BundleCreator) -> BundleCreatorType:
+def export_creator(creator: BundleCreator, idx: int) -> BundleCreatorType:
     """Export a single creator to schema format."""
     creator_data = BundleCreatorType()
+    creator_data.order = idx
 
     # Set creator name
     creator_name = CreatorNameType()
