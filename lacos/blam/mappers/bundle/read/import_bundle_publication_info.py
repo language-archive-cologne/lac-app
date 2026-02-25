@@ -1,7 +1,8 @@
 from typing import Optional, List
 from django.db import transaction
 from lacos.blam.models.bundle.bundle_publication_info import (
-    BundlePublicationInfo, BundleCreator, BundleContributor, BundleContributorName
+    BundlePublicationInfo, BundlePublicationInfoCreator,
+    BundleCreator, BundleContributor, BundleContributorName,
 )
 from blam_schemas.bundle.blam_bundle_repository_v1_1 import (
     Cmd,
@@ -151,7 +152,6 @@ def import_creators(bundle_pub_info: BundlePublicationInfo, creators_data: List)
             given_name=creator_data.creator_name.creator_given_name or "",
             defaults={
                 'affiliation': None,
-                'order': idx,
             }
         )
         
@@ -169,9 +169,12 @@ def import_creators(bundle_pub_info: BundlePublicationInfo, creators_data: List)
         if creator_data.creator_affiliation:
             creator.affiliation = creator_data.creator_affiliation[0]
 
-        creator.order = idx
         creator.save()
-        bundle_pub_info.creators.add(creator)
+        BundlePublicationInfoCreator.objects.create(
+            bundlepublicationinfo=bundle_pub_info,
+            bundlecreator=creator,
+            order=idx,
+        )
 
 
 def import_contributors(bundle_pub_info: BundlePublicationInfo, contributors_data: List) -> None:

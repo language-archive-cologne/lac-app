@@ -2,8 +2,9 @@ from typing import Any
 from django.db import transaction
 from lacos.blam.models.collection.collection_publication_info import (
     CollectionPublicationInfo,
+    CollectionPublicationInfoCreator,
     CollectionCreator,
-    CollectionContributor
+    CollectionContributor,
 )
 from lacos.blam.models.collection.collection_repository import Collection
 from blam_schemas.collection.blam_collection_repository_v1_2 import (
@@ -130,25 +131,12 @@ def import_creators(publication_info: CollectionPublicationInfo, publication_inf
                 else:
                     creator_data['given_name'] = ""  # Required field, use empty string if missing
 
-            # Set order from position in XML list
-            creator_data['order'] = idx
-
             # Try to find an existing creator with the same name, or create a new one
             creator, created = CollectionCreator.objects.get_or_create(
                 family_name=creator_data['family_name'],
                 given_name=creator_data.get('given_name', ''),
-                defaults=creator_data
+                defaults=creator_data,
             )
-            
-            # Update fields that might have changed (including order)
-            if not created:
-                for key, value in creator_data.items():
-                    setattr(creator, key, value)
-                creator.save()
-            elif 'order' in creator_data:
-                # Ensure order is set even for newly created creators
-                creator.order = creator_data['order']
-                creator.save()
             
             # Add affiliations if they exist
             if hasattr(creator_schema, 'creator_affiliation') and creator_schema.creator_affiliation:
@@ -172,8 +160,12 @@ def import_creators(publication_info: CollectionPublicationInfo, publication_inf
                     creator.name_identifier_type = id_type
                     creator.save()
             
-            # Add the creator to the publication info
-            publication_info.creators.add(creator)
+            # Link creator to publication info with per-publication order
+            CollectionPublicationInfoCreator.objects.create(
+                collectionpublicationinfo=publication_info,
+                collectioncreator=creator,
+                order=idx,
+            )
 
 
 def import_contributors(publication_info: CollectionPublicationInfo, publication_info_schema) -> None:

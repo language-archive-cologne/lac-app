@@ -235,7 +235,7 @@ class BasePublicationReferenceView(HtmxTemplateHelperMixin, View):
         rows = []
         disabled_message = None
         if publication_info:
-            objects = getattr(publication_info, config["relation"]).all().order_by("pk")
+            objects = getattr(publication_info, config["relation"]).all()
             rows = self.build_rows(parent, reference_slug, objects)
         else:
             disabled_message = f"Save {self.info_label} before managing {config['item_label'].lower()}."

@@ -2,10 +2,34 @@ from django.db import models
 from lacos.blam.models.base_publication_info import PublicationInfo, Creator as BaseCreator, Contributor as BaseContributor
 
 
+class BundlePublicationInfoCreator(models.Model):
+    """Through model for BundlePublicationInfo <-> BundleCreator M2M.
+
+    Stores per-publication creator ordering independently, so shared
+    BundleCreator records don't corrupt each other's citation order.
+    """
+    bundlepublicationinfo = models.ForeignKey(
+        'BundlePublicationInfo',
+        on_delete=models.CASCADE,
+        db_column='bundlepublicationinfo_id',
+    )
+    bundlecreator = models.ForeignKey(
+        'BundleCreator',
+        on_delete=models.CASCADE,
+        db_column='bundlecreator_id',
+    )
+    order = models.IntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'blam_bundlepublicationinfo_creators'
+        ordering = ['order']
+        unique_together = [('bundlepublicationinfo', 'bundlecreator')]
+
+
 class BundlePublicationInfo(PublicationInfo):
     """
     Concrete implementation of PublicationInfo for Bundles
-    
+
     Extends the abstract PublicationInfo model with bundle-specific fields
     and relationships.
     """
@@ -15,7 +39,11 @@ class BundlePublicationInfo(PublicationInfo):
         on_delete=models.CASCADE,
         related_name='publication_info'
     )
-    creators = models.ManyToManyField('BundleCreator', blank=True)
+    creators = models.ManyToManyField(
+        'BundleCreator',
+        blank=True,
+        through='BundlePublicationInfoCreator',
+    )
     contributors = models.ManyToManyField('BundleContributor', blank=True)
     
     # Add identifier fields with not-null constraints

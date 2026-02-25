@@ -46,9 +46,8 @@ def export_publication_info(pub_info: CollectionPublicationInfo, repo) -> None:
 
 def _export_creators(creators: QuerySet[CollectionCreator]) -> CreatorsType:
     creators_data = CreatorsType()
-    sorted_creators = sorted(creators, key=lambda c: (c.order is None, c.order or 0))
     creators_data.collection_creator = [
-        _export_creator(creator, idx) for idx, creator in enumerate(sorted_creators)
+        _export_creator(creator, idx) for idx, creator in enumerate(creators)
     ]
     return creators_data
 

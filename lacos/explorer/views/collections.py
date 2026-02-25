@@ -567,8 +567,6 @@ class CollectionDetailView(HandleLookupMixin, DetailView):
         pub_info = self.object.publication_info.first()
         if pub_info:
             creators = list(pub_info.creators.all())
-            # Sort by order field if present, otherwise keep original order
-            creators.sort(key=lambda c: (c.order is None, c.order or 0))
 
             if creators:
                 creator_names = []

@@ -2,10 +2,34 @@ from django.db import models
 from lacos.blam.models.base_publication_info import PublicationInfo, Creator as BaseCreator, Contributor as BaseContributor
 
 
+class CollectionPublicationInfoCreator(models.Model):
+    """Through model for CollectionPublicationInfo <-> CollectionCreator M2M.
+
+    Stores per-publication creator ordering independently, so shared
+    CollectionCreator records don't corrupt each other's citation order.
+    """
+    collectionpublicationinfo = models.ForeignKey(
+        'CollectionPublicationInfo',
+        on_delete=models.CASCADE,
+        db_column='collectionpublicationinfo_id',
+    )
+    collectioncreator = models.ForeignKey(
+        'CollectionCreator',
+        on_delete=models.CASCADE,
+        db_column='collectioncreator_id',
+    )
+    order = models.IntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'blam_collectionpublicationinfo_creators'
+        ordering = ['order']
+        unique_together = [('collectionpublicationinfo', 'collectioncreator')]
+
+
 class CollectionPublicationInfo(PublicationInfo):
     """
     Concrete implementation of PublicationInfo for Collections
-    
+
     Extends the abstract PublicationInfo model with collection-specific fields
     and relationships.
     """
@@ -14,7 +38,11 @@ class CollectionPublicationInfo(PublicationInfo):
         on_delete=models.CASCADE,
         related_name='publication_info'
     )
-    creators = models.ManyToManyField('CollectionCreator', blank=True)
+    creators = models.ManyToManyField(
+        'CollectionCreator',
+        blank=True,
+        through='CollectionPublicationInfoCreator',
+    )
     contributors = models.ManyToManyField('CollectionContributor', blank=True)
     
     class Meta:

@@ -36,7 +36,6 @@ class Creator(BaseModel):
         blank=True
     )
     affiliation = models.CharField(max_length=255, null=True, blank=True)
-    order = models.IntegerField(null=True, blank=True, help_text="Order in citation list")
 
     class Meta:
         abstract = True
