@@ -26,13 +26,13 @@
   <!-- Navigation -->
   <div class="flex flex-wrap items-center gap-x-4 gap-y-2 mb-6">
     <div class="join">
-      <a href="{% url 'field_search' %}" class="btn btn-sm join-item btn-outline">{% translate "Collections" %}</a>
-      <a class="btn btn-sm join-item btn-primary">{% translate "Bundles" %}</a>
+      <button type="submit" form="field-search-form" formaction="{% url 'field_search' %}" class="btn btn-sm join-item btn-outline">{% translate "Collections" %}</button>
+      <span class="btn btn-sm join-item btn-primary">{% translate "Bundles" %}</span>
     </div>
     <span class="text-base-content/20 hidden sm:inline">|</span>
     <div class="join">
       <a href="{% url 'bundle_faceted_search' %}" class="btn btn-sm join-item btn-outline">{% translate "Faceted Search" %}</a>
-      <a class="btn btn-sm join-item btn-primary">{% translate "Field Search" %}</a>
+      <span class="btn btn-sm join-item btn-primary">{% translate "Field Search" %}</span>
     </div>
   </div>
 
@@ -218,6 +218,7 @@
         logicHidden.value = e.target.value;
         syncConnectors();
       });
+
     })();
   </script>
 {% endblock explorer_content %}

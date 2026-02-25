@@ -65,18 +65,18 @@
   <!-- Navigation -->
   <div class="flex flex-wrap items-center gap-x-4 gap-y-2 mb-6">
     <div class="join">
-      <a class="btn btn-sm join-item btn-primary">{% translate "Collections" %}</a>
-      <a href="{% url 'bundle_faceted_search' %}{% if search_query %}?q={{ search_query|urlencode }}{% endif %}" class="btn btn-sm join-item btn-outline">{% translate "Bundles" %}</a>
+      <span class="btn btn-sm join-item btn-primary">{% translate "Collections" %}</span>
+      <button type="submit" form="faceted-search-form" formaction="{% url 'bundle_faceted_search' %}" class="btn btn-sm join-item btn-outline">{% translate "Bundles" %}</button>
     </div>
     <span class="text-base-content/20 hidden sm:inline">|</span>
     <div class="join">
-      <a class="btn btn-sm join-item btn-primary">{% translate "Faceted Search" %}</a>
+      <span class="btn btn-sm join-item btn-primary">{% translate "Faceted Search" %}</span>
       <a href="{% url 'field_search' %}" class="btn btn-sm join-item btn-outline">{% translate "Field Search" %}</a>
     </div>
   </div>
 
   <!-- Search bar -->
-  <form method="get" action="{% url 'faceted_search' %}" class="mb-6">
+  <form id="faceted-search-form" method="get" action="{% url 'faceted_search' %}" class="mb-6">
     {# Preserve facet params as hidden inputs #}
     {% for key, values in current_params.lists %}
       {% if key != "q" and key != "page" %}
