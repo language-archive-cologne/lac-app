@@ -1,0 +1,69 @@
+{% load humanize %}
+
+<!-- Registered periodic tasks cards -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    {% for task in periodic_tasks %}
+    <div class="card bg-base-100 shadow">
+        <div class="card-body p-4">
+            <div class="flex items-center justify-between">
+                <h4 class="font-semibold text-sm">{{ task.label }}</h4>
+                {% if task.last_status == 'success' %}
+                    <span class="badge badge-success badge-sm">OK</span>
+                {% elif task.last_status == 'failed' %}
+                    <span class="badge badge-error badge-sm">FAIL</span>
+                {% else %}
+                    <span class="badge badge-ghost badge-sm">never</span>
+                {% endif %}
+            </div>
+            <div class="text-xs text-base-content/60 mt-1">{{ task.schedule_human }}</div>
+            <div class="text-xs mt-2">
+                {% if task.last_run_time %}
+                    Last run: {{ task.last_run_time|naturaltime }}
+                {% else %}
+                    <span class="text-warning">No executions recorded</span>
+                {% endif %}
+            </div>
+            <div class="text-[11px] text-base-content/50 mt-1">
+                {{ task.total_success }} succeeded · {{ task.total_failed }} failed
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Recent periodic runs table -->
+<div class="card bg-base-100 shadow">
+    <div class="card-body">
+        <h3 class="card-title text-base">Recent Periodic Runs</h3>
+        <div class="overflow-x-auto">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Task</th>
+                        <th>Status</th>
+                        <th>Time</th>
+                        <th>Message</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for run in recent_runs %}
+                    <tr>
+                        <td class="text-xs">{{ run.description|default:run.task_name }}</td>
+                        <td>
+                            <span class="badge badge-sm {% if run.status == 'success' %}badge-success{% elif run.status == 'failed' %}badge-error{% else %}badge-ghost{% endif %}">
+                                {{ run.status }}
+                            </span>
+                        </td>
+                        <td class="text-xs">{{ run.created_at|naturaltime }}</td>
+                        <td class="text-xs max-w-xs truncate">{{ run.message|default:"-" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="text-center text-base-content/60">No periodic runs recorded yet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

@@ -122,6 +122,22 @@
             </div>
         </div>
 
+        <input type="radio" name="dbadmin_tabs" class="tab" aria-label="Scheduled" />
+        <div class="tab-content bg-base-100 border-base-300 p-6">
+            <div
+                id="scheduled-tasks"
+                hx-get="{% url 'dbadmin:scheduled_tasks' %}"
+                hx-trigger="load"
+                hx-target="#scheduled-tasks"
+                hx-swap="innerHTML"
+            >
+                <div class="flex items-center justify-center py-10">
+                    <span class="loading loading-spinner loading-md"></span>
+                    <span class="ml-3 text-sm text-base-content/60">Loading scheduled tasks...</span>
+                </div>
+            </div>
+        </div>
+
         <input type="radio" name="dbadmin_tabs" class="tab" aria-label="Management" />
         <div class="tab-content bg-base-100 border-base-300 p-6">
             <!-- Metadata stats cards -->
