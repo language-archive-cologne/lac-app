@@ -215,11 +215,14 @@
             </div>
 
             <!-- Maintenance and Destructive Operations -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="card bg-base-100 shadow">
-                    <div class="card-body">
-                        <h4 class="card-title text-base">Database Maintenance</h4>
-                        <p class="text-sm text-base-content/60 mb-3">Clean up and fix issues in the database models.</p>
+            <div class="space-y-2">
+                <div class="collapse collapse-arrow bg-base-200">
+                    <input type="checkbox" />
+                    <div class="collapse-title text-sm font-medium py-2 min-h-0">
+                        Database Maintenance
+                    </div>
+                    <div class="collapse-content text-sm">
+                        <p class="text-base-content/60 mb-3">Clean up and fix issues in the database models.</p>
                         <button
                             hx-post="{% url 'dbadmin:cleanup' %}"
                             hx-target="#results-container"
@@ -231,33 +234,35 @@
                         </button>
                     </div>
                 </div>
-                <div class="card bg-base-100 shadow border-error/20 border">
-                    <div class="card-body">
-                        <h4 class="card-title text-base text-error">Destructive Operations</h4>
-                        <p class="text-sm text-base-content/60 mb-3">
+                <div class="collapse collapse-arrow bg-base-200 border border-error/20">
+                    <input type="checkbox" />
+                    <div class="collapse-title text-sm font-medium py-2 min-h-0 text-error">
+                        Destructive Operations
+                    </div>
+                    <div class="collapse-content text-sm">
+                        <p class="text-base-content/60 mb-3">
                             <strong>CAUTION:</strong> These actions delete data and cannot be undone.
                         </p>
-                        <div class="space-y-2">
+                        <div class="flex flex-wrap gap-2">
                             <button
                                 hx-post="{% url 'dbadmin:delete_collections' %}"
                                 hx-target="#confirm-modal"
                                 hx-swap="innerHTML"
-                                class="btn btn-warning btn-sm w-full">
+                                class="btn btn-warning btn-sm">
                                 Delete Collections Only
                             </button>
                             <button
                                 hx-post="{% url 'dbadmin:delete_bundles' %}"
                                 hx-target="#confirm-modal"
                                 hx-swap="innerHTML"
-                                class="btn btn-warning btn-sm w-full">
+                                class="btn btn-warning btn-sm">
                                 Delete Bundles Only
                             </button>
-                            <div class="divider my-1"></div>
                             <button
                                 hx-post="{% url 'dbadmin:delete_all' %}"
                                 hx-target="#confirm-modal"
                                 hx-swap="innerHTML"
-                                class="btn btn-error btn-sm w-full">
+                                class="btn btn-error btn-sm">
                                 Delete All Data
                             </button>
                         </div>
