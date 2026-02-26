@@ -51,16 +51,17 @@ class DatabaseStatsService:
 
     @staticmethod
     def get_backup_summary() -> dict:
+        backup_names = ["blam_database_backup", "periodic_backup"]
         last_backup = (
-            BackgroundTask.objects.filter(task_name="blam_database_backup")
+            BackgroundTask.objects.filter(task_name__in=backup_names)
             .order_by("-created_at")
             .first()
         )
         total = BackgroundTask.objects.filter(
-            task_name="blam_database_backup"
+            task_name__in=backup_names
         ).count()
         successful = BackgroundTask.objects.filter(
-            task_name="blam_database_backup",
+            task_name__in=backup_names,
             status=BackgroundTask.Status.SUCCESS,
         ).count()
         return {
