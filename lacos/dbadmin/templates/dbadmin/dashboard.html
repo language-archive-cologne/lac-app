@@ -75,6 +75,7 @@
                                     hx-post="{% url 'dbadmin:task_enqueue' 'reindex-collections' %}"
                                     hx-target="#active-task-list"
                                     hx-swap="afterbegin"
+                                    hx-confirm="Reindex all collections from S3 XML? This will re-parse every collection and may take a while."
                                     class="btn btn-sm btn-secondary w-full">
                                     Reindex collections from S3 XML
                                 </button>
@@ -82,6 +83,7 @@
                                     hx-post="{% url 'dbadmin:task_enqueue' 'generate-peaks' %}"
                                     hx-target="#active-task-list"
                                     hx-swap="afterbegin"
+                                    hx-confirm="Generate audio sidecars for all collections? This processes every audio file and may take a long time."
                                     class="btn btn-sm btn-warning w-full">
                                     Generate audio sidecars
                                 </button>
