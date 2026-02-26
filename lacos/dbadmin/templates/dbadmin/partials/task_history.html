@@ -52,7 +52,7 @@
                                 {{ task.status }}
                             </span>
                         </td>
-                        <td class="text-xs">{{ task.created_at|naturaltime }}</td>
+                        <td class="text-xs">{{ task.created_at|date:"Y-m-d H:i:s" }}</td>
                         <td class="text-xs max-w-xs truncate">{{ task.message|default:"-" }}</td>
                         <td>
                             {% if task.status == 'queued' or task.status == 'running' %}

@@ -54,7 +54,7 @@
                                 {{ run.status }}
                             </span>
                         </td>
-                        <td class="text-xs">{{ run.created_at|naturaltime }}</td>
+                        <td class="text-xs">{{ run.created_at|date:"Y-m-d H:i:s" }}</td>
                         <td class="text-xs max-w-xs truncate">{{ run.message|default:"-" }}</td>
                     </tr>
                     {% empty %}
