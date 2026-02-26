@@ -79,41 +79,41 @@
         {% if page_obj.has_other_pages %}
         <div class="flex justify-center mt-4">
             <div class="join">
+                {% if page_obj.has_previous %}
                 <button
                     hx-get="{% url 'dbadmin:task_history' %}?page=1&status={{ status_filter }}&type={{ type_filter }}"
                     hx-target="#task-history"
                     hx-swap="innerHTML"
-                    class="join-item btn btn-sm"
-                    {% if not page_obj.has_previous %}disabled{% endif %}>
+                    class="join-item btn btn-sm">
                     First
                 </button>
                 <button
                     hx-get="{% url 'dbadmin:task_history' %}?page={{ page_obj.previous_page_number }}&status={{ status_filter }}&type={{ type_filter }}"
                     hx-target="#task-history"
                     hx-swap="innerHTML"
-                    class="join-item btn btn-sm"
-                    {% if not page_obj.has_previous %}disabled{% endif %}>
+                    class="join-item btn btn-sm">
                     Previous
                 </button>
+                {% endif %}
                 <button class="join-item btn btn-sm btn-disabled">
                     Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
                 </button>
+                {% if page_obj.has_next %}
                 <button
                     hx-get="{% url 'dbadmin:task_history' %}?page={{ page_obj.next_page_number }}&status={{ status_filter }}&type={{ type_filter }}"
                     hx-target="#task-history"
                     hx-swap="innerHTML"
-                    class="join-item btn btn-sm"
-                    {% if not page_obj.has_next %}disabled{% endif %}>
+                    class="join-item btn btn-sm">
                     Next
                 </button>
                 <button
                     hx-get="{% url 'dbadmin:task_history' %}?page={{ page_obj.paginator.num_pages }}&status={{ status_filter }}&type={{ type_filter }}"
                     hx-target="#task-history"
                     hx-swap="innerHTML"
-                    class="join-item btn btn-sm"
-                    {% if not page_obj.has_next %}disabled{% endif %}>
+                    class="join-item btn btn-sm">
                     Last
                 </button>
+                {% endif %}
             </div>
         </div>
         {% endif %}
