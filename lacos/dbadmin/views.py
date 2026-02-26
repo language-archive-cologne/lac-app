@@ -366,6 +366,26 @@ class DatabaseDeleteBundlesConfirmView(SuperuserRequiredMixin, View):
         return HttpResponse(html)
 
 
+class ScheduledTasksView(SuperuserRequiredMixin, View):
+    def get(self, request, *args, **kwargs):
+        periodic_summary = DatabaseStatsService.get_periodic_tasks_summary()
+        recent_runs = (
+            BackgroundTask.objects.filter(
+                metadata__trigger="periodic",
+            )
+            .order_by("-created_at")[:20]
+        )
+        html = render_to_string(
+            "dbadmin/partials/scheduled_tasks.html",
+            {
+                "periodic_tasks": periodic_summary,
+                "recent_runs": recent_runs,
+            },
+            request=request,
+        )
+        return HttpResponse(html)
+
+
 # ---------------------------------------------------------------------------
 # Overview stats / Task history (HTMX partials)
 # ---------------------------------------------------------------------------

@@ -107,3 +107,32 @@ class DatabaseStatsService:
         except Exception as exc:
             logger.warning("Failed to check dead tuples: %s", exc)
         return warnings
+
+    @staticmethod
+    def get_periodic_tasks_summary() -> list[dict]:
+        from lacos.common.periodic_task_registry import PERIODIC_TASKS
+
+        summary = []
+        for task_info in PERIODIC_TASKS:
+            last_run = (
+                BackgroundTask.objects.filter(task_name=task_info["task_name"])
+                .order_by("-created_at")
+                .first()
+            )
+            recent_success = BackgroundTask.objects.filter(
+                task_name=task_info["task_name"],
+                status=BackgroundTask.Status.SUCCESS,
+            ).count()
+            recent_failed = BackgroundTask.objects.filter(
+                task_name=task_info["task_name"],
+                status=BackgroundTask.Status.FAILED,
+            ).count()
+            summary.append({
+                **task_info,
+                "last_run": last_run,
+                "last_status": last_run.status if last_run else None,
+                "last_run_time": last_run.created_at if last_run else None,
+                "total_success": recent_success,
+                "total_failed": recent_failed,
+            })
+        return summary
