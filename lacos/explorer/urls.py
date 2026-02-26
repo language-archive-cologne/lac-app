@@ -21,14 +21,9 @@ urlpatterns = [
         name="imdi_browser",
     ),
     path(
-        "imdi/tree/",
-        view=views.ImdiTreeChildrenView.as_view(),
-        name="imdi_tree_children",
-    ),
-    path(
-        "imdi/detail/",
-        view=views.ImdiDetailView.as_view(),
-        name="imdi_detail",
+        "imdi/xml/",
+        view=views.ImdiXmlView.as_view(),
+        name="imdi_xml",
     ),
     # UUID-based patterns first (more specific, won't be caught by path:handle)
     path(

@@ -13,7 +13,6 @@ from lacos.blam.models.collection.collection_structural_info import (
     CollectionAdditionalMetadataFile,
     CollectionStructuralInfo,
 )
-from lacos.explorer.services.imdi_parser import ImdiNode
 
 
 class _FakeS3Body:
@@ -68,10 +67,6 @@ def test_bundle_imdi_resource_renders_imdi_modal_for_htmx_view(client, monkeypat
             "url": "https://example.test/preview",
         },
     )
-    monkeypatch.setattr(
-        "lacos.explorer.views.utils.imdi.parse_imdi",
-        lambda *_args, **_kwargs: ImdiNode(node_type="Session", label="Bundle IMDI"),
-    )
 
     response = client.get(
         reverse(
@@ -85,7 +80,7 @@ def test_bundle_imdi_resource_renders_imdi_modal_for_htmx_view(client, monkeypat
     assert response.status_code == 200
     page = response.content.decode("utf-8")
     assert 'data-viewer-type="imdi"' in page
-    assert 'id="imdi-detail-panel"' in page
+    assert "data-imdi-viewer" in page
 
 
 @pytest.mark.django_db
@@ -118,10 +113,6 @@ def test_collection_imdi_resource_renders_imdi_modal_for_htmx_view(client, monke
         "lacos.explorer.views.collections.ResourceMappingService",
         lambda: DummyService(),
     )
-    monkeypatch.setattr(
-        "lacos.explorer.views.utils.imdi.parse_imdi",
-        lambda *_args, **_kwargs: ImdiNode(node_type="Session", label="Collection IMDI"),
-    )
 
     response = client.get(
         reverse(
@@ -138,4 +129,4 @@ def test_collection_imdi_resource_renders_imdi_modal_for_htmx_view(client, monke
     assert response.status_code == 200
     page = response.content.decode("utf-8")
     assert 'data-viewer-type="imdi"' in page
-    assert 'id="imdi-detail-panel"' in page
+    assert "data-imdi-viewer" in page

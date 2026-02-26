@@ -4,7 +4,6 @@ import pytest
 from django.urls import reverse
 
 from lacos.blam.models import Collection
-from lacos.explorer.services.imdi_parser import ImdiNode
 
 HTTP_OK = 200
 
@@ -18,10 +17,6 @@ class _FakeImdiStorageService:
         del prefix
         return keys[0] if keys else None
 
-    def read_imdi_file(self, bucket: str, key: str) -> bytes | None:
-        del bucket, key
-        return b"<METATRANSCRIPT/>"
-
 
 @pytest.mark.django_db
 def test_imdi_browser_htmx_returns_modal_content(client, monkeypatch):
@@ -31,13 +26,10 @@ def test_imdi_browser_htmx_returns_modal_content(client, monkeypatch):
         import_object_key="archive/corpus.imdi",
     )
 
-    root_node = ImdiNode(node_type="Corpus", label="Test Corpus")
-
     monkeypatch.setattr(
         "lacos.explorer.views.imdi._get_storage_service",
         lambda: _FakeImdiStorageService(),
     )
-    monkeypatch.setattr("lacos.explorer.views.imdi.parse_imdi", lambda xml: root_node)
 
     response = client.get(
         reverse("explorer:imdi_browser", kwargs={"pk": collection.pk}),
@@ -46,7 +38,7 @@ def test_imdi_browser_htmx_returns_modal_content(client, monkeypatch):
 
     assert response.status_code == HTTP_OK
     page = response.content.decode("utf-8")
-    assert 'id="imdi-detail-panel"' in page
+    assert "data-imdi-viewer" in page
     assert "data-modal-close" in page
 
     trigger_payload = json.loads(response["HX-Trigger"])
@@ -61,13 +53,10 @@ def test_imdi_browser_non_htmx_returns_full_page(client, monkeypatch):
         import_object_key="archive/corpus.imdi",
     )
 
-    root_node = ImdiNode(node_type="Corpus", label="Test Corpus")
-
     monkeypatch.setattr(
         "lacos.explorer.views.imdi._get_storage_service",
         lambda: _FakeImdiStorageService(),
     )
-    monkeypatch.setattr("lacos.explorer.views.imdi.parse_imdi", lambda xml: root_node)
 
     response = client.get(
         reverse("explorer:imdi_browser", kwargs={"pk": collection.pk}),
