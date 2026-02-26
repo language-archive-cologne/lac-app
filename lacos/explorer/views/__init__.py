@@ -8,7 +8,7 @@ from .collections import CollectionDetailView, CollectionJsonLdView, CollectionL
 from .bundle_faceted_search import BundleFacetedSearchView
 from .faceted_search import FacetedSearchView
 from .field_search import BundleFieldSearchView, FieldSearchView
-from .imdi import ImdiBrowserView, ImdiXmlView
+from .imdi import ImdiXmlView
 from .utils import map_popup_view
 
 
@@ -32,7 +32,6 @@ __all__ = [
     "BundleXmlView",
     "ResourceAccessView",
     # IMDI views
-    "ImdiBrowserView",
     "ImdiXmlView",
     # Utility views
     "map_popup_view",

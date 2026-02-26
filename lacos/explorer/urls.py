@@ -16,11 +16,6 @@ urlpatterns = [
         name="map_popup",
     ),
     path(
-        "collections/<uuid:pk>/imdi/",
-        view=views.ImdiBrowserView.as_view(),
-        name="imdi_browser",
-    ),
-    path(
         "imdi/xml/",
         view=views.ImdiXmlView.as_view(),
         name="imdi_xml",

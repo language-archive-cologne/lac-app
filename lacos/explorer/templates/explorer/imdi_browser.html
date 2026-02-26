@@ -1,8 +1,0 @@
-{% extends "explorer_base.html" %}
-{% load i18n %}
-
-{% block title %}{% translate "IMDI Browser" %} - {{ collection.get_general_info.display_title|default:collection.identifier }}{% endblock title %}
-
-{% block explorer_content %}
-  {% include "explorer/imdi/partials/browser_layout.html" with in_modal=False %}
-{% endblock explorer_content %}
