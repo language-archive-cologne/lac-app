@@ -222,12 +222,16 @@
                         Database Maintenance
                     </div>
                     <div class="collapse-content text-sm">
-                        <p class="text-base-content/60 mb-3">Clean up and fix issues in the database models.</p>
+                        <div role="alert" class="alert alert-info mb-3 py-2 text-xs">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            <span>Fixes orphaned bundle-resource links and broken collection-bundle associations.</span>
+                        </div>
                         <button
                             hx-post="{% url 'dbadmin:cleanup' %}"
                             hx-target="#results-container"
                             hx-swap="innerHTML"
                             hx-indicator="#cleanup-indicator"
+                            hx-confirm="Run database cleanup? This will fix orphaned links and associations."
                             class="btn btn-error btn-sm">
                             Cleanup Database
                             <span id="cleanup-indicator" class="loading loading-spinner loading-xs htmx-indicator"></span>
@@ -240,9 +244,10 @@
                         Destructive Operations
                     </div>
                     <div class="collapse-content text-sm">
-                        <p class="text-base-content/60 mb-3">
-                            <strong>CAUTION:</strong> These actions delete data and cannot be undone.
-                        </p>
+                        <div role="alert" class="alert alert-warning mb-3 py-2 text-xs">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 w-5 h-5" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                            <span>These actions permanently delete data and cannot be undone. A confirmation dialog will appear before each action.</span>
+                        </div>
                         <div class="flex flex-wrap gap-2">
                             <button
                                 hx-post="{% url 'dbadmin:delete_collections' %}"
