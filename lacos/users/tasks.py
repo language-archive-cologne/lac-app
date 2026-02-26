@@ -115,8 +115,8 @@ def _write_metadata(path: Path, payload: bytes) -> None:
                 logger.debug("Unable to remove temporary metadata file %s", tmp_path)
 
 
-@task(retries=3, retry_delay=60)
-def refresh_shibboleth_metadata() -> dict:
+def _run_refresh_metadata() -> dict:
+    """Shared SAML metadata refresh logic used by both manual and periodic tasks."""
     if not getattr(settings, "SAML_LOGIN_ENABLED", False):
         return {"success": False, "skipped": "saml_login_disabled"}
 
@@ -168,6 +168,11 @@ def refresh_shibboleth_metadata() -> dict:
     return {"success": True, "changed": True, "path": str(target_path)}
 
 
+@task(retries=3, retry_delay=60)
+def refresh_shibboleth_metadata() -> dict:
+    return _run_refresh_metadata()
+
+
 if HUEY_PERIODIC_AVAILABLE:
     @db_periodic_task(
         crontab(
@@ -181,7 +186,7 @@ if HUEY_PERIODIC_AVAILABLE:
         schedule="5 3 * * *",
     )
     def refresh_shibboleth_metadata_periodic() -> dict:
-        return refresh_shibboleth_metadata()
+        return _run_refresh_metadata()
 else:
     def refresh_shibboleth_metadata_periodic() -> dict:  # pragma: no cover - fallback
-        return refresh_shibboleth_metadata()
+        return _run_refresh_metadata()
