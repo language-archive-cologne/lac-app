@@ -18,6 +18,8 @@ try:
 except ImportError:  # pragma: no cover - optional dependency guard
     HUEY_PERIODIC_AVAILABLE = False
 
+from lacos.common.periodic_task_tracker import tracked_periodic
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_METADATA_URL = "https://idp.rrz.uni-koeln.de/idp/shibboleth"
@@ -172,6 +174,11 @@ if HUEY_PERIODIC_AVAILABLE:
             minute=getattr(settings, "SAML_METADATA_REFRESH_CRON_MINUTE", 5),
             hour=getattr(settings, "SAML_METADATA_REFRESH_CRON_HOUR", 3),
         )
+    )
+    @tracked_periodic(
+        task_name="periodic_saml_metadata",
+        description="SAML Metadata Refresh (periodic)",
+        schedule="5 3 * * *",
     )
     def refresh_shibboleth_metadata_periodic() -> dict:
         return refresh_shibboleth_metadata()

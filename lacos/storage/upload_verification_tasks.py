@@ -12,6 +12,7 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     HUEY_PERIODIC_AVAILABLE = False
 
+from lacos.common.periodic_task_tracker import tracked_periodic
 from lacos.storage.models import UploadSession
 from lacos.storage.services.upload_verification_service import UploadVerificationService
 
@@ -79,6 +80,11 @@ def _verify_stale_sessions() -> dict:
 
 if HUEY_PERIODIC_AVAILABLE:
     @db_periodic_task(crontab(minute=f"*/{_get_schedule_minutes()}"))
+    @tracked_periodic(
+        task_name="periodic_upload_verification",
+        description="Upload Verification (periodic)",
+        schedule="*/15 * * * *",
+    )
     def verify_pending_upload_sessions() -> dict:
         """Periodically verify stale upload sessions."""
         return _verify_stale_sessions()

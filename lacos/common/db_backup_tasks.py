@@ -13,6 +13,7 @@ try:
 except ImportError:  # pragma: no cover - optional dependency guard
     HUEY_PERIODIC_AVAILABLE = False
 
+from lacos.common.periodic_task_tracker import tracked_periodic
 from lacos.common.services.database_backup_service import DatabaseBackupService
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,11 @@ def backup_database_to_s3() -> dict:
 
 if HUEY_PERIODIC_AVAILABLE:
     @db_periodic_task(crontab(minute=_backup_minute(), hour=_backup_hour()))
+    @tracked_periodic(
+        task_name="periodic_backup",
+        description="Database Backup (periodic)",
+        schedule="0 2 * * *",
+    )
     def backup_database_to_s3_periodic() -> dict:
         logger.info("Periodic database backup triggered (schedule: %02d:%02d)", _backup_hour(), _backup_minute())
         return _run_backup(trigger="periodic")
