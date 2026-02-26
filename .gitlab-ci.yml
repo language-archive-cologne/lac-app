@@ -48,3 +48,10 @@ deploy_dev_fast:
     - if: '$CI_COMMIT_BRANCH == "dev"'
   script:
     - ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd /opt/lacos/lac-app && git fetch origin dev && git checkout dev && git reset --hard origin/dev && export DOCKER_GID=\$(stat -c '%g' /var/run/docker.sock) && docker compose -f docker-compose.dev.yml --profile build run --rm --no-deps theme && docker compose -f docker-compose.dev.yml up -d --no-build --force-recreate huey && docker compose -f docker-compose.dev.yml restart django"
+
+prune_dev:
+  extends: .deploy_base
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+  script:
+    - ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "docker container prune -f && docker image prune -f && docker builder prune -af --filter 'until=168h'"
