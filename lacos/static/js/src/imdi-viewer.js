@@ -196,11 +196,10 @@ function buildNode(el, ctx, open) {
     const summary = document.createElement("summary");
     summary.className = "cursor-pointer select-none";
     summary.style.width = "fit-content";
-    summary.style.maxWidth = "100%";
     summary.innerHTML =
       iconHtml("CorpusLink") +
-      `<span class="break-all">${esc(labelFor(el))}</span>` +
-      `<span class="badge badge-xs badge-ghost ml-1 shrink-0">link</span>`;
+      `<span>${esc(labelFor(el))}</span>` +
+      `<span class="badge badge-xs badge-ghost ml-1">link</span>`;
 
     summary.addEventListener("click", (e) => {
       e.preventDefault();
@@ -233,8 +232,7 @@ function buildNode(el, ctx, open) {
     const summary = document.createElement("summary");
     summary.className = "cursor-pointer select-none";
     summary.style.width = "fit-content";
-    summary.style.maxWidth = "100%";
-    summary.innerHTML = iconHtml(tag) + `<span class="break-all">${esc(labelFor(el))}</span>`;
+    summary.innerHTML = iconHtml(tag) + `<span>${esc(labelFor(el))}</span>`;
 
     summary.addEventListener("click", (e) => {
       e.preventDefault();
@@ -255,11 +253,11 @@ function buildNode(el, ctx, open) {
     // Leaf node: inline tag: value
     const text = (el.textContent || "").trim();
     const span = document.createElement("span");
-    span.className = "cursor-pointer select-none flex items-center gap-1 justify-start text-left min-w-0";
+    span.className = "cursor-pointer select-none flex items-center gap-1 justify-start text-left";
     span.innerHTML =
       iconHtml(tag, "xs") +
       `<span class="text-base-content/70 shrink-0">${esc(tag)}:</span>` +
-      `<span class="truncate min-w-0">${esc(text)}</span>`;
+      `<span class="truncate">${esc(text)}</span>`;
     span.addEventListener("click", () => selectNode(el, tag, ctx));
     li.appendChild(span);
   }
@@ -456,8 +454,6 @@ async function initViewer(container) {
 
     // Build two-panel layout
     container.innerHTML = "";
-    const wrapper = document.createElement("div");
-    wrapper.className = "flex flex-col";
 
     // Layout toggle bar (visible on lg only)
     const toggleBar = document.createElement("div");
@@ -469,31 +465,29 @@ async function initViewer(container) {
       `<rect x="${l + 1}" y="0" width="${r}" height="14" rx="1.5" opacity="0.3"/></svg>`;
 
     const layouts = [
-      { icon: colIcon(13, 6), title: "Tree wider", tree: "66.666%", detail: "33.333%" },
-      { icon: colIcon(9.5, 9.5), title: "Equal split", tree: "50%", detail: "50%" },
-      { icon: colIcon(6, 13), title: "Detail wider", tree: "33.333%", detail: "66.666%" },
+      { icon: colIcon(13, 6), title: "Tree wider", treeW: "lg:w-2/3", detailW: "lg:w-1/3" },
+      { icon: colIcon(9.5, 9.5), title: "Equal split", treeW: "lg:w-1/2", detailW: "lg:w-1/2" },
+      { icon: colIcon(6, 13), title: "Detail wider", treeW: "lg:w-1/3", detailW: "lg:w-2/3" },
     ];
 
-    // Panel row
-    const panelRow = document.createElement("div");
-    panelRow.className = "flex flex-col lg:flex-row min-h-[58vh]";
+    const wrapper = document.createElement("div");
+    wrapper.className = "flex flex-col lg:flex-row min-h-[58vh]";
 
     // Tree panel (wider – leaves show inline values)
     const treePanel = document.createElement("div");
     treePanel.className =
-      "min-w-0 border-r border-base-300 overflow-y-auto overflow-x-hidden max-h-[72vh] p-4 break-words";
-    treePanel.style.flexBasis = "66.666%";
+      "lg:w-2/3 min-w-0 border-r border-base-300 overflow-y-auto overflow-x-auto max-h-[72vh] p-4";
     treePanel.setAttribute("data-imdi-tree", "");
     const tree = buildTree(root, ctx);
     treePanel.appendChild(tree);
 
     // Detail panel (narrower, scrollable)
     const detailPanel = document.createElement("div");
-    detailPanel.className = "min-w-0 p-6 overflow-y-auto max-h-[72vh]";
-    detailPanel.style.flexBasis = "33.333%";
+    detailPanel.className = "lg:w-1/3 min-w-0 p-6 overflow-y-auto max-h-[72vh]";
     detailPanel.setAttribute("data-imdi-detail", "");
 
     // Wire up toggle buttons
+    const widthClasses = ["lg:w-1/3", "lg:w-1/2", "lg:w-2/3"];
     layouts.forEach((layout, i) => {
       const btn = document.createElement("button");
       btn.className = "join-item btn btn-xs btn-ghost";
@@ -505,8 +499,12 @@ async function initViewer(container) {
           b.classList.remove("btn-active"),
         );
         btn.classList.add("btn-active");
-        treePanel.style.flexBasis = layout.tree;
-        detailPanel.style.flexBasis = layout.detail;
+        widthClasses.forEach((c) => {
+          treePanel.classList.remove(c);
+          detailPanel.classList.remove(c);
+        });
+        treePanel.classList.add(layout.treeW);
+        detailPanel.classList.add(layout.detailW);
       });
       toggleBar.appendChild(btn);
     });
@@ -520,10 +518,9 @@ async function initViewer(container) {
       renderDetail(root, localName(root), detailPanel);
     }
 
-    panelRow.appendChild(treePanel);
-    panelRow.appendChild(detailPanel);
-    wrapper.appendChild(toggleBar);
-    wrapper.appendChild(panelRow);
+    wrapper.appendChild(treePanel);
+    wrapper.appendChild(detailPanel);
+    container.appendChild(toggleBar);
     container.appendChild(wrapper);
   } catch (err) {
     container.innerHTML = `<div class="alert alert-error"><span>Failed to load IMDI data: ${esc(err.message)}</span></div>`;
