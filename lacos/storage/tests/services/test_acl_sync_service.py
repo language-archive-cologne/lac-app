@@ -92,10 +92,10 @@ def test_sync_collection_uses_cached_acl(mock_s3, acl_sync_service):
         {"agentClass": "acl:AuthenticatedAgent", "mode": ["acl:Read"]},
     ]
 
-    # OCFL 1.1 path: extensions/<collection>-acl/acl.json
+    # OCFL 1.1 path: extensions/0013-acl/acl.json
     mock_s3.put_object(
         Bucket=TEST_BUCKET_NAME,
-        Key="collections/collection-cache/extensions/collection-cache-acl/acl.json",
+        Key="collections/collection-cache/extensions/0013-acl/acl.json",
         Body=json.dumps(acl_rules),
     )
 
@@ -163,6 +163,38 @@ def test_sync_bundle_preserves_v_prefixed_bundle_segment(mock_s3, acl_sync_servi
     permissions = ACLPermissions.objects.get(content_type=ct, object_id=bundle.pk)
     assert permissions.ACL_file_key == expected_acl_key
     assert permissions.permissions_data == acl_rules
+
+
+@pytest.mark.django_db
+def test_sync_bundle_ocfl11_metadata_path(mock_s3, acl_sync_service):
+    """Test ACL loading when import_object_key uses OCFL 1.1 /v1/metadata/ pattern."""
+    collection = _create_collection(identifier="qaqet")
+    collection.import_bucket = TEST_BUCKET_NAME
+    collection.import_object_key = "qaqet/qaqet/v1/metadata/qaqet.xml"
+    collection.save()
+
+    bundle = _create_bundle(collection, identifier="bundle-meta")
+    bundle.import_bucket = TEST_BUCKET_NAME
+    bundle.import_object_key = "qaqet/bundle-meta/v1/metadata/bundle-meta.xml"
+    bundle.save()
+
+    acl_rules = [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}]
+
+    # OCFL 1.1: ACL in extensions/0013-acl/acl.json
+    mock_s3.put_object(
+        Bucket=TEST_BUCKET_NAME,
+        Key="qaqet/bundle-meta/extensions/0013-acl/acl.json",
+        Body=json.dumps(acl_rules),
+    )
+
+    result = acl_sync_service.sync_bundle(bundle)
+    assert result.success is True
+    assert result.key == "qaqet/bundle-meta/extensions/0013-acl/acl.json"
+
+    ct = ContentType.objects.get_for_model(Bundle)
+    permissions = ACLPermissions.objects.get(content_type=ct, object_id=bundle.pk)
+    assert permissions.permissions_data == acl_rules
+    assert permissions.access_level == ACL_LEVEL_PUBLIC
 
 
 @pytest.mark.django_db

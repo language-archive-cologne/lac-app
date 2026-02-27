@@ -324,18 +324,15 @@ class ACLService(BaseStorageService):
         """
         Build the S3 key for an object's acl.json file.
 
-        OCFL 1.1 structure places ACL in extensions/<object>-acl/acl.json
+        OCFL 1.1 structure places ACL in extensions/0013-acl/acl.json
+        (OCFL community extension 0013 for access control).
         """
         base_prefix = self._resolve_object_prefix(obj)
         if not base_prefix:
             return None
 
-        # Get the object identifier for the extension directory name
         base_prefix = base_prefix.rstrip('/')
-        obj_id = base_prefix.rsplit('/', 1)[-1]  # Get last path component
-
-        # OCFL 1.1: ACL in extensions/<object>-acl/acl.json
-        return f"{base_prefix}/extensions/{obj_id}-acl/acl.json"
+        return f"{base_prefix}/extensions/0013-acl/acl.json"
 
     def _build_legacy_acl_key(self, obj: Any) -> Optional[str]:
         """Build the legacy S3 key for an object's acl.json file (pre-OCFL 1.1)."""
@@ -375,10 +372,11 @@ class ACLService(BaseStorageService):
         if not cleaned:
             return None
 
-        # OCFL content paths include explicit version markers like
-        # ".../v1/content/...". Trim only at that marker so regular path
-        # segments starting with "v" (e.g. "veraa") are preserved.
-        marker = re.search(r"/v\d+/content(?:/|$)", cleaned, flags=re.IGNORECASE)
+        # OCFL paths include explicit version markers like
+        # ".../v1/content/..." or ".../v1/metadata/..." (OCFL 1.1).
+        # Trim at that marker so regular path segments starting with
+        # "v" (e.g. "veraa") are preserved.
+        marker = re.search(r"/v\d+/(?:content|metadata)(?:/|$)", cleaned, flags=re.IGNORECASE)
         if marker and marker.start() > 0:
             cleaned = cleaned[:marker.start()]
             return cleaned
