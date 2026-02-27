@@ -8,6 +8,7 @@
 @source "../../../lacos/dbadmin/templates/**/*.html";
 @source "../../../lacos/explorer/templates/**/*.html";
 @source "../../../lacos/storage/templates/**/*.html";
+@source "../../../lacos/static/js/src/**/*.js";
 
 /* daisyUI theme configuration */
 @plugin "daisyui" {
