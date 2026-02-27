@@ -5,6 +5,10 @@
  * raw data, avoiding full-width offscreen canvases that exceed browser limits on
  * long files (131K+ frames).
  *
+ * Supports two modes:
+ * - Full-data mode: all frame data provided upfront (backwards compat)
+ * - Range mode: frames fetched on demand via HTTP Range requests for large files
+ *
  * Optimizations:
  * - Flattened data array for cache-friendly access
  * - Sliding-window frame accumulator (incremental, not per-pixel recompute)
@@ -13,8 +17,8 @@
  *
  * @param {Object} wavesurfer - WaveSurfer v7 instance
  * @param {Array<Uint8Array>|number[][]|Object} data
- *   Either [n_frames][n_bins] uint8 values, or:
- *   { nFrames: number, nBins: number, flat: Uint8Array }.
+ *   Full-data mode: [n_frames][n_bins] uint8 values, or { nFrames, nBins, flat: Uint8Array }
+ *   Range mode: { nFrames, nBins, dataUrl: string }
  * @param {Object} [opts]
  * @param {number} [opts.height=384] - Display height in CSS pixels
  */
@@ -68,6 +72,9 @@
       : ((c[0] << 24) | (c[1] << 16) | (c[2] << 8) | 255);
   }
 
+  // Header size in the binary spectrogram format.
+  var HEADER_BYTES = 6;
+
   function SpectrogramRenderer(wavesurfer, data, opts) {
     opts = opts || {};
     this._ws = wavesurfer;
@@ -88,8 +95,28 @@
     this._imgH = 0;
     this._yToBin = null;
 
-    // Normalize into contiguous flat uint8 data for cache-friendly access.
-    if (data && data.flat instanceof Uint8Array) {
+    // Range mode state
+    this._rangeMode = false;
+    this._dataUrl = null;
+    this._bufStart = 0;
+    this._bufEnd = 0;
+    this._fetching = false;
+    this._fetchController = null;
+
+    if (data && typeof data.dataUrl === 'string') {
+      // Range mode: fetch frames on demand
+      this._rangeMode = true;
+      this._dataUrl = data.dataUrl;
+      this._nFrames = data.nFrames | 0;
+      this._nBins = data.nBins | 0;
+      this._flat = null;
+      this._sums = new Int32Array(this._nBins);
+
+      this._mount();
+      this._listen();
+      this._scheduleRender(true);
+    } else if (data && data.flat instanceof Uint8Array) {
+      // Full-data mode (pre-parsed)
       this._nFrames = data.nFrames | 0;
       this._nBins = data.nBins | 0;
       var expectedLen = this._nFrames * this._nBins;
@@ -97,16 +124,22 @@
         throw new Error('Invalid spectrogram data dimensions');
       }
       this._flat = data.flat.subarray(0, expectedLen);
+      this._sums = new Int32Array(this._nBins);
+
+      this._mount();
+      this._listen();
+      this._scheduleRender(true);
     } else {
+      // Full-data mode (2D array)
       this._nFrames = data.length;
       this._nBins = data[0].length;
       this._flat = this._flattenData(data);
-    }
-    this._sums = new Int32Array(this._nBins);
+      this._sums = new Int32Array(this._nBins);
 
-    this._mount();
-    this._listen();
-    this._scheduleRender(true);
+      this._mount();
+      this._listen();
+      this._scheduleRender(true);
+    }
   }
 
   /** Flatten [nFrames][nBins] into a contiguous Uint8Array. */
@@ -135,6 +168,70 @@
       flat.set(data[f], f * nB);
     }
     return flat;
+  };
+
+  // ─── Range fetching ──────────────────────────────────────────────────
+
+  /**
+   * Fetch a range of frames from the server via HTTP Range request.
+   * Fetches the needed range plus a 2x prefetch margin on each side.
+   */
+  SpectrogramRenderer.prototype._fetchRange = function (needStart, needEnd) {
+    if (this._destroyed || this._fetching) return;
+
+    var nBins = this._nBins;
+    var nFrames = this._nFrames;
+
+    // Add 2x prefetch margin around the needed range.
+    var span = needEnd - needStart;
+    var margin = span * 2;
+    var fetchStart = Math.max(0, needStart - margin);
+    var fetchEnd = Math.min(nFrames, needEnd + margin);
+
+    // Convert frame range to byte range (header is 6 bytes).
+    var byteStart = HEADER_BYTES + fetchStart * nBins;
+    var byteEnd = HEADER_BYTES + fetchEnd * nBins - 1; // inclusive for Range header
+
+    this._fetching = true;
+
+    if (this._fetchController) {
+      this._fetchController.abort();
+    }
+    if (typeof AbortController !== 'undefined') {
+      this._fetchController = new AbortController();
+    }
+    var controller = this._fetchController;
+    var self = this;
+
+    fetch(this._dataUrl, {
+      headers: { Range: 'bytes=' + byteStart + '-' + byteEnd },
+      signal: controller ? controller.signal : undefined,
+    })
+      .then(function (resp) {
+        if (!resp.ok && resp.status !== 206) throw new Error(resp.status);
+        return resp.arrayBuffer();
+      })
+      .then(function (buffer) {
+        if (self._destroyed) return;
+
+        self._flat = new Uint8Array(buffer);
+        self._bufStart = fetchStart;
+        self._bufEnd = fetchStart + Math.floor(self._flat.byteLength / nBins);
+
+        // Re-render now that we have data.
+        self._forceNext = true;
+        self._scheduleRender(true);
+      })
+      .catch(function (err) {
+        if (err && err.name === 'AbortError') return;
+        console.warn('Spectrogram range fetch failed:', err);
+      })
+      .finally(function () {
+        self._fetching = false;
+        if (self._fetchController === controller) {
+          self._fetchController = null;
+        }
+      });
   };
 
   /** Build Y-pixel to frequency-bin map (with Y-flip: bin 0 at bottom). */
@@ -231,6 +328,20 @@
     var visibleWidth = Math.min(viewWidth, Math.max(0, fullWidth - viewLeft));
     if (visibleWidth <= 0) return false;
 
+    // In range mode, check if needed frames are buffered.
+    if (this._rangeMode) {
+      var framesPerPx = this._nFrames / fullWidth;
+      var needStart = Math.max(0, Math.floor(viewLeft * framesPerPx));
+      var needEnd = Math.min(this._nFrames, Math.ceil((viewLeft + visibleWidth) * framesPerPx));
+
+      if (!this._flat || needStart < this._bufStart || needEnd > this._bufEnd) {
+        // Needed frames not in buffer — trigger fetch.
+        this._fetchRange(needStart, needEnd);
+        // Can't paint yet if we have no data at all.
+        if (!this._flat) return false;
+      }
+    }
+
     var vp = fullWidth + '|' + viewLeft + '|' + visibleWidth;
     if (!this._forceNext && vp === this._lastVP) return true;
     this._forceNext = false;
@@ -274,17 +385,24 @@
     var yToBin = this._yToBin;
     var framesPerPx = nFrames / fullWidth;
 
+    // In range mode, offset frame indices into the buffer.
+    var bufOffset = this._rangeMode ? this._bufStart : 0;
+    var bufFrames = this._rangeMode ? (this._bufEnd - this._bufStart) : nFrames;
+
     // Seed the accumulator for the first pixel column.
     var prevStart = Math.max(0, Math.floor(viewLeft * framesPerPx));
     var prevEnd = Math.min(nFrames, Math.floor((viewLeft + 1) * framesPerPx));
     if (prevEnd <= prevStart) prevEnd = prevStart + 1;
     if (prevEnd > nFrames) prevEnd = nFrames;
 
-    var bin, f, off;
+    var bin, f, off, localF;
     for (bin = 0; bin < nBins; bin++) sums[bin] = 0;
     for (f = prevStart; f < prevEnd; f++) {
-      off = f * nBins;
-      for (bin = 0; bin < nBins; bin++) sums[bin] += flat[off + bin];
+      localF = f - bufOffset;
+      if (localF >= 0 && localF < bufFrames) {
+        off = localF * nBins;
+        for (bin = 0; bin < nBins; bin++) sums[bin] += flat[off + bin];
+      }
     }
 
     for (var px = 0; px < width; px++) {
@@ -297,12 +415,18 @@
 
         // Slide window: subtract frames that left, add frames that entered.
         for (f = prevStart; f < curStart; f++) {
-          off = f * nBins;
-          for (bin = 0; bin < nBins; bin++) sums[bin] -= flat[off + bin];
+          localF = f - bufOffset;
+          if (localF >= 0 && localF < bufFrames) {
+            off = localF * nBins;
+            for (bin = 0; bin < nBins; bin++) sums[bin] -= flat[off + bin];
+          }
         }
         for (f = prevEnd; f < curEnd; f++) {
-          off = f * nBins;
-          for (bin = 0; bin < nBins; bin++) sums[bin] += flat[off + bin];
+          localF = f - bufOffset;
+          if (localF >= 0 && localF < bufFrames) {
+            off = localF * nBins;
+            for (bin = 0; bin < nBins; bin++) sums[bin] += flat[off + bin];
+          }
         }
 
         prevStart = curStart;
@@ -374,6 +498,10 @@
       clearTimeout(this._retryTimer);
       this._retryTimer = null;
     }
+    if (this._fetchController) {
+      this._fetchController.abort();
+      this._fetchController = null;
+    }
 
     for (var i = 0; i < this._unsubs.length; i++) {
       if (typeof this._unsubs[i] === 'function') this._unsubs[i]();
@@ -394,6 +522,7 @@
     this._yToBin = null;
     this._imgData = null;
     this._lastVP = null;
+    this._dataUrl = null;
   };
 
   window.SpectrogramRenderer = SpectrogramRenderer;

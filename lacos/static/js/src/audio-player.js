@@ -456,11 +456,11 @@
       this._spectrogramFetchController = null;
     }
 
+    // Check LRU cache first (only populated for full-data / legacy mode).
     var cache = AudioPlayer._spectrogramCache || (AudioPlayer._spectrogramCache = new Map());
     var cacheKey = this._spectrogramCacheKey(url);
     var cached = cache.get(cacheKey);
     if (cached) {
-      // Keep cache entry hot (simple LRU behavior).
       cache.delete(cacheKey);
       cache.set(cacheKey, cached);
       if (!self.wavesurfer || self._destroyed) return;
@@ -472,22 +472,55 @@
       this._spectrogramFetchController = new AbortController();
     }
     var controller = this._spectrogramFetchController;
+    var fetchOpts = controller ? { signal: controller.signal } : {};
 
-    fetch(url, controller ? { signal: controller.signal } : undefined)
-      .then(function (resp) { if (!resp.ok) throw new Error(resp.status); return resp.arrayBuffer(); })
-      .then(function (buffer) {
-        if (!self.wavesurfer || self._destroyed) return;
-        var parsed = self._parseSpectrogramBuffer(buffer);
-        if (!parsed) return;
+    // Try a Range request for just the 6-byte header first.
+    var headerOpts = Object.assign({}, fetchOpts, {
+      headers: { Range: 'bytes=0-5' },
+    });
 
-        cache.set(cacheKey, parsed);
-        // Cap cache size to avoid unbounded memory growth.
-        while (cache.size > 3) {
-          var oldestKey = cache.keys().next().value;
-          cache.delete(oldestKey);
+    fetch(url, headerOpts)
+      .then(function (resp) {
+        if (!resp.ok && resp.status !== 206) throw new Error(resp.status);
+
+        if (resp.status === 206) {
+          // Server supports Range requests (uncompressed file).
+          // Parse header from the 6-byte response, then use range mode.
+          return resp.arrayBuffer().then(function (buf) {
+            if (self._destroyed || !self.wavesurfer) return;
+            if (buf.byteLength < 6) throw new Error('Header too short');
+
+            var view = new DataView(buf);
+            var nFrames = view.getUint32(0, true);
+            var nBins = view.getUint16(4, true);
+            if (!nFrames || !nBins) throw new Error('Invalid header');
+
+            self._spectrogramRenderer = new SpectrogramRenderer(
+              self.wavesurfer,
+              { nFrames: nFrames, nBins: nBins, dataUrl: url },
+              { height: height }
+            );
+          });
         }
 
-        self._spectrogramRenderer = new SpectrogramRenderer(self.wavesurfer, parsed, { height: height });
+        // Status 200: server returned the full file (old gzip-encoded file,
+        // or Range not supported). Fall back to full-data mode.
+        return resp.arrayBuffer().then(function (buffer) {
+          if (self._destroyed || !self.wavesurfer) return;
+          var parsed = self._parseSpectrogramBuffer(buffer);
+          if (!parsed) return;
+
+          // Use LRU cache for full-data mode.
+          var cache = AudioPlayer._spectrogramCache || (AudioPlayer._spectrogramCache = new Map());
+          var cacheKey = self._spectrogramCacheKey(url);
+          cache.set(cacheKey, parsed);
+          while (cache.size > 3) {
+            var oldestKey = cache.keys().next().value;
+            cache.delete(oldestKey);
+          }
+
+          self._spectrogramRenderer = new SpectrogramRenderer(self.wavesurfer, parsed, { height: height });
+        });
       })
       .catch(function (err) {
         if (err && err.name === 'AbortError') return;

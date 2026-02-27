@@ -5,7 +5,6 @@ frequency bins that match WaveSurfer.js Spectrogram plugin output exactly.
 """
 
 import errno
-import gzip
 import json
 import logging
 import os
@@ -299,9 +298,8 @@ class MediaProcessingService:
                         self.bucket_service.s3_client.put_object(
                             Bucket=bucket,
                             Key=spectrogram_data_key,
-                            Body=gzip.compress(spectrogram_data),
+                            Body=spectrogram_data,
                             ContentType="application/octet-stream",
-                            ContentEncoding="gzip",
                             Metadata={"source-etag": source_etag},
                         )
                     except ClientError as exc:
@@ -395,7 +393,7 @@ class MediaProcessingService:
 
         Returns binary payload: 6-byte header (uint32 LE n_frames + uint16 LE
         n_bins) followed by n_frames * n_bins raw uint8 bytes in row-major
-        (frame-major) order.  The caller gzip-compresses before upload.
+        (frame-major) order.  Uploaded uncompressed to allow HTTP Range requests.
 
         Uses chunked STFT with sliding_window_view to keep peak memory
         under ~200 MB regardless of audio duration.
