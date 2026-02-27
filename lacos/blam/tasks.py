@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 from io import StringIO
 import logging
 
@@ -10,6 +11,7 @@ from lacos.common.services.database_backup_service import DatabaseBackupService
 from lacos.explorer.search_indexing import rebuild_all_search_vectors
 from lacos.storage.media_tasks import scan_and_generate_peaks_task
 from lacos.storage.services.background_task_service import BackgroundTaskService
+from lacos.storage.services.bucket_service import BucketService
 
 logger = logging.getLogger(__name__)
 
@@ -180,6 +182,107 @@ def generate_all_peaks_task(tracking_id: str) -> dict:
         return payload
     except Exception as exc:
         logger.error("Failed to generate audio sidecars: %s", exc, exc_info=True)
+        payload = {"success": False, "error": str(exc)}
+        BackgroundTaskService.mark_failed(
+            tracking_id,
+            error_message=str(exc),
+            result=payload,
+        )
+        return payload
+
+
+@task(retries=0)
+def decompress_spectrograms_task(tracking_id: str, bucket_name: str | None = None) -> dict:
+    """Re-upload gzip-encoded .spectrogram.bin files as raw bytes for range-request support."""
+    from lacos.blam.models.collection.collection_repository import Collection
+
+    target = bucket_name or "all collection buckets"
+    BackgroundTaskService.mark_running(
+        tracking_id,
+        message=f"Scanning {target} for compressed spectrogram files",
+    )
+    try:
+        if bucket_name:
+            buckets = [bucket_name]
+        else:
+            buckets = (
+                Collection.objects
+                .values_list("import_bucket", flat=True)
+                .distinct()
+            )
+            buckets = [b for b in buckets if b]
+
+        bucket_service = BucketService()
+        s3 = bucket_service.s3_client
+
+        converted = 0
+        skipped = 0
+        errors = 0
+
+        for bucket in buckets:
+            paginator = s3.get_paginator("list_objects_v2")
+            for page in paginator.paginate(Bucket=bucket):
+                for obj in page.get("Contents", []):
+                    key = obj["Key"]
+                    if not key.endswith(".spectrogram.bin"):
+                        continue
+
+                    try:
+                        head = s3.head_object(Bucket=bucket, Key=key)
+                    except Exception as exc:
+                        logger.warning("HEAD %s/%s failed: %s", bucket, key, exc)
+                        errors += 1
+                        continue
+
+                    if head.get("ContentEncoding", "") != "gzip":
+                        skipped += 1
+                        continue
+
+                    try:
+                        resp = s3.get_object(Bucket=bucket, Key=key)
+                        compressed_body = resp["Body"].read()
+                        metadata = head.get("Metadata", {})
+                        raw_data = gzip.decompress(compressed_body)
+
+                        s3.put_object(
+                            Bucket=bucket,
+                            Key=key,
+                            Body=raw_data,
+                            ContentType="application/octet-stream",
+                            Metadata=metadata,
+                        )
+                        converted += 1
+                    except Exception as exc:
+                        logger.warning("Decompress %s/%s failed: %s", bucket, key, exc)
+                        errors += 1
+
+        payload = {
+            "success": errors == 0,
+            "converted": converted,
+            "skipped": skipped,
+            "errors": errors,
+        }
+        if errors == 0:
+            BackgroundTaskService.mark_success(
+                tracking_id,
+                message=(
+                    f"Spectrogram decompression complete."
+                    f" Converted {converted}, skipped {skipped} (already raw)."
+                ),
+                result=payload,
+            )
+        else:
+            BackgroundTaskService.mark_failed(
+                tracking_id,
+                error_message=(
+                    f"Spectrogram decompression finished with {errors} error(s)."
+                    f" Converted {converted}, skipped {skipped}."
+                ),
+                result=payload,
+            )
+        return payload
+    except Exception as exc:
+        logger.error("Failed to decompress spectrograms: %s", exc, exc_info=True)
         payload = {"success": False, "error": str(exc)}
         BackgroundTaskService.mark_failed(
             tracking_id,

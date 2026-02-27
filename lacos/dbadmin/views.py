@@ -16,6 +16,7 @@ from lacos.blam.services.cleanup_service import CleanupService
 from lacos.dbadmin.services import DatabaseStatsService
 from lacos.blam.tasks import (
     backup_database_task,
+    decompress_spectrograms_task,
     generate_all_peaks_task,
     reindex_collections_task,
     reindex_search_vectors_task,
@@ -35,6 +36,8 @@ class DashboardView(SuperuserRequiredMixin, TemplateView):
     template_name = "dbadmin/dashboard.html"
 
     def get_context_data(self, **kwargs):
+        from lacos.blam.models.collection.collection_repository import Collection
+
         context = super().get_context_data(**kwargs)
         context["title"] = "Database Dashboard"
         context["pg_stats"] = DatabaseStatsService.get_pg_stats()
@@ -43,6 +46,9 @@ class DashboardView(SuperuserRequiredMixin, TemplateView):
             status__in=[BackgroundTask.Status.QUEUED, BackgroundTask.Status.RUNNING]
         ).order_by("-created_at")[:10]
         context["metadata_stats"] = CleanupService.get_database_statistics()
+        context["collection_buckets"] = sorted(
+            b for b in Collection.objects.values_list("import_bucket", flat=True).distinct() if b
+        )
         return context
 
 
@@ -57,6 +63,7 @@ class TaskAction:
     description: str
     start_message: str
     callable_name: str
+    extra_fields: tuple[str, ...] = ()
 
 
 TASK_ACTIONS = {
@@ -84,6 +91,13 @@ TASK_ACTIONS = {
         start_message="Audio sidecar generation queued.",
         callable_name="generate_all_peaks_task",
     ),
+    "decompress-spectrograms": TaskAction(
+        task_name="decompress_spectrograms",
+        description="Decompress gzip-encoded spectrogram files for range-request support",
+        start_message="Spectrogram decompression queued.",
+        callable_name="decompress_spectrograms_task",
+        extra_fields=("bucket_name",),
+    ),
 }
 
 _TASK_CALLABLES = {
@@ -91,6 +105,7 @@ _TASK_CALLABLES = {
     "backup_database_task": backup_database_task,
     "reindex_collections_task": reindex_collections_task,
     "generate_all_peaks_task": generate_all_peaks_task,
+    "decompress_spectrograms_task": decompress_spectrograms_task,
 }
 
 
@@ -108,10 +123,15 @@ class TaskEnqueueView(SuperuserRequiredMixin, View):
 
         try:
             enqueue_callable = _TASK_CALLABLES[task_action.callable_name]
+            extra_kwargs = {
+                field: request.POST[field]
+                for field in task_action.extra_fields
+                if request.POST.get(field)
+            }
 
             def _enqueue_after_commit():
                 try:
-                    result = enqueue_callable(tracking_id=str(task_record.id))
+                    result = enqueue_callable(tracking_id=str(task_record.id), **extra_kwargs)
                     huey_task_id = getattr(result, "id", None)
                     if huey_task_id:
                         task = BackgroundTask.objects.filter(pk=task_record.id).first()

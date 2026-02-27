@@ -87,6 +87,23 @@
                                     class="btn btn-sm btn-warning w-full">
                                     Generate audio sidecars
                                 </button>
+                                <div class="flex gap-1 w-full">
+                                    <select name="bucket_name" id="decompress-bucket-select" class="select select-sm select-bordered flex-1 min-w-0">
+                                        <option value="">All buckets</option>
+                                        {% for bucket in collection_buckets %}
+                                        <option value="{{ bucket }}">{{ bucket }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button
+                                        hx-post="{% url 'dbadmin:task_enqueue' 'decompress-spectrograms' %}"
+                                        hx-include="#decompress-bucket-select"
+                                        hx-target="#active-task-list"
+                                        hx-swap="afterbegin"
+                                        hx-confirm="Decompress spectrogram files? This re-uploads gzip-encoded files as raw bytes."
+                                        class="btn btn-sm btn-warning whitespace-nowrap">
+                                        Decompress spectrograms
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
