@@ -71,7 +71,7 @@ def get_presigned_urls(request):
         bucket_name = request.POST.get("bucket_name")
         files_json = request.POST.get("files_metadata")
     
-    logger.info(f"Content type: {request.content_type}")
+    logger.info("Received presigned URL request", extra={"content_type": request.content_type})
     
     # folder_name is optional - if empty, files go to bucket root
     # If uploading a folder structure, the path is preserved from files_metadata
@@ -88,18 +88,18 @@ def get_presigned_urls(request):
         files_metadata = json.loads(files_json)
     except json.JSONDecodeError as e:
         error_message = f"Invalid files metadata format: {e}"
-        logger.error(error_message)
+        logger.error("Invalid files metadata format", extra={"error": str(e)})
         return JsonResponse({"success": False, "error": error_message})
     
     access_error = _ensure_collection_access(request, path_hint=folder_name)
     if access_error:
         return access_error
 
-    logger.info(f"Generating presigned URLs for folder: {folder_name} with {len(files_metadata)} files")
+    logger.info("Generating presigned URLs for folder", extra={"folder_name": folder_name, "file_count": len(files_metadata)})
     
     # Log sample files information for debugging
     if files_metadata:
-        logger.debug(f"Sample file metadata: {files_metadata[0]}")
+        logger.debug("Sample file metadata", extra={"sample": files_metadata[0]})
     
     # Use the singleton upload service
     try:
@@ -218,7 +218,7 @@ def get_presigned_urls(request):
             upload_session.save(update_fields=["status", "completed_at"])
         
         if result["success"]:
-            logger.info(f"Successfully generated {result['total_urls']} presigned URLs")
+            logger.info("Successfully generated presigned URLs", extra={"total_urls": result['total_urls']})
             if upload_session:
                 upload_session.status = "in_progress"
                 upload_session.save(update_fields=["status"])
@@ -234,12 +234,12 @@ def get_presigned_urls(request):
             })
         else:
             error_message = f"Failed to generate presigned URLs: {result.get('error', 'Unknown error')}"
-            logger.error(error_message)
+            logger.error("Failed to generate presigned URLs", extra={"error": result.get('error', 'Unknown error')})
             return JsonResponse({"success": False, "error": error_message, "failures": result.get("failures", [])})
     except Exception as service_error:
         # Handle service call errors
         error_message = f"Service error: {str(service_error)}"
-        logger.error(error_message)
+        logger.error("Service error generating presigned URLs", extra={"error": str(service_error)})
         return JsonResponse({"success": False, "error": error_message})
 
 
@@ -274,8 +274,8 @@ def mark_uploads_complete(request):
         upload_session_id = data.get("upload_session_id")
         bucket_name = data.get("bucket_name")
         
-        logger.info(f"Received verification request with content type: {request.content_type}")
-        logger.info(f"S3 keys to verify: {len(s3_keys)}")
+        logger.info("Received verification request", extra={"content_type": request.content_type})
+        logger.info("S3 keys to verify", extra={"count": len(s3_keys)})
         
     except json.JSONDecodeError:
         logger.warning("Invalid JSON in mark_uploads_complete request")
@@ -315,7 +315,7 @@ def mark_uploads_complete(request):
     except Exception as service_error:
         # Handle service call errors
         error_message = f"Failed to verify uploads: {str(service_error)}"
-        logger.error(error_message)
+        logger.error("Failed to verify uploads", extra={"error": str(service_error)})
         return JsonResponse({
             "success": False,
             "error": error_message,
@@ -354,7 +354,7 @@ def initialize_multipart_upload(request):
         if access_error:
             return access_error
         
-        logger.info(f"Initializing multipart upload for {file_name}")
+        logger.info("Initializing multipart upload", extra={"file_name": file_name})
         
         # Use the upload service to initialize the multipart upload
         upload_service = get_upload_service()
@@ -366,10 +366,10 @@ def initialize_multipart_upload(request):
         )
         
         if result["success"]:
-            logger.info(f"Multipart upload initialized with ID: {result['upload_id']}")
+            logger.info("Multipart upload initialized", extra={"upload_id": result['upload_id']})
             return JsonResponse(result)
         else:
-            logger.error(f"Failed to initialize multipart upload: {result.get('error')}")
+            logger.error("Failed to initialize multipart upload", extra={"error": result.get('error')})
             return JsonResponse(result)
     
     except json.JSONDecodeError:
@@ -379,7 +379,7 @@ def initialize_multipart_upload(request):
     
     except Exception as e:
         error_message = f"Error initializing multipart upload: {str(e)}"
-        logger.error(error_message)
+        logger.error("Error initializing multipart upload", extra={"error": str(e)})
         return JsonResponse({"success": False, "error": error_message})
 
 
@@ -421,7 +421,7 @@ def get_part_upload_urls(request):
         if access_error:
             return access_error
 
-        logger.info(f"Generating {part_count} part upload URLs for {s3_key}")
+        logger.info("Generating part upload URLs", extra={"part_count": part_count, "s3_key": s3_key})
         
         # Use the upload service to get presigned URLs for each part
         upload_service = get_upload_service()
@@ -434,10 +434,10 @@ def get_part_upload_urls(request):
         )
         
         if result["success"]:
-            logger.info(f"Generated {len(result['presigned_urls'])} part upload URLs")
+            logger.info("Generated part upload URLs", extra={"count": len(result['presigned_urls'])})
             return JsonResponse(result)
         else:
-            logger.error(f"Failed to generate part upload URLs: {result.get('error')}")
+            logger.error("Failed to generate part upload URLs", extra={"error": result.get('error')})
             return JsonResponse(result)
     
     except json.JSONDecodeError:
@@ -447,7 +447,7 @@ def get_part_upload_urls(request):
     
     except Exception as e:
         error_message = f"Error generating part upload URLs: {str(e)}"
-        logger.error(error_message)
+        logger.error("Error generating part upload URLs", extra={"error": str(e)})
         return JsonResponse({"success": False, "error": error_message})
 
 
@@ -487,7 +487,7 @@ def complete_multipart_upload(request):
         if access_error:
             return access_error
 
-        logger.info(f"Completing multipart upload for {s3_key} with {len(parts)} parts")
+        logger.info("Completing multipart upload", extra={"s3_key": s3_key, "parts_count": len(parts)})
         
         # Use the upload service to complete the multipart upload
         upload_service = get_upload_service()
@@ -499,10 +499,10 @@ def complete_multipart_upload(request):
         )
         
         if result["success"]:
-            logger.info(f"Multipart upload completed for {s3_key}")
+            logger.info("Multipart upload completed", extra={"s3_key": s3_key})
             return JsonResponse(result)
         else:
-            logger.error(f"Failed to complete multipart upload: {result.get('error')}")
+            logger.error("Failed to complete multipart upload", extra={"error": result.get('error')})
             return JsonResponse(result)
     
     except json.JSONDecodeError:
@@ -512,7 +512,7 @@ def complete_multipart_upload(request):
     
     except Exception as e:
         error_message = f"Error completing multipart upload: {str(e)}"
-        logger.error(error_message)
+        logger.error("Error completing multipart upload", extra={"error": str(e)})
         return JsonResponse({"success": False, "error": error_message})
 
 
@@ -542,7 +542,7 @@ def abort_multipart_upload(request):
         if access_error:
             return access_error
 
-        logger.info(f"Aborting multipart upload for {s3_key}")
+        logger.info("Aborting multipart upload", extra={"s3_key": s3_key})
         
         # Use the upload service to abort the multipart upload
         upload_service = get_upload_service()
@@ -553,10 +553,10 @@ def abort_multipart_upload(request):
         )
         
         if result["success"]:
-            logger.info(f"Multipart upload aborted for {s3_key}")
+            logger.info("Multipart upload aborted", extra={"s3_key": s3_key})
             return JsonResponse(result)
         else:
-            logger.error(f"Failed to abort multipart upload: {result.get('error')}")
+            logger.error("Failed to abort multipart upload", extra={"error": result.get('error')})
             return JsonResponse(result)
     
     except json.JSONDecodeError:
@@ -566,7 +566,7 @@ def abort_multipart_upload(request):
     
     except Exception as e:
         error_message = f"Error aborting multipart upload: {str(e)}"
-        logger.error(error_message)
+        logger.error("Error aborting multipart upload", extra={"error": str(e)})
         return JsonResponse({"success": False, "error": error_message})
 
 
@@ -587,13 +587,13 @@ def list_multipart_uploads(request):
         result = upload_service.list_multipart_uploads()
         
         if result["success"]:
-            logger.info(f"Found {result.get('count', 0)} in-progress multipart uploads")
+            logger.info("Found in-progress multipart uploads", extra={"count": result.get('count', 0)})
             return JsonResponse(result)
         else:
-            logger.error(f"Failed to list multipart uploads: {result.get('error')}")
+            logger.error("Failed to list multipart uploads", extra={"error": result.get('error')})
             return JsonResponse(result)
     
     except Exception as e:
         error_message = f"Error listing multipart uploads: {str(e)}"
-        logger.error(error_message)
-        return JsonResponse({"success": False, "error": error_message}) 
+        logger.error("Error listing multipart uploads", extra={"error": str(e)})
+        return JsonResponse({"success": False, "error": error_message})

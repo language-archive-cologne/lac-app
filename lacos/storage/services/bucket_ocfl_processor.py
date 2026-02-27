@@ -97,8 +97,8 @@ class BucketOCFLProcessor:
         Returns:
             Dict containing processing results
         """
-        logger.info(f"Starting collection-wide OCFL processing for {bucket_name} "
-                   f"(dry_run={dry_run}, parallel={parallel})")
+        logger.info("Starting collection-wide OCFL processing",
+                   extra={"bucket_name": bucket_name, "dry_run": dry_run, "parallel": parallel})
 
         try:
             # Reset processing state
@@ -143,7 +143,7 @@ class BucketOCFLProcessor:
             return self._compile_final_results(analysis, feasibility, processing_results)
 
         except Exception as e:
-            logger.error(f"Error in bucket processing: {str(e)}")
+            logger.error("Error in bucket processing", extra={"error": str(e)})
             return {
                 "success": False,
                 "error": str(e),
@@ -210,7 +210,7 @@ class BucketOCFLProcessor:
         Returns:
             Dict containing rollback results
         """
-        logger.info(f"Rolling back failed conversions for {bucket_name}")
+        logger.info("Rolling back failed conversions", extra={"bucket_name": bucket_name})
 
         rollback_results = {
             "success": True,
@@ -246,7 +246,7 @@ class BucketOCFLProcessor:
             self._cleanup_all_backups()
 
         except Exception as e:
-            logger.error(f"Error during rollback: {str(e)}")
+            logger.error("Error during rollback", extra={"error": str(e)})
             rollback_results["success"] = False
             rollback_results["error"] = str(e)
 
@@ -370,7 +370,7 @@ class BucketOCFLProcessor:
                         self.progress_callback(self.get_processing_progress())
 
                 except Exception as e:
-                    logger.error(f"Error processing {folder_analysis.folder_path}: {str(e)}")
+                    logger.error("Error processing folder", extra={"folder_path": folder_analysis.folder_path, "error": str(e)})
                     result = FolderProcessingResult(
                         folder_path=folder_analysis.folder_path,
                         status=ProcessingStatus.FAILED,
@@ -390,13 +390,13 @@ class BucketOCFLProcessor:
         )
 
         try:
-            logger.info(f"Processing folder: {folder_analysis.folder_path}")
+            logger.info("Processing folder", extra={"folder_path": folder_analysis.folder_path})
 
             # Skip if already OCFL compliant
             if folder_analysis.structure_type == StructureType.FULL_OCFL:
                 result.status = ProcessingStatus.SKIPPED
                 result.conversion_details["reason"] = "Already OCFL compliant"
-                logger.info(f"Skipping {folder_analysis.folder_path} - already OCFL compliant")
+                logger.info("Skipping folder - already OCFL compliant", extra={"folder_path": folder_analysis.folder_path})
                 return result
 
             if dry_run:
@@ -407,7 +407,7 @@ class BucketOCFLProcessor:
                     "would_convert": True,
                     "structure_type": folder_analysis.structure_type.value
                 }
-                logger.info(f"Dry run: would convert {folder_analysis.folder_path}")
+                logger.info("Dry run: would convert folder", extra={"folder_path": folder_analysis.folder_path})
                 return result
 
             # Create backup before conversion
@@ -417,9 +417,9 @@ class BucketOCFLProcessor:
                 )
                 result.backup_id = backup_id
                 self.active_backups.append(backup_id)
-                logger.debug(f"Created backup {backup_id} for {folder_analysis.folder_path}")
+                logger.debug("Created backup for folder", extra={"backup_id": backup_id, "folder_path": folder_analysis.folder_path})
             except Exception as e:
-                logger.warning(f"Failed to create backup for {folder_analysis.folder_path}: {str(e)}")
+                logger.warning("Failed to create backup for folder", extra={"folder_path": folder_analysis.folder_path, "error": str(e)})
                 # Continue without backup (risky but allows processing)
 
             # Perform conversion using enhanced OCFL service
@@ -436,17 +436,17 @@ class BucketOCFLProcessor:
                 result.status = ProcessingStatus.COMPLETED
                 result.conversion_details = conversion_result
                 result.files_processed = conversion_result.get("files_processed", 0)
-                logger.info(f"Successfully converted {folder_analysis.folder_path}")
+                logger.info("Successfully converted folder", extra={"folder_path": folder_analysis.folder_path})
             else:
                 result.status = ProcessingStatus.FAILED
                 result.error_message = conversion_result.get("error", "Unknown conversion error")
                 result.conversion_details = conversion_result
-                logger.error(f"Failed to convert {folder_analysis.folder_path}: {result.error_message}")
+                logger.error("Failed to convert folder", extra={"folder_path": folder_analysis.folder_path, "error": result.error_message})
 
         except Exception as e:
             result.status = ProcessingStatus.FAILED
             result.error_message = str(e)
-            logger.error(f"Exception processing {folder_analysis.folder_path}: {str(e)}")
+            logger.error("Exception processing folder", extra={"folder_path": folder_analysis.folder_path, "error": str(e)})
 
         finally:
             result.end_time = time.time()
@@ -504,7 +504,7 @@ class BucketOCFLProcessor:
                 self.fixture_manager.cleanup_backup(backup_id)
                 self.active_backups.remove(backup_id)
             except Exception as e:
-                logger.warning(f"Failed to cleanup backup {backup_id}: {str(e)}")
+                logger.warning("Failed to cleanup backup", extra={"backup_id": backup_id, "error": str(e)})
 
     def set_progress_callback(self, callback: Callable[[BatchProcessingProgress], None]) -> None:
         """

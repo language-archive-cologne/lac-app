@@ -44,7 +44,7 @@ class OCFLService:
         Returns:
             Dict[str, Any]: Result of the validation
         """
-        logger.info(f"Validating OCFL structure for {source_prefix}")
+        logger.info("Validating OCFL structure", extra={"source_prefix": source_prefix})
         
         try:
             # Check if source exists in ingest bucket
@@ -97,7 +97,7 @@ class OCFLService:
             }
             
         except Exception as e:
-            logger.error(f"Error validating OCFL structure: {str(e)}")
+            logger.error("Error validating OCFL structure", extra={"error": str(e)})
             return {
                 "success": False,
                 "error": str(e)
@@ -113,7 +113,7 @@ class OCFLService:
         Returns:
             Dict[str, Any]: Result of the transformation
         """
-        logger.info(f"Transforming structure for {source_prefix}")
+        logger.info("Transforming structure", extra={"source_prefix": source_prefix})
         
         try:
             # Create temporary directory for transformation
@@ -122,7 +122,7 @@ class OCFLService:
                 self.bucket_service._download_directory(self.ingest_bucket, source_prefix, temp_dir)
                 
                 # Log the directory structure for debugging
-                logger.info(f"Downloaded content to {temp_dir}")
+                logger.info("Downloaded content to temp directory", extra={"temp_dir": temp_dir})
                 self._log_directory_structure(temp_dir)
                 
                 # Create OCFL structure in a new directory
@@ -144,7 +144,7 @@ class OCFLService:
                 source_dir = self._find_source_directory(temp_dir, source_prefix)
                 
                 if source_dir and os.path.exists(source_dir):
-                    logger.info(f"Found source directory at {source_dir}")
+                    logger.info("Found source directory", extra={"source_dir": source_dir})
                     
                     # Find and move XML files to metadata
                     self._move_xml_files(source_dir, metadata_dir)
@@ -155,11 +155,11 @@ class OCFLService:
                 # Handle data directory if it exists
                 data_dir = self._find_data_directory(source_dir)
                 if data_dir and os.path.exists(data_dir):
-                    logger.info(f"Found data directory at {data_dir}")
+                    logger.info("Found data directory", extra={"data_dir": data_dir})
                     dest_data = os.path.join(content_dir, OCFL_DATA_DIR)
                     shutil.copytree(data_dir, dest_data, dirs_exist_ok=True)
                 else:
-                    logger.warning(f"Could not find source directory in {temp_dir}")
+                    logger.warning("Could not find source directory", extra={"temp_dir": temp_dir})
                 
                 # Upload transformed structure to production
                 result = self.bucket_service._upload_directory(
@@ -182,7 +182,7 @@ class OCFLService:
                     }
                 
         except Exception as e:
-            logger.error(f"Error transforming structure: {str(e)}")
+            logger.error("Error transforming structure", extra={"error": str(e)})
             return {
                 "success": False,
                 "error": str(e)
@@ -190,14 +190,14 @@ class OCFLService:
     
     def _log_directory_structure(self, directory: str) -> None:
         """Log the directory structure for debugging purposes"""
-        logger.info(f"Directory structure of {directory}:")
+        logger.info("Directory structure", extra={"directory": directory})
         for root, dirs, files in os.walk(directory):
             rel_path = os.path.relpath(root, directory)
             if rel_path == ".":
                 rel_path = ""
-            logger.info(f"  Directory: {rel_path}")
+            logger.info("Directory entry", extra={"rel_path": rel_path})
             for file in files:
-                logger.info(f"    File: {os.path.join(rel_path, file)}")
+                logger.info("File entry", extra={"file_path": os.path.join(rel_path, file)})
     
     def _find_source_directory(self, temp_dir: str, source_prefix: str) -> str:
         """
@@ -234,7 +234,7 @@ class OCFLService:
         for root, _, files in os.walk(source_dir):
             # Skip the metadata directory itself to avoid copying files to themselves
             if os.path.abspath(root).startswith(abs_metadata_dir):
-                logger.info(f"Skipping metadata directory: {root}")
+                logger.info("Skipping metadata directory", extra={"root": root})
                 continue
                 
             for file in files:
@@ -244,14 +244,14 @@ class OCFLService:
                     
                     # Skip if destination already exists or source and destination are the same
                     if os.path.exists(dst) and os.path.samefile(src, dst):
-                        logger.info(f"Skipping file that would copy to itself: {src}")
+                        logger.info("Skipping file that would copy to itself", extra={"src": src})
                         continue
-                        
-                    logger.info(f"Moving XML file from {src} to {dst}")
+
+                    logger.info("Moving XML file", extra={"src": src, "dst": dst})
                     shutil.copy2(src, dst)
                     xml_files_moved += 1
                     
-        logger.info(f"Moved {xml_files_moved} XML files to metadata directory")
+        logger.info("Moved XML files to metadata directory", extra={"count": xml_files_moved})
     
     def _move_acl_file(self, source_dir: str, metadata_dir: str) -> None:
         """Find and move acl.json file to the metadata directory"""
@@ -263,9 +263,9 @@ class OCFLService:
         if os.path.exists(acl_file):
             # Skip if source and destination are the same
             if os.path.exists(dest_acl_file) and os.path.samefile(acl_file, dest_acl_file):
-                logger.info(f"Skipping acl.json that would copy to itself: {acl_file}")
+                logger.info("Skipping acl.json that would copy to itself", extra={"acl_file": acl_file})
             else:
-                logger.info(f"Moving acl.json from {acl_file} to metadata directory")
+                logger.info("Moving acl.json to metadata directory", extra={"acl_file": acl_file})
                 shutil.copy2(acl_file, dest_acl_file)
             return
             
@@ -283,9 +283,9 @@ class OCFLService:
                 
                 # Skip if source and destination are the same
                 if os.path.exists(dest_acl_file) and os.path.samefile(acl_file, dest_acl_file):
-                    logger.info(f"Skipping acl.json that would copy to itself: {acl_file}")
+                    logger.info("Skipping acl.json that would copy to itself", extra={"acl_file": acl_file})
                 else:
-                    logger.info(f"Found acl.json at {acl_file}, moving to metadata directory")
+                    logger.info("Found acl.json, moving to metadata directory", extra={"acl_file": acl_file})
                     shutil.copy2(acl_file, dest_acl_file)
                 return
                 
@@ -313,7 +313,7 @@ class OCFLService:
         Returns:
             Dict[str, Any]: Result of the operation
         """
-        logger.info(f"Starting move to production for {source_prefix}")
+        logger.info("Starting move to production", extra={"source_prefix": source_prefix})
         
         try:
             # First validate the structure
@@ -322,15 +322,15 @@ class OCFLService:
             if not validation_result["success"]:
                 if validation_result.get("needs_transform", False):
                     # Structure needs transformation
-                    logger.info(f"Structure needs transformation, transforming {source_prefix}")
+                    logger.info("Structure needs transformation", extra={"source_prefix": source_prefix})
                     return self.transform_structure(source_prefix)
                 else:
-                    logger.error(f"Validation failed: {validation_result.get('error', 'Unknown error')}")
+                    logger.error("Validation failed", extra={"error": validation_result.get('error', 'Unknown error')})
                     return validation_result
             
             # Structure is valid, copy directly
             try:
-                logger.info(f"Structure is valid, copying {source_prefix} directly to production")
+                logger.info("Structure is valid, copying directly to production", extra={"source_prefix": source_prefix})
                 copied_files = 0
                 
                 # List all objects in the source
@@ -346,20 +346,20 @@ class OCFLService:
                         )
                         copied_files += 1
                 
-                logger.info(f"Successfully copied {copied_files} files from {source_prefix} to production bucket")
+                logger.info("Successfully copied files to production bucket", extra={"copied_files": copied_files, "source_prefix": source_prefix})
                 return {
                     "success": True,
                     "message": f"Successfully moved {source_prefix} to production bucket ({copied_files} files copied)"
                 }
                 
             except Exception as copy_error:
-                logger.error(f"Error copying to production: {str(copy_error)}")
+                logger.error("Error copying to production", extra={"error": str(copy_error)})
                 # If direct copy failed, try transformation as a fallback
-                logger.info(f"Direct copy failed, trying transformation as fallback")
+                logger.info("Direct copy failed, trying transformation as fallback")
                 return self.transform_structure(source_prefix)
                 
         except Exception as e:
-            logger.error(f"Error in move_to_production: {str(e)}")
+            logger.error("Error in move_to_production", extra={"error": str(e)})
             return {
                 "success": False,
                 "error": str(e)
@@ -376,7 +376,7 @@ class OCFLService:
         Returns:
             Dict[str, Any]: Result of the conversion
         """
-        logger.info(f"Starting in-place OCFL conversion for bundle {bundle_path} in {bucket_name}")
+        logger.info("Starting in-place OCFL conversion for bundle", extra={"bundle_path": bundle_path, "bucket_name": bucket_name})
 
         try:
             # First, analyze the existing structure
@@ -407,7 +407,7 @@ class OCFLService:
             return self._perform_atomic_conversion(bucket_name, bundle_path, conversion_plan)
 
         except Exception as e:
-            logger.error(f"Error in in-place conversion: {str(e)}")
+            logger.error("Error in in-place conversion", extra={"error": str(e)})
             return {
                 "success": False,
                 "error": str(e)
@@ -424,7 +424,7 @@ class OCFLService:
         Returns:
             Dict[str, Any]: Analysis result with structure details
         """
-        logger.info(f"Analyzing folder structure: {folder_path}")
+        logger.info("Analyzing folder structure", extra={"folder_path": folder_path})
 
         try:
             # Get folder contents
@@ -520,7 +520,7 @@ class OCFLService:
             }
 
         except Exception as e:
-            logger.error(f"Error analyzing folder structure: {str(e)}")
+            logger.error("Error analyzing folder structure", extra={"error": str(e)})
             return {
                 "success": False,
                 "error": str(e)
@@ -603,7 +603,7 @@ class OCFLService:
                 plan["estimated_time"] = "15-30 minutes"
 
         except Exception as e:
-            logger.error(f"Error creating conversion plan: {str(e)}")
+            logger.error("Error creating conversion plan", extra={"error": str(e)})
             plan["feasible"] = False
             plan["risks"].append(f"Planning error: {str(e)}")
 
@@ -622,7 +622,7 @@ class OCFLService:
         Returns:
             Dict[str, Any]: Conversion result
         """
-        logger.info(f"Performing atomic conversion for {folder_path}")
+        logger.info("Performing atomic conversion", extra={"folder_path": folder_path})
 
         try:
             if conversion_plan.get("conversion_type") in {"structured_to_ocfl", "flat_to_ocfl"}:
@@ -643,7 +643,7 @@ class OCFLService:
             }
 
         except Exception as e:
-            logger.error(f"Error in atomic conversion: {str(e)}")
+            logger.error("Error in atomic conversion", extra={"error": str(e)})
 
             return {
                 "success": False,
@@ -658,7 +658,7 @@ class OCFLService:
         source_prefix = folder_path if folder_path.endswith('/') else f"{folder_path}/"
         temp_prefix = f"{folder_path.rstrip('/')}_ocfl_{uuid.uuid4().hex[:8]}/"
 
-        logger.info(f"Performing server-side conversion for {folder_path} using temp prefix {temp_prefix}")
+        logger.info("Performing server-side conversion", extra={"folder_path": folder_path, "temp_prefix": temp_prefix})
 
         metadata_seen: set[str] = set()
         metadata_files: List[str] = []
@@ -739,7 +739,7 @@ class OCFLService:
             }
 
         except Exception as exc:
-            logger.error(f"Server-side OCFL conversion failed: {exc}")
+            logger.error("Server-side OCFL conversion failed", extra={"error": str(exc)})
             try:
                 self._delete_folder_contents(bucket_name, temp_prefix)
             except Exception:
@@ -811,7 +811,7 @@ class OCFLService:
             }
 
         except Exception as e:
-            logger.error(f"Error creating OCFL structure: {str(e)}")
+            logger.error("Error creating OCFL structure", extra={"error": str(e)})
             return {
                 "success": False,
                 "error": str(e)
@@ -827,7 +827,7 @@ class OCFLService:
                     dst = os.path.join(metadata_dir, file)
                     shutil.copy2(src, dst)
                     xml_files.append(file)
-                    logger.debug(f"Moved XML file: {file}")
+                    logger.debug("Moved XML file", extra={"file": file})
         return xml_files
 
     def _move_acl_file_if_exists(self, source_dir: str, metadata_dir: str) -> bool:
@@ -847,7 +847,7 @@ class OCFLService:
             dst = os.path.join(content_dir, OCFL_DATA_DIR)
             shutil.copytree(data_dir, dst, dirs_exist_ok=True)
             file_count = sum(len(files) for _, _, files in os.walk(dst))
-            logger.debug(f"Moved data directory with {file_count} files")
+            logger.debug("Moved data directory", extra={"file_count": file_count})
             return file_count
         return 0
 
@@ -956,7 +956,7 @@ class OCFLService:
                                 raise
 
         except Exception as e:
-            logger.error(f"Error deleting folder contents: {str(e)}")
+            logger.error("Error deleting folder contents", extra={"error": str(e)})
             raise
 
     def _move_folder_contents(self, bucket_name: str, source_path: str, target_path: str, delete_source: bool = False) -> None:
@@ -999,7 +999,7 @@ class OCFLService:
                             )
 
         except Exception as e:
-            logger.error(f"Error moving folder contents: {str(e)}")
+            logger.error("Error moving folder contents", extra={"error": str(e)})
             raise 
 
     def _build_inventory(self, folder_path: str, manifest_entries: Dict[str, List[str]],

@@ -38,7 +38,8 @@ class TestCollectionDeletionLogging:
             collection.delete()
 
         assert "COLLECTION_DELETED" in caplog.text
-        assert f"pk={collection_pk}" in caplog.text
+        record = next(r for r in caplog.records if r.getMessage() == "COLLECTION_DELETED")
+        assert record.pk == collection_pk
 
     def test_collection_deletion_logs_name(self, caplog):
         """Test that collection name is included in log."""
@@ -48,6 +49,8 @@ class TestCollectionDeletionLogging:
             collection.delete()
 
         assert "COLLECTION_DELETED" in caplog.text
+        record = next(r for r in caplog.records if r.getMessage() == "COLLECTION_DELETED")
+        assert hasattr(record, "collection_name")
 
 
 @pytest.mark.django_db
@@ -63,7 +66,8 @@ class TestBundleDeletionLogging:
             bundle.delete()
 
         assert "BUNDLE_DELETED" in caplog.text
-        assert f"pk={bundle_pk}" in caplog.text
+        record = next(r for r in caplog.records if r.getMessage() == "BUNDLE_DELETED")
+        assert record.pk == bundle_pk
 
     def test_bundle_deletion_logs_name(self, caplog):
         """Test that bundle name is included in log."""
@@ -73,10 +77,12 @@ class TestBundleDeletionLogging:
             bundle.delete()
 
         assert "BUNDLE_DELETED" in caplog.text
+        record = next(r for r in caplog.records if r.getMessage() == "BUNDLE_DELETED")
+        assert hasattr(record, "bundle_name")
 
     def test_bundle_with_collection_deletion_logs_both(self, caplog):
         """Test that deleting a bundle linked to a collection logs bundle deletion.
-        
+
         Note: Due to the FK relationship direction (BundleStructuralInfo.bundle -> Bundle),
         deleting a Collection only cascades to BundleStructuralInfo, not to the Bundle itself.
         This test verifies that explicitly deleting a bundle is properly logged.
@@ -85,10 +91,8 @@ class TestBundleDeletionLogging:
         bundle = create_test_bundle(bundle_id="child_bundle", collection=collection)
 
         with caplog.at_level("WARNING", logger="lacos.security"):
-            # Explicitly delete the bundle first, then the collection
             bundle.delete()
             collection.delete()
 
-        # Both should be logged when explicitly deleted
         assert "BUNDLE_DELETED" in caplog.text
         assert "COLLECTION_DELETED" in caplog.text

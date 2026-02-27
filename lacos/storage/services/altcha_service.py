@@ -58,7 +58,7 @@ class AltchaService:
             )
         )
 
-        logger.debug(f"Created ALTCHA challenge (expires in {self.expires_seconds}s)")
+        logger.debug("Created ALTCHA challenge", extra={"expires_seconds": self.expires_seconds})
 
         return {
             'algorithm': challenge.algorithm,
@@ -115,7 +115,7 @@ class AltchaService:
             )
 
             if not is_valid:
-                logger.warning(f"ALTCHA verification failed: {error}")
+                logger.warning("ALTCHA verification failed", extra={"error": error})
                 return is_valid, error
 
             # Atomically mark as used to prevent race condition replays.
@@ -130,7 +130,7 @@ class AltchaService:
             return True, None
 
         except Exception as e:
-            logger.error(f"ALTCHA verification error: {e}")
+            logger.error("ALTCHA verification error", extra={"error": str(e)})
             return False, str(e)
 
     def verify_solution_base64(self, payload_base64: str) -> Tuple[bool, Optional[str]]:
@@ -150,7 +150,7 @@ class AltchaService:
         try:
             return self.verify_solution(payload_base64)
         except Exception as e:
-            logger.error(f"Failed to verify ALTCHA payload: {e}")
+            logger.error("Failed to verify ALTCHA payload", extra={"error": str(e)})
             return False, f"Invalid payload format: {e}"
 
 

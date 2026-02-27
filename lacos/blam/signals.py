@@ -41,11 +41,11 @@ def delete_associated_resources(sender, instance, **kwargs):
             # Use getattr with a default of None to handle cases where the relation doesn't exist
             resources_container = getattr(instance, 'resources', None)
         except Exception as e:
-            logger.warning(f"Could not access resources for BundleStructuralInfo PK={instance.pk}: {e}")
+            logger.warning("Could not access resources for BundleStructuralInfo", extra={"pk": instance.pk, "error": e})
             resources_container = None
         
         if resources_container:
-            logger.info(f"PRE_DELETE signal: Deleting resources for BundleStructuralInfo PK={instance.pk} via BundleResources PK={resources_container.pk}")
+            logger.info("PRE_DELETE signal: Deleting resources for BundleStructuralInfo", extra={"structural_info_pk": instance.pk, "bundle_resources_pk": resources_container.pk})
 
             # Get all related resource objects (convert to list before deleting)
             media_resources = list(resources_container.bundle_media_resources.all())
@@ -54,38 +54,38 @@ def delete_associated_resources(sender, instance, **kwargs):
 
             # Delete Media Resources
             if media_resources:
-                logger.info(f"Deleting {len(media_resources)} MediaResource(s)...")
+                logger.info("Deleting MediaResources", extra={"count": len(media_resources)})
                 for resource in media_resources:
                     resource.delete() 
 
             # Delete Written Resources
             if written_resources:
-                logger.info(f"Deleting {len(written_resources)} WrittenResource(s)...")
+                logger.info("Deleting WrittenResources", extra={"count": len(written_resources)})
                 for resource in written_resources:
                     resource.delete()
 
             # Delete Other Resources
             if other_resources:
-                logger.info(f"Deleting {len(other_resources)} OtherResource(s)...")
+                logger.info("Deleting OtherResources", extra={"count": len(other_resources)})
                 for resource in other_resources:
                     resource.delete()
             
             # Explicitly delete the BundleResources container itself 
             # because CASCADE doesn't seem to be working properly
-            logger.info(f"Explicitly deleting BundleResources container PK={resources_container.pk}")
+            logger.info("Explicitly deleting BundleResources container", extra={"pk": resources_container.pk})
             resources_container_pk = resources_container.pk
             resources_container.delete()
-            logger.info(f"Successfully deleted BundleResources container PK={resources_container_pk}")
+            logger.info("Successfully deleted BundleResources container", extra={"pk": resources_container_pk})
             
-            logger.info(f"Finished deleting associated resources for BundleStructuralInfo PK={instance.pk}")
+            logger.info("Finished deleting associated resources for BundleStructuralInfo", extra={"pk": instance.pk})
             # The comment below is incorrect - CASCADE is not working as expected, so we delete it explicitly above
             # The BundleResources container itself will be deleted after this by CASCADE
 
         else:
-            logger.warning(f"PRE_DELETE signal for BundleStructuralInfo PK={instance.pk}, but no associated BundleResources container found.")
+            logger.warning("PRE_DELETE signal for BundleStructuralInfo, but no associated BundleResources container found", extra={"pk": instance.pk})
 
     except Exception as e:
-        logger.error(f"Error in pre_delete signal for BundleStructuralInfo PK={instance.pk}: {e}", exc_info=True)
+        logger.error("Error in pre_delete signal for BundleStructuralInfo", extra={"pk": instance.pk, "error": e}, exc_info=True)
 
 # Add signal handlers for each resource type to delete S3ResourceLocation objects
 @receiver(pre_delete, sender=MediaResource)
@@ -103,12 +103,12 @@ def delete_s3_locations_for_media_resource(sender, instance, **kwargs):
             count = s3_locations.count()
             
             if count > 0:
-                logger.info(f"PRE_DELETE signal: Deleting {count} S3ResourceLocation(s) for MediaResource PK={instance.pk} (PID={resource_pid})")
+                logger.info("PRE_DELETE signal: Deleting S3ResourceLocations for MediaResource", extra={"count": count, "pk": instance.pk, "resource_pid": resource_pid})
                 # Use a more direct approach to ensure deletion
                 deleted_count = s3_locations.delete()[0]
-                logger.info(f"Successfully deleted {deleted_count} S3ResourceLocation(s) for MediaResource PK={instance.pk}")
+                logger.info("Successfully deleted S3ResourceLocations for MediaResource", extra={"deleted_count": deleted_count, "pk": instance.pk})
             else:
-                logger.info(f"No S3ResourceLocation objects found for MediaResource PK={instance.pk} (PID={resource_pid})")
+                logger.info("No S3ResourceLocation objects found for MediaResource", extra={"pk": instance.pk, "resource_pid": resource_pid})
         
         # As a fallback, also try to delete any S3ResourceLocation referencing this MediaResource by content_type/object_id
         media_content_type = ContentType.objects.get_for_model(MediaResource)
@@ -118,11 +118,11 @@ def delete_s3_locations_for_media_resource(sender, instance, **kwargs):
         )
         if s3_by_obj.exists():
             count = s3_by_obj.count()
-            logger.info(f"Also deleting {count} S3ResourceLocation(s) by content reference for MediaResource PK={instance.pk}")
+            logger.info("Also deleting S3ResourceLocations by content reference for MediaResource", extra={"count": count, "pk": instance.pk})
             s3_by_obj.delete()
             
     except Exception as e:
-        logger.error(f"Error in pre_delete signal for MediaResource PK={instance.pk}: {e}", exc_info=True)
+        logger.error("Error in pre_delete signal for MediaResource", extra={"pk": instance.pk, "error": e}, exc_info=True)
 
 @receiver(pre_delete, sender=WrittenResource)
 def delete_s3_locations_for_written_resource(sender, instance, **kwargs):
@@ -139,12 +139,12 @@ def delete_s3_locations_for_written_resource(sender, instance, **kwargs):
             count = s3_locations.count()
             
             if count > 0:
-                logger.info(f"PRE_DELETE signal: Deleting {count} S3ResourceLocation(s) for WrittenResource PK={instance.pk} (PID={resource_pid})")
+                logger.info("PRE_DELETE signal: Deleting S3ResourceLocations for WrittenResource", extra={"count": count, "pk": instance.pk, "resource_pid": resource_pid})
                 # Use a more direct approach to ensure deletion
                 deleted_count = s3_locations.delete()[0]
-                logger.info(f"Successfully deleted {deleted_count} S3ResourceLocation(s) for WrittenResource PK={instance.pk}")
+                logger.info("Successfully deleted S3ResourceLocations for WrittenResource", extra={"deleted_count": deleted_count, "pk": instance.pk})
             else:
-                logger.info(f"No S3ResourceLocation objects found for WrittenResource PK={instance.pk} (PID={resource_pid})")
+                logger.info("No S3ResourceLocation objects found for WrittenResource", extra={"pk": instance.pk, "resource_pid": resource_pid})
         
         # As a fallback, also try to delete any S3ResourceLocation referencing this WrittenResource by content_type/object_id
         written_content_type = ContentType.objects.get_for_model(WrittenResource)
@@ -154,11 +154,11 @@ def delete_s3_locations_for_written_resource(sender, instance, **kwargs):
         )
         if s3_by_obj.exists():
             count = s3_by_obj.count()
-            logger.info(f"Also deleting {count} S3ResourceLocation(s) by content reference for WrittenResource PK={instance.pk}")
+            logger.info("Also deleting S3ResourceLocations by content reference for WrittenResource", extra={"count": count, "pk": instance.pk})
             s3_by_obj.delete()
             
     except Exception as e:
-        logger.error(f"Error in pre_delete signal for WrittenResource PK={instance.pk}: {e}", exc_info=True)
+        logger.error("Error in pre_delete signal for WrittenResource", extra={"pk": instance.pk, "error": e}, exc_info=True)
 
 @receiver(pre_delete, sender=OtherResource)
 def delete_s3_locations_for_other_resource(sender, instance, **kwargs):
@@ -175,12 +175,12 @@ def delete_s3_locations_for_other_resource(sender, instance, **kwargs):
             count = s3_locations.count()
             
             if count > 0:
-                logger.info(f"PRE_DELETE signal: Deleting {count} S3ResourceLocation(s) for OtherResource PK={instance.pk} (PID={resource_pid})")
+                logger.info("PRE_DELETE signal: Deleting S3ResourceLocations for OtherResource", extra={"count": count, "pk": instance.pk, "resource_pid": resource_pid})
                 # Use a more direct approach to ensure deletion
                 deleted_count = s3_locations.delete()[0]
-                logger.info(f"Successfully deleted {deleted_count} S3ResourceLocation(s) for OtherResource PK={instance.pk}")
+                logger.info("Successfully deleted S3ResourceLocations for OtherResource", extra={"deleted_count": deleted_count, "pk": instance.pk})
             else:
-                logger.info(f"No S3ResourceLocation objects found for OtherResource PK={instance.pk} (PID={resource_pid})")
+                logger.info("No S3ResourceLocation objects found for OtherResource", extra={"pk": instance.pk, "resource_pid": resource_pid})
         
         # As a fallback, also try to delete any S3ResourceLocation referencing this OtherResource by content_type/object_id
         other_content_type = ContentType.objects.get_for_model(OtherResource)
@@ -190,11 +190,11 @@ def delete_s3_locations_for_other_resource(sender, instance, **kwargs):
         )
         if s3_by_obj.exists():
             count = s3_by_obj.count()
-            logger.info(f"Also deleting {count} S3ResourceLocation(s) by content reference for OtherResource PK={instance.pk}")
+            logger.info("Also deleting S3ResourceLocations by content reference for OtherResource", extra={"count": count, "pk": instance.pk})
             s3_by_obj.delete()
             
     except Exception as e:
-        logger.error(f"Error in pre_delete signal for OtherResource PK={instance.pk}: {e}", exc_info=True)
+        logger.error("Error in pre_delete signal for OtherResource", extra={"pk": instance.pk, "error": e}, exc_info=True)
 
 
 # Security audit logging for critical model deletions
@@ -204,7 +204,8 @@ def log_collection_deletion(sender, instance, **kwargs):
     collection_name = getattr(instance, "name", "unknown")
     collection_pid = getattr(instance, "pid", "unknown")
     security_logger.warning(
-        f"COLLECTION_DELETED: name={collection_name} pid={collection_pid} pk={instance.pk}"
+        "COLLECTION_DELETED",
+        extra={"collection_name": collection_name, "pid": collection_pid, "pk": instance.pk},
     )
     _invalidate_explorer_caches()
 
@@ -234,7 +235,8 @@ def log_bundle_deletion(sender, instance, **kwargs):
     bundle_name = getattr(instance, "name", "unknown")
     bundle_pid = getattr(instance, "pid", "unknown")
     security_logger.warning(
-        f"BUNDLE_DELETED: name={bundle_name} pid={bundle_pid} pk={instance.pk}"
+        "BUNDLE_DELETED",
+        extra={"bundle_name": bundle_name, "pid": bundle_pid, "pk": instance.pk},
     )
     _invalidate_explorer_caches()
 

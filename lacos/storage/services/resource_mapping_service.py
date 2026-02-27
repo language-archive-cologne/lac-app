@@ -71,7 +71,7 @@ class ResourceMappingService(BaseStorageService):
                     # Use UUIDs for path consistency
                     return f'collections/{collection.id}/bundles/{obj.id}/'
             
-            logger.warning(f"Bundle {obj.id} is missing structural info or collection link. Cannot construct S3 path.")
+            logger.warning("Bundle is missing structural info or collection link, cannot construct S3 path", extra={"bundle_id": obj.id})
             return None
                 
         # --- Corrected Logic for Resource Types --- 
@@ -82,22 +82,22 @@ class ResourceMappingService(BaseStorageService):
                 bundle_resources_container = obj.bundleresources_set.first()
                 
                 # Debug logging
-                logger.info(f"Resource type: {type(obj).__name__}, ID: {obj.id}")
-                logger.info(f"BundleResources containers: {obj.bundleresources_set.count()}")
+                logger.info("Resource lookup", extra={"resource_type": type(obj).__name__, "resource_id": obj.id})
+                logger.info("BundleResources containers", extra={"count": obj.bundleresources_set.count()})
                 if bundle_resources_container:
-                    logger.info(f"First container ID: {bundle_resources_container.id}, bundle ID: {bundle_resources_container.bundle_id}")
+                    logger.info("First container found", extra={"container_id": bundle_resources_container.id, "bundle_id": bundle_resources_container.bundle_id})
 
                 if bundle_resources_container:
                     # Directly access the bundle via the foreign key
                     bundle = bundle_resources_container.bundle
-                    logger.info(f"Found bundle ID: {bundle.id if bundle else None}")
+                    logger.info("Found bundle", extra={"bundle_id": bundle.id if bundle else None})
                     
                     # Get structural info if it exists
                     if bundle:
-                        logger.info(f"Bundle has structural_info: {bundle.structural_info.count()}")
+                        logger.info("Bundle structural_info count", extra={"count": bundle.structural_info.count()})
                         si = bundle.structural_info.first()
                         if si:
-                            logger.info(f"StructInfo collection: {si.is_member_of_collection_id}")
+                            logger.info("StructInfo collection", extra={"collection_id": si.is_member_of_collection_id})
                             collection = si.is_member_of_collection
                             if collection and hasattr(obj, 'file_name') and obj.file_name:
                                 # Use UUIDs for path consistency
@@ -105,7 +105,7 @@ class ResourceMappingService(BaseStorageService):
 
             except Exception as e: # Catch broader exceptions during traversal/query
                  # Handle cases where relations might not exist or query fails
-                 logger.warning(f"Could not find related Bundle for resource {type(obj).__name__} (ID: {obj.id}). Check model relations: {e}", exc_info=False)
+                 logger.warning("Could not find related Bundle for resource, check model relations", extra={"resource_type": type(obj).__name__, "resource_id": obj.id, "error": str(e)}, exc_info=False)
                  bundle = None # Ensure bundle is None if any step failed
                  
             # Only if relationships are correctly detected but somehow invalid, we'll reach this section
@@ -118,12 +118,12 @@ class ResourceMappingService(BaseStorageService):
                     return f'collections/{collection.id}/bundles/{bundle.id}/resources/{obj.file_name}'
                 
             # Log if bundle couldn't be determined for a resource type object
-            logger.warning(f"Failed to determine valid Bundle/Collection path for resource {type(obj).__name__} (ID: {obj.id}).")
+            logger.warning("Failed to determine valid Bundle/Collection path for resource", extra={"resource_type": type(obj).__name__, "resource_id": obj.id})
             return None
                  
         else:
             # Default case if object type is not recognized
-            logger.warning(f"Cannot construct S3 path for unrecognized object type: {type(obj).__name__}")
+            logger.warning("Cannot construct S3 path for unrecognized object type", extra={"obj_type": type(obj).__name__})
             return None
     
     def get_s3_location(self, obj):
@@ -198,7 +198,7 @@ class ResourceMappingService(BaseStorageService):
         if pid_url is None and hasattr(obj, 'file_pid'):
             pid_url = obj.file_pid
 
-        logger.info(f"register_s3_location: obj={type(obj).__name__}(id={obj.id}), bucket={bucket}, key={key}, pid_url={pid_url}")
+        logger.info("register_s3_location", extra={"obj_type": type(obj).__name__, "obj_id": obj.id, "bucket": bucket, "key": key, "pid_url": pid_url})
 
         # Determine if this is a real file (resource) vs a prefix (collection/bundle)
         is_file_resource = isinstance(obj, (MediaResource, WrittenResource, OtherResource))
@@ -216,7 +216,7 @@ class ResourceMappingService(BaseStorageService):
                     's3_key': key
                 }
             )
-            logger.info(f"register_s3_location: {'CREATED' if created else 'UPDATED'} S3ResourceLocation(id={location.id}) for pid={pid_url}")
+            logger.info("register_s3_location completed", extra={"action": "CREATED" if created else "UPDATED", "location_id": location.id, "pid_url": pid_url})
         else:
             # Fall back to content_type + object_id for objects without PID
             location, created = S3ResourceLocation.objects.update_or_create(
@@ -228,7 +228,7 @@ class ResourceMappingService(BaseStorageService):
                     's3_key': key
                 }
             )
-            logger.info(f"register_s3_location: {'CREATED' if created else 'UPDATED'} S3ResourceLocation(id={location.id}) for content_type={ct}, object_id={obj.id}")
+            logger.info("register_s3_location completed", extra={"action": "CREATED" if created else "UPDATED", "location_id": location.id, "content_type": str(ct), "object_id": obj.id})
 
         # Fetch S3 metadata (size_bytes, mime_type) for file resources
         if fetch_metadata and is_file_resource:
@@ -264,16 +264,16 @@ class ResourceMappingService(BaseStorageService):
 
             if update_fields:
                 location.save(update_fields=update_fields)
-                logger.debug(f"Updated S3 metadata for {key}: size={size_bytes}, mime={mime_type}")
+                logger.debug("Updated S3 metadata", extra={"key": key, "size_bytes": size_bytes, "mime_type": mime_type})
 
         except ClientError as e:
             error_code = e.response.get('Error', {}).get('Code', '')
             if error_code == '404':
-                logger.debug(f"S3 object not found for metadata: {bucket}/{key}")
+                logger.debug("S3 object not found for metadata", extra={"bucket": bucket, "key": key})
             else:
-                logger.warning(f"Failed to fetch S3 metadata for {bucket}/{key}: {e}")
+                logger.warning("Failed to fetch S3 metadata", extra={"bucket": bucket, "key": key, "error": str(e)})
         except Exception as e:
-            logger.warning(f"Unexpected error fetching S3 metadata for {bucket}/{key}: {e}")
+            logger.warning("Unexpected error fetching S3 metadata", extra={"bucket": bucket, "key": key, "error": str(e)})
     
     def generate_presigned_url(self, bucket, key, expires_in=None, response_headers=None):
         """Generate a presigned URL for temporary access.
@@ -437,20 +437,20 @@ class ResourceMappingService(BaseStorageService):
             # Use collection's import_bucket if available, otherwise fall back to production_bucket
             # This ensures presigned URLs point to where the data actually exists
             bucket = collection.import_bucket if collection.import_bucket else discovery_service.production_bucket
-            logger.info(f"map_collection_hierarchy: collection_id={collection_id}")
-            logger.info(f"map_collection_hierarchy: import_bucket={collection.import_bucket}")
-            logger.info(f"map_collection_hierarchy: import_object_key={collection.import_object_key}")
-            logger.info(f"map_collection_hierarchy: using bucket={bucket}")
+            logger.info("map_collection_hierarchy", extra={"collection_id": collection_id})
+            logger.info("map_collection_hierarchy import_bucket", extra={"import_bucket": collection.import_bucket})
+            logger.info("map_collection_hierarchy import_object_key", extra={"import_object_key": collection.import_object_key})
+            logger.info("map_collection_hierarchy using bucket", extra={"bucket": bucket})
 
             # Use actual OCFL path from import_object_key instead of UUID-based path
             collection_key_prefix = self._extract_ocfl_base_path(collection.import_object_key)
             if not collection_key_prefix:
                 # Fallback to UUID-based path if import_object_key is not set
                 collection_key_prefix = discovery_service.form_collection_path(collection_id) + "/"
-                logger.warning(f"Collection {collection_id} has no import_object_key, falling back to UUID-based path: {collection_key_prefix}")
+                logger.warning("Collection has no import_object_key, falling back to UUID-based path", extra={"collection_id": collection_id, "collection_key_prefix": collection_key_prefix})
 
             self.register_s3_location(collection, bucket, collection_key_prefix)
-            logger.info(f"Mapped Collection {collection_id} to S3 location: {bucket}/{collection_key_prefix}")
+            logger.info("Mapped Collection to S3 location", extra={"collection_id": collection_id, "bucket": bucket, "key_prefix": collection_key_prefix})
             total_mapped += 1
 
             # 1.5 Map collection additional metadata files
@@ -470,16 +470,16 @@ class ResourceMappingService(BaseStorageService):
                                     metadata_count += 1
                                     total_mapped += 1
                                 except Exception as meta_map_e:
-                                    logger.error(f"Failed to map collection metadata file {getattr(metadata_file, 'id', 'N/A')} (name: {metadata_file.file_name}): {meta_map_e}", exc_info=False)
-                        logger.info(f"Mapped {metadata_count} additional metadata files for Collection {collection_id}")
+                                    logger.error("Failed to map collection metadata file", extra={"metadata_file_id": getattr(metadata_file, 'id', 'N/A'), "file_name": metadata_file.file_name, "error": str(meta_map_e)}, exc_info=False)
+                        logger.info("Mapped additional metadata files for Collection", extra={"count": metadata_count, "collection_id": collection_id})
                     else:
-                        logger.warning(f"Collection {collection_id} has no import_object_key, cannot map additional metadata files")
+                        logger.warning("Collection has no import_object_key, cannot map additional metadata files", extra={"collection_id": collection_id})
 
         except Collection.DoesNotExist:
-             logger.error(f"Collection {collection_id} not found for resource mapping.")
+             logger.error("Collection not found for resource mapping", extra={"collection_id": collection_id})
              return 0 # Cannot proceed without collection
         except Exception as e:
-            logger.error(f"Failed to map Collection {collection_id} object: {e}", exc_info=True)
+            logger.error("Failed to map Collection object", extra={"collection_id": collection_id, "error": str(e)}, exc_info=True)
             # Continue to map bundles even if collection mapping failed?
             # For now, we return 0 if collection fetch fails, but log error if mapping fails.
 
@@ -491,7 +491,7 @@ class ResourceMappingService(BaseStorageService):
                 bundle_resources_pairs.append((bundle.id, resources.id if resources else None))
 
         # 2. Iterate through bundles using the provided pairs
-        logger.info(f"Processing {len(bundle_resources_pairs)} bundle/resources pairs for collection {collection_id}.")
+        logger.info("Processing bundle/resources pairs for collection", extra={"count": len(bundle_resources_pairs), "collection_id": collection_id})
         for bundle_id, bundle_resources_id in bundle_resources_pairs:
             try:
                 # Fetch Bundle by ID
@@ -502,10 +502,10 @@ class ResourceMappingService(BaseStorageService):
                 if not bundle_key_prefix:
                     # Fallback to UUID-based path if import_object_key is not set
                     bundle_key_prefix = discovery_service.form_bundle_path(collection_id, bundle.id) + "/"
-                    logger.warning(f"Bundle {bundle.id} has no import_object_key, falling back to UUID-based path: {bundle_key_prefix}")
+                    logger.warning("Bundle has no import_object_key, falling back to UUID-based path", extra={"bundle_id": bundle.id, "bundle_key_prefix": bundle_key_prefix})
 
                 self.register_s3_location(bundle, bucket, bundle_key_prefix)
-                logger.info(f"Mapped Bundle {bundle.id} to S3 location: {bucket}/{bundle_key_prefix}")
+                logger.info("Mapped Bundle to S3 location", extra={"bundle_id": bundle.id, "bucket": bucket, "key_prefix": bundle_key_prefix})
                 total_mapped += 1
 
                 # Derive the base key for bundle files once so both additional
@@ -520,12 +520,13 @@ class ResourceMappingService(BaseStorageService):
                             bundle_id=bundle.id,
                         )
                         logger.warning(
-                            f"Bundle {bundle.id} has no import_object_key, "
-                            f"falling back to UUID-based resource path: {resources_base_key}"
+                            "Bundle has no import_object_key, falling back to UUID-based resource path",
+                            extra={"bundle_id": bundle.id, "resources_base_key": resources_base_key},
                         )
                     except Exception as format_e:
                         logger.error(
-                            f"Could not format resource base key for bundle {bundle.id}: {format_e}"
+                            "Could not format resource base key for bundle",
+                            extra={"bundle_id": bundle.id, "error": str(format_e)},
                         )
                         resources_base_key = None
 
@@ -542,15 +543,14 @@ class ResourceMappingService(BaseStorageService):
                                 total_mapped += 1
                             except Exception as meta_map_e:
                                 logger.error(
-                                    f"Failed to map bundle metadata file "
-                                    f"{getattr(metadata_file, 'id', 'N/A')} "
-                                    f"(name: {metadata_file.file_name}): {meta_map_e}",
+                                    "Failed to map bundle metadata file",
+                                    extra={"metadata_file_id": getattr(metadata_file, 'id', 'N/A'), "file_name": metadata_file.file_name, "error": str(meta_map_e)},
                                     exc_info=False,
                                 )
                     if metadata_count:
                         logger.info(
-                            f"Mapped {metadata_count} additional metadata files "
-                            f"for Bundle {bundle.id}"
+                            "Mapped additional metadata files for Bundle",
+                            extra={"count": metadata_count, "bundle_id": bundle.id},
                         )
 
                 # 3. Map Resources using the BundleResources ID
@@ -558,12 +558,12 @@ class ResourceMappingService(BaseStorageService):
                     try:
                         # Fetch BundleResources directly by its ID
                         bundle_resources = BundleResources.objects.get(id=bundle_resources_id)
-                        logger.info(f"Found BundleResources object (ID: {bundle_resources.id}) for Bundle {bundle.id} via passed ID.")
+                        logger.info("Found BundleResources object for Bundle via passed ID", extra={"bundle_resources_id": bundle_resources.id, "bundle_id": bundle.id})
 
                         if not resources_base_key:
                             logger.warning(
-                                f"No resources base path available for Bundle {bundle.id}. "
-                                "Skipping resource mapping."
+                                "No resources base path available for Bundle, skipping resource mapping",
+                                extra={"bundle_id": bundle.id},
                             )
                             continue
 
@@ -578,7 +578,7 @@ class ResourceMappingService(BaseStorageService):
                                         resource_count += 1
                                         total_mapped += 1
                                     except Exception as res_map_e:
-                                        logger.error(f"Failed to map media resource {getattr(media_resource, 'id', 'N/A')} (name: {media_resource.file_name}): {res_map_e}", exc_info=False)
+                                        logger.error("Failed to map media resource", extra={"resource_id": getattr(media_resource, 'id', 'N/A'), "file_name": media_resource.file_name, "error": str(res_map_e)}, exc_info=False)
 
                         # Map written resources
                         if hasattr(bundle_resources, 'bundle_written_resources'):
@@ -590,7 +590,7 @@ class ResourceMappingService(BaseStorageService):
                                         resource_count += 1
                                         total_mapped += 1
                                     except Exception as res_map_e:
-                                        logger.error(f"Failed to map written resource {getattr(written_resource, 'id', 'N/A')} (name: {written_resource.file_name}): {res_map_e}", exc_info=False)
+                                        logger.error("Failed to map written resource", extra={"resource_id": getattr(written_resource, 'id', 'N/A'), "file_name": written_resource.file_name, "error": str(res_map_e)}, exc_info=False)
 
                         # Map other resources
                         if hasattr(bundle_resources, 'bundle_other_resources'):
@@ -602,23 +602,23 @@ class ResourceMappingService(BaseStorageService):
                                         resource_count += 1
                                         total_mapped += 1
                                     except Exception as res_map_e:
-                                        logger.error(f"Failed to map other resource {getattr(other_resource, 'id', 'N/A')} (name: {other_resource.file_name}): {res_map_e}", exc_info=False)
+                                        logger.error("Failed to map other resource", extra={"resource_id": getattr(other_resource, 'id', 'N/A'), "file_name": other_resource.file_name, "error": str(res_map_e)}, exc_info=False)
 
-                        logger.info(f"Mapped {resource_count} resources for Bundle {bundle.id} using BundleResources ID {bundle_resources.id}")
+                        logger.info("Mapped resources for bundle", extra={"resource_count": resource_count, "bundle_id": bundle.id, "bundle_resources_id": bundle_resources.id})
 
                     except BundleResources.DoesNotExist:
-                         logger.error(f"BundleResources object with passed ID {bundle_resources_id} not found for Bundle {bundle.id}. Cannot map resources.")
+                         logger.error("BundleResources object not found, cannot map resources", extra={"bundle_resources_id": bundle_resources_id, "bundle_id": bundle.id})
                     except Exception as res_fetch_e:
-                         logger.error(f"Error fetching or processing BundleResources {bundle_resources_id} for Bundle {bundle.id}: {res_fetch_e}", exc_info=True)
+                         logger.error("Error fetching or processing BundleResources", extra={"bundle_resources_id": bundle_resources_id, "bundle_id": bundle.id, "error": str(res_fetch_e)}, exc_info=True)
                 else:
-                    logger.warning(f"No BundleResources ID provided for Bundle {bundle.id}. Skipping resource mapping.")
+                    logger.warning("No BundleResources ID provided for bundle, skipping resource mapping", extra={"bundle_id": bundle.id})
 
             except Bundle.DoesNotExist:
-                logger.error(f"Bundle with ID {bundle_id} not found. Cannot map bundle or its resources.")
+                logger.error("Bundle not found, cannot map bundle or its resources", extra={"bundle_id": bundle_id})
             except Exception as bundle_map_e:
-                logger.error(f"Failed to map Bundle {bundle_id} or its resources: {bundle_map_e}", exc_info=True)
+                logger.error("Failed to map bundle or its resources", extra={"bundle_id": bundle_id, "error": str(bundle_map_e)}, exc_info=True)
 
-        logger.info(f"Finished mapping for collection {collection_id}. Total objects mapped: {total_mapped}")
+        logger.info("Finished mapping for collection", extra={"collection_id": collection_id, "total_mapped": total_mapped})
         return total_mapped  # Return count of mapped objects
 
 
@@ -779,5 +779,5 @@ class ACFLService:
             # Log the error
             import logging
             logger = logging.getLogger(__name__)
-            logger.error(f"Error refreshing ACFL permissions: {e}")
+            logger.error("Error refreshing ACFL permissions", extra={"error": str(e)})
             return None

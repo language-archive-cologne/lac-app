@@ -24,7 +24,7 @@ class ConvertToOCFLView(ArchivistRequiredMixin, View):
             create_backup = request.POST.get('create_backup', 'false').lower() == 'true'
             force = request.POST.get('force', 'false').lower() == 'true'
 
-            logger.info(f"Triggering OCFL conversion task for {bucket_name}/{folder_path}")
+            logger.info("Triggering OCFL conversion task", extra={"bucket_name": bucket_name, "folder_path": folder_path})
 
             task_record = BackgroundTaskService.create(
                 task_name='convert_folder_to_ocfl',
@@ -75,7 +75,7 @@ class ConvertToOCFLView(ArchivistRequiredMixin, View):
             )
 
         except Exception as e:
-            logger.error(f"Error triggering OCFL conversion task: {str(e)}")
+            logger.error("Error triggering OCFL conversion task", extra={"error": str(e)})
             return HttpResponse(
                 f"""
                 <div class="alert alert-error">

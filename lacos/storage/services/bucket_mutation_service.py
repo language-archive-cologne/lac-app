@@ -126,11 +126,12 @@ class BucketMutationService:
 
         except ClientError as e:
             logger.error(
-                f"Error renaming bucket {current_bucket} -> {new_bucket}: {str(e)}"
+                "Error renaming bucket",
+                extra={"current_bucket": current_bucket, "new_bucket": new_bucket, "error": str(e)},
             )
             return {"success": False, "error": str(e)}
         except Exception as e:
-            logger.exception(f"Unexpected error renaming bucket {current_bucket}")
+            logger.exception("Unexpected error renaming bucket", extra={"current_bucket": current_bucket})
             return {"success": False, "error": str(e)}
 
     def rename_folder(
@@ -212,10 +213,10 @@ class BucketMutationService:
             return response
 
         except ClientError as e:
-            logger.error(f"Error renaming folder {old_path} -> {new_name}: {str(e)}")
+            logger.error("Error renaming folder", extra={"old_path": old_path, "new_name": new_name, "error": str(e)})
             return {"success": False, "error": str(e)}
         except Exception as e:
-            logger.exception(f"Unexpected error renaming folder {old_path}")
+            logger.exception("Unexpected error renaming folder", extra={"old_path": old_path})
             return {"success": False, "error": str(e)}
 
     def rename_file(
@@ -276,10 +277,10 @@ class BucketMutationService:
             return response
 
         except ClientError as e:
-            logger.error(f"Error renaming file {file_path} -> {new_name}: {str(e)}")
+            logger.error("Error renaming file", extra={"file_path": file_path, "new_name": new_name, "error": str(e)})
             return {"success": False, "error": str(e)}
         except Exception as e:
-            logger.exception(f"Unexpected error renaming file {file_path}")
+            logger.exception("Unexpected error renaming file", extra={"file_path": file_path})
             return {"success": False, "error": str(e)}
 
     def delete_folder(self, bucket_name: str, folder_path: str) -> Dict[str, Any]:
@@ -320,10 +321,10 @@ class BucketMutationService:
             }
 
         except ClientError as e:
-            logger.error(f"Error deleting folder {folder_path}: {str(e)}")
+            logger.error("Error deleting folder", extra={"folder_path": folder_path, "error": str(e)})
             return {"success": False, "error": str(e)}
         except Exception as e:
-            logger.exception(f"Unexpected error deleting folder {folder_path}")
+            logger.exception("Unexpected error deleting folder", extra={"folder_path": folder_path})
             return {"success": False, "error": str(e)}
 
     def delete_file(self, bucket_name: str, file_path: str) -> Dict[str, Any]:
@@ -347,8 +348,8 @@ class BucketMutationService:
             return {"success": True, "message": f"Deleted file '{file_path}'"}
 
         except ClientError as e:
-            logger.error(f"Error deleting file {file_path}: {str(e)}")
+            logger.error("Error deleting file", extra={"file_path": file_path, "error": str(e)})
             return {"success": False, "error": str(e)}
         except Exception as e:
-            logger.exception(f"Unexpected error deleting file {file_path}")
+            logger.exception("Unexpected error deleting file", extra={"file_path": file_path})
             return {"success": False, "error": str(e)}

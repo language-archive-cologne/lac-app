@@ -75,8 +75,8 @@ class FileDiscoveryService(BaseStorageService):
         path_structure['bundle_xml_path'] = bundle_xml_path
         
         # Log the loaded configuration
-        logger.info(f"Loaded path patterns: collection={collection_path_pattern}, bundle={bundle_path_pattern}")
-        logger.info(f"Derived paths: collection_xml={collection_xml_path}, bundle_xml={bundle_xml_path}")
+        logger.info("Loaded path patterns", extra={"collection": collection_path_pattern, "bundle": bundle_path_pattern})
+        logger.info("Derived paths", extra={"collection_xml": collection_xml_path, "bundle_xml": bundle_xml_path})
         
         return path_structure
     
@@ -209,14 +209,14 @@ class FileDiscoveryService(BaseStorageService):
                 try:
                     self.s3_client.head_object(Bucket=bucket, Key=collection_xml_key)
                     collections.append(dir_name)
-                    logger.debug(f"Found collection in S3: {dir_name}")
+                    logger.debug("Found collection in S3", extra={"dir_name": dir_name})
                 except Exception as e:
-                    logger.debug(f"Not a collection or error: {dir_name}, {str(e)}")
+                    logger.debug("Not a collection or error", extra={"dir_name": dir_name, "error": str(e)})
             
-            logger.info(f"Found {len(collections)} collections in S3 bucket {bucket}")
+            logger.info("Found collections in S3 bucket", extra={"count": len(collections), "bucket": bucket})
             return collections
         except Exception as e:
-            logger.error(f"Error finding collections in S3: {e}")
+            logger.error("Error finding collections in S3", extra={"error": str(e)})
             return []
 
     def find_bundles_in_collection_s3(self, bucket: str = None, collection_id: str = None) -> List[str]:
@@ -259,14 +259,14 @@ class FileDiscoveryService(BaseStorageService):
                 try:
                     self.s3_client.head_object(Bucket=bucket, Key=bundle_xml_key)
                     bundles.append(bundle_id)
-                    logger.debug(f"Found bundle in S3: {bundle_id} in collection {collection_id}")
+                    logger.debug("Found bundle in S3", extra={"bundle_id": bundle_id, "collection_id": collection_id})
                 except Exception as e:
-                    logger.debug(f"Not a bundle or error: {bundle_id}, {str(e)}")
+                    logger.debug("Not a bundle or error", extra={"bundle_id": bundle_id, "error": str(e)})
             
-            logger.info(f"Found {len(bundles)} bundles in collection {collection_id} in S3 bucket {bucket}")
+            logger.info("Found bundles in collection", extra={"count": len(bundles), "collection_id": collection_id, "bucket": bucket})
             return bundles
         except Exception as e:
-            logger.error(f"Error finding bundles in collection in S3: {e}")
+            logger.error("Error finding bundles in collection in S3", extra={"error": str(e)})
             return []
 
     def find_resources_in_bundle_s3(self, bucket: str = None, collection_id: str = None, bundle_id: str = None) -> List[str]:
@@ -297,7 +297,7 @@ class FileDiscoveryService(BaseStorageService):
             prefix_pattern = resource_pattern.rsplit('{resource_filename}', 1)[0]
             resources_prefix = prefix_pattern.format(collection_id=collection_id, bundle_id=bundle_id)
         except KeyError: # Handle cases where format keys might be missing if pattern is unexpected
-             logger.error(f"Could not format resource prefix from pattern: {resource_pattern}")
+             logger.error("Could not format resource prefix from pattern", extra={"resource_pattern": resource_pattern})
              return []
         
         try:
@@ -315,12 +315,12 @@ class FileDiscoveryService(BaseStorageService):
                            # Ensure we only list direct children, not items in sub-prefixes
                            if key.startswith(resources_prefix) and '/' not in key[len(resources_prefix):]:
                                resources.append(filename)
-                               logger.debug(f"Found resource in S3: {filename} in bundle {bundle_id}")
+                               logger.debug("Found resource in S3", extra={"file_name": filename, "bundle_id": bundle_id})
             
-            logger.info(f"Found {len(resources)} resources in bundle {bundle_id} in S3 bucket {bucket}")
+            logger.info("Found resources in bundle", extra={"count": len(resources), "bundle_id": bundle_id, "bucket": bucket})
             return resources
         except Exception as e:
-            logger.error(f"Error finding resources in bundle in S3: {e}")
+            logger.error("Error finding resources in bundle in S3", extra={"error": str(e)})
             return []
 
     def find_collection_and_bundle_xmls_s3(self, bucket, prefix=""):
@@ -368,28 +368,28 @@ class FileDiscoveryService(BaseStorageService):
                 if not prefix_obj: continue # Skip if None
                 current_prefix = prefix_obj.get('Prefix')
                 potential_id = current_prefix.rstrip('/').rsplit('/', 1)[-1]
-                logger.info(f"Checking prefix {current_prefix} as potential collection '{potential_id}'")
+                logger.info("Checking prefix as potential collection", extra={"prefix": current_prefix, "potential_id": potential_id})
 
                 try:
                     collection_xml_key = self.form_collection_xml_path(potential_id)
-                    logger.info(f"Formed collection XML path: {collection_xml_key} for prefix {current_prefix}")
+                    logger.info("Formed collection XML path", extra={"collection_xml_key": collection_xml_key, "prefix": current_prefix})
                     # Check if the formed key belongs to this prefix
                     if collection_xml_key.startswith(current_prefix):
-                        logger.info(f"Checking for collection XML at: {collection_xml_key}")
+                        logger.info("Checking for collection XML", extra={"collection_xml_key": collection_xml_key})
                         self.s3_client.head_object(Bucket=bucket, Key=collection_xml_key)
                         # Store potential collection info
                         potential_collection_xml_keys.append((potential_id, collection_xml_key, current_prefix))
-                        logger.info(f"SUCCESS: Identified potential Collection via XML: {collection_xml_key}")
+                        logger.info("Identified potential Collection via XML", extra={"collection_xml_key": collection_xml_key})
                     else:
-                         logger.debug(f"Skipping collection check for {potential_id} as formed path {collection_xml_key} doesn't match prefix {current_prefix}")
+                         logger.debug("Skipping collection check, formed path doesn't match prefix", extra={"potential_id": potential_id, "collection_xml_key": collection_xml_key, "prefix": current_prefix})
                 except ClientError as coll_e:
                     if coll_e.response.get('Error', {}).get('Code', 'Unknown') == '404':
-                        logger.info(f"Not a collection: Collection XML check failed (404) for {collection_xml_key}")
+                        logger.info("Not a collection: Collection XML check failed (404)", extra={"collection_xml_key": collection_xml_key})
                     else:
                          error_code = coll_e.response.get('Error', {}).get('Code', 'Unknown')
-                         logger.warning(f"WARN: Collection XML check failed unexpectedly for {collection_xml_key}. Error: {error_code}")
+                         logger.warning("Collection XML check failed unexpectedly", extra={"collection_xml_key": collection_xml_key, "error_code": error_code})
                 except Exception as coll_e:
-                     logger.error(f"ERROR: Unexpected error checking collection XML for {potential_id}: {coll_e}", exc_info=True)
+                     logger.error("Unexpected error checking collection XML", extra={"potential_id": potential_id, "error": str(coll_e)}, exc_info=True)
 
             # Determine the primary collection ID to use for bundle association
             # Simple case: Assume the first one found is the one. 
@@ -397,7 +397,7 @@ class FileDiscoveryService(BaseStorageService):
             if potential_collection_xml_keys:
                 found_collection_id, collection_xml_to_add, found_collection_prefix = potential_collection_xml_keys[0]
                 result['potential_collection_xmls'].append(collection_xml_to_add)
-                logger.info(f"Using Collection ID '{found_collection_id}' from prefix '{found_collection_prefix}' for bundle search.")
+                logger.info("Using Collection ID for bundle search", extra={"collection_id": found_collection_id, "prefix": found_collection_prefix})
             else:
                 logger.warning(
                     "No collection XML found under prefix; skipping bundle discovery",
@@ -411,44 +411,44 @@ class FileDiscoveryService(BaseStorageService):
 
             # --- Pass 2: Find Bundles as Siblings ---
             if found_collection_id:
-                logger.debug(f"Searching for bundles associated with collection '{found_collection_id}' among sibling prefixes.")
+                logger.debug("Searching for bundles associated with collection among sibling prefixes", extra={"collection_id": found_collection_id})
                 for prefix_obj in top_level_prefixes:
                     if not prefix_obj: continue
                     current_prefix = prefix_obj.get('Prefix')
 
                     # Skip the prefix identified as the collection directory
                     if current_prefix == found_collection_prefix:
-                        logger.debug(f"Skipping prefix {current_prefix} as it's the identified collection prefix.")
+                        logger.debug("Skipping prefix as it's the identified collection prefix", extra={"prefix": current_prefix})
                         continue
 
                     potential_bundle_id = current_prefix.rstrip('/').rsplit('/', 1)[-1]
-                    logger.debug(f"Checking prefix {current_prefix} as potential bundle '{potential_bundle_id}' for collection '{found_collection_id}'")
+                    logger.debug("Checking prefix as potential bundle", extra={"prefix": current_prefix, "potential_bundle_id": potential_bundle_id, "collection_id": found_collection_id})
 
                     try:
                         # Use the FOUND collection ID here when forming the path
                         bundle_xml_key = self.form_bundle_xml_path(found_collection_id, potential_bundle_id)
                         # Check if the formed key belongs to this bundle prefix
                         if bundle_xml_key.startswith(current_prefix):
-                             logger.debug(f"Checking for bundle XML at: {bundle_xml_key}")
+                             logger.debug("Checking for bundle XML", extra={"bundle_xml_key": bundle_xml_key})
                              self.s3_client.head_object(Bucket=bucket, Key=bundle_xml_key)
                              result['potential_bundle_xmls'].append(bundle_xml_key)
-                             logger.info(f"SUCCESS: Identified Bundle via XML: {bundle_xml_key}")
+                             logger.info("Identified Bundle via XML", extra={"bundle_xml_key": bundle_xml_key})
                         else:
-                             logger.debug(f"Skipping bundle check for {potential_bundle_id} as formed path {bundle_xml_key} doesn't match prefix {current_prefix}")
+                             logger.debug("Skipping bundle check, formed path doesn't match prefix", extra={"potential_bundle_id": potential_bundle_id, "bundle_xml_key": bundle_xml_key, "prefix": current_prefix})
                     except ClientError as bundle_e:
                         if bundle_e.response.get('Error', {}).get('Code', 'Unknown') == '404':
-                            logger.debug(f"Not a bundle: Bundle XML check failed (404) for {bundle_xml_key}")
+                            logger.debug("Not a bundle: Bundle XML check failed (404)", extra={"bundle_xml_key": bundle_xml_key})
                         else:
                              error_code = bundle_e.response.get('Error', {}).get('Code', 'Unknown')
-                             logger.warning(f"WARN: Bundle XML check failed unexpectedly for {bundle_xml_key}. Error: {error_code}")
+                             logger.warning("Bundle XML check failed unexpectedly", extra={"bundle_xml_key": bundle_xml_key, "error_code": error_code})
                     except Exception as bundle_e:
-                        logger.error(f"ERROR: Unexpected error checking bundle XML for {potential_bundle_id}: {bundle_e}", exc_info=True)
+                        logger.error("Unexpected error checking bundle XML", extra={"potential_bundle_id": potential_bundle_id, "error": str(bundle_e)}, exc_info=True)
                 # --- End Bundle Search ---
                 
         except Exception as outer_e:
-            logger.error(f"ERROR: Failed during S3 listing for prefix '{prefix}': {outer_e}", exc_info=True)
+            logger.error("Failed during S3 listing for prefix", extra={"prefix": prefix, "error": str(outer_e)}, exc_info=True)
 
-        logger.info(f"Finished S3 XML discovery. Found {len(result['potential_collection_xmls'])} collections, {len(result['potential_bundle_xmls'])} bundles.")
+        logger.info("Finished S3 XML discovery", extra={"collections_found": len(result['potential_collection_xmls']), "bundles_found": len(result['potential_bundle_xmls'])})
         return result
 
     def read_s3_object(self, bucket: str = None, key: str = None) -> Optional[bytes]:
@@ -474,10 +474,10 @@ class FileDiscoveryService(BaseStorageService):
             return response['Body'].read()
         except ClientError as e:
             if e.response['Error']['Code'] == 'NoSuchKey':
-                logger.warning(f"S3 object {bucket}/{key} not found")
+                logger.warning("S3 object not found", extra={"bucket": bucket, "key": key})
                 return None
             else:
-                logger.error(f"Error reading S3 object {bucket}/{key}: {e}")
+                logger.error("Error reading S3 object", extra={"bucket": bucket, "key": key, "error": str(e)})
                 raise
 
     def get_resource(self, bucket: str = None, collection_id: str = None, 

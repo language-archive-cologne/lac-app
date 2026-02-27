@@ -70,7 +70,7 @@ def check_rate_limit(request, key_prefix: str, max_requests: int, window_seconds
             except ValueError:
                 # Extremely rare: key expired between add failure and this incr
                 # Allow request but log for monitoring
-                logger.warning(f"Rate limit cache race for {cache_key}")
+                logger.warning("Rate limit cache race", extra={"cache_key": cache_key})
                 return True
 
     return new_count <= max_requests
@@ -141,21 +141,20 @@ def check_resource_authorization(request, bucket: str, key: str) -> Optional[str
         if not location:
             if require_location:
                 logger.warning(
-                    f"Download denied: no S3ResourceLocation for {bucket}/{key}"
+                    "Download denied: no S3ResourceLocation found",
+                    extra={"bucket": bucket, "key": key},
                 )
                 return "Resource not found"
             # Legacy mode is disabled unless explicitly opted in per request.
             if not _has_explicit_unmapped_opt_in(request):
                 logger.error(
-                    "Download denied: REQUIRE_S3_LOCATION_FOR_DOWNLOAD=False without "
-                    f"explicit opt-in for unmapped resource {bucket}/{key} "
-                    f"(user={request.user}, ip={get_client_ip(request)})"
+                    "Download denied: REQUIRE_S3_LOCATION_FOR_DOWNLOAD=False without explicit opt-in",
+                    extra={"bucket": bucket, "key": key, "user": str(request.user), "ip": get_client_ip(request)},
                 )
                 return "Resource not found"
             logger.error(
-                "SECURITY WARNING: allowing download of unmapped resource "
-                f"{bucket}/{key} via explicit opt-in "
-                f"(user={request.user}, ip={get_client_ip(request)})"
+                "SECURITY WARNING: allowing download of unmapped resource via explicit opt-in",
+                extra={"bucket": bucket, "key": key, "user": str(request.user), "ip": get_client_ip(request)},
             )
             return None
 
@@ -179,7 +178,8 @@ def check_resource_authorization(request, bucket: str, key: str) -> Optional[str
 
                 if not acl_result.allowed and acl_service.enforcement_enabled:
                     logger.warning(
-                        f"ACL denied download for user {request.user} on {bucket}/{key}: {acl_result.reason}"
+                        "ACL denied download",
+                        extra={"user": str(request.user), "bucket": bucket, "key": key, "reason": acl_result.reason},
                     )
                     return "Access denied"
 
@@ -187,6 +187,6 @@ def check_resource_authorization(request, bucket: str, key: str) -> Optional[str
         return None
 
     except Exception as e:
-        logger.error(f"Error checking authorization for {bucket}/{key}: {e}")
+        logger.error("Error checking authorization", extra={"bucket": bucket, "key": key, "error": str(e)})
         # On error, deny access to be safe
         return "Authorization check failed"

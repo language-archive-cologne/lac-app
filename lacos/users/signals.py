@@ -55,13 +55,13 @@ def auto_populate_acl_agent_uri(sender, instance, created, **kwargs):
 def log_user_changes(sender, instance, created, **kwargs):
     """Log user account creation and updates."""
     if created:
-        logger.info(f"USER_CREATED: username={instance.username} email={instance.email}")
+        logger.info("USER_CREATED", extra={"username": instance.username, "email": instance.email})
 
 
 @receiver(post_delete, sender=User)
 def log_user_deletion(sender, instance, **kwargs):
     """Log user account deletion."""
-    logger.warning(f"USER_DELETED: username={instance.username} email={instance.email}")
+    logger.warning("USER_DELETED", extra={"username": instance.username, "email": instance.email})
 
 
 @receiver(user_logged_in)
@@ -79,8 +79,8 @@ def log_user_login(sender, request, user, **kwargs):
             login_method = "regular"
 
     logger.info(
-        f"LOGIN_SUCCESS: user={user.username} ip={ip_address} method={login_method} "
-        f"user_agent={user_agent}"
+        "LOGIN_SUCCESS",
+        extra={"user": user.username, "ip": ip_address, "method": login_method, "user_agent": user_agent},
     )
 
 
@@ -89,7 +89,7 @@ def log_user_logout(sender, request, user, **kwargs):
     """Log user logout events."""
     ip_address = get_client_ip(request)
     username = user.username if user else "anonymous"
-    logger.info(f"LOGOUT: user={username} ip={ip_address}")
+    logger.info("LOGOUT", extra={"user": username, "ip": ip_address})
 
 
 @receiver(user_login_failed)
@@ -99,6 +99,7 @@ def log_login_failed(sender, credentials, request, **kwargs):
     username = credentials.get("username", "unknown")
     user_agent = request.META.get("HTTP_USER_AGENT", "unknown")[:200] if request else "unknown"
     logger.warning(
-        f"LOGIN_FAILED: attempted_user={username} ip={ip_address} user_agent={user_agent}"
+        "LOGIN_FAILED",
+        extra={"attempted_user": username, "ip": ip_address, "user_agent": user_agent},
     )
 

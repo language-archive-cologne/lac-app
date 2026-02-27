@@ -88,7 +88,7 @@ class UploadService(BaseStorageService):
             # Generate a unique key for the file
             file_key = self._generate_file_key(file_name, path_prefix)
 
-            logger.info(f"Generating presigned upload URL for {file_key}")
+            logger.info("Generating presigned upload URL", extra={"file_key": file_key})
 
             # Check if multipart is needed based on file size
             threshold = self._get_multipart_threshold()
@@ -96,7 +96,7 @@ class UploadService(BaseStorageService):
             parts_info = self.calculate_multipart_parts(size_for_parts)
 
             if parts_info['should_use_multipart'] or file_size <= 0:
-                    logger.info(f"File size {file_size} exceeds threshold, using multipart upload")
+                    logger.info("File size exceeds threshold, using multipart upload", extra={"file_size": file_size})
 
                     # Initialize multipart upload
                     init_result = self.initialize_multipart_upload(
@@ -140,8 +140,8 @@ class UploadService(BaseStorageService):
             )
             
             # Log the generated URL for debugging
-            logger.info(f"Generated presigned URL: {presigned_post['url']}")
-            logger.info(f"Generated presigned fields: {json.dumps(presigned_post['fields'])}")
+            logger.info("Generated presigned URL", extra={"url": presigned_post['url']})
+            logger.info("Generated presigned fields", extra={"fields": presigned_post['fields']})
             
             return {
                 'success': True,
@@ -154,7 +154,7 @@ class UploadService(BaseStorageService):
                 'bucket_name': target_bucket
             }
         except Exception as e:
-            logger.error(f"Error generating presigned POST for {file_name}: {str(e)}")
+            logger.error("Error generating presigned POST", extra={"file_name": file_name, "error": str(e)})
             return {
                 'success': False,
                 'error': str(e)
@@ -218,7 +218,7 @@ class UploadService(BaseStorageService):
             file_path = file_meta.get('path')  # Get the optional file-specific path
             
             if not file_name or not file_type:
-                logger.warning(f"Skipping invalid file metadata: {file_meta}")
+                logger.warning("Skipping invalid file metadata", extra={"file_meta": file_meta})
                 failures.append({
                     'file_meta': file_meta,
                     'error': 'Missing file_name or file_type'
@@ -255,7 +255,7 @@ class UploadService(BaseStorageService):
                 # For multipart uploads, we won't have presigned_post but will have upload_id and parts_info
                 if result.get('upload_type') == 'multipart':
                     if 'upload_id' not in result or 'parts_info' not in result:
-                        logger.error(f"Missing multipart fields in result for {file_name}")
+                        logger.error("Missing multipart fields in result", extra={"file_name": file_name})
                         failures.append({
                             'file_meta': file_meta,
                             'error': "Missing multipart upload fields in server response"
@@ -264,7 +264,7 @@ class UploadService(BaseStorageService):
                 else:
                     # For single uploads, validate presigned_post structure
                     if 'presigned_post' not in result:
-                        logger.error(f"Missing presigned_post in result for {file_name}")
+                        logger.error("Missing presigned_post in result", extra={"file_name": file_name})
                         failures.append({
                             'file_meta': file_meta,
                             'error': "Missing presigned_post in server response"
@@ -274,7 +274,7 @@ class UploadService(BaseStorageService):
                     # Validate that presigned_post has url and fields
                     presigned_post = result['presigned_post']
                     if not isinstance(presigned_post, dict) or 'url' not in presigned_post or 'fields' not in presigned_post:
-                        logger.error(f"Invalid presigned_post structure for {file_name}: {presigned_post}")
+                        logger.error("Invalid presigned_post structure", extra={"file_name": file_name, "presigned_post": presigned_post})
                         failures.append({
                             'file_meta': file_meta,
                             'error': f"Invalid presigned_post format. Keys: {list(presigned_post.keys()) if isinstance(presigned_post, dict) else 'not a dict'}"
@@ -323,7 +323,7 @@ class UploadService(BaseStorageService):
                 if path_prefix:
                     s3_key = f"{path_prefix}/{clean_file_name}"
             
-            logger.info(f"Generating accelerated upload URL for {s3_key}")
+            logger.info("Generating accelerated upload URL", extra={"s3_key": s3_key})
             
             # Create a special client with acceleration enabled
             s3_client_accelerated = boto3.client(
@@ -359,7 +359,7 @@ class UploadService(BaseStorageService):
             }
             
         except Exception as e:
-            logger.error(f"Error generating accelerated upload URL for {file_name}: {str(e)}")
+            logger.error("Error generating accelerated upload URL", extra={"file_name": file_name, "error": str(e)})
             return {
                 'success': False,
                 'error': str(e),
@@ -403,7 +403,7 @@ class UploadService(BaseStorageService):
             }
             
         except Exception as e:
-            logger.error(f"Error verifying uploaded file {s3_key}: {str(e)}")
+            logger.error("Error verifying uploaded file", extra={"s3_key": s3_key, "error": str(e)})
             return {
                 'success': False,
                 'error': str(e),
@@ -474,34 +474,34 @@ class UploadService(BaseStorageService):
         size_mb = file_size / MB
         size_gb = file_size / GB
         if size_gb >= 1:
-            logger.debug(f"Calculating multipart chunks for {size_gb:.2f}GB file")
+            logger.debug("Calculating multipart chunks for file", extra={"size_gb": round(size_gb, 2)})
         else:
-            logger.debug(f"Calculating multipart chunks for {size_mb:.1f}MB file")
+            logger.debug("Calculating multipart chunks for file", extra={"size_mb": round(size_mb, 1)})
 
         # Optimized chunk sizes to minimize parts while maintaining performance
         if file_size <= 500 * MB:
             # 100-500MB: Use 25MB chunks (results in 4-20 parts)
             chunk_size = 25 * MB
-            logger.debug(f"Using 25MB chunks for small file ({size_mb:.1f}MB)")
+            logger.debug("Using 25MB chunks for small file", extra={"size_mb": round(size_mb, 1)})
         elif file_size <= 1 * GB:
             # 500MB-1GB: Use 50MB chunks (results in 10-20 parts)
             chunk_size = 50 * MB
-            logger.debug(f"Using 50MB chunks for medium file ({size_mb:.1f}MB)")
+            logger.debug("Using 50MB chunks for medium file", extra={"size_mb": round(size_mb, 1)})
         elif file_size <= 5 * GB:
             # 1GB-5GB: Use 100MB chunks (results in 10-50 parts)
             chunk_size = 100 * MB
-            logger.debug(f"Using 100MB chunks for large file ({size_gb:.2f}GB)")
+            logger.debug("Using 100MB chunks for large file", extra={"size_gb": round(size_gb, 2)})
         elif file_size <= 50 * GB:
             # 5GB-50GB: Use 250MB chunks (results in 20-200 parts)
             chunk_size = 250 * MB
-            logger.debug(f"Using 250MB chunks for very large file ({size_gb:.2f}GB)")
+            logger.debug("Using 250MB chunks for very large file", extra={"size_gb": round(size_gb, 2)})
         else:
             # >50GB: Calculate to keep parts around 500-1000
             target_parts = 750  # Aim for middle of range
             chunk_size = (file_size + target_parts - 1) // target_parts
             # Round up to nearest 50MB for consistency
             chunk_size = ((chunk_size + (50 * MB) - 1) // (50 * MB)) * (50 * MB)
-            logger.debug(f"Using dynamic {chunk_size/MB:.0f}MB chunks for huge file ({size_gb:.2f}GB)")
+            logger.debug("Using dynamic chunks for huge file", extra={"chunk_size_mb": round(chunk_size / MB), "size_gb": round(size_gb, 2)})
 
         return chunk_size
 
@@ -527,7 +527,7 @@ class UploadService(BaseStorageService):
                 configured_chunk = int(settings.MULTIPART_UPLOAD_SETTINGS.get('chunk_size', 0))
                 if configured_chunk > 0:
                     chunk_size = configured_chunk
-                    logger.debug(f"Using configured chunk size: {chunk_size/(1024*1024):.0f}MB")
+                    logger.debug("Using configured chunk size", extra={"chunk_size_mb": round(chunk_size / (1024 * 1024))})
             except Exception:
                 pass
 
@@ -544,7 +544,7 @@ class UploadService(BaseStorageService):
 
         # If too many parts, increase chunk size to stay well under 10,000 limit
         if part_count > max_parts:
-            logger.warning(f"Part count {part_count} exceeds S3 limit, adjusting chunk size")
+            logger.warning("Part count exceeds S3 limit, adjusting chunk size", extra={"part_count": part_count})
             # Leave some headroom (use 9,500 as practical limit)
             practical_max = 9500
             chunk_size = (file_size + practical_max - 1) // practical_max
@@ -552,11 +552,11 @@ class UploadService(BaseStorageService):
             mb = 1024 * 1024
             chunk_size = ((chunk_size + (10 * mb) - 1) // (10 * mb)) * (10 * mb)
             part_count = (file_size + chunk_size - 1) // chunk_size
-            logger.info(f"Adjusted to {chunk_size/mb:.0f}MB chunks to stay under part limit")
+            logger.info("Adjusted chunk size to stay under part limit", extra={"chunk_size_mb": round(chunk_size / mb)})
 
         # Log final calculation
         mb = 1024 * 1024
-        logger.debug(f"Multipart calculation complete: {part_count} parts × {chunk_size/mb:.1f}MB chunks = {file_size/mb:.1f}MB total")
+        logger.debug("Multipart calculation complete", extra={"part_count": part_count, "chunk_size_mb": round(chunk_size / mb, 1), "total_size_mb": round(file_size / mb, 1)})
 
         # Decide whether to use multipart based on configured threshold
         threshold = self._get_multipart_threshold()
@@ -650,7 +650,7 @@ class UploadService(BaseStorageService):
             s3_key = self._generate_file_key(file_name, path_prefix)
             
             target_bucket = bucket_name or self.ingest_bucket
-            logger.info(f"Initializing multipart upload for {s3_key} in {target_bucket}")
+            logger.info("Initializing multipart upload", extra={"s3_key": s3_key, "bucket": target_bucket})
             
             # Create a multipart upload
             response = self.s3_client.create_multipart_upload(
@@ -660,7 +660,7 @@ class UploadService(BaseStorageService):
             )
             
             upload_id = response['UploadId']
-            logger.info(f"Multipart upload initialized: {upload_id}")
+            logger.info("Multipart upload initialized", extra={"upload_id": upload_id})
             
             return {
                 'success': True,
@@ -671,7 +671,7 @@ class UploadService(BaseStorageService):
                 'bucket_name': target_bucket
             }
         except Exception as e:
-            logger.error(f"Error initializing multipart upload for {file_name}: {str(e)}")
+            logger.error("Error initializing multipart upload", extra={"file_name": file_name, "error": str(e)})
             return {
                 'success': False,
                 'error': str(e),
@@ -720,7 +720,7 @@ class UploadService(BaseStorageService):
                     'url': url
                 })
             
-            logger.info(f"Generated {part_count} part upload URLs for {s3_key}")
+            logger.info("Generated part upload URLs", extra={"part_count": part_count, "s3_key": s3_key})
             
             return {
                 'success': True,
@@ -731,7 +731,7 @@ class UploadService(BaseStorageService):
                 'bucket_name': target_bucket
             }
         except Exception as e:
-            logger.error(f"Error generating part upload URLs for {s3_key}: {str(e)}")
+            logger.error("Error generating part upload URLs", extra={"s3_key": s3_key, "error": str(e)})
             return {
                 'success': False,
                 'error': str(e),
@@ -771,7 +771,7 @@ class UploadService(BaseStorageService):
             multipart_parts.sort(key=lambda x: x['PartNumber'])
             
             target_bucket = bucket_name or self.ingest_bucket
-            logger.info(f"Completing multipart upload for {s3_key} in {target_bucket} with {len(multipart_parts)} parts")
+            logger.info("Completing multipart upload", extra={"s3_key": s3_key, "bucket": target_bucket, "parts_count": len(multipart_parts)})
             
             # Complete the multipart upload
             response = self.s3_client.complete_multipart_upload(
@@ -783,7 +783,7 @@ class UploadService(BaseStorageService):
                 }
             )
             
-            logger.info(f"Multipart upload completed: {response}")
+            logger.info("Multipart upload completed", extra={"response": response})
             
             # Check if file exists and get metadata
             head_response = self.s3_client.head_object(
@@ -804,7 +804,7 @@ class UploadService(BaseStorageService):
                 'file_size_formatted': self._format_size(file_size)
             }
         except Exception as e:
-            logger.error(f"Error completing multipart upload for {s3_key}: {str(e)}")
+            logger.error("Error completing multipart upload", extra={"s3_key": s3_key, "error": str(e)})
             return {
                 'success': False,
                 'error': str(e),
@@ -830,7 +830,7 @@ class UploadService(BaseStorageService):
         """
         try:
             target_bucket = bucket_name or self.ingest_bucket
-            logger.info(f"Aborting multipart upload for {s3_key} in {target_bucket}")
+            logger.info("Aborting multipart upload", extra={"s3_key": s3_key, "bucket": target_bucket})
             
             # Abort the multipart upload
             self.s3_client.abort_multipart_upload(
@@ -839,7 +839,7 @@ class UploadService(BaseStorageService):
                 UploadId=upload_id
             )
             
-            logger.info(f"Multipart upload aborted: {upload_id}")
+            logger.info("Multipart upload aborted", extra={"upload_id": upload_id})
             
             return {
                 'success': True,
@@ -847,7 +847,7 @@ class UploadService(BaseStorageService):
                 'upload_id': upload_id
             }
         except Exception as e:
-            logger.error(f"Error aborting multipart upload for {s3_key}: {str(e)}")
+            logger.error("Error aborting multipart upload", extra={"s3_key": s3_key, "error": str(e)})
             return {
                 'success': False,
                 'error': str(e),
@@ -863,7 +863,7 @@ class UploadService(BaseStorageService):
             Dict[str, Any]: Dictionary containing list of uploads or error information
         """
         try:
-            logger.info(f"Listing multipart uploads for bucket {self.ingest_bucket}")
+            logger.info("Listing multipart uploads for bucket", extra={"bucket": self.ingest_bucket})
             
             # List multipart uploads
             response = self.s3_client.list_multipart_uploads(
@@ -881,7 +881,7 @@ class UploadService(BaseStorageService):
                     'initiator': upload.get('Initiator', {}).get('DisplayName', '')
                 })
             
-            logger.info(f"Found {len(uploads)} in-progress multipart uploads")
+            logger.info("Found in-progress multipart uploads", extra={"count": len(uploads)})
             
             return {
                 'success': True,
@@ -889,7 +889,7 @@ class UploadService(BaseStorageService):
                 'count': len(uploads)
             }
         except Exception as e:
-            logger.error(f"Error listing multipart uploads: {str(e)}")
+            logger.error("Error listing multipart uploads", extra={"error": str(e)})
             return {
                 'success': False,
                 'error': str(e)

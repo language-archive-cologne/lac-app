@@ -45,8 +45,8 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
         else:
             active_bucket = self.get_active_bucket(request, workspace_buckets)
 
-        logger.info(f"🎨 TEMPLATE_HELPER: render_bucket_tabs_template called with {len(workspace_buckets)} buckets")
-        logger.info(f"🔧 BUCKET_TABS: Active bucket: {active_bucket}")
+        logger.info("Render bucket tabs template called", extra={"bucket_count": len(workspace_buckets)})
+        logger.info("Bucket tabs active bucket", extra={"active_bucket": active_bucket})
 
         context = {
             'workspace_buckets': workspace_buckets,
@@ -106,7 +106,7 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
                     force_fresh=force_fresh,
                 )
 
-                logger.info(f"🎨 TEMPLATE_HELPER: render_bucket_content_template for {bucket_name}")
+                logger.info("Render bucket content template", extra={"bucket_name": bucket_name})
                 logger.info(
                     "📁 BUCKET_CONTENT: %s items (has_more=%s)",
                     len(listing_page),
@@ -152,7 +152,7 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
                 request=request
             )
         except Exception as e:
-            logger.exception(f"Error rendering bucket content for {bucket_name}: {str(e)}")
+            logger.exception("Error rendering bucket content", extra={"bucket_name": bucket_name, "error": str(e)})
             return f'<div class="alert alert-error"><span>Error loading bucket: {str(e)}</span></div>'
 
     def render_folder_structure_template(self, request, bucket_name, structure=None):
@@ -169,7 +169,7 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
             try:
                 structure = bucket_service.get_root_level_items(bucket_name, force_fresh=True)
             except Exception as e:
-                logger.exception(f"Error getting structure for {bucket_name}: {str(e)}")
+                logger.exception("Error getting structure", extra={"bucket_name": bucket_name, "error": str(e)})
                 structure = {
                     "type": "folder",
                     "name": bucket_name,
@@ -216,7 +216,7 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
                 request=request
             )
         except Exception as e:
-            logger.exception(f"Error rendering bucket info for {bucket_name}: {str(e)}")
+            logger.exception("Error rendering bucket info", extra={"bucket_name": bucket_name, "error": str(e)})
             return f'<span class="text-error">Error loading info: {str(e)}</span>'
 
     def render_active_bucket_state_template(self, request, active_bucket, oob=False):
@@ -265,21 +265,21 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
         Returns:
             str: Complete HTML response with OOB updates
         """
-        logger.info(f"🔍 BUILD_OOB DEBUG: main_html length: {len(main_html)}")
-        logger.info(f"🔍 BUILD_OOB DEBUG: oob_updates: {list(oob_updates.keys()) if oob_updates else 'None'}")
+        logger.info("Build OOB response", extra={"main_html_length": len(main_html)})
+        logger.info("Build OOB updates", extra={"oob_targets": list(oob_updates.keys()) if oob_updates else None})
 
         if not oob_updates:
-            logger.info(f"🔍 BUILD_OOB DEBUG: No OOB updates, returning main_html only")
+            logger.info("No OOB updates, returning main_html only")
             return main_html
 
         oob_html = ""
         for target_id, content in oob_updates.items():
             oob_element = f'<div id="{target_id}" hx-swap-oob="innerHTML">{content}</div>'
             oob_html += oob_element
-            logger.info(f"🔍 BUILD_OOB DEBUG: Added OOB element for '{target_id}', content length: {len(content)}")
+            logger.info("Added OOB element", extra={"target_id": target_id, "content_length": len(content)})
 
         final_response = f'{main_html}{oob_html}'
-        logger.info(f"🔍 BUILD_OOB DEBUG: Final combined response length: {len(final_response)}")
+        logger.info("Final combined OOB response", extra={"response_length": len(final_response)})
         return final_response
 
 
@@ -331,7 +331,7 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
                 return f"{self.build_oob_response(main_html, {'bucket-tabs': tabs_html})}{active_bucket_snippet}"
 
         except Exception as e:
-            logger.exception(f"Error building bucket tabs OOB response: {str(e)}")
+            logger.exception("Error building bucket tabs OOB response", extra={"error": str(e)})
             return main_html
 
     def add_htmx_trigger(self, html_content, trigger_events=None):
@@ -352,7 +352,7 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
 
         if trigger_events:
             response['HX-Trigger'] = json.dumps(trigger_events)
-            logger.info(f"🔔 HTMX_TRIGGER: Added triggers: {list(trigger_events.keys())}")
+            logger.info("Added HTMX triggers", extra={"triggers": list(trigger_events.keys())})
 
         return response
 

@@ -106,7 +106,7 @@ def import_publication_info(cmd_data: Cmd, bundle: 'Bundle') -> Optional[BundleP
                 bundle=bundle,  # Set the bundle directly
             )
     except Exception as e:
-        logger.error(f"Failed to create or update BundlePublicationInfo: {e}", exc_info=True)
+        logger.error("Failed to create or update BundlePublicationInfo", extra={"error": e}, exc_info=True)
         return None # Or re-raise error
 
     # Reset related objects to keep updates idempotent

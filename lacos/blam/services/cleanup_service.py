@@ -48,7 +48,7 @@ class CleanupService:
                     resources__isnull=True
                 )
                 stats['bundles_without_resources'] = bundles_missing_resources.count()
-                logger.info(f"Found {stats['bundles_without_resources']} bundles without resources")
+                logger.info("Found bundles without resources", extra={"count": stats['bundles_without_resources']})
                 
                 # Create resource containers for bundles that don't have them
                 for bundle in bundles_missing_resources:
@@ -56,7 +56,7 @@ class CleanupService:
                         # Create a new resources container
                         resources = BundleResources.objects.create(bundle=bundle)
                         stats['fixed_resources'] += 1
-                        logger.debug(f"Created resources container for bundle {bundle.id}")
+                        logger.debug("Created resources container for bundle", extra={"bundle_id": bundle.id})
                     except Exception as e:
                         error_msg = f"Error fixing resources for bundle {bundle.id}: {e}"
                         logger.error(error_msg)
@@ -68,10 +68,10 @@ class CleanupService:
                     bundle__isnull=True
                 )
                 stats['orphaned_resources_removed'] = orphaned_resources.count()
-                logger.info(f"Found {stats['orphaned_resources_removed']} orphaned resource containers")
+                logger.info("Found orphaned resource containers", extra={"count": stats['orphaned_resources_removed']})
                 
                 if stats['orphaned_resources_removed'] > 0:
-                    logger.warning(f"Deleting {stats['orphaned_resources_removed']} orphaned resource containers")
+                    logger.warning("Deleting orphaned resource containers", extra={"count": stats['orphaned_resources_removed']})
                     orphaned_resources.delete()
                 
                 # 3. Find empty resource containers and populate stats
@@ -85,7 +85,7 @@ class CleanupService:
                     other_count=0
                 )
                 stats['empty_resource_containers'] = empty_resources.count()
-                logger.info(f"Found {stats['empty_resource_containers']} empty resource containers")
+                logger.info("Found empty resource containers", extra={"count": stats['empty_resource_containers']})
                 
                 # 4. Find orphaned resources (not linked to any BundleResources)
                 orphaned_media = MediaResource.objects.filter(
@@ -102,25 +102,25 @@ class CleanupService:
                 stats['orphaned_written_removed'] = orphaned_written.count()
                 stats['orphaned_other_removed'] = orphaned_other.count()
                 
-                logger.info(f"Found {stats['orphaned_media_removed']} orphaned media resources")
-                logger.info(f"Found {stats['orphaned_written_removed']} orphaned written resources")
-                logger.info(f"Found {stats['orphaned_other_removed']} orphaned other resources")
+                logger.info("Found orphaned media resources", extra={"count": stats['orphaned_media_removed']})
+                logger.info("Found orphaned written resources", extra={"count": stats['orphaned_written_removed']})
+                logger.info("Found orphaned other resources", extra={"count": stats['orphaned_other_removed']})
                 
                 # Delete orphaned resources
                 if stats['orphaned_media_removed'] > 0:
-                    logger.warning(f"Deleting {stats['orphaned_media_removed']} orphaned media resources")
+                    logger.warning("Deleting orphaned media resources", extra={"count": stats['orphaned_media_removed']})
                     orphaned_media.delete()
                 
                 if stats['orphaned_written_removed'] > 0:
-                    logger.warning(f"Deleting {stats['orphaned_written_removed']} orphaned written resources")
+                    logger.warning("Deleting orphaned written resources", extra={"count": stats['orphaned_written_removed']})
                     orphaned_written.delete()
                 
                 if stats['orphaned_other_removed'] > 0:
-                    logger.warning(f"Deleting {stats['orphaned_other_removed']} orphaned other resources")
+                    logger.warning("Deleting orphaned other resources", extra={"count": stats['orphaned_other_removed']})
                     orphaned_other.delete()
                 
                 # Log summary
-                logger.info(f"Bundle resources cleanup completed: {stats}")
+                logger.info("Bundle resources cleanup completed", extra={"stats": stats})
                 
         except Exception as e:
             error_msg = f"Error during bundle resources cleanup: {e}"
@@ -149,19 +149,18 @@ class CleanupService:
             with transaction.atomic():
                 # Find collections with bundles that don't properly reference back to the collection
                 collections = Collection.objects.all()
-                logger.info(f"Checking {collections.count()} collections for broken bundle links")
+                logger.info("Checking collections for broken bundle links", extra={"count": collections.count()})
                 
                 for collection in collections:
                     # Get bundles linked via bundle_collection reverse relationship
                     linked_bundles = collection.bundle_collection.all()
-                    logger.debug(f"Collection {collection.id} has {linked_bundles.count()} linked bundles")
+                    logger.debug("Collection linked bundles count", extra={"collection_id": collection.id, "count": linked_bundles.count()})
                     
                     for structural_info in linked_bundles:
                         try:
                             # Ensure each BundleStructuralInfo correctly points to this collection
                             if structural_info.is_member_of_collection_id != collection.id:
-                                logger.warning(f"Found mismatched collection link in BundleStructuralInfo {structural_info.id}. " 
-                                              f"Expected {collection.id}, found {structural_info.is_member_of_collection_id}")
+                                logger.warning("Found mismatched collection link in BundleStructuralInfo", extra={"structural_info_id": structural_info.id, "expected_collection_id": collection.id, "found_collection_id": structural_info.is_member_of_collection_id})
                                 structural_info.is_member_of_collection = collection
                                 structural_info.save()
                                 stats['fixed_links'] += 1
@@ -172,7 +171,7 @@ class CleanupService:
                             stats['errors'].append(f"Collection {collection.id}, BundleStructuralInfo {structural_info.id}: {str(e)}")
                 
                 # Log summary
-                logger.info(f"Collection-bundle link cleanup completed: Fixed {stats['fixed_links']} links")
+                logger.info("Collection-bundle link cleanup completed", extra={"fixed_links": stats['fixed_links']})
                 
         except Exception as e:
             error_msg = f"Error during collection-bundle link cleanup: {e}"
@@ -267,7 +266,7 @@ class CleanupService:
         
         stats['resources']['empty_containers'] = empty_resources
         
-        logger.debug(f"Database statistics: {stats}")
+        logger.debug("Database statistics", extra={"stats": stats})
         return stats
     
     @staticmethod
@@ -305,9 +304,7 @@ class CleanupService:
                 stats['deleted']['written_resources'] = WrittenResource.objects.count()
                 stats['deleted']['other_resources'] = OtherResource.objects.count()
                 
-                logger.warning(f"About to delete {stats['deleted']['collections']} collections, "
-                              f"{stats['deleted']['bundles']} bundles, and "
-                              f"{stats['deleted']['media_resources'] + stats['deleted']['written_resources'] + stats['deleted']['other_resources']} resources")
+                logger.warning("About to delete all data", extra={"collections": stats['deleted']['collections'], "bundles": stats['deleted']['bundles'], "resources": stats['deleted']['media_resources'] + stats['deleted']['written_resources'] + stats['deleted']['other_resources']})
                 
                 # Delete everything - cascade will handle related objects
                 Collection.objects.all().delete()
@@ -318,7 +315,7 @@ class CleanupService:
                 WrittenResource.objects.all().delete()
                 OtherResource.objects.all().delete()
                 
-                logger.warning(f"Successfully deleted all BLAM data: {stats}")
+                logger.warning("Successfully deleted all BLAM data", extra={"stats": stats})
         except Exception as e:
             error_msg = f"Error during data deletion: {e}"
             logger.error(error_msg)
@@ -363,12 +360,12 @@ class CleanupService:
                 # Count collections before deletion
                 stats['deleted']['collections'] = Collection.objects.count()
                 
-                logger.warning(f"About to delete {stats['deleted']['collections']} collections and orphan {stats['orphaned']['bundles']} bundles")
+                logger.warning("About to delete collections", extra={"collections": stats['deleted']['collections'], "orphaned_bundles": stats['orphaned']['bundles']})
                 
                 # Delete all collections - cascade will handle related collection-specific objects
                 Collection.objects.all().delete()
                 
-                logger.warning(f"Successfully deleted all collections: {stats}")
+                logger.warning("Successfully deleted all collections", extra={"stats": stats})
         except Exception as e:
             error_msg = f"Error during collections deletion: {e}"
             logger.error(error_msg)
@@ -420,8 +417,7 @@ class CleanupService:
                 stats['deleted']['written_resources'] = WrittenResource.objects.count()
                 stats['deleted']['other_resources'] = OtherResource.objects.count()
                 
-                logger.warning(f"About to delete {stats['deleted']['bundles']} bundles and their resources, "
-                              f"affecting {stats['affected']['collections']} collections")
+                logger.warning("About to delete bundles and their resources", extra={"bundles": stats['deleted']['bundles'], "affected_collections": stats['affected']['collections']})
                 
                 # Delete all bundles and resources - cascade will handle related objects
                 Bundle.objects.all().delete()
@@ -431,7 +427,7 @@ class CleanupService:
                 WrittenResource.objects.all().delete()
                 OtherResource.objects.all().delete()
                 
-                logger.warning(f"Successfully deleted all bundles and resources: {stats}")
+                logger.warning("Successfully deleted all bundles and resources", extra={"stats": stats})
         except Exception as e:
             error_msg = f"Error during bundles deletion: {e}"
             logger.error(error_msg)
@@ -463,15 +459,15 @@ class CleanupService:
                     collection__isnull=True
                 )
                 stats['orphaned_headers_removed'] = orphaned_headers.count()
-                logger.info(f"Found {stats['orphaned_headers_removed']} orphaned collection headers")
+                logger.info("Found orphaned collection headers", extra={"count": stats['orphaned_headers_removed']})
                 
                 # Delete orphaned headers
                 if stats['orphaned_headers_removed'] > 0:
-                    logger.warning(f"Deleting {stats['orphaned_headers_removed']} orphaned collection headers")
+                    logger.warning("Deleting orphaned collection headers", extra={"count": stats['orphaned_headers_removed']})
                     orphaned_headers.delete()
                 
                 # Log summary
-                logger.info(f"Collection headers cleanup completed: {stats}")
+                logger.info("Collection headers cleanup completed", extra={"stats": stats})
                 
         except Exception as e:
             error_msg = f"Error during collection headers cleanup: {e}"
@@ -504,15 +500,15 @@ class CleanupService:
                     collection__isnull=True
                 )
                 stats['orphaned_publication_info_removed'] = orphaned_pub_info.count()
-                logger.info(f"Found {stats['orphaned_publication_info_removed']} orphaned collection publication info records")
+                logger.info("Found orphaned collection publication info records", extra={"count": stats['orphaned_publication_info_removed']})
                 
                 # Delete orphaned publication info records
                 if stats['orphaned_publication_info_removed'] > 0:
-                    logger.warning(f"Deleting {stats['orphaned_publication_info_removed']} orphaned collection publication info records")
+                    logger.warning("Deleting orphaned collection publication info records", extra={"count": stats['orphaned_publication_info_removed']})
                     orphaned_pub_info.delete()
                 
                 # Log summary
-                logger.info(f"Collection publication info cleanup completed: {stats}")
+                logger.info("Collection publication info cleanup completed", extra={"stats": stats})
                 
         except Exception as e:
             error_msg = f"Error during collection publication info cleanup: {e}"
@@ -545,15 +541,15 @@ class CleanupService:
                     collection__isnull=True
                 )
                 stats['orphaned_general_info_removed'] = orphaned_gen_info.count()
-                logger.info(f"Found {stats['orphaned_general_info_removed']} orphaned collection general info records")
+                logger.info("Found orphaned collection general info records", extra={"count": stats['orphaned_general_info_removed']})
                 
                 # Delete orphaned general info records
                 if stats['orphaned_general_info_removed'] > 0:
-                    logger.warning(f"Deleting {stats['orphaned_general_info_removed']} orphaned collection general info records")
+                    logger.warning("Deleting orphaned collection general info records", extra={"count": stats['orphaned_general_info_removed']})
                     orphaned_gen_info.delete()
                 
                 # Log summary
-                logger.info(f"Collection general info cleanup completed: {stats}")
+                logger.info("Collection general info cleanup completed", extra={"stats": stats})
                 
         except Exception as e:
             error_msg = f"Error during collection general info cleanup: {e}"
@@ -586,15 +582,15 @@ class CleanupService:
                     collection__isnull=True
                 )
                 stats['orphaned_admin_info_removed'] = orphaned_admin_info.count()
-                logger.info(f"Found {stats['orphaned_admin_info_removed']} orphaned collection administrative info records")
+                logger.info("Found orphaned collection administrative info records", extra={"count": stats['orphaned_admin_info_removed']})
                 
                 # Delete orphaned administrative info records
                 if stats['orphaned_admin_info_removed'] > 0:
-                    logger.warning(f"Deleting {stats['orphaned_admin_info_removed']} orphaned collection administrative info records")
+                    logger.warning("Deleting orphaned collection administrative info records", extra={"count": stats['orphaned_admin_info_removed']})
                     orphaned_admin_info.delete()
                 
                 # Log summary
-                logger.info(f"Collection administrative info cleanup completed: {stats}")
+                logger.info("Collection administrative info cleanup completed", extra={"stats": stats})
                 
         except Exception as e:
             error_msg = f"Error during collection administrative info cleanup: {e}"
@@ -627,15 +623,15 @@ class CleanupService:
                     collection__isnull=True
                 )
                 stats['orphaned_structural_info_removed'] = orphaned_struct_info.count()
-                logger.info(f"Found {stats['orphaned_structural_info_removed']} orphaned collection structural info records")
+                logger.info("Found orphaned collection structural info records", extra={"count": stats['orphaned_structural_info_removed']})
                 
                 # Delete orphaned structural info records
                 if stats['orphaned_structural_info_removed'] > 0:
-                    logger.warning(f"Deleting {stats['orphaned_structural_info_removed']} orphaned collection structural info records")
+                    logger.warning("Deleting orphaned collection structural info records", extra={"count": stats['orphaned_structural_info_removed']})
                     orphaned_struct_info.delete()
                 
                 # Log summary
-                logger.info(f"Collection structural info cleanup completed: {stats}")
+                logger.info("Collection structural info cleanup completed", extra={"stats": stats})
                 
         except Exception as e:
             error_msg = f"Error during collection structural info cleanup: {e}"
@@ -668,15 +664,15 @@ class CleanupService:
                     funder_infos__isnull=True
                 )
                 stats['orphaned_project_info_removed'] = orphaned_proj_info.count()
-                logger.info(f"Found {stats['orphaned_project_info_removed']} orphaned project info records")
+                logger.info("Found orphaned project info records", extra={"count": stats['orphaned_project_info_removed']})
                 
                 # Delete orphaned project info records
                 if stats['orphaned_project_info_removed'] > 0:
-                    logger.warning(f"Deleting {stats['orphaned_project_info_removed']} orphaned project info records")
+                    logger.warning("Deleting orphaned project info records", extra={"count": stats['orphaned_project_info_removed']})
                     orphaned_proj_info.delete()
                 
                 # Log summary
-                logger.info(f"Project info cleanup completed: {stats}")
+                logger.info("Project info cleanup completed", extra={"stats": stats})
                 
         except Exception as e:
             error_msg = f"Error during project info cleanup: {e}"

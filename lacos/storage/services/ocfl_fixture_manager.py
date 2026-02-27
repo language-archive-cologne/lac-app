@@ -62,7 +62,7 @@ class OCFLFixtureManager:
         Returns:
             PreservationMetadata: All extracted metadata
         """
-        logger.info(f"Extracting metadata from {folder_path}")
+        logger.info("Extracting metadata", extra={"folder_path": folder_path})
 
         metadata = PreservationMetadata()
 
@@ -71,7 +71,7 @@ class OCFLFixtureManager:
             contents = self.bucket_service.list_bucket_contents(bucket_name, folder_path)
 
             if not contents:
-                logger.warning(f"No contents found in {folder_path}")
+                logger.warning("No contents found", extra={"folder_path": folder_path})
                 return metadata
 
             # Extract different types of metadata
@@ -81,12 +81,14 @@ class OCFLFixtureManager:
             self._extract_directory_structure(contents, metadata)
             self._extract_custom_metadata(bucket_name, folder_path, contents, metadata)
 
-            logger.info(f"Successfully extracted metadata: {len(metadata.xml_files)} XML files, "
-                       f"ACL data: {'yes' if metadata.acl_data else 'no'}, "
-                       f"OCFL markers: {len(metadata.ocfl_markers)}")
+            logger.info("Successfully extracted metadata", extra={
+                "xml_files_count": len(metadata.xml_files),
+                "has_acl_data": metadata.acl_data is not None,
+                "ocfl_markers_count": len(metadata.ocfl_markers),
+            })
 
         except Exception as e:
-            logger.error(f"Error extracting metadata from {folder_path}: {str(e)}")
+            logger.error("Error extracting metadata", extra={"folder_path": folder_path, "error": str(e)})
             metadata.custom_metadata["extraction_error"] = str(e)
 
         return metadata
@@ -104,7 +106,7 @@ class OCFLFixtureManager:
         Returns:
             Dict containing application results
         """
-        logger.info(f"Applying fixtures to OCFL structure at {ocfl_folder_path}")
+        logger.info("Applying fixtures to OCFL structure", extra={"ocfl_folder_path": ocfl_folder_path})
 
         results = {
             "success": True,
@@ -131,10 +133,10 @@ class OCFLFixtureManager:
             # Apply custom metadata
             self._apply_custom_metadata(bucket_name, metadata_path, metadata.custom_metadata, results)
 
-            logger.info(f"Applied {len(results['applied_fixtures'])} fixtures successfully")
+            logger.info("Applied fixtures successfully", extra={"count": len(results['applied_fixtures'])})
 
         except Exception as e:
-            logger.error(f"Error applying fixtures: {str(e)}")
+            logger.error("Error applying fixtures", extra={"error": str(e)})
             results["success"] = False
             results["errors"].append(str(e))
 
@@ -154,7 +156,7 @@ class OCFLFixtureManager:
         Returns:
             str: Backup ID for later reference
         """
-        logger.info(f"Creating fixture backup for {folder_path}")
+        logger.info("Creating fixture backup", extra={"folder_path": folder_path})
 
         backup_id = f"backup_{folder_path.replace('/', '_')}_{int(datetime.datetime.now().timestamp())}"
 
@@ -200,11 +202,11 @@ class OCFLFixtureManager:
             # Store active backup
             self.active_backups[backup_id] = backup
 
-            logger.info(f"Created backup {backup_id} at {backup_location}")
+            logger.info("Created backup", extra={"backup_id": backup_id, "backup_location": backup_location})
             return backup_id
 
         except Exception as e:
-            logger.error(f"Error creating backup for {folder_path}: {str(e)}")
+            logger.error("Error creating backup", extra={"folder_path": folder_path, "error": str(e)})
             raise
 
     def restore_from_backup(self, backup_id: str, target_bucket: str) -> Dict[str, Any]:
@@ -218,7 +220,7 @@ class OCFLFixtureManager:
         Returns:
             Dict containing restoration results
         """
-        logger.info(f"Restoring from backup {backup_id}")
+        logger.info("Restoring from backup", extra={"backup_id": backup_id})
 
         if backup_id not in self.active_backups:
             # Try to load backup from file
@@ -241,7 +243,7 @@ class OCFLFixtureManager:
             )
 
             if result["success"]:
-                logger.info(f"Successfully restored {backup.original_path} from backup {backup_id}")
+                logger.info("Successfully restored from backup", extra={"original_path": backup.original_path, "backup_id": backup_id})
                 return {
                     "success": True,
                     "message": f"Restored {backup.original_path}",
@@ -254,7 +256,7 @@ class OCFLFixtureManager:
                 }
 
         except Exception as e:
-            logger.error(f"Error restoring backup {backup_id}: {str(e)}")
+            logger.error("Error restoring backup", extra={"backup_id": backup_id, "error": str(e)})
             return {
                 "success": False,
                 "error": str(e)
@@ -281,14 +283,14 @@ class OCFLFixtureManager:
                 # Remove from active backups
                 del self.active_backups[backup_id]
 
-                logger.info(f"Cleaned up backup {backup_id}")
+                logger.info("Cleaned up backup", extra={"backup_id": backup_id})
                 return True
             else:
-                logger.warning(f"Backup {backup_id} not found in active backups")
+                logger.warning("Backup not found in active backups", extra={"backup_id": backup_id})
                 return False
 
         except Exception as e:
-            logger.error(f"Error cleaning up backup {backup_id}: {str(e)}")
+            logger.error("Error cleaning up backup", extra={"backup_id": backup_id, "error": str(e)})
             return False
 
     def list_active_backups(self) -> List[Dict[str, Any]]:
@@ -338,9 +340,9 @@ class OCFLFixtureManager:
 
                     acl_content = body.read().decode('utf-8')
                     metadata.acl_data = json.loads(acl_content)
-                    logger.debug(f"Extracted ACL data from {acl_key}")
+                    logger.debug("Extracted ACL data", extra={"acl_key": acl_key})
                 except Exception as e:
-                    logger.warning(f"Failed to extract ACL data: {str(e)}")
+                    logger.warning("Failed to extract ACL data", extra={"error": str(e)})
                     metadata.custom_metadata.setdefault("extraction_error", str(e))
 
     def _extract_xml_files(self, bucket_name: str, folder_path: str,
@@ -370,9 +372,9 @@ class OCFLFixtureManager:
 
                     xml_content = body.read().decode('utf-8')
                     metadata.xml_files[item["name"]] = xml_content
-                    logger.debug(f"Extracted XML file {item['name']}")
+                    logger.debug("Extracted XML file", extra={"file_name": item['name']})
                 except Exception as e:
-                    logger.warning(f"Failed to extract XML file {item['name']}: {str(e)}")
+                    logger.warning("Failed to extract XML file", extra={"file_name": item['name'], "error": str(e)})
                     metadata.custom_metadata.setdefault("extraction_error", str(e))
 
     def _extract_ocfl_markers(self, contents: List[Dict], metadata: PreservationMetadata) -> None:
@@ -380,7 +382,7 @@ class OCFLFixtureManager:
         for item in contents:
             if item["name"].startswith("0=ocfl_object_"):
                 metadata.ocfl_markers.append(item["name"])
-                logger.debug(f"Found OCFL marker: {item['name']}")
+                logger.debug("Found OCFL marker", extra={"marker": item['name']})
 
     def _extract_directory_structure(self, contents: List[Dict], metadata: PreservationMetadata) -> None:
         """Extract directory structure for preservation"""
@@ -417,9 +419,9 @@ class OCFLFixtureManager:
                     )
                     content = response['Body'].read().decode('utf-8')
                     metadata.custom_metadata[item["name"]] = content
-                    logger.debug(f"Extracted custom metadata file {item['name']}")
+                    logger.debug("Extracted custom metadata file", extra={"file_name": item['name']})
                 except Exception as e:
-                    logger.warning(f"Failed to extract custom metadata {item['name']}: {str(e)}")
+                    logger.warning("Failed to extract custom metadata", extra={"file_name": item['name'], "error": str(e)})
 
     def _ensure_directory_exists(self, bucket_name: str, directory_path: str) -> None:
         """Ensure directory exists in S3 by creating a directory marker"""
@@ -431,7 +433,7 @@ class OCFLFixtureManager:
                 Body=""
             )
         except Exception as e:
-            logger.warning(f"Failed to create directory marker for {directory_path}: {str(e)}")
+            logger.warning("Failed to create directory marker", extra={"directory_path": directory_path, "error": str(e)})
 
     def _apply_acl_data(self, bucket_name: str, metadata_path: str,
                        acl_data: Dict, results: Dict) -> None:
@@ -444,7 +446,7 @@ class OCFLFixtureManager:
                 Body=json.dumps(acl_data, indent=2)
             )
             results["applied_fixtures"].append("acl.json")
-            logger.debug(f"Applied ACL data to {acl_key}")
+            logger.debug("Applied ACL data", extra={"acl_key": acl_key})
         except Exception as e:
             results["errors"].append(f"Failed to apply ACL data: {str(e)}")
 
@@ -460,7 +462,7 @@ class OCFLFixtureManager:
                     Body=content
                 )
                 results["applied_fixtures"].append(filename)
-                logger.debug(f"Applied XML file {filename}")
+                logger.debug("Applied XML file", extra={"file_name": filename})
             except Exception as e:
                 results["errors"].append(f"Failed to apply XML file {filename}: {str(e)}")
 
@@ -476,7 +478,7 @@ class OCFLFixtureManager:
                     Body=""
                 )
                 results["applied_fixtures"].append(marker)
-                logger.debug(f"Applied OCFL marker {marker}")
+                logger.debug("Applied OCFL marker", extra={"marker": marker})
             except Exception as e:
                 results["errors"].append(f"Failed to apply OCFL marker {marker}: {str(e)}")
 
@@ -496,7 +498,7 @@ class OCFLFixtureManager:
                     Body=content_str
                 )
                 results["applied_fixtures"].append(filename)
-                logger.debug(f"Applied custom metadata {filename}")
+                logger.debug("Applied custom metadata", extra={"file_name": filename})
             except Exception as e:
                 results["errors"].append(f"Failed to apply custom metadata {filename}: {str(e)}")
 
@@ -506,7 +508,7 @@ class OCFLFixtureManager:
         try:
             self.bucket_service._download_directory(bucket_name, folder_path, backup_location)
         except Exception as e:
-            logger.error(f"Failed to download folder for backup: {str(e)}")
+            logger.error("Failed to download folder for backup", extra={"error": str(e)})
             raise
 
     def _load_backup_from_file(self, backup_id: str) -> None:
@@ -539,7 +541,7 @@ class OCFLFixtureManager:
                 )
 
                 self.active_backups[backup_id] = backup
-                logger.debug(f"Loaded backup {backup_id} from file")
+                logger.debug("Loaded backup from file", extra={"backup_id": backup_id})
 
         except Exception as e:
-            logger.warning(f"Failed to load backup {backup_id} from file: {str(e)}")
+            logger.warning("Failed to load backup from file", extra={"backup_id": backup_id, "error": str(e)})

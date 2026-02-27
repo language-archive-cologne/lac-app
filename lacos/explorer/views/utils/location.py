@@ -57,7 +57,7 @@ def get_location_from_coordinates(coordinates):
         return formatted_coords
 
     except Exception as e:
-        logger.error(f"Error fetching location from coordinates: {e}")
+        logger.error("Error fetching location from coordinates", extra={"error": str(e)})
         return coordinates
 
 

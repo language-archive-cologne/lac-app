@@ -156,7 +156,7 @@ def create_base_general_info(general_info_schema, location: CollectionLocation, 
                     id_type_str = choice_value
                     break
             if not id_type_str:
-                 logger.warning(f"Could not map Collection ID type enum '{id_type_enum.name}' to IdentifierTypeChoices. Storing raw value.")
+                 logger.warning("Could not map Collection ID type enum to IdentifierTypeChoices, storing raw value", extra={"id_type_enum_name": id_type_enum.name})
                  # Fallback or raise error? Storing raw value from enum for now.
                  id_type_str = id_type_enum.value 
         else:
@@ -229,7 +229,7 @@ def import_object_languages(general_info: CollectionGeneralInfo, object_language
             # Use iso_code as the primary identifier
             iso_code = getattr(language_schema.object_language_iso639_3_code, 'value', None)
             if not iso_code:
-                logger.warning(f"Skipping language import: Missing ISO 639-3 code in schema for language name '{language_schema.object_language_name}'")
+                logger.warning("Skipping language import: missing ISO 639-3 code in schema", extra={"language_name": language_schema.object_language_name})
                 continue # Skip this language if it lacks the unique key
 
             # Create a new per-collection language object

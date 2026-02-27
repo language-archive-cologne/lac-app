@@ -49,10 +49,10 @@ def get_upload_url(request):
     
     # Handle service result and return appropriate HTTP response
     if result.get('success') is False:
-        logger.error(f"Failed to generate presigned URL: {result.get('error')}")
+        logger.error("Failed to generate presigned URL", extra={"error": result.get('error')})
         return Response(result, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    logger.info(f"Successfully generated presigned URL for {file_name}")
+
+    logger.info("Successfully generated presigned URL", extra={"file_name": file_name})
     return Response(result)
 
 
@@ -95,16 +95,16 @@ def get_batch_upload_urls(request):
     
     # Handle service result and return appropriate HTTP response
     if result.get('total_urls', 0) == 0:
-        logger.warning(f"No valid presigned URLs generated from {len(files)} files")
+        logger.warning("No valid presigned URLs generated", extra={"file_count": len(files)})
         # Return a 207 Multi-Status if some URLs were generated but others failed
         if result.get('total_failures', 0) > 0:
             return Response(result, status=status.HTTP_207_MULTI_STATUS)
             
     if result.get('success') is False:
-        logger.error(f"Failed to generate batch presigned URLs: {len(result.get('failures', []))} failures")
+        logger.error("Failed to generate batch presigned URLs", extra={"failure_count": len(result.get('failures', []))})
         return Response(result, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
-    logger.info(f"Successfully generated {result.get('total_urls', 0)} presigned URLs")
+    logger.info("Successfully generated presigned URLs", extra={"total_urls": result.get('total_urls', 0)})
     return Response(result)
 
 
@@ -147,10 +147,10 @@ def get_accelerated_upload_url(request):
     
     # Handle service result and return appropriate HTTP response
     if result.get('success') is False:
-        logger.error(f"Failed to generate accelerated presigned URL: {result.get('error')}")
+        logger.error("Failed to generate accelerated presigned URL", extra={"error": result.get('error')})
         return Response(result, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    logger.info(f"Successfully generated accelerated presigned URL for {file_name}")
+
+    logger.info("Successfully generated accelerated presigned URL", extra={"file_name": file_name})
     return Response(result)
 
 
@@ -185,10 +185,10 @@ def mark_upload_complete(request):
     
     # Handle service result and return appropriate HTTP response
     if result.get('success') is False:
-        logger.error(f"Failed to verify upload for {s3_key}: {result.get('error')}")
+        logger.error("Failed to verify upload", extra={"s3_key": s3_key, "error": result.get('error')})
         return Response(result, status=status.HTTP_404_NOT_FOUND)
-    
-    logger.info(f"Successfully verified uploaded file: {s3_key}")
+
+    logger.info("Successfully verified uploaded file", extra={"s3_key": s3_key})
     return Response(result)
 
 
@@ -214,7 +214,7 @@ def get_folder_upload_urls(request):
         # Accept either folder_structure or files_metadata for compatibility
         files_metadata = data.get('folder_structure') or data.get('files_metadata', [])
         
-        logger.info(f"Folder upload request received for '{folder_name}' with {len(files_metadata)} files")
+        logger.info("Folder upload request received", extra={"folder_name": folder_name, "file_count": len(files_metadata)})
         
         # Validate required parameters
         if not folder_name:
@@ -233,7 +233,7 @@ def get_folder_upload_urls(request):
         
         # Log some sample files for debugging
         if files_metadata:
-            logger.debug(f"Sample file metadata: {files_metadata[0]}")
+            logger.debug("Sample file metadata", extra={"sample": files_metadata[0]})
         
         # Call service layer
         service = UploadService()
@@ -246,12 +246,12 @@ def get_folder_upload_urls(request):
         
         # Handle service result
         if result.get('total_urls', 0) == 0:
-            logger.warning(f"No valid presigned URLs generated from {len(files_metadata)} files")
+            logger.warning("No valid presigned URLs generated", extra={"file_count": len(files_metadata)})
             if result.get('total_failures', 0) > 0:
                 return Response(result, status=status.HTTP_207_MULTI_STATUS)
         
         if result.get('success') is False:
-            logger.error(f"Failed to generate folder upload URLs: {len(result.get('failures', []))} failures")
+            logger.error("Failed to generate folder upload URLs", extra={"failure_count": len(result.get('failures', []))})
             return Response(result, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Transform to a client-friendly format with original paths
@@ -273,7 +273,7 @@ def get_folder_upload_urls(request):
             }
             client_friendly_posts.append(client_post)
         
-        logger.info(f"Successfully generated {len(client_friendly_posts)} presigned URLs for folder upload")
+        logger.info("Successfully generated presigned URLs for folder upload", extra={"count": len(client_friendly_posts)})
         
         return Response({
             'success': True,
@@ -282,5 +282,5 @@ def get_folder_upload_urls(request):
             'folder_name': folder_name
         })
     except Exception as e:
-        logger.error(f"Error generating folder upload URLs: {str(e)}")
+        logger.error("Error generating folder upload URLs", extra={"error": str(e)})
         return Response({"success": False, "error": "An error occurred while generating folder upload URLs"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR) 

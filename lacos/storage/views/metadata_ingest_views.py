@@ -38,19 +38,19 @@ def validate_metadata_xml(bucket: str, s3_key: str, metadata_type: str) -> dict:
 
     # Check if file exists in S3
     try:
-        logger.info(f"🔍 VALIDATE_XML: Reading S3 object bucket={bucket}, key={s3_key}")
+        logger.info("VALIDATE_XML: Reading S3 object", extra={"bucket": bucket, "key": s3_key})
         discovery_service = FileDiscoveryService()
         xml_bytes = discovery_service.read_s3_object(bucket=bucket, key=s3_key)
 
         if not xml_bytes:
-            logger.warning(f"🔍 VALIDATE_XML: File not found")
+            logger.warning("VALIDATE_XML: File not found")
             result['error'] = f"File not found in bucket '{bucket}' at path '{s3_key}'"
             return result
 
-        logger.info(f"🔍 VALIDATE_XML: Successfully read {len(xml_bytes)} bytes")
+        logger.info("VALIDATE_XML: Successfully read S3 object", extra={"byte_count": len(xml_bytes)})
 
     except Exception as e:
-        logger.error(f"🔍 VALIDATE_XML: Error reading S3 object: {str(e)}", exc_info=True)
+        logger.error("VALIDATE_XML: Error reading S3 object", extra={"error": str(e)}, exc_info=True)
         result['error'] = f"Cannot access S3 file: {str(e)}"
         return result
 
@@ -355,7 +355,7 @@ def validate_metadata_endpoint(request, bucket_type, object_path):
     # Clean up trailing slashes from path
     object_path = object_path.rstrip('/')
 
-    logger.info(f"🔍 VALIDATE: bucket_type={bucket_type}, object_path={object_path}")
+    logger.info("VALIDATE: Starting validation", extra={"bucket_type": bucket_type, "object_path": object_path})
 
     bucket_service = BucketService()
     accessible_buckets = bucket_service.get_all_accessible_buckets()
@@ -370,7 +370,7 @@ def validate_metadata_endpoint(request, bucket_type, object_path):
     else:
         bucket_name = bucket_type
 
-    logger.info(f"🔍 VALIDATE: resolved bucket_name={bucket_name}")
+    logger.info("VALIDATE: Resolved bucket name", extra={"bucket_name": bucket_name})
 
     # Get metadata type from query parameter (user explicitly selected it)
     metadata_type = request.GET.get('type', '').lower()
@@ -393,19 +393,19 @@ def validate_metadata_endpoint(request, bucket_type, object_path):
             else:
                 metadata_type = 'bundle'
 
-        logger.info(f"🔍 VALIDATE: auto-detected metadata_type={metadata_type} from path={object_path}")
+        logger.info("VALIDATE: Auto-detected metadata type", extra={"metadata_type": metadata_type, "object_path": object_path})
     else:
-        logger.info(f"🔍 VALIDATE: user-selected metadata_type={metadata_type}")
+        logger.info("VALIDATE: User-selected metadata type", extra={"metadata_type": metadata_type})
 
     # Get or generate target_id for proper element replacement
     target_id = request.GET.get('target_id') or slugify(f'file-info-{object_path}')
 
-    logger.info(f"🔍 VALIDATE: target_id={target_id}")
+    logger.info("VALIDATE: Using target ID", extra={"target_id": target_id})
 
     # Run validation
     result = validate_metadata_xml(bucket_name, object_path, metadata_type)
 
-    logger.info(f"🔍 VALIDATE: result valid={result.get('valid')}, error={result.get('error')}")
+    logger.info("VALIDATE: Validation complete", extra={"valid": result.get('valid'), "error": result.get('error')})
 
     context = {
         'result': result,

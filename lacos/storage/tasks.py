@@ -34,7 +34,7 @@ def convert_folder_to_ocfl_task(
     Returns:
         Dict with conversion results
     """
-    logger.info(f"Starting OCFL conversion task for {bucket_name}/{folder_path}")
+    logger.info("Starting OCFL conversion task", extra={"bucket_name": bucket_name, "folder_path": folder_path})
 
     try:
         # Initialize services
@@ -46,7 +46,7 @@ def convert_folder_to_ocfl_task(
             BackgroundTaskService.mark_running(tracking_id, message="Analyzing folder structure")
 
         # Analyze the folder structure first
-        logger.info(f"Analyzing folder structure: {bucket_name}/{folder_path}")
+        logger.info("Analyzing folder structure", extra={"bucket_name": bucket_name, "folder_path": folder_path})
         analysis_result = ocfl_service.analyze_folder_structure(bucket_name, folder_path)
 
         if not analysis_result.get('success'):
@@ -88,7 +88,7 @@ def convert_folder_to_ocfl_task(
         backup_location = None
         backup_id = None
         if create_backup:
-            logger.info(f"Creating backup for {bucket_name}/{folder_path}")
+            logger.info("Creating backup", extra={"bucket_name": bucket_name, "folder_path": folder_path})
             try:
                 backup_id = fixture_manager.create_fixture_backup(
                     bucket_name=bucket_name,
@@ -97,22 +97,22 @@ def convert_folder_to_ocfl_task(
                 backup_record = fixture_manager.active_backups.get(backup_id)
                 if backup_record:
                     backup_location = backup_record.backup_location
-                    logger.info(f"Backup created: {backup_id} at {backup_location}")
+                    logger.info("Backup created", extra={"backup_id": backup_id, "backup_location": backup_location})
                     if tracking_id:
                         BackgroundTaskService.touch(tracking_id, message="Backup created")
             except Exception as backup_error:
-                logger.warning(f"Failed to create backup: {backup_error}. Continuing without backup.")
+                logger.warning("Failed to create backup, continuing without backup", extra={"error": str(backup_error)})
                 if tracking_id:
                     BackgroundTaskService.touch(tracking_id, message=f"Backup failed: {backup_error}")
 
         # Perform the conversion
-        logger.info(f"Performing OCFL conversion for {bucket_name}/{folder_path}")
+        logger.info("Performing OCFL conversion", extra={"bucket_name": bucket_name, "folder_path": folder_path})
         if tracking_id:
             BackgroundTaskService.touch(tracking_id, message="Executing conversion")
         conversion_result = ocfl_service.convert_bundle_to_ocfl(bucket_name, folder_path)
 
         if conversion_result.get('success'):
-            logger.info(f"OCFL conversion completed successfully for {bucket_name}/{folder_path}")
+            logger.info("OCFL conversion completed successfully", extra={"bucket_name": bucket_name, "folder_path": folder_path})
             payload = {
                 'success': True,
                 'message': f'Successfully converted {folder_path} to OCFL format',
@@ -140,7 +140,7 @@ def convert_folder_to_ocfl_task(
             return payload
 
         error_msg = conversion_result.get('error', 'Unknown error occurred during conversion')
-        logger.error(f"OCFL conversion failed for {bucket_name}/{folder_path}: {error_msg}")
+        logger.error("OCFL conversion failed", extra={"bucket_name": bucket_name, "folder_path": folder_path, "error": error_msg})
         if tracking_id:
             BackgroundTaskService.mark_failed(
                 tracking_id,
@@ -161,7 +161,7 @@ def convert_folder_to_ocfl_task(
 
     except Exception as e:
         error_msg = f"Error during OCFL conversion: {str(e)}"
-        logger.error(error_msg, exc_info=True)
+        logger.error("Error during OCFL conversion", extra={"error": str(e)}, exc_info=True)
         if tracking_id:
             BackgroundTaskService.mark_failed(tracking_id, error_message=error_msg)
         return {
@@ -184,7 +184,7 @@ def analyze_folder_for_ocfl_task(bucket_name: str, folder_path: str, tracking_id
     Returns:
         Dict with analysis results
     """
-    logger.info(f"Analyzing folder for OCFL suitability: {bucket_name}/{folder_path}")
+    logger.info("Analyzing folder for OCFL suitability", extra={"bucket_name": bucket_name, "folder_path": folder_path})
 
     try:
         # Initialize services
@@ -197,7 +197,7 @@ def analyze_folder_for_ocfl_task(bucket_name: str, folder_path: str, tracking_id
         analysis_result = ocfl_service.analyze_folder_structure(bucket_name, folder_path)
 
         if analysis_result.get('success'):
-            logger.info(f"Folder analysis completed for {bucket_name}/{folder_path}")
+            logger.info("Folder analysis completed", extra={"bucket_name": bucket_name, "folder_path": folder_path})
             if tracking_id:
                 BackgroundTaskService.mark_success(
                     tracking_id,
@@ -228,7 +228,7 @@ def analyze_folder_for_ocfl_task(bucket_name: str, folder_path: str, tracking_id
 
     except Exception as e:
         error_msg = f"Error during folder analysis: {str(e)}"
-        logger.error(error_msg, exc_info=True)
+        logger.error("Error during folder analysis", extra={"error": str(e)}, exc_info=True)
         return {
             'success': False,
             'error': error_msg,

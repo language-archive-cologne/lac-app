@@ -36,15 +36,15 @@ def find_s3_import_candidates(bucket: str = None, prefix: str = '') -> Dict[str,
         Dict with 'potential_collection_xmls' and 'potential_bundle_xmls' keys
         containing lists of S3 keys.
     """
-    logger.info(f"Searching for import candidates in S3: {bucket or 'default bucket'}/{prefix}")
+    logger.info("Searching for import candidates in S3", extra={"bucket": bucket or "default bucket", "prefix": prefix})
     discovery_service = FileDiscoveryService()
     try:
         # Use the specific method that finds both types based on configured patterns
         result = discovery_service.find_collection_and_bundle_xmls_s3(bucket, prefix)
-        logger.info(f"Import candidate search completed. Found {len(result.get('potential_collection_xmls', []))} potential collections and {len(result.get('potential_bundle_xmls', []))} potential bundles.")
+        logger.info("Import candidate search completed", extra={"potential_collections": len(result.get('potential_collection_xmls', [])), "potential_bundles": len(result.get('potential_bundle_xmls', []))})
         return result
     except Exception as e:
-        logger.error(f"Error finding import candidates in S3: {e}")
+        logger.error("Error finding import candidates in S3", extra={"error": e})
         # Return empty dict on error to avoid downstream failures
         return {'potential_collection_xmls': [], 'potential_bundle_xmls': []}
 
@@ -64,7 +64,7 @@ def import_s3_collection(
     Returns:
         Collection database ID if successful, None otherwise.
     """
-    logger.info(f"COLLECTION IMPORT: Starting import from S3: {bucket}/{s3_key}")
+    logger.info("COLLECTION IMPORT: Starting import from S3", extra={"bucket": bucket, "s3_key": s3_key})
     discovery_service = FileDiscoveryService()
     collection_id = None
     collection_title = "Unknown"
@@ -72,7 +72,7 @@ def import_s3_collection(
         with transaction.atomic():
             xml_content_bytes = discovery_service.read_s3_object(bucket, s3_key)
             if xml_content_bytes is None:
-                logger.error(f"COLLECTION IMPORT FAILED: XML not found or unreadable at {bucket}/{s3_key}")
+                logger.error("COLLECTION IMPORT FAILED: XML not found or unreadable", extra={"bucket": bucket, "s3_key": s3_key})
                 # Raising exception inside atomic block ensures rollback
                 raise ValueError(f"XML not found at {bucket}/{s3_key}")
 
@@ -95,14 +95,14 @@ def import_s3_collection(
 
             collection_id = collection.id # Store ID for logging after commit
             collection_title = getattr(collection.general_info, 'display_title', 'Unknown') if hasattr(collection, 'general_info') else 'Unknown' # Safe access
-            logger.info(f"COLLECTION IMPORT SUCCESS (within transaction): ID={collection_id} | Title={collection_title} | S3={s3_key}")
-        
+            logger.info("COLLECTION IMPORT SUCCESS (within transaction)", extra={"collection_id": collection_id, "title": collection_title, "s3_key": s3_key})
+
         # This part executes *after* the transaction successfully commits
-        logger.info(f"COLLECTION COMMITTED: Transaction for collection {collection_id} | Title={collection_title} is now committed")
+        logger.info("COLLECTION COMMITTED: Transaction committed", extra={"collection_id": collection_id, "title": collection_title})
         return collection_id
 
     except Exception as e:
-        logger.error(f"COLLECTION IMPORT FAILED: Error during import or transaction for S3 {bucket}/{s3_key}: {e}", exc_info=True)
+        logger.error("COLLECTION IMPORT FAILED: Error during import or transaction", extra={"bucket": bucket, "s3_key": s3_key, "error": e}, exc_info=True)
         return None
 
 # --- Refactored Bundle Import Task ---
@@ -122,30 +122,30 @@ def import_s3_bundle(
         Tuple (bundle_id, bundle_resources_id) if successful, None otherwise.
     """
     task_id = f"BUNDLE-{s3_key.split('/')[-1]}"
-    logger.info(f"{task_id}: Starting import from S3: {bucket}/{s3_key}")
-    
+    logger.info("Starting bundle import from S3", extra={"task_id": task_id, "bucket": bucket, "s3_key": s3_key})
+
     discovery_service = FileDiscoveryService()
     try:
         xml_content_bytes = discovery_service.read_s3_object(bucket, s3_key)
         if xml_content_bytes is None:
-            logger.error(f"{task_id}: FAILED - XML not found or unreadable at {bucket}/{s3_key}")
+            logger.error("FAILED - XML not found or unreadable", extra={"task_id": task_id, "bucket": bucket, "s3_key": s3_key})
             return None
 
         xml_content = xml_content_bytes.decode('utf-8')
-        
+
         importer_result = BundleImporter.import_from_xml(
             xml_content,
             update_existing=update_existing,
         )
 
         if not importer_result or not isinstance(importer_result, tuple) or len(importer_result) != 2:
-            logger.error(f"{task_id}: FAILED - BundleImporter did not return expected (bundle, bundle_resources_id) tuple.")
+            logger.error("FAILED - BundleImporter did not return expected tuple", extra={"task_id": task_id})
             return None
-            
+
         bundle, bundle_resources_id = importer_result
-        
+
         if not bundle or not bundle_resources_id:
-             logger.error(f"{task_id}: FAILED - BundleImporter returned None for bundle or bundle_resources_id.")
+             logger.error("FAILED - BundleImporter returned None for bundle or bundle_resources_id", extra={"task_id": task_id})
              return None
 
         fields_to_update: List[str] = []
@@ -161,12 +161,12 @@ def import_s3_bundle(
         bundle_title = getattr(bundle.general_info, 'display_title', 'Unknown') if hasattr(bundle, 'general_info') and bundle.general_info else 'Unknown'
         struct_info = bundle.structural_info.first() if hasattr(bundle, 'structural_info') else None
         collection_id_linked = getattr(struct_info.is_member_of_collection, 'id', 'None') if struct_info and hasattr(struct_info, 'is_member_of_collection') else 'None'
-        
-        logger.info(f"{task_id}: IMPORT SUCCESS | Bundle ID={bundle.id} | BundleResources ID={bundle_resources_id} | Collection ID={collection_id_linked} | Title={bundle_title}")
+
+        logger.info("IMPORT SUCCESS", extra={"task_id": task_id, "bundle_id": bundle.id, "bundle_resources_id": bundle_resources_id, "collection_id": collection_id_linked, "title": bundle_title})
         return (bundle.id, bundle_resources_id)
-        
+
     except Exception as e:
-        logger.error(f"{task_id}: IMPORT FAILED - Error importing bundle from S3 {bucket}/{s3_key}: {e}", exc_info=True)
+        logger.error("IMPORT FAILED - Error importing bundle from S3", extra={"task_id": task_id, "bucket": bucket, "s3_key": s3_key, "error": e}, exc_info=True)
         return None
 
 # --- Refactored Bundle Group Import Task ---
@@ -194,7 +194,7 @@ def import_s3_bundles_for_collection(
     successful_pairs: List[Tuple[UUID, UUID]] = []
 
     if collection_id is None:
-        logger.warning(f"{task_id}: SKIPPED - No collection ID provided.")
+        logger.warning("SKIPPED - No collection ID provided", extra={"task_id": task_id})
         return (None, successful_pairs)
 
     # Verify collection exists
@@ -202,24 +202,24 @@ def import_s3_bundles_for_collection(
         from lacos.blam.models.collection.collection_repository import Collection
         collection = Collection.objects.get(id=collection_id)
         collection_title = getattr(collection.general_info, 'display_title', 'Unknown') if hasattr(collection, 'general_info') and collection.general_info else 'Unknown'
-        logger.info(f"{task_id}: Verified collection exists | ID={collection_id} | Title={collection_title}")
+        logger.info("Verified collection exists", extra={"task_id": task_id, "collection_id": collection_id, "title": collection_title})
     except Collection.DoesNotExist:
-        logger.error(f"{task_id}: FAILED - Collection {collection_id} not found. Bundles cannot be reliably linked.")
+        logger.error("FAILED - Collection not found, bundles cannot be reliably linked", extra={"task_id": task_id, "collection_id": collection_id})
     except Exception as e:
-        logger.warning(f"{task_id}: Warning - Error verifying collection {collection_id}: {e}")
+        logger.warning("Error verifying collection", extra={"task_id": task_id, "collection_id": collection_id, "error": e})
 
     if not bundle_keys:
-        logger.info(f"{task_id}: No bundle keys provided for collection {collection_id}. Nothing to import.")
+        logger.info("No bundle keys provided, nothing to import", extra={"task_id": task_id, "collection_id": collection_id})
         return (collection_id, successful_pairs) # Return ID and empty list
 
-    logger.info(f"{task_id}: Processing {len(bundle_keys)} bundle keys for collection ID={collection_id}")
+    logger.info("Processing bundle keys for collection", extra={"task_id": task_id, "bundle_key_count": len(bundle_keys), "collection_id": collection_id})
 
     imported_count = 0
     failed_count = 0
-    
+
     for index, bundle_key in enumerate(bundle_keys):
         bundle_task_id = f"{task_id}-BUNDLE-{index+1}"
-        logger.info(f"{bundle_task_id}: Processing bundle {index+1}/{len(bundle_keys)} | S3 key: {bundle_key}")
+        logger.info("Processing bundle", extra={"bundle_task_id": bundle_task_id, "index": index + 1, "total": len(bundle_keys), "s3_key": bundle_key})
         try:
             # Call single bundle import locally
             bundle_result = import_s3_bundle.call_local(
@@ -227,30 +227,30 @@ def import_s3_bundles_for_collection(
                 s3_key=bundle_key,
                 update_existing=update_existing,
             )
-            
+
             if bundle_result and isinstance(bundle_result, tuple) and len(bundle_result) == 2:
                 bundle_id, bundle_resources_id = bundle_result
                 if bundle_id and bundle_resources_id:
                     imported_count += 1
                     successful_pairs.append(bundle_result) # Add the (id, id) pair
-                    logger.info(f"{bundle_task_id}: SUCCESS - Bundle imported | ID={bundle_id} | ResourcesID={bundle_resources_id}")
+                    logger.info("SUCCESS - Bundle imported", extra={"bundle_task_id": bundle_task_id, "bundle_id": bundle_id, "resources_id": bundle_resources_id})
                 else:
                     failed_count += 1
-                    logger.warning(f"{bundle_task_id}: FAILED - Bundle import returned None in tuple.")
+                    logger.warning("FAILED - Bundle import returned None in tuple", extra={"bundle_task_id": bundle_task_id})
             else:
                 failed_count += 1
-                logger.warning(f"{bundle_task_id}: FAILED - Bundle import returned None or invalid format.")
+                logger.warning("FAILED - Bundle import returned None or invalid format", extra={"bundle_task_id": bundle_task_id})
         except Exception as e:
-            logger.error(f"{bundle_task_id}: FAILED - Error importing bundle: {e}", exc_info=True)
+            logger.error("FAILED - Error importing bundle", extra={"bundle_task_id": bundle_task_id, "error": e}, exc_info=True)
             failed_count += 1
 
     if imported_count > 0:
-        logger.info(f"{task_id}: SUMMARY - Successfully imported {imported_count}/{len(bundle_keys)} bundles | Failed: {failed_count}")
-        logger.debug(f"{task_id}: Successful pairs: {successful_pairs}")
+        logger.info("SUMMARY - Bundle imports completed", extra={"task_id": task_id, "imported": imported_count, "total": len(bundle_keys), "failed": failed_count})
+        logger.debug("Successful pairs", extra={"task_id": task_id, "successful_pairs": successful_pairs})
     else:
-        logger.warning(f"{task_id}: NO BUNDLES IMPORTED - All {failed_count} bundle imports failed for collection {collection_id}")
+        logger.warning("NO BUNDLES IMPORTED - All bundle imports failed", extra={"task_id": task_id, "failed": failed_count, "collection_id": collection_id})
 
-    logger.info(f"{task_id}: Returning collection ID={collection_id} and {len(successful_pairs)} successful pairs.")
+    logger.info("Returning collection results", extra={"task_id": task_id, "collection_id": collection_id, "successful_pair_count": len(successful_pairs)})
     return (collection_id, successful_pairs)
 
 # --- Orphan Bundle Cleanup Task ---
@@ -278,7 +278,7 @@ def cleanup_orphan_bundles(
     task_id = f"CLEANUP-ORPHANS-{collection_id}"
 
     if collection_id is None:
-        logger.warning(f"{task_id}: SKIPPED - No collection ID provided")
+        logger.warning("SKIPPED - No collection ID provided", extra={"task_id": task_id})
         return (collection_id, list_of_pairs)
 
     # Extract bundle identifiers from S3 keys
@@ -293,7 +293,7 @@ def cleanup_orphan_bundles(
             s3_bundle_identifiers.add(bundle_identifier)
 
     logger.info(
-        f"{task_id}: Found {len(s3_bundle_identifiers)} bundle identifiers in S3: {s3_bundle_identifiers}"
+        "Found bundle identifiers in S3", extra={"task_id": task_id, "count": len(s3_bundle_identifiers), "identifiers": s3_bundle_identifiers}
     )
 
     # Note: If s3_bundle_identifiers is empty, ALL bundles in DB are orphans
@@ -309,7 +309,7 @@ def cleanup_orphan_bundles(
         ).values_list('bundle_id', flat=True)
 
         db_bundles = Bundle.objects.filter(id__in=linked_bundle_ids)
-        logger.info(f"{task_id}: Found {db_bundles.count()} bundles in DB linked to collection")
+        logger.info("Found bundles in DB linked to collection", extra={"task_id": task_id, "count": db_bundles.count()})
 
         # Find orphans: bundles in DB whose S3 folder is NOT in S3 bundle keys
         # We use import_object_key to determine the S3 folder, not bundle.identifier
@@ -328,30 +328,29 @@ def cleanup_orphan_bundles(
             if bundle_folder is None or bundle_folder not in s3_bundle_identifiers:
                 orphan_bundles.append(bundle)
                 logger.info(
-                    f"{task_id}: Identified orphan bundle: {bundle.identifier} "
-                    f"(folder: {bundle_folder}, ID: {bundle.id})"
+                    "Identified orphan bundle", extra={"task_id": task_id, "identifier": bundle.identifier, "folder": bundle_folder, "bundle_id": bundle.id}
                 )
 
         if orphan_bundles:
-            logger.info(f"{task_id}: Deleting {len(orphan_bundles)} orphan bundles")
+            logger.info("Deleting orphan bundles", extra={"task_id": task_id, "count": len(orphan_bundles)})
             for bundle in orphan_bundles:
                 bundle_id = bundle.id
                 bundle_identifier = bundle.identifier
                 try:
                     bundle.delete()
                     logger.info(
-                        f"{task_id}: DELETED orphan bundle {bundle_identifier} (ID: {bundle_id})"
+                        "DELETED orphan bundle", extra={"task_id": task_id, "identifier": bundle_identifier, "bundle_id": bundle_id}
                     )
                 except Exception as e:
                     logger.error(
-                        f"{task_id}: Failed to delete orphan bundle {bundle_identifier}: {e}",
+                        "Failed to delete orphan bundle", extra={"task_id": task_id, "identifier": bundle_identifier, "error": e},
                         exc_info=True,
                     )
         else:
-            logger.info(f"{task_id}: No orphan bundles found")
+            logger.info("No orphan bundles found", extra={"task_id": task_id})
 
     except Exception as e:
-        logger.error(f"{task_id}: Error during orphan cleanup: {e}", exc_info=True)
+        logger.error("Error during orphan cleanup", extra={"task_id": task_id, "error": e}, exc_info=True)
 
     return (collection_id, list_of_pairs)
 
@@ -370,44 +369,44 @@ def resolve_collection_bundle_links_task(collection_id: Optional[UUID], list_of_
         The same Tuple (collection_id, list_of_successful_pairs).
     """
     task_id = f"RESOLVE-LINKS-{collection_id}"
-    
+
     if collection_id is None:
-        logger.warning(f"{task_id}: SKIPPED - No collection ID provided")
+        logger.warning("SKIPPED - No collection ID provided", extra={"task_id": task_id})
         return (None, list_of_pairs)  # Pass through existing list
 
-    logger.info(f"{task_id}: Starting bundle link resolution for collection ID={collection_id}")
+    logger.info("Starting bundle link resolution", extra={"task_id": task_id, "collection_id": collection_id})
 
     # Verify collection exists
     try:
         from lacos.blam.models.collection.collection_repository import Collection
         collection = Collection.objects.get(id=collection_id)
         collection_title = getattr(collection.general_info, 'display_title', 'Unknown') if hasattr(collection, 'general_info') and collection.general_info else 'Unknown'
-        logger.info(f"{task_id}: Verified collection exists | ID={collection_id} | Title={collection_title}")
+        logger.info("Verified collection exists", extra={"task_id": task_id, "collection_id": collection_id, "title": collection_title})
     except Collection.DoesNotExist:
-        logger.error(f"{task_id}: FAILED - Collection {collection_id} not found in database")
+        logger.error("FAILED - Collection not found in database", extra={"task_id": task_id, "collection_id": collection_id})
         return (collection_id, list_of_pairs) # Return original input
     except Exception as e:
-        logger.warning(f"{task_id}: Warning - Error verifying collection {collection_id}: {e}")
+        logger.warning("Error verifying collection", extra={"task_id": task_id, "collection_id": collection_id, "error": e})
 
     try:
-        logger.info(f"{task_id}: Calling resolve_links_service for collection ID={collection_id}")
+        logger.info("Calling resolve_links_service", extra={"task_id": task_id, "collection_id": collection_id})
         result = resolve_links_service(collection_id) # Service only needs collection_id
-        
+
         if result is None:
-            logger.error(f"{task_id}: FAILED - resolve_links_service returned None for collection {collection_id}")
+            logger.error("FAILED - resolve_links_service returned None", extra={"task_id": task_id, "collection_id": collection_id})
         else:
             try:
                 from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
                 linked_bundles = BundleStructuralInfo.objects.filter(is_member_of_collection_id=collection_id)
                 bundle_count = linked_bundles.count()
-                logger.info(f"{task_id}: Collection has {bundle_count} linked bundles after resolution")
+                logger.info("Collection linked bundles after resolution", extra={"task_id": task_id, "bundle_count": bundle_count})
             except Exception as e:
-                logger.warning(f"{task_id}: Could not retrieve linked bundles for logging: {e}")
-            
-        logger.info(f"{task_id}: SUCCESS - Bundle link resolution completed for collection ID={collection_id}")
-        
+                logger.warning("Could not retrieve linked bundles for logging", extra={"task_id": task_id, "error": e})
+
+        logger.info("SUCCESS - Bundle link resolution completed", extra={"task_id": task_id, "collection_id": collection_id})
+
     except Exception as e:
-        logger.error(f"{task_id}: FAILED - Error resolving bundle links for collection {collection_id}: {e}", exc_info=True)
+        logger.error("FAILED - Error resolving bundle links", extra={"task_id": task_id, "collection_id": collection_id, "error": e}, exc_info=True)
 
     return (collection_id, list_of_pairs) # Always return the tuple
 
@@ -426,36 +425,36 @@ def map_collection_resources(collection_id: Optional[UUID], list_of_pairs: List[
         The collection_id if successful, otherwise None.
     """
     task_id = f"MAP-RESOURCES-{collection_id}"
-    
+
     if collection_id is None:
-        logger.warning(f"{task_id}: SKIPPED - No collection ID provided")
+        logger.warning("SKIPPED - No collection ID provided", extra={"task_id": task_id})
         return None # Propagate None
 
-    logger.info(f"{task_id}: Starting S3 resource mapping for collection ID={collection_id} using {len(list_of_pairs)} bundle/resources pairs.")
+    logger.info("Starting S3 resource mapping", extra={"task_id": task_id, "collection_id": collection_id, "pair_count": len(list_of_pairs)})
 
     # Verify collection exists
     try:
         from lacos.blam.models.collection.collection_repository import Collection
         collection = Collection.objects.get(id=collection_id)
         collection_title = getattr(collection.general_info, 'display_title', 'Unknown') if hasattr(collection, 'general_info') and collection.general_info else 'Unknown'
-        logger.info(f"{task_id}: Verified collection exists | ID={collection_id} | Title={collection_title}")
+        logger.info("Verified collection exists", extra={"task_id": task_id, "collection_id": collection_id, "title": collection_title})
     except Collection.DoesNotExist:
-        logger.error(f"{task_id}: FAILED - Collection {collection_id} not found in database")
+        logger.error("FAILED - Collection not found in database", extra={"task_id": task_id, "collection_id": collection_id})
         return None
     except Exception as e:
-        logger.warning(f"{task_id}: Warning - Error verifying collection {collection_id}: {e}")
+        logger.warning("Error verifying collection", extra={"task_id": task_id, "collection_id": collection_id, "error": e})
 
     try:
         mapping_service = ResourceMappingService()
         # Pass the explicitly received list of pairs to the service method
-        logger.info(f"{task_id}: Calling map_collection_hierarchy for collection ID={collection_id} with {len(list_of_pairs)} pairs.")
+        logger.info("Calling map_collection_hierarchy", extra={"task_id": task_id, "collection_id": collection_id, "pair_count": len(list_of_pairs)})
         total_mapped = mapping_service.map_collection_hierarchy(collection_id=collection_id, bundle_resources_pairs=list_of_pairs)
-        
-        logger.info(f"{task_id}: SUCCESS - Mapped {total_mapped} objects/resources for collection ID={collection_id}")
-        
+
+        logger.info("SUCCESS - Mapped resources for collection", extra={"task_id": task_id, "total_mapped": total_mapped, "collection_id": collection_id})
+
         return collection_id
     except Exception as e:
-        logger.error(f"{task_id}: FAILED - Error mapping resources for collection {collection_id}: {e}", exc_info=True)
+        logger.error("FAILED - Error mapping resources", extra={"task_id": task_id, "collection_id": collection_id, "error": e}, exc_info=True)
         return None # Return None on mapping failure
 
 
@@ -465,23 +464,23 @@ def process_s3_prefix(bucket: str = None, prefix: str = '', update_existing: boo
     Finds S3 candidates locally and enqueues processing pipelines.
     Passes data explicitly between tasks.
     """
-    logger.info(f"Starting synchronous S3 candidate finding for: {bucket or 'default bucket'}/{prefix}")
+    logger.info("Starting synchronous S3 candidate finding", extra={"bucket": bucket or "default bucket", "prefix": prefix})
     discovery_service = FileDiscoveryService()
     actual_bucket = bucket or discovery_service.production_bucket
 
     # 1. Find potential XML files locally
     try:
         candidates = find_s3_import_candidates.call_local(actual_bucket, prefix)
-        logger.info(f"Locally found {len(candidates.get('potential_collection_xmls', []))} potential collections and {len(candidates.get('potential_bundle_xmls', []))} potential bundles in {actual_bucket}/{prefix}")
+        logger.info("Locally found import candidates", extra={"potential_collections": len(candidates.get('potential_collection_xmls', [])), "potential_bundles": len(candidates.get('potential_bundle_xmls', [])), "bucket": actual_bucket, "prefix": prefix})
     except Exception as e:
-        logger.error(f"Error finding S3 import candidates locally for {actual_bucket}/{prefix}: {e}", exc_info=True)
+        logger.error("Error finding S3 import candidates locally", extra={"bucket": actual_bucket, "prefix": prefix, "error": e}, exc_info=True)
         return
 
     collection_xmls = candidates.get('potential_collection_xmls', [])
     bundle_xmls = candidates.get('potential_bundle_xmls', [])
 
     if not collection_xmls and not bundle_xmls:
-        logger.info(f"No collection or bundle XMLs found to process in {actual_bucket}/{prefix}.")
+        logger.info("No collection or bundle XMLs found to process", extra={"bucket": actual_bucket, "prefix": prefix})
         return
 
     # 2. Group bundle keys by inferred collection identifier
@@ -491,18 +490,18 @@ def process_s3_prefix(bucket: str = None, prefix: str = '', update_existing: boo
             parts = bundle_key.split('/')
             collection_identifier = parts[0] if len(parts) > 1 else None # Safer check
             if not collection_identifier:
-                logger.warning(f"Could not infer collection identifier from bundle key: {bundle_key}. Skipping.")
+                logger.warning("Could not infer collection identifier from bundle key, skipping", extra={"bundle_key": bundle_key})
                 continue
             if collection_identifier not in bundles_by_collection_id:
                 bundles_by_collection_id[collection_identifier] = []
             bundles_by_collection_id[collection_identifier].append(bundle_key)
         except Exception as e:
-            logger.warning(f"Error inferring collection id from bundle key {bundle_key}: {e}")
+            logger.warning("Error inferring collection id from bundle key", extra={"bundle_key": bundle_key, "error": e})
             continue
-    logger.info(f"Grouped bundles into {len(bundles_by_collection_id)} collection groups for prefix {prefix}.")
+    logger.info("Grouped bundles into collection groups", extra={"group_count": len(bundles_by_collection_id), "prefix": prefix})
 
     # 3. Create and enqueue a pipeline for each collection
-    logger.info(f"Creating and enqueuing import pipelines for {len(collection_xmls)} potential collection XMLs found in {prefix}...")
+    logger.info("Creating and enqueuing import pipelines", extra={"collection_xml_count": len(collection_xmls), "prefix": prefix})
     pipelines_enqueued = 0
     for coll_key in collection_xmls:
         try:
@@ -510,11 +509,11 @@ def process_s3_prefix(bucket: str = None, prefix: str = '', update_existing: boo
             parts = coll_key.split('/')
             collection_identifier = parts[0] if parts else None
             if not collection_identifier:
-                 logger.warning(f"Could not infer collection identifier from key: {coll_key}. Skipping.")
+                 logger.warning("Could not infer collection identifier from key, skipping", extra={"coll_key": coll_key})
                  continue
 
             associated_bundle_keys = bundles_by_collection_id.get(collection_identifier, [])
-            logger.info(f"Pipeline for Collection {collection_identifier} (Key: {coll_key}) | Associated Bundles: {len(associated_bundle_keys)}")
+            logger.info("Pipeline for collection", extra={"collection_identifier": collection_identifier, "coll_key": coll_key, "associated_bundle_count": len(associated_bundle_keys)})
 
             # --- Define Pipeline ---
             # Task 1: Import Collection -> returns collection_id
@@ -557,24 +556,24 @@ def process_s3_prefix(bucket: str = None, prefix: str = '', update_existing: boo
 
             # Task 4: Map Resources -> Now accepts (collection_id, list_of_pairs), returns collection_id or None
             p = p.then(map_collection_resources.s())
-            
+
             # --- Enqueue Pipeline ---
             # Enqueue the pipeline object returned by the chain of .then() calls
             result = huey.enqueue(p)
-            
+
             if result:
                 # Attempt to get ID, but handle potential AttributeError
                 try:
                     task_id_str = str(result.id)
                 except AttributeError:
                     task_id_str = repr(result) # Fallback to repr if no id
-                logger.info(f"Enqueued pipeline start for collection {collection_identifier} (Key: {coll_key}). Root Task Result/ID (approx): {task_id_str}")
+                logger.info("Enqueued pipeline start for collection", extra={"collection_identifier": collection_identifier, "coll_key": coll_key, "task_id": task_id_str})
             else:
-                 logger.warning(f"Huey enqueue call for collection {collection_identifier} returned {result}.")
+                 logger.warning("Huey enqueue call returned unexpected result", extra={"collection_identifier": collection_identifier, "result": result})
             pipelines_enqueued += 1
 
         except Exception as e:
-            logger.error(f"Error creating/enqueuing pipeline for collection key {coll_key}: {e}", exc_info=True)
+            logger.error("Error creating/enqueuing pipeline for collection key", extra={"coll_key": coll_key, "error": e}, exc_info=True)
             continue
 
-    logger.info(f"Completed enqueuing {pipelines_enqueued} collection processing pipelines for S3 prefix: {actual_bucket}/{prefix}")
+    logger.info("Completed enqueuing collection processing pipelines", extra={"pipelines_enqueued": pipelines_enqueued, "bucket": actual_bucket, "prefix": prefix})

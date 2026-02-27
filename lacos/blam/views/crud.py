@@ -41,11 +41,11 @@ def delete_blam_model(request, model_type, object_id):
         else:
             return HttpResponseBadRequest(f"Invalid model type: {model_type}")
         
-        logger.info(f"Deleting {model_name} with ID: {object_id}")
+        logger.info("Deleting model", extra={"model_name": model_name, "object_id": object_id})
 
         if model_type.lower() == 'collection':
             bundles = Bundle.objects.filter(structural_info__is_member_of_collection=model).distinct()
-            logger.info(f"Deleting {bundles.count()} bundle(s) linked to Collection ID: {object_id}")
+            logger.info("Deleting bundles linked to Collection", extra={"count": bundles.count(), "collection_id": object_id})
             with transaction.atomic():
                 for bundle in bundles:
                     bundle.delete()
@@ -53,12 +53,12 @@ def delete_blam_model(request, model_type, object_id):
         else:
             model.delete()
 
-        logger.info(f"{model_name} with ID: {object_id} successfully deleted")
+        logger.info("Model successfully deleted", extra={"model_name": model_name, "object_id": object_id})
 
         response = HttpResponse("", status=200)
         response["HX-Trigger"] = json.dumps({"blam-metadata-refresh": True})
         return response
         
     except Exception as e:
-        logger.error(f"Error deleting {model_type} with ID {object_id}: {str(e)}")
+        logger.error("Error deleting model", extra={"model_type": model_type, "object_id": object_id, "error": str(e)})
         return HttpResponseBadRequest(f"Error deleting {model_type}: {str(e)}")

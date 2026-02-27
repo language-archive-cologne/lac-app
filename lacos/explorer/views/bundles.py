@@ -230,10 +230,10 @@ class BundleResourcesView(View):
             return redirect(presigned_url)
 
         except ValueError as e:
-            logger.error(f"Resource mapping service error: {e}")
+            logger.error("Resource mapping service error", extra={"error": str(e)})
             raise Http404(f"Resource {resource_id} not found or cannot be accessed")
         except Exception as e:
-            logger.error(f"Error accessing resource: {e}")
+            logger.error("Error accessing resource", extra={"error": str(e)})
             return HttpResponse(f"Error accessing resource: {str(e)}", status=500)
 
     def _handle_resource_list(self, request, bundle, acl_service, acl_result, collection_for_path):
@@ -440,10 +440,10 @@ class ResourceAccessView(View):
             raise Http404("Unsupported action")
 
         except ValueError as e:
-            logger.error(f"Resource mapping service error: {e}")
+            logger.error("Resource mapping service error", extra={"error": str(e)})
             raise Http404(f"Resource {resource_id} not found or cannot be accessed")
         except Exception as e:
-            logger.error(f"Error accessing resource: {e}")
+            logger.error("Error accessing resource", extra={"error": str(e)})
             return HttpResponse(f"Error accessing resource: {str(e)}", status=500)
 
     def _build_elan_context(

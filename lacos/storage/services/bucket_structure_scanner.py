@@ -79,7 +79,7 @@ class BucketStructureScanner:
         Returns:
             BucketAnalysis: Comprehensive analysis of bucket structure
         """
-        logger.info(f"Starting bucket structure scan for {bucket_name}")
+        logger.info("Starting bucket structure scan", extra={"bucket_name": bucket_name})
 
         analysis = BucketAnalysis(bucket_name=bucket_name)
 
@@ -88,7 +88,7 @@ class BucketStructureScanner:
             collections = self._get_top_level_collections(bucket_name)
             analysis.total_folders = len(collections)
 
-            logger.info(f"Found {len(collections)} top-level collections to analyze")
+            logger.info("Found top-level collections to analyze", extra={"count": len(collections)})
 
             # Initialize structure breakdown
             for structure_type in StructureType:
@@ -110,10 +110,10 @@ class BucketStructureScanner:
             # Generate overall recommendations
             self._generate_bucket_recommendations(analysis)
 
-            logger.info(f"Completed bucket scan: {analysis.total_folders} collections, {analysis.total_files} files")
+            logger.info("Completed bucket scan", extra={"total_folders": analysis.total_folders, "total_files": analysis.total_files})
 
         except Exception as e:
-            logger.error(f"Error scanning bucket {bucket_name}: {str(e)}")
+            logger.error("Error scanning bucket", extra={"bucket_name": bucket_name, "error": str(e)})
             analysis.blocking_issues.append(f"Scan error: {str(e)}")
             analysis.conversion_feasibility = "low"
 
@@ -130,7 +130,7 @@ class BucketStructureScanner:
         Returns:
             FolderAnalysis: Detailed analysis of folder structure
         """
-        logger.debug(f"Analyzing folder structure: {folder_path}")
+        logger.debug("Analyzing folder structure", extra={"folder_path": folder_path})
 
         analysis = FolderAnalysis(folder_path=folder_path, structure_type=StructureType.UNKNOWN)
 
@@ -155,7 +155,7 @@ class BucketStructureScanner:
             self._generate_folder_recommendations(analysis)
 
         except Exception as e:
-            logger.error(f"Error analyzing folder {folder_path}: {str(e)}")
+            logger.error("Error analyzing folder", extra={"folder_path": folder_path, "error": str(e)})
             analysis.issues.append(f"Analysis error: {str(e)}")
             analysis.conversion_complexity = "high"
 
@@ -285,7 +285,7 @@ class BucketStructureScanner:
 
             return collections
         except Exception as e:
-            logger.error(f"Error getting top-level collections: {str(e)}")
+            logger.error("Error getting top-level collections", extra={"error": str(e)})
             return []
 
     def _analyze_folder_contents(self, contents: List[Dict], analysis: FolderAnalysis) -> None:

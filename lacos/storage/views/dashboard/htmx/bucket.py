@@ -71,7 +71,7 @@ class BucketContentHTMXView(HtmxTemplateHelperMixin, View):
 
                 return HttpResponse(f'{content_html}{selector_html}')
             except Exception as e:
-                logger.error(f"Error loading bucket content for {bucket_name}: {str(e)}")
+                logger.error("Error loading bucket content", extra={"bucket_name": bucket_name, "error": str(e)})
                 session.metadata["error"] = str(e)
                 return self.htmx_error_response(f"Failed to load bucket: {str(e)}")
 
@@ -112,7 +112,7 @@ class CreateBucketHTMXView(HtmxTemplateHelperMixin, View):
                 bucket_select_html = self.render_bucket_select_template(
                     request, active_bucket=bucket_name, oob=True
                 )
-                logger.info(f"Bucket select OOB HTML: {bucket_select_html[:200]}...")
+                logger.info("Bucket select OOB HTML rendered", extra={"html_preview": bucket_select_html[:200]})
                 response_html = f"{response_html}{bucket_select_html}"
 
                 # Return response with trigger to close modal
@@ -124,7 +124,7 @@ class CreateBucketHTMXView(HtmxTemplateHelperMixin, View):
                 return self.htmx_error_response(result.get("error", "Failed to create bucket"))
 
         except Exception as e:
-            logger.error(f"Error creating bucket {bucket_name}: {str(e)}")
+            logger.error("Error creating bucket", extra={"bucket_name": bucket_name, "error": str(e)})
             return self.htmx_error_response(str(e))
 
 
@@ -160,7 +160,7 @@ def delete_bucket_htmx(request, bucket_name):
             return HttpResponse(html, status=400)
 
     except Exception as e:
-        logger.error(f"Error deleting bucket {bucket_name}: {str(e)}")
+        logger.error("Error deleting bucket", extra={"bucket_name": bucket_name, "error": str(e)})
         html = render_to_string(
             "dashboard/partials/error.html",
             {"error": str(e)},
@@ -251,7 +251,7 @@ class RenameBucketHTMXView(HtmxTemplateHelperMixin, View):
                 return self.htmx_error_response(result.get("error", "Failed to rename bucket"))
 
         except Exception as e:
-            logger.error(f"Error renaming bucket {bucket_name} to {new_name}: {str(e)}")
+            logger.error("Error renaming bucket", extra={"bucket_name": bucket_name, "new_name": new_name, "error": str(e)})
             return self.htmx_error_response(str(e))
 
 

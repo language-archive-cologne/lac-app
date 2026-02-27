@@ -32,7 +32,7 @@ class AltchaChallengeView(View):
             self.RATE_LIMIT_MAX,
             self.RATE_LIMIT_WINDOW
         ):
-            logger.warning(f"Rate limit exceeded for ALTCHA challenges from {get_client_ip(request)}")
+            logger.warning("Rate limit exceeded for ALTCHA challenges", extra={"client_ip": get_client_ip(request)})
             return JsonResponse(
                 {'error': 'Too many requests. Please try again later.'},
                 status=429
@@ -86,7 +86,7 @@ class ProtectedDownloadView(View):
         is_valid, error = altcha_service.verify_solution_base64(altcha_payload)
 
         if not is_valid:
-            logger.warning(f"ALTCHA verification failed for {bucket}/{key}: {error}")
+            logger.warning("ALTCHA verification failed", extra={"bucket": bucket, "key": key, "error": error})
             return JsonResponse({
                 'error': 'Verification failed',
                 'detail': 'Please complete the verification again'
@@ -116,13 +116,13 @@ class ProtectedDownloadView(View):
                 auth_context=auth_context,
             )
         except Exception as e:
-            logger.error(f"Failed to generate presigned URL for {bucket}/{key}: {e}")
+            logger.error("Failed to generate presigned URL", extra={"bucket": bucket, "key": key, "error": str(e)})
             return JsonResponse({
                 'error': 'Failed to generate download link',
                 'detail': 'Please try again later'
             }, status=500)
 
-        logger.info(f"Protected download authorized for {bucket}/{key} by user {request.user}")
+        logger.info("Protected download authorized", extra={"bucket": bucket, "key": key, "user": str(request.user)})
 
         return JsonResponse({
             'success': True,
@@ -172,7 +172,7 @@ class BundleDownloadView(View):
         is_valid, error = altcha_service.verify_solution_base64(altcha_payload)
 
         if not is_valid:
-            logger.warning(f"ALTCHA verification failed for bundle download: {error}")
+            logger.warning("ALTCHA verification failed for bundle download", extra={"error": error})
             return JsonResponse({
                 'error': 'Verification failed',
                 'detail': 'Please complete the verification again'
@@ -219,12 +219,12 @@ class BundleDownloadView(View):
                 )
                 downloads.append(result)
             except Exception as e:
-                logger.error(f"Failed to generate presigned URL for {bucket}/{key}: {e}")
+                logger.error("Failed to generate presigned URL", extra={"bucket": bucket, "key": key, "error": str(e)})
                 errors.append({'index': i, 'error': 'Failed to generate link', 'key': key})
 
         logger.info(
-            f"Protected bundle download: {len(downloads)} authorized, "
-            f"{len(errors)} failed for user {request.user}"
+            "Protected bundle download completed",
+            extra={"authorized_count": len(downloads), "failed_count": len(errors), "user": str(request.user)},
         )
 
         response_data = {

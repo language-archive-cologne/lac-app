@@ -224,7 +224,7 @@ class BucketService(BaseStorageService):
                 )
             return result
         except Exception as e:
-            logger.error(f"Error getting root level items for bucket '{bucket_name}': {str(e)}")
+            logger.error("Error getting root level items for bucket", extra={"bucket_name": bucket_name, "error": str(e)})
             if operation_meta is not None:
                 operation_meta["error"] = str(e)
             return {"type": "folder", "name": bucket_name, "path": "", "children": []}
@@ -348,7 +348,7 @@ class BucketService(BaseStorageService):
                 )
             return result_page
         except Exception as e:
-            logger.error(f"Error getting folder contents for '{folder_path}' in bucket '{bucket_name}': {str(e)}")
+            logger.error("Error getting folder contents", extra={"folder_path": folder_path, "bucket_name": bucket_name, "error": str(e)})
             if operation_meta is not None:
                 operation_meta["error"] = str(e)
             if raise_errors:
@@ -505,7 +505,7 @@ class BucketService(BaseStorageService):
     # OCFL-related methods
     def move_to_production(self, source_prefix: str) -> Dict[str, Any]:
         """Move a folder from the ingest bucket to the production bucket using the OCFL service."""
-        logger.info(f"Starting move to production for {source_prefix}")
+        logger.info("Starting move to production", extra={"source_prefix": source_prefix})
         return self.ocfl_service.move_to_production(source_prefix)
         
     def direct_move_to_production(self, source_prefix: str) -> Dict[str, Any]:
@@ -519,7 +519,7 @@ class BucketService(BaseStorageService):
         Returns:
             Dict[str, Any]: Result of the operation
         """
-        logger.info(f"Starting direct move to production for {source_prefix}")
+        logger.info("Starting direct move to production", extra={"source_prefix": source_prefix})
         
         try:
             # Verify ingest and production buckets are different
@@ -534,7 +534,7 @@ class BucketService(BaseStorageService):
             # Ensure source_prefix ends with a slash for proper prefix matching
             if not source_prefix.endswith('/'):
                 source_prefix = source_prefix + '/'
-                logger.info(f"Added trailing slash for proper prefix matching: {source_prefix}")
+                logger.info("Added trailing slash for proper prefix matching", extra={"source_prefix": source_prefix})
             
             # List all objects in the source
             paginator = self.s3_client.get_paginator("list_objects_v2")
@@ -546,7 +546,7 @@ class BucketService(BaseStorageService):
                     
                     # Skip if this is just the folder marker object
                     if source_key == source_prefix:
-                        logger.info(f"Skipping folder marker object: {source_key}")
+                        logger.info("Skipping folder marker object", extra={"source_key": source_key})
                         continue
                     
                     # Copy the object to the production bucket
@@ -559,11 +559,11 @@ class BucketService(BaseStorageService):
                     copied_files += 1
                     
                     if copied_files % 10 == 0:
-                        logger.info(f"Copied {copied_files} files so far...")
+                        logger.info("Copy progress", extra={"copied_files": copied_files})
             
             # Add an empty directory marker if no files were found
             if copied_files == 0:
-                logger.warning(f"No files found to copy, creating an empty directory marker: {source_prefix}")
+                logger.warning("No files found to copy, creating an empty directory marker", extra={"source_prefix": source_prefix})
                 self.s3_client.put_object(
                     Bucket=self.production_bucket,
                     Key=source_prefix,
@@ -572,21 +572,21 @@ class BucketService(BaseStorageService):
                 copied_files = 1
             
             if copied_files > 0:
-                logger.info(f"Successfully copied {copied_files} files from {source_prefix} to production bucket")
+                logger.info("Successfully copied files to production bucket", extra={"copied_files": copied_files, "source_prefix": source_prefix})
                 return {
                     "success": True,
                     "message": f"Successfully moved {source_prefix} to production bucket ({copied_files} files copied)"
                 }
             else:
                 # This should never happen now due to the empty directory marker
-                logger.warning(f"No files found to copy at {source_prefix}")
+                logger.warning("No files found to copy", extra={"source_prefix": source_prefix})
                 return {
                     "success": False,
                     "error": f"No files found to copy at {source_prefix}"
                 }
                 
         except Exception as e:
-            logger.error(f"Error in direct_move_to_production: {str(e)}")
+            logger.error("Error in direct_move_to_production", extra={"error": str(e)})
         return {
             "success": False,
             "error": str(e)
@@ -628,7 +628,7 @@ class BucketService(BaseStorageService):
 
         except ClientError as exc:
             error_code = exc.response.get("Error", {}).get("Code", "Unknown")
-            logger.error(f"Error calculating bucket size for {bucket_name}: {error_code}")
+            logger.error("Error calculating bucket size", extra={"bucket_name": bucket_name, "error_code": error_code})
             return {
                 "success": False,
                 "bucket_name": bucket_name,
@@ -638,7 +638,7 @@ class BucketService(BaseStorageService):
                 "object_count": 0,
             }
         except Exception as exc:  # pylint: disable=broad-except
-            logger.exception(f"Unexpected error calculating bucket size for {bucket_name}")
+            logger.exception("Unexpected error calculating bucket size", extra={"bucket_name": bucket_name})
             return {
                 "success": False,
                 "bucket_name": bucket_name,
@@ -671,10 +671,10 @@ class BucketService(BaseStorageService):
             error_code = exc.response.get("Error", {}).get("Code", "Unknown")
             status_code = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
             if error_code == "NoSuchKey" or status_code == 404:
-                logger.warning(f"File not found for info lookup: {object_path}")
+                logger.warning("File not found for info lookup", extra={"object_path": object_path})
                 error_message = "File not found"
             else:
-                logger.error(f"Error fetching file info for {object_path}: {error_code}")
+                logger.error("Error fetching file info", extra={"object_path": object_path, "error_code": error_code})
                 error_message = f"S3 error: {error_code}"
 
             return {
@@ -684,7 +684,7 @@ class BucketService(BaseStorageService):
                 "error": error_message,
             }
         except Exception as exc:  # pylint: disable=broad-except
-            logger.exception(f"Unexpected error fetching file info for {object_path}")
+            logger.exception("Unexpected error fetching file info", extra={"object_path": object_path})
             return {
                 "success": False,
                 "bucket_name": bucket_name,
@@ -798,7 +798,7 @@ class BucketService(BaseStorageService):
         Returns:
             Dict[str, Any]: Result with success status and message
         """
-        logger.info(f"Creating new bucket: {bucket_name}, OCFL: {enable_ocfl}")
+        logger.info("Creating new bucket", extra={"bucket_name": bucket_name, "enable_ocfl": enable_ocfl})
 
         try:
             # Validate bucket name
@@ -834,7 +834,7 @@ class BucketService(BaseStorageService):
 
             # Invalidate the bucket list cache so new bucket appears immediately
             cache.delete("storage:bucket-names")
-            logger.info(f"Successfully created bucket '{bucket_name}' and added to workspace")
+            logger.info("Successfully created bucket and added to workspace", extra={"bucket_name": bucket_name})
 
             return {
                 "success": True,
@@ -844,7 +844,7 @@ class BucketService(BaseStorageService):
             }
 
         except Exception as e:
-            logger.exception(f"Error creating bucket {bucket_name}: {str(e)}")
+            logger.exception("Error creating bucket", extra={"bucket_name": bucket_name, "error": str(e)})
             return {
                 "success": False,
                 "error": f"Error creating bucket: {str(e)}"

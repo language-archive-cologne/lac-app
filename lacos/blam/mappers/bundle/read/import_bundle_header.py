@@ -63,10 +63,10 @@ def import_bundle_header(cmd_data: Cmd, bundle: 'Bundle') -> Optional[BundleHead
         )
         
         status = "created" if created else "updated"
-        logger.info(f"BundleHeader with self-link '{md_self_link}' {status} and associated with bundle.")
+        logger.info("BundleHeader associated with bundle", extra={"md_self_link": md_self_link, "status": status})
         return bundle_header
     except Exception as e:
-        logger.error(f"Failed to create or update BundleHeader with self-link '{md_self_link}': {e}", exc_info=True)
+        logger.error("Failed to create or update BundleHeader", extra={"md_self_link": md_self_link, "error": e}, exc_info=True)
         return None
 
 

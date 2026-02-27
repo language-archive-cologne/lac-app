@@ -19,4 +19,4 @@ class BlamConfig(AppConfig):
         except ImportError:
             logger.warning("Could not import BLAM signals (signals.py may be missing/invalid).")
         except Exception as e:
-            logger.error(f"Error registering BLAM signals: {e}", exc_info=True)
+            logger.error("Error registering BLAM signals", extra={"error": e}, exc_info=True)

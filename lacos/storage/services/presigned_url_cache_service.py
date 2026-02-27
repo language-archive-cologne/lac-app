@@ -95,8 +95,8 @@ class PresignedUrlCacheService:
 
         if self._has_control_chars(candidate):
             logger.warning(
-                "Rejected download filename with control characters; using fallback "
-                f"(filename={original!r})"
+                "Rejected download filename with control characters; using fallback",
+                extra={"rejected_filename": repr(original)},
             )
             candidate = fallback.replace("\\", "/").split("/")[-1]
 
@@ -154,11 +154,11 @@ class PresignedUrlCacheService:
         if not force_refresh:
             cached_url = cache.get(cache_key)
             if cached_url:
-                logger.debug(f"Cache hit for presigned URL: {cache_key}")
+                logger.debug("Cache hit for presigned URL", extra={"cache_key": cache_key})
                 return cached_url
 
         # Generate new presigned URL
-        logger.debug(f"Cache miss for presigned URL: {cache_key}, generating new URL")
+        logger.debug("Cache miss for presigned URL, generating new URL", extra={"cache_key": cache_key})
         url = self.resource_service.generate_presigned_url(
             bucket=bucket,
             key=key,
@@ -168,7 +168,7 @@ class PresignedUrlCacheService:
 
         # Cache the URL
         cache.set(cache_key, url, timeout=self.cache_ttl)
-        logger.info(f"Cached presigned URL for {bucket}/{key} (TTL: {self.cache_ttl}s)")
+        logger.info("Cached presigned URL", extra={"bucket": bucket, "key": key, "cache_ttl": self.cache_ttl})
 
         return url
 
@@ -245,7 +245,7 @@ class PresignedUrlCacheService:
             bucket, key, response_headers, auth_context
         )
         cache.delete(cache_key)
-        logger.info(f"Invalidated cached presigned URL: {cache_key}")
+        logger.info("Invalidated cached presigned URL", extra={"cache_key": cache_key})
 
 
 # Thread-safe singleton instance

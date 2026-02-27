@@ -198,12 +198,14 @@ class BucketMetadataService:
                         result["blam_type"] = "collection"
                         result["blam_id"] = str(collection.pk)
                         logger.info(
-                            f"Identified path {path} as Collection with ID {collection.pk}"
+                            "Identified path as Collection",
+                            extra={"path": path, "collection_id": str(collection.pk)},
                         )
                         return result
                 except Exception as e:
                     logger.error(
-                        f"Error querying Collection for path {path}: {str(e)}"
+                        "Error querying Collection for path",
+                        extra={"path": path, "error": str(e)},
                     )
 
             # Check for bundle
@@ -221,14 +223,15 @@ class BucketMetadataService:
                         result["blam_type"] = "bundle"
                         result["blam_id"] = str(bundle.pk)
                         logger.info(
-                            f"Identified path {path} as Bundle with ID {bundle.pk}"
+                            "Identified path as Bundle",
+                            extra={"path": path, "bundle_id": str(bundle.pk)},
                         )
                         return result
                 except Exception as e:
-                    logger.error(f"Error querying Bundle for path {path}: {str(e)}")
+                    logger.error("Error querying Bundle for path", extra={"path": path, "error": str(e)})
 
         except Exception as e:
-            logger.error(f"Error in is_blam_object for path {path}: {str(e)}")
+            logger.error("Error in is_blam_object for path", extra={"path": path, "error": str(e)})
 
         return result
 

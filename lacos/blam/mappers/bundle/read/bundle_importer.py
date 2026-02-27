@@ -177,7 +177,7 @@ class BundleImporter:
         # Create a new bundle with a temporary identifier
         # This will be replaced with the proper md_self_link in import_from_xml
         bundle = Bundle.objects.create(identifier=f"temp-bundle-{uuid.uuid4()}")
-        logger.info(f"Created new Bundle with ID {bundle.id}")
+        logger.info("Created new Bundle", extra={"bundle_id": bundle.id})
         return bundle
 
     @classmethod
@@ -216,13 +216,13 @@ class BundleImporter:
                     br_instance = bundle_struct_info.bundle.resources.first()
                     if br_instance:
                         bundle_resources_id = br_instance.id
-                        logger.info(f"Successfully obtained BundleResources ID: {bundle_resources_id} during import.")
+                        logger.info("Successfully obtained BundleResources ID during import", extra={"bundle_resources_id": bundle_resources_id})
                     else:
                         logger.warning("Structural info imported, but failed to find associated BundleResources instance.")
                 except Exception as e:
-                     logger.error(f"Error getting BundleResources ID after structural info import: {e}")
+                     logger.error("Error getting BundleResources ID after structural info import", extra={"error": e})
             
-            logger.info(f"Bundle import completed for '{getattr(header, 'md_self_link', 'Unknown')}'.")
+            logger.info("Bundle import completed", extra={"md_self_link": getattr(header, 'md_self_link', 'Unknown')})
             return (bundle, bundle_resources_id)
             
         except Exception as e:
@@ -279,7 +279,7 @@ class BundleImporter:
                  return None 
 
             if not collection_identifier_type_str:
-                logger.error(f"Could not map bundle's collection identifier type enum '{collection_identifier_type_enum}' to a string choice.")
+                logger.error("Could not map bundle's collection identifier type enum to a string choice", extra={"identifier_type_enum": collection_identifier_type_enum})
                 return None
             # ---------------------------------------
 
@@ -292,13 +292,13 @@ class BundleImporter:
                 bundle
             )
         except AttributeError as e:
-            logger.error(f"Could not extract data from bundle CMD data for structural info: {e}", exc_info=False) # Less verbose logging
+            logger.error("Could not extract data from bundle CMD data for structural info", extra={"error": e}, exc_info=False)
             return None
         except ValueError as e:
-            logger.warning(f"Failed to import structural info (e.g., collection not found): {str(e)}")
+            logger.warning("Failed to import structural info (e.g., collection not found)", extra={"error": str(e)})
             return None
         except Exception as e:
-            logger.error(f"Unexpected error during structural info import: {e}", exc_info=True)
+            logger.error("Unexpected error during structural info import", extra={"error": e}, exc_info=True)
             return None
 
     @staticmethod

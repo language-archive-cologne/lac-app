@@ -1130,7 +1130,7 @@ def load_folder_contents(request, bucket_type, folder_path):
             )
 
         except Exception as e:
-            logger.error(f"Error loading folder contents for {sanitized_path or ROOT_FOLDER_SENTINEL}: {str(e)}")
+            logger.error("Error loading folder contents", extra={"folder_path": sanitized_path or ROOT_FOLDER_SENTINEL, "error": str(e)})
             session.metadata["error"] = str(e)
             listing_page = BucketListingPage(items=[], has_more=False, next_token=None, bucket=bucket, prefix=sanitized_path)
             requested_max_keys = locals().get("requested_max_keys", 0)
@@ -1222,7 +1222,7 @@ def dashboard_content(request, bucket_type):
             session.metadata["has_more"] = listing.has_more
             session.metadata["next_token"] = listing.next_token
 
-            logger.info(f"Refreshing {bucket_type} structure with {len(listing)} items (has_more={listing.has_more})")
+            logger.info("Refreshing bucket structure", extra={"bucket_type": bucket_type, "count": len(listing), "has_more": listing.has_more})
 
             return render(
                 request,
@@ -1234,7 +1234,7 @@ def dashboard_content(request, bucket_type):
                 }
             )
         except Exception as e:
-            logger.exception(f"Error loading dashboard content for {bucket_type}: {str(e)}")
+            logger.exception("Error loading dashboard content", extra={"bucket_type": bucket_type, "error": str(e)})
             session.metadata["error"] = str(e)
             return HttpResponse(f"Error: {str(e)}", status=500)
 
@@ -1293,7 +1293,7 @@ class BucketContentHTMXView(HtmxTemplateHelperMixin, View):
 
                 return HttpResponse(response_html)
             except Exception as e:
-                logger.exception(f"Error loading bucket content for {bucket_name}: {str(e)}")
+                logger.exception("Error loading bucket content", extra={"bucket_name": bucket_name, "error": str(e)})
                 session.metadata["error"] = str(e)
                 return HttpResponse(f"Error: {str(e)}", status=500)
 
@@ -1399,7 +1399,7 @@ class CreateBucketHTMXView(HtmxTemplateHelperMixin, View):
             if not result["success"]:
                 return HttpResponse(result["error"], status=400)
 
-            logger.info(f"Successfully created bucket: {bucket_name}, OCFL: {enable_ocfl}")
+            logger.info("Successfully created bucket", extra={"bucket_name": bucket_name, "enable_ocfl": enable_ocfl})
 
             # Only update bucket tabs, keep current view active
             current_active_bucket = self.get_active_bucket(request)
@@ -1422,7 +1422,7 @@ class CreateBucketHTMXView(HtmxTemplateHelperMixin, View):
             return self.add_htmx_trigger(tabs_html, {'closeModal': 'create-bucket-modal'})
 
         except Exception as e:
-            logger.exception(f"Error creating bucket: {str(e)}")
+            logger.exception("Error creating bucket", extra={"error": str(e)})
             return HttpResponse(f"Error creating bucket: {str(e)}", status=500)
 
 
@@ -1444,7 +1444,7 @@ def delete_bucket_htmx(request, bucket_name):
             return HttpResponse("Bucket not accessible", status=403)
 
         # Delete the bucket (this would need to be implemented in BucketService)
-        logger.info(f"Deleting bucket: {bucket_name}")
+        logger.info("Deleting bucket", extra={"bucket_name": bucket_name})
 
         # Get updated bucket list
         workspace_buckets = bucket_service.get_all_accessible_buckets()
@@ -1464,7 +1464,7 @@ def delete_bucket_htmx(request, bucket_name):
             }
         )
     except Exception as e:
-        logger.exception(f"Error deleting bucket: {str(e)}")
+        logger.exception("Error deleting bucket", extra={"error": str(e)})
         return HttpResponse(f"Error deleting bucket: {str(e)}", status=500)
 
 
@@ -1603,5 +1603,5 @@ class RenameBucketHTMXView(HtmxTemplateHelperMixin, View):
             return HttpResponse(response_html + modal_html)
 
         except Exception as e:
-            logger.exception(f"Error renaming bucket {bucket_name}: {str(e)}")
+            logger.exception("Error renaming bucket", extra={"bucket_name": bucket_name, "error": str(e)})
             return HttpResponse(f"Error renaming bucket: {str(e)}", status=500)

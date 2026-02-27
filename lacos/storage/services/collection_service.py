@@ -101,7 +101,7 @@ class CollectionService(BaseStorageService):
             
             return False
         except Exception as e:
-            logger.error(f"Error checking if {prefix} is an OCFL object: {str(e)}")
+            logger.error("Error checking if prefix is an OCFL object", extra={"prefix": prefix, "error": str(e)})
             return False
     
     def find_ocfl_objects(self, bucket_name: str, prefix: str = "") -> List[str]:
@@ -132,7 +132,7 @@ class CollectionService(BaseStorageService):
             
             return ocfl_objects
         except Exception as e:
-            logger.error(f"Error finding OCFL objects: {str(e)}")
+            logger.error("Error finding OCFL objects", extra={"error": str(e)})
             return []
     
     def is_collection_path(self, path: str) -> bool:
@@ -351,7 +351,8 @@ class CollectionService(BaseStorageService):
             return listing
         except Exception as e:
             logger.error(
-                f"Error listing bucket contents for bucket: '{bucket_name}'. Error: {e}"
+                "Error listing bucket contents",
+                extra={"bucket_name": bucket_name, "error": str(e)},
             )
             if raise_errors:
                 raise
@@ -368,20 +369,20 @@ class CollectionService(BaseStorageService):
         Returns:
             Dict[str, Any]: Dictionary representing the folder structure with children
         """
-        logger.info(f"Getting folder structure for bucket '{bucket_name}' with prefix '{prefix}'")
+        logger.info("Getting folder structure", extra={"bucket_name": bucket_name, "prefix": prefix})
         
         # First, ensure the bucket exists
         if not self.ensure_bucket_exists(bucket_name):
-            logger.warning(f"Cannot get folder structure: Bucket '{bucket_name}' does not exist or is not accessible")
+            logger.warning("Cannot get folder structure: bucket does not exist or is not accessible", extra={"bucket_name": bucket_name})
             return {"type": "folder", "name": bucket_name, "path": "", "children": []}
         
         try:
             contents = self.list_bucket_contents(bucket_name, prefix)
             
             # Debug log the contents
-            logger.info(f"DEBUG: Bucket contents for '{bucket_name}' with prefix '{prefix}':")
+            logger.info("Bucket contents retrieved", extra={"bucket_name": bucket_name, "prefix": prefix})
             for item in contents:
-                logger.info(f"  {item.get('name')} - type: {item.get('is_dir', False)}")
+                logger.info("Bucket content item", extra={"item_name": item.get('name'), "is_dir": item.get('is_dir', False)})
             
             # Create the root folder
             root_name = bucket_name if not prefix else os.path.basename(prefix.rstrip('/'))
@@ -409,16 +410,16 @@ class CollectionService(BaseStorageService):
                     })
             
             # Debug log the structure
-            logger.info(f"DEBUG: Folder structure for '{bucket_name}' with prefix '{prefix}':")
-            logger.info(f"  Type: {structure['type']}, Name: {structure['name']}, Path: {structure['path']}")
-            logger.info(f"  Children: {len(structure['children'])}")
+            logger.info("Folder structure built", extra={"bucket_name": bucket_name, "prefix": prefix})
+            logger.info("Folder structure details", extra={"structure_type": structure['type'], "structure_name": structure['name'], "path": structure['path']})
+            logger.info("Folder structure children count", extra={"count": len(structure['children'])})
             for child in structure['children']:
-                logger.info(f"    {child.get('name')} - type: {child.get('type')}")
+                logger.info("Folder structure child", extra={"child_name": child.get('name'), "child_type": child.get('type')})
                 if child.get('type') == 'folder' and 'children' in child:
-                    logger.info(f"      Contains: {len(child.get('children', []))} items")
+                    logger.info("Folder child item count", extra={"child_name": child.get('name'), "count": len(child.get('children', []))})
             
             return structure
             
         except Exception as e:
-            logger.error(f"Error getting folder structure for '{bucket_name}' with prefix '{prefix}': {str(e)}")
+            logger.error("Error getting folder structure", extra={"bucket_name": bucket_name, "prefix": prefix, "error": str(e)})
             return {"type": "folder", "name": bucket_name, "path": prefix, "children": []} 

@@ -101,7 +101,7 @@ def process_uploaded_files(request):
                     })
             
             except Exception as e:
-                logger.exception(f"Error processing file {file_name}: {str(e)}")
+                logger.exception("Error processing file", extra={"file_name": file_name, "error": str(e)})
                 failed_files.append({
                     'file_name': file_name,
                     's3_key': s3_key,
@@ -117,7 +117,7 @@ def process_uploaded_files(request):
         })
     
     except Exception as e:
-        logger.exception(f"Error in process_uploaded_files: {str(e)}")
+        logger.exception("Error in process_uploaded_files", extra={"error": str(e)})
         return Response({
             'success': False,
             'error': str(e)
@@ -145,7 +145,7 @@ def upload_error(request):
     error_message = data.get('error', 'No error details provided')
     
     # Log the error
-    logger.error(f"Client reported upload error for file '{file_name}' (S3 key: {s3_key}): {error_message}")
+    logger.error("Client reported upload error", extra={"file_name": file_name, "s3_key": s3_key, "error": error_message})
     
     # You could also store these errors in the database if needed
     
@@ -234,7 +234,7 @@ def mark_upload_complete(request):
                     })
             
             except Exception as e:
-                logger.exception(f"Error processing file {file_name}: {str(e)}")
+                logger.exception("Error processing file", extra={"file_name": file_name, "error": str(e)})
                 failed_files.append({
                     'file_name': file_name,
                     's3_key': s3_key,
@@ -251,7 +251,7 @@ def mark_upload_complete(request):
         })
     
     except Exception as e:
-        logger.exception(f"Error in mark_upload_complete: {str(e)}")
+        logger.exception("Error in mark_upload_complete", extra={"error": str(e)})
         return Response({
             'success': False,
             'error': str(e)

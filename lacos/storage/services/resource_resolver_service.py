@@ -104,7 +104,7 @@ class ResourceResolverService:
 
         # 1. Validate bundle_id format
         if not is_valid_uuid(bundle_id):
-            logger.warning(f"Invalid bundle UUID format: {bundle_id}")
+            logger.warning("Invalid bundle UUID format", extra={"bundle_id": bundle_id})
             for resource_id in resource_ids:
                 errors.append(
                     ResourceError(
@@ -119,7 +119,7 @@ class ResourceResolverService:
         try:
             bundle = Bundle.objects.get(id=bundle_id)
         except (Bundle.DoesNotExist, ValueError):
-            logger.warning(f"Bundle not found: {bundle_id}")
+            logger.warning("Bundle not found", extra={"bundle_id": bundle_id})
             # Return error for all requested resources
             for resource_id in resource_ids:
                 errors.append(
@@ -134,7 +134,8 @@ class ResourceResolverService:
         # 3. Check ACL permissions
         if not self.acl_service.is_allowed(user, bundle, mode="acl:Read"):
             logger.info(
-                f"ACL denied for user {getattr(user, 'pk', 'anonymous')} on bundle {bundle_id}"
+                "ACL denied for user on bundle",
+                extra={"user_pk": getattr(user, "pk", "anonymous"), "bundle_id": bundle_id},
             )
             for resource_id in resource_ids:
                 errors.append(
@@ -163,7 +164,7 @@ class ResourceResolverService:
                 else:
                     errors.append(result)
             except Exception as e:
-                logger.exception(f"Unexpected error resolving resource {resource_id}")
+                logger.exception("Unexpected error resolving resource", extra={"resource_id": resource_id})
                 errors.append(
                     ResourceError(
                         resource_id=resource_id,
@@ -196,7 +197,7 @@ class ResourceResolverService:
 
         # 1. Validate collection_id format
         if not is_valid_uuid(collection_id):
-            logger.warning(f"Invalid collection UUID format: {collection_id}")
+            logger.warning("Invalid collection UUID format", extra={"collection_id": collection_id})
             for resource_id in resource_ids:
                 errors.append(
                     ResourceError(
@@ -211,7 +212,7 @@ class ResourceResolverService:
         try:
             collection = Collection.objects.get(id=collection_id)
         except (Collection.DoesNotExist, ValueError):
-            logger.warning(f"Collection not found: {collection_id}")
+            logger.warning("Collection not found", extra={"collection_id": collection_id})
             for resource_id in resource_ids:
                 errors.append(
                     ResourceError(
@@ -225,7 +226,8 @@ class ResourceResolverService:
         # 3. Check ACL permissions on collection
         if not self.acl_service.is_allowed(user, collection, mode="acl:Read"):
             logger.info(
-                f"ACL denied for user {getattr(user, 'pk', 'anonymous')} on collection {collection_id}"
+                "ACL denied for user on collection",
+                extra={"user_pk": getattr(user, "pk", "anonymous"), "collection_id": collection_id},
             )
             for resource_id in resource_ids:
                 errors.append(
@@ -254,7 +256,7 @@ class ResourceResolverService:
                 else:
                     errors.append(result)
             except Exception as e:
-                logger.exception(f"Unexpected error resolving resource {resource_id}")
+                logger.exception("Unexpected error resolving resource", extra={"resource_id": resource_id})
                 errors.append(
                     ResourceError(
                         resource_id=resource_id,
@@ -272,14 +274,14 @@ class ResourceResolverService:
         try:
             structural_info = collection.structural_info.first()
             if not structural_info:
-                logger.debug(f"No structural_info found for collection {collection.id}")
+                logger.debug("No structural_info found for collection", extra={"collection_id": collection.id})
                 return resource_ids
 
             for metadata_file in structural_info.additional_metadata_files.all():
                 resource_ids.add(str(metadata_file.id))
 
         except Exception as e:
-            logger.error(f"Error getting collection resource IDs: {e}")
+            logger.error("Error getting collection resource IDs", extra={"error": str(e)})
 
         return resource_ids
 
@@ -362,7 +364,7 @@ class ResourceResolverService:
                 for other_resource in bundle_resources.bundle_other_resources.all():
                     resource_ids.add(str(other_resource.id))
             else:
-                logger.debug(f"No BundleResources found for bundle {bundle.id}")
+                logger.debug("No BundleResources found for bundle", extra={"bundle_id": bundle.id})
 
             structural_info = bundle.structural_info.first()
             if structural_info:
@@ -370,7 +372,7 @@ class ResourceResolverService:
                     resource_ids.add(str(metadata_file.id))
 
         except Exception as e:
-            logger.error(f"Error getting bundle resource IDs: {e}")
+            logger.error("Error getting bundle resource IDs", extra={"error": str(e)})
 
         return resource_ids
 
@@ -497,6 +499,7 @@ class ResourceResolverService:
             )
         except S3ResourceLocation.DoesNotExist:
             logger.debug(
-                f"No S3ResourceLocation found for {type(resource).__name__} {resource.id}"
+                "No S3ResourceLocation found for resource",
+                extra={"resource_type": type(resource).__name__, "resource_id": resource.id},
             )
             return None

@@ -119,19 +119,19 @@ def import_bundle_resources(
         bundle_struct_info: The BundleStructuralInfo object to link resources to
         resources_data: Resources data from the CMD object (nested within struct info)
     """
-    logger.debug(f"Entering import_bundle_resources for bundle {bundle_struct_info.bundle.id}")
-    logger.debug(f"Type of received resources_data: {type(resources_data)}")
-    logger.debug(f"Received resources_data: {resources_data!r}") # Log the representation
+    logger.debug("Entering import_bundle_resources", extra={"bundle_id": bundle_struct_info.bundle.id})
+    logger.debug("Type of received resources_data", extra={"type": type(resources_data)})
+    logger.debug("Received resources_data", extra={"resources_data": repr(resources_data)})
     
     # Check for specific resource attributes before the if conditions
     has_media = hasattr(resources_data, 'media_resource') and resources_data.media_resource
     has_written = hasattr(resources_data, 'written_resource') and resources_data.written_resource
     has_other = hasattr(resources_data, 'other_resource') and resources_data.other_resource
-    logger.debug(f"Resources data has media: {bool(has_media)}, written: {bool(has_written)}, other: {bool(has_other)}")
+    logger.debug("Resources data availability", extra={"has_media": bool(has_media), "has_written": bool(has_written), "has_other": bool(has_other)})
     if has_media:
-        logger.debug(f"Media resource list type: {type(resources_data.media_resource)}, Length: {len(resources_data.media_resource) if isinstance(resources_data.media_resource, list) else 'N/A'}")
+        logger.debug("Media resource list details", extra={"type": type(resources_data.media_resource), "length": len(resources_data.media_resource) if isinstance(resources_data.media_resource, list) else "N/A"})
     if has_written:
-        logger.debug(f"Written resource list type: {type(resources_data.written_resource)}, Length: {len(resources_data.written_resource) if isinstance(resources_data.written_resource, list) else 'N/A'}")
+        logger.debug("Written resource list details", extra={"type": type(resources_data.written_resource), "length": len(resources_data.written_resource) if isinstance(resources_data.written_resource, list) else "N/A"})
         
     # Get or create the associated BundleResources instance via the relationship
     try:
@@ -139,15 +139,15 @@ def import_bundle_resources(
         bundle_resources = BundleResources.objects.filter(bundle=bundle_struct_info.bundle).first()
         if not bundle_resources:
             # Create a new BundleResources if one doesn't exist
-            logger.debug(f"Creating new BundleResources for bundle {bundle_struct_info.bundle.id}")
+            logger.debug("Creating new BundleResources", extra={"bundle_id": bundle_struct_info.bundle.id})
             bundle_resources = BundleResources.objects.create(bundle=bundle_struct_info.bundle)
         else:
-            logger.debug(f"Found existing BundleResources (ID: {bundle_resources.id}) for bundle {bundle_struct_info.bundle.id}")
+            logger.debug("Found existing BundleResources", extra={"bundle_resources_id": bundle_resources.id, "bundle_id": bundle_struct_info.bundle.id})
             
     except Exception as e:
-        logger.error(f"Error getting/creating BundleResources for bundle {bundle_struct_info.bundle.id}: {e}", exc_info=True)
+        logger.error("Error getting/creating BundleResources", extra={"bundle_id": bundle_struct_info.bundle.id, "error": e}, exc_info=True)
         # Create a new BundleResources if there was an error
-        logger.debug(f"Attempting to create new BundleResources after error for bundle {bundle_struct_info.bundle.id}")
+        logger.debug("Attempting to create new BundleResources after error", extra={"bundle_id": bundle_struct_info.bundle.id})
         bundle_resources = BundleResources.objects.create(bundle=bundle_struct_info.bundle)
 
     # Reset related objects to keep updates idempotent
@@ -162,26 +162,26 @@ def import_bundle_resources(
 
     # Import media resources if present in XML data
     if has_media:
-        logger.info(f"Importing {len(resources_data.media_resource)} media resource(s)...")
+        logger.info("Importing media resources", extra={"count": len(resources_data.media_resource)})
         import_media_resources(bundle_resources, resources_data.media_resource)
     else:
         logger.debug("No media resources found in resources_data.")
 
     # Import written resources if present in XML data
     if has_written:
-        logger.info(f"Importing {len(resources_data.written_resource)} written resource(s)...")
+        logger.info("Importing written resources", extra={"count": len(resources_data.written_resource)})
         import_written_resources(bundle_resources, resources_data.written_resource)
     else:
         logger.debug("No written resources found in resources_data.")
 
     # Import other resources if present in XML data
     if has_other:
-        logger.info(f"Importing {len(resources_data.other_resource)} other resource(s)...")
+        logger.info("Importing other resources", extra={"count": len(resources_data.other_resource)})
         import_other_resources(bundle_resources, resources_data.other_resource)
     else:
         logger.debug("No other resources found in resources_data.")
     
-    logger.debug(f"Finished import_bundle_resources for bundle {bundle_struct_info.bundle.id}")
+    logger.debug("Finished import_bundle_resources", extra={"bundle_id": bundle_struct_info.bundle.id})
 
 
 def import_media_resources(
@@ -219,9 +219,9 @@ def import_media_resources(
         # Log count immediately after adding
         try:
             count_after_add = bundle_resources.bundle_media_resources.count()
-            logger.debug(f"(Importer) Added MediaResource {media_resource.id}. BundleResources {bundle_resources.id} now has {count_after_add} media resources.")
+            logger.debug("Added MediaResource to BundleResources", extra={"media_resource_id": media_resource.id, "bundle_resources_id": bundle_resources.id, "media_count": count_after_add})
         except Exception as log_e:
-            logger.error(f"(Importer) Error logging count after adding MediaResource {media_resource.id}: {log_e}")
+            logger.error("Error logging count after adding MediaResource", extra={"media_resource_id": media_resource.id, "error": log_e})
 
 
 def import_written_resources(
@@ -266,9 +266,9 @@ def import_written_resources(
         # Log count immediately after adding
         try:
             count_after_add = bundle_resources.bundle_written_resources.count()
-            logger.debug(f"(Importer) Added WrittenResource {written_resource.id}. BundleResources {bundle_resources.id} now has {count_after_add} written resources.")
+            logger.debug("Added WrittenResource to BundleResources", extra={"written_resource_id": written_resource.id, "bundle_resources_id": bundle_resources.id, "written_count": count_after_add})
         except Exception as log_e:
-            logger.error(f"(Importer) Error logging count after adding WrittenResource {written_resource.id}: {log_e}")
+            logger.error("Error logging count after adding WrittenResource", extra={"written_resource_id": written_resource.id, "error": log_e})
 
 
 def import_other_resources(
@@ -304,6 +304,6 @@ def import_other_resources(
         # Log count immediately after adding
         try:
             count_after_add = bundle_resources.bundle_other_resources.count()
-            logger.debug(f"(Importer) Added OtherResource {other_resource.id}. BundleResources {bundle_resources.id} now has {count_after_add} other resources.")
+            logger.debug("Added OtherResource to BundleResources", extra={"other_resource_id": other_resource.id, "bundle_resources_id": bundle_resources.id, "other_count": count_after_add})
         except Exception as log_e:
-            logger.error(f"(Importer) Error logging count after adding OtherResource {other_resource.id}: {log_e}")
+            logger.error("Error logging count after adding OtherResource", extra={"other_resource_id": other_resource.id, "error": log_e})

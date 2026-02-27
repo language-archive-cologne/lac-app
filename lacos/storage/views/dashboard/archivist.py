@@ -166,7 +166,7 @@ def load_folder_contents(request, bucket_type, folder_path):
                 },
             )
         except Exception as e:
-            logger.error(f"Error loading folder contents for {folder_path}: {str(e)}")
+            logger.error("Error loading folder contents", extra={"folder_path": folder_path, "error": str(e)})
             session.metadata["error"] = str(e)
 
             requested_max_keys = locals().get("requested_max_keys", 0)
@@ -257,7 +257,7 @@ def dashboard_content(request, bucket_type):
                 },
             )
         except Exception as e:
-            logger.error(f"Error loading dashboard content for {bucket_type}: {str(e)}")
+            logger.error("Error loading dashboard content", extra={"bucket_type": bucket_type, "error": str(e)})
             session.metadata["error"] = str(e)
             return render(
                 request,
@@ -301,7 +301,7 @@ def bucket_size_info(request, bucket_name):
                 },
             )
         except Exception as e:
-            logger.error(f"Error getting bucket size for {bucket_name}: {str(e)}")
+            logger.error("Error getting bucket size", extra={"bucket_name": bucket_name, "error": str(e)})
             session.metadata["error"] = str(e)
             return render(
                 request,

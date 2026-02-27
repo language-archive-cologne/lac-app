@@ -775,10 +775,10 @@ class CollectionResourcesView(View):
             raise Http404("Unsupported action")
 
         except ValueError as e:
-            logger.error(f"Resource mapping service error: {e}")
+            logger.error("Resource mapping service error", extra={"error": str(e)})
             raise Http404(f"Resource {resource_id} not found or cannot be accessed")
         except Exception as e:
-            logger.error(f"Error accessing resource: {e}")
+            logger.error("Error accessing resource", extra={"error": str(e)})
             raise Http404(f"Error accessing resource: {str(e)}")
 
     def _render_htmx_modal(

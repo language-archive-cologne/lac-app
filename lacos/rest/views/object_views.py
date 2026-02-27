@@ -51,8 +51,8 @@ def copy_object(request):
     
     # Handle service result and return appropriate HTTP response
     if result.get('success') is False:
-        logger.error(f"Failed to copy object from {source_key} to {dest_key}: {result.get('error')}")
+        logger.error("Failed to copy object", extra={"source_key": source_key, "dest_key": dest_key, "error": result.get('error')})
         return Response(result, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    logger.info(f"Successfully copied object from {source_key} to {dest_key}")
+
+    logger.info("Successfully copied object", extra={"source_key": source_key, "dest_key": dest_key})
     return Response(result) 

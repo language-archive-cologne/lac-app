@@ -36,7 +36,8 @@ class BundleScriptDownloadView(View):
             self.RATE_LIMIT_WINDOW
         ):
             logger.warning(
-                f"Rate limit exceeded for script generation from {get_client_ip(request)}"
+                "Rate limit exceeded for script generation",
+                extra={"client_ip": get_client_ip(request)},
             )
             return JsonResponse(
                 {'error': 'Too many requests. Please try again later.'},
@@ -90,7 +91,7 @@ class BundleScriptDownloadView(View):
         is_valid, error = altcha_service.verify_solution_base64(altcha_payload)
 
         if not is_valid:
-            logger.warning(f"ALTCHA verification failed for script generation: {error}")
+            logger.warning("ALTCHA verification failed for script generation", extra={"error": error})
             return JsonResponse({
                 'error': 'Verification failed',
                 'detail': 'Please complete the verification again'
@@ -300,8 +301,8 @@ class BundleScriptDownloadView(View):
         else:
             entity_type = 'bundle'
         logger.info(
-            f"Script generation for {entity_type}: {len(resolved)} resolved, "
-            f"{len(errors)} errors, format={script_format}"
+            "Script generation completed",
+            extra={"entity_type": entity_type, "resolved_count": len(resolved), "error_count": len(errors), "format": script_format},
         )
 
         return JsonResponse({

@@ -95,7 +95,7 @@ class ACLService(BaseStorageService):
         if not result.success and result.error is None:
             legacy_key = self._build_legacy_acl_key(collection)
             if legacy_key and legacy_key != key:
-                self.logger.info(f"Trying legacy ACL path for collection {collection.pk}: {legacy_key}")
+                self.logger.info("Trying legacy ACL path for collection", extra={"collection_pk": collection.pk, "legacy_key": legacy_key})
                 result = self._load_object(collection, bucket, legacy_key)
 
         return result
@@ -110,7 +110,7 @@ class ACLService(BaseStorageService):
         if not result.success and result.error is None:
             legacy_key = self._build_legacy_acl_key(bundle)
             if legacy_key and legacy_key != key:
-                self.logger.info(f"Trying legacy ACL path for bundle {bundle.pk}: {legacy_key}")
+                self.logger.info("Trying legacy ACL path for bundle", extra={"bundle_pk": bundle.pk, "legacy_key": legacy_key})
                 result = self._load_object(bundle, bucket, legacy_key)
 
         return result
@@ -272,11 +272,11 @@ class ACLService(BaseStorageService):
 
         except ClientError as exc:
             error_msg = f"S3 error writing ACL: {exc}"
-            self.logger.error(error_msg)
+            self.logger.error("S3 error writing ACL", extra={"error": str(exc)})
             return ACLResult(obj=obj, bucket=bucket, key=key, success=False, error=error_msg)
         except Exception as exc:
             error_msg = f"Error writing ACL: {exc}"
-            self.logger.exception(error_msg)
+            self.logger.exception("Error writing ACL", extra={"error": str(exc)})
             return ACLResult(obj=obj, bucket=bucket, key=key, success=False, error=error_msg)
 
     # =========================================================================

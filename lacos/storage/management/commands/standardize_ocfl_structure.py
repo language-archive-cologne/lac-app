@@ -282,5 +282,5 @@ class Command(BaseCommand):
                     self.stdout.write(self.style.ERROR(f"Failed to move to production: {result['error']}"))
 
         except Exception as e:
-            logger.error(f"Error in standardize_ocfl_structure command: {str(e)}")
+            logger.error("Error in standardize_ocfl_structure command", extra={"error": str(e)})
             self.stdout.write(self.style.ERROR(f"Error: {str(e)}"))

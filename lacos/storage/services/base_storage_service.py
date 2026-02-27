@@ -59,17 +59,17 @@ class BaseStorageService:
         self.production_bucket = self._get_production_bucket_name()
 
         # Create S3 client
-        logger.info(f"Creating S3 client with endpoint URL: {self.endpoint_url}")
+        logger.info("Creating S3 client", extra={"endpoint_url": self.endpoint_url})
         self.s3_client = self._create_s3_client()
 
-        logger.info(f"BaseStorageService initialized with {'MinIO' if self.is_minio else 'S3'}")
-        logger.info(f"Using endpoint: {self.endpoint_url or 'default S3 endpoint'}")
-        logger.info(f"Using region: {self.region}")
-        logger.info(f"S3 max pool connections: {self.max_pool_connections}")
-        logger.info(f"Workspace buckets: {self.workspace_buckets}")
-        logger.info(f"All buckets are OCFL-capable")
-        logger.info(f"Legacy ingest bucket: {self.ingest_bucket}")
-        logger.info(f"Legacy production bucket: {self.production_bucket}")
+        logger.info("BaseStorageService initialized", extra={"backend": "MinIO" if self.is_minio else "S3"})
+        logger.info("Using endpoint", extra={"endpoint_url": self.endpoint_url or "default S3 endpoint"})
+        logger.info("Using region", extra={"region": self.region})
+        logger.info("S3 max pool connections", extra={"max_pool_connections": self.max_pool_connections})
+        logger.info("Workspace buckets", extra={"workspace_buckets": self.workspace_buckets})
+        logger.info("All buckets are OCFL-capable")
+        logger.info("Legacy ingest bucket", extra={"ingest_bucket": self.ingest_bucket})
+        logger.info("Legacy production bucket", extra={"production_bucket": self.production_bucket})
         
         # Only check buckets if not skipped and not already checked
         if not skip_bucket_check and not self._buckets_checked:
@@ -80,15 +80,15 @@ class BaseStorageService:
                 bucket_exists = self.ensure_bucket_exists(bucket_name)
                 if bucket_exists:
                     # Ensure CORS is configured for all buckets (needed for direct uploads and video streaming)
-                    logger.info(f"Ensuring CORS is configured for {bucket_name}...")
+                    logger.info("Ensuring CORS is configured", extra={"bucket_name": bucket_name})
                     cors_result = self.ensure_cors_enabled(bucket_name)
                     if cors_result["success"]:
                         if cors_result.get("updated", False):
-                            logger.info(f"✅ CORS configuration for {bucket_name} has been updated")
+                            logger.info("CORS configuration has been updated", extra={"bucket_name": bucket_name})
                         else:
-                            logger.info(f"✅ CORS configuration for {bucket_name} is already correct")
+                            logger.info("CORS configuration is already correct", extra={"bucket_name": bucket_name})
                     else:
-                        logger.warning(f"⚠️ Failed to configure CORS for {bucket_name}: {cors_result.get('error', 'Unknown error')}")
+                        logger.warning("Failed to configure CORS", extra={"bucket_name": bucket_name, "error": cors_result.get('error', 'Unknown error')})
 
             # Set the class-level flag
             self._buckets_checked = True
@@ -270,7 +270,7 @@ class BaseStorageService:
     def _get_workspace_buckets(self) -> list:
         """Get the list of workspace buckets from settings."""
         workspace_buckets = getattr(settings, 'S3_WORKSPACE_BUCKETS', ['ingest', 'production'])
-        logger.info(f"Loaded workspace buckets from settings: {workspace_buckets}")
+        logger.info("Loaded workspace buckets from settings", extra={"workspace_buckets": workspace_buckets})
         return workspace_buckets
 
     @property
@@ -339,15 +339,15 @@ class BaseStorageService:
                 browser_endpoint = os.environ.get('AWS_S3_BROWSER_ENDPOINT_URL', None)
                 
                 if browser_endpoint:
-                    logger.info(f"Using browser endpoint URL from environment: {browser_endpoint}")
+                    logger.info("Using browser endpoint URL from environment", extra={"browser_endpoint": browser_endpoint})
                 elif 'minio:9000' in self.endpoint_url:
                     # Default fallback for local development
                     browser_endpoint = self.endpoint_url.replace('minio:9000', 'localhost:9000')
-                    logger.info(f"MinIO detected at {self.endpoint_url}, will use {browser_endpoint} for presigned URLs")
+                    logger.info("MinIO detected, will use browser endpoint for presigned URLs", extra={"endpoint_url": self.endpoint_url, "browser_endpoint": browser_endpoint})
                 else:
                     # If no specific browser endpoint is provided, use the same as server
                     browser_endpoint = self.endpoint_url
-                    logger.info(f"Using server endpoint for presigned URLs: {browser_endpoint}")
+                    logger.info("Using server endpoint for presigned URLs", extra={"browser_endpoint": browser_endpoint})
                 
                 # Create a separate client for generating presigned URLs
                 self.presigned_client = boto3.client(
@@ -358,7 +358,7 @@ class BaseStorageService:
                     endpoint_url=browser_endpoint,
                     config=boto3.session.Config(**config_kwargs)
                 )
-                logger.info(f"Created separate client for presigned URLs with endpoint: {browser_endpoint}")
+                logger.info("Created separate client for presigned URLs", extra={"browser_endpoint": browser_endpoint})
 
         client_kwargs['config'] = boto3.session.Config(**config_kwargs)
         
@@ -389,42 +389,42 @@ class BaseStorageService:
         Returns:
             bool: True if the bucket exists or was created successfully, False otherwise.
         """
-        logger.info(f"Checking if bucket '{bucket_name}' exists...")
+        logger.info("Checking if bucket exists", extra={"bucket_name": bucket_name})
         try:
             # Check if bucket exists
             self.s3_client.head_bucket(Bucket=bucket_name)
-            logger.info(f"✅ Bucket '{bucket_name}' already exists")
+            logger.info("Bucket already exists", extra={"bucket_name": bucket_name})
             return True
         except ClientError as e:
             error_code = e.response.get('Error', {}).get('Code', 'Unknown')
             error_message = e.response.get('Error', {}).get('Message', str(e))
-            logger.info(f"Bucket check result: {error_code} - {error_message}")
+            logger.info("Bucket check result", extra={"error_code": error_code, "error_message": error_message})
             
             # If bucket doesn't exist, create it
             if error_code == '404' or error_code == 'NoSuchBucket':
                 try:
-                    logger.info(f"🔄 Creating bucket '{bucket_name}' in region '{self.region}'...")
+                    logger.info("Creating bucket", extra={"bucket_name": bucket_name, "region": self.region})
                     if self.region == 'us-east-1':
                         # Special case for us-east-1
-                        logger.info(f"Using special case for us-east-1 region (no LocationConstraint)")
+                        logger.info("Using special case for us-east-1 region (no LocationConstraint)")
                         self.s3_client.create_bucket(Bucket=bucket_name)
                     else:
-                        logger.info(f"Using LocationConstraint={self.region}")
+                        logger.info("Using LocationConstraint", extra={"region": self.region})
                         self.s3_client.create_bucket(
                             Bucket=bucket_name,
                             CreateBucketConfiguration={'LocationConstraint': self.region}
                         )
-                    logger.info(f"✅ Bucket '{bucket_name}' created successfully")
+                    logger.info("Bucket created successfully", extra={"bucket_name": bucket_name})
                     return True
                 except Exception as create_error:
-                    logger.error(f"❌ Error creating bucket '{bucket_name}': {str(create_error)}")
+                    logger.error("Error creating bucket", extra={"bucket_name": bucket_name, "error": str(create_error)})
                     # Log more details about the error
                     if hasattr(create_error, 'response'):
                         error_details = create_error.response.get('Error', {})
-                        logger.error(f"Error details: Code={error_details.get('Code')}, Message={error_details.get('Message')}")
+                        logger.error("Error details", extra={"code": error_details.get('Code'), "error_message": error_details.get('Message')})
                     return False
             else:
-                logger.error(f"❌ Error checking bucket '{bucket_name}': {error_code} - {error_message}")
+                logger.error("Error checking bucket", extra={"bucket_name": bucket_name, "error_code": error_code, "error_message": error_message})
                 return False
     
     def get_file_content(self, bucket_name: str, file_path: str) -> Dict[str, Any]:
@@ -460,7 +460,7 @@ class BaseStorageService:
                 "path": file_path,
             }
         except ClientError as e:
-            logger.error(f"Error getting file content for {file_path}: {str(e)}")
+            logger.error("Error getting file content", extra={"file_path": file_path, "error": str(e)})
             return {"error": str(e)}
             
     def delete_object(self, bucket_name: str, object_path: str, is_directory: bool = False) -> Dict[str, Any]:
@@ -488,14 +488,14 @@ class BaseStorageService:
                 if objects_to_delete:
                     # Some S3-compatible services (like MinIO) require Content-MD5 for DeleteObjects
                     # We'll delete each object individually to avoid this issue
-                    logger.info(f"Deleting {len(objects_to_delete)} objects from {bucket_name}/{object_path}")
+                    logger.info("Deleting objects from bucket", extra={"count": len(objects_to_delete), "bucket_name": bucket_name, "object_path": object_path})
                     deleted_count = 0
                     for obj in objects_to_delete:
                         try:
                             self.s3_client.delete_object(Bucket=bucket_name, Key=obj["Key"])
                             deleted_count += 1
                         except Exception as obj_error:
-                            logger.error(f"Error deleting object {obj['Key']}: {str(obj_error)}")
+                            logger.error("Error deleting object", extra={"key": obj['Key'], "error": str(obj_error)})
                     
                     return {
                         "success": deleted_count > 0,
@@ -518,7 +518,7 @@ class BaseStorageService:
                     "deleted_objects": 1
                 }
         except ClientError as e:
-            logger.error(f"Error deleting {object_path}: {str(e)}")
+            logger.error("Error deleting object", extra={"object_path": object_path, "error": str(e)})
             return {"success": False, "error": str(e)}
     
     def ensure_cors_enabled(self, bucket_name: str = None) -> Dict[str, Any]:
@@ -537,7 +537,7 @@ class BaseStorageService:
         if bucket_name is None:
             bucket_name = self.ingest_bucket
         
-        logger.info(f"Checking CORS configuration for bucket: {bucket_name}")
+        logger.info("Checking CORS configuration for bucket", extra={"bucket_name": bucket_name})
 
         # MinIO does not implement PutBucketCors / GetBucketCors.
         # Skip entirely to avoid noisy ERROR logs on every startup.
@@ -558,7 +558,7 @@ class BaseStorageService:
             try:
                 cors_config = self.s3_client.get_bucket_cors(Bucket=bucket_name)
                 current_rules = cors_config.get('CORSRules', [])
-                logger.info(f"Found existing CORS configuration with {len(current_rules)} rules")
+                logger.info("Found existing CORS configuration", extra={"rule_count": len(current_rules)})
                 
                 # Check if our required rule already exists
                 rule_exists = False
@@ -607,11 +607,11 @@ class BaseStorageService:
                     return {"success": True, "message": "CORS configuration created", "updated": True}
                 else:
                     # Some other error occurred
-                    logger.error(f"❌ Error getting CORS configuration: {error_code} - {error_message}")
+                    logger.error("Error getting CORS configuration", extra={"error_code": error_code, "error_message": error_message})
                     return {"success": False, "error": f"{error_code}: {error_message}"}
         
         except Exception as e:
-            logger.error(f"❌ Error ensuring CORS configuration: {str(e)}")
+            logger.error("Error ensuring CORS configuration", extra={"error": str(e)})
             return {"success": False, "error": str(e)}
 
     def _is_running_in_container(self):
