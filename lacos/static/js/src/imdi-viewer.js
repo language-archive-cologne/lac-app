@@ -460,14 +460,14 @@ async function initViewer(container) {
     // Tree panel (wider – leaves show inline values)
     const treePanel = document.createElement("div");
     treePanel.className =
-      "lg:w-2/3 border-r border-base-300 overflow-y-auto max-h-[72vh] p-4";
+      "lg:w-2/3 min-w-0 border-r border-base-300 overflow-y-auto overflow-x-hidden max-h-[72vh] p-4";
     treePanel.setAttribute("data-imdi-tree", "");
     const tree = buildTree(root, ctx);
     treePanel.appendChild(tree);
 
     // Detail panel (narrower, scrollable)
     const detailPanel = document.createElement("div");
-    detailPanel.className = "lg:w-1/3 p-6 overflow-y-auto max-h-[72vh]";
+    detailPanel.className = "lg:w-1/3 min-w-0 p-6 overflow-y-auto max-h-[72vh]";
     detailPanel.setAttribute("data-imdi-detail", "");
 
     // Render initial detail for root content element
