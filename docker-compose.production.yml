@@ -10,8 +10,12 @@ services:
     build:
       context: .
       dockerfile: ./compose/production/django/Dockerfile
-
     image: lacos_production_django
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       - postgres
       - redis
@@ -34,6 +38,11 @@ services:
       context: .
       dockerfile: ./compose/production/postgres/Dockerfile
     image: lacos_production_postgres
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       - lacos_production_postgres_data:/var/lib/postgresql/data
       - lacos_production_postgres_data_backups:/backups
@@ -45,6 +54,11 @@ services:
       context: .
       dockerfile: ./compose/production/traefik/Dockerfile
     image: lacos_production_traefik
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       - django
     volumes:
@@ -55,7 +69,11 @@ services:
 
   redis:
     image: docker.io/redis:6
-    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   awscli:
     build:

@@ -291,6 +291,10 @@ LOGGING = {
         "verbose": {
             "format": "%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d %(message)s",
         },
+        "json": {
+            "()": "pythonjsonlogger.json.JsonFormatter",
+            "format": "%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d %(message)s",
+        },
     },
     "handlers": {
         "console": {

@@ -37,3 +37,5 @@ geopy==2.4.1 # https://github.com/geopy/geopy
 markdown==3.7 # https://github.com/Python-Markdown/markdown
 #altcha - proof-of-work CAPTCHA for download protection
 altcha==0.2.0 # https://github.com/altcha-org/altcha-lib-py
+#python-json-logger - structured JSON logging
+python-json-logger==4.0.0 # https://github.com/nhairs/python-json-logger

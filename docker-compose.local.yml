@@ -16,6 +16,11 @@ services:
       target: web-run-stage
     image: lacos_local_django
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       - postgres
       - minio
@@ -44,6 +49,11 @@ services:
       context: .
       dockerfile: ./compose/production/postgres/Dockerfile
     image: lacos_production_postgres
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       - lacos_local_postgres_data:/var/lib/postgresql/data
       - lacos_local_postgres_data_backups:/backups
@@ -54,6 +64,11 @@ services:
 
   minio:
     image: minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "127.0.0.1:9100:9000"
       - "127.0.0.1:9101:9001"
@@ -84,6 +99,11 @@ services:
 
   redis:
     image: "redis:8.2-alpine@sha256:a308ca111032fa8f306a2dc7be7ba5deb8b777ed5d258c733cddba48a1fd7904"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       - lacos_local_redis_data:/data
     ports:
@@ -98,6 +118,11 @@ services:
       dockerfile: ./compose/local/django/Dockerfile
       target: worker-run-stage
     image: lacos_local_huey
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       - django
       - redis

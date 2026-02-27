@@ -34,13 +34,16 @@ LOGGING = {
         "verbose": {
             "format": "%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d %(message)s",
         },
-        "simple": {"format": "%(levelname)s %(message)s"},
+        "json": {
+            "()": "pythonjsonlogger.json.JsonFormatter",
+            "format": "%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d %(message)s",
+        },
     },
     "handlers": {
         "console": {
             "level": "INFO",
             "class": "logging.StreamHandler",
-            "formatter": "simple",
+            "formatter": "json",
         },
     },
     "root": {"level": "INFO", "handlers": ["console"]},
