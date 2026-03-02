@@ -283,7 +283,6 @@ lacos/media/
 .env
 .envs/*
 !.envs/.local/
-!.envs/.production/*.template
 
 # Plan/design docs
 docs/plans/*.md
