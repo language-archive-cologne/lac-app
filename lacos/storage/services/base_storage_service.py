@@ -327,12 +327,13 @@ class BaseStorageService:
             server_endpoint = self.endpoint_url
             client_kwargs['endpoint_url'] = server_endpoint
             
+            # S3-compatible endpoints (MinIO, Dell ECS) need path-style addressing
+            # and signature version matching the provider (Dell ECS uses v2 / 's3')
+            config_kwargs['signature_version'] = os.environ.get('AWS_S3_SIGNATURE_VERSION', 's3')
+            config_kwargs['s3'] = {'addressing_style': 'path'}
+
             # For MinIO in local development, we need special handling for presigned URLs
             if self.is_minio:
-                # Create a config that tells boto3 to use path-style addressing
-                # This is required for MinIO
-                config_kwargs['signature_version'] = 's3v4'
-                config_kwargs['s3'] = {'addressing_style': 'path'}
                 
                 # For presigned URLs that will be used by the browser,
                 # we need to use a browser-accessible URL
