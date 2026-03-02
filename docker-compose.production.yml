@@ -1,16 +1,21 @@
 volumes:
   lacos_production_postgres_data: {}
   lacos_production_postgres_data_backups: {}
-  lacos_production_traefik: {}
-  
+  lacos_production_redis_data: {}
 
+networks:
+  lacos_production_network:
+    driver: bridge
 
 services:
   django:
     build:
       context: .
-      dockerfile: ./compose/production/django/Dockerfile
+      dockerfile: ./compose/local/django/Dockerfile
+      target: web-run-stage
     image: lacos_production_django
+    container_name: lacos_production_django
+    restart: unless-stopped
     logging:
       driver: "json-file"
       options:
@@ -19,25 +24,41 @@ services:
     depends_on:
       - postgres
       - redis
+    volumes:
+      - .:/app:z
+      - /etc/shibboleth:/etc/shibboleth:ro
+      - /opt/lacos/lac-guidelines:/app/lac-guidelines:ro
     env_file:
       - ./.envs/.production/.django
       - ./.envs/.production/.postgres
+      - ./.envs/.production/.storage
+      - ./.envs/.production/.docker
     environment:
-      SAML_LOGIN_ENABLED: ${SAML_LOGIN_ENABLED:-false}
+      SAML_LOGIN_ENABLED: "true"
       SAML_DJANGO_USER_MAIN_ATTRIBUTE: "username"
       SAML_USE_NAME_ID_AS_USERNAME: "false"
-      SAML_SP_BASE_URL: ${SAML_SP_BASE_URL:-https://lacos.uni-koeln.de}
-      SAML_IDP_METADATA_LOCAL: ${SAML_IDP_METADATA_LOCAL:-/app/shibboleth.xml}
-      SAML_SP_CERT_FILE: ${SAML_SP_CERT_FILE:-}
-      SAML_SP_KEY_FILE: ${SAML_SP_KEY_FILE:-}
-      SAML_XMLSEC_BINARY: ${SAML_XMLSEC_BINARY:-/usr/bin/xmlsec1}
+      GUIDELINES_REPO_URL: /app/lac-guidelines
+      LAC_MEDIA_TMP_DIR: "/app/.tmp/media-processing"
+    ports:
+      - '127.0.0.1:8103:8000'
     command: /start
+    networks:
+      - lacos_production_network
+    dns:
+      - ${DNS_PRIMARY}
+      - ${DNS_SECONDARY}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "${S3_HOSTNAME}:${S3_IP}"
 
   postgres:
     build:
       context: .
       dockerfile: ./compose/production/postgres/Dockerfile
     image: lacos_production_postgres
+    container_name: lacos_production_postgres
+    restart: unless-stopped
+    command: postgres -c max_connections=200
     logging:
       driver: "json-file"
       options:
@@ -48,12 +69,35 @@ services:
       - lacos_production_postgres_data_backups:/backups
     env_file:
       - ./.envs/.production/.postgres
+    ports:
+      - '127.0.0.1:5434:5432'
+    networks:
+      - lacos_production_network
 
-  traefik:
+  redis:
+    image: "redis:8.2-alpine@sha256:a308ca111032fa8f306a2dc7be7ba5deb8b777ed5d258c733cddba48a1fd7904"
+    container_name: lacos_production_redis
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    volumes:
+      - lacos_production_redis_data:/data
+    ports:
+      - '127.0.0.1:6371:6379'
+    networks:
+      - lacos_production_network
+
+  huey:
     build:
       context: .
-      dockerfile: ./compose/production/traefik/Dockerfile
-    image: lacos_production_traefik
+      dockerfile: ./compose/local/django/Dockerfile
+      target: worker-run-stage
+    image: lacos_production_huey
+    container_name: lacos_production_huey
+    restart: unless-stopped
     logging:
       driver: "json-file"
       options:
@@ -61,25 +105,48 @@ services:
         max-file: "3"
     depends_on:
       - django
+      - redis
     volumes:
-      - lacos_production_traefik:/etc/traefik/acme
-    ports:
-      - '0.0.0.0:8080:80'
-      - '0.0.0.0:8443:443'
-
-  redis:
-    image: docker.io/redis:6
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  awscli:
-    build:
-      context: .
-      dockerfile: ./compose/production/aws/Dockerfile
+      - .:/app:z
+      - /etc/shibboleth:/etc/shibboleth:ro
+      - lacos_production_postgres_data_backups:/backups
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${HOST_DOCKER_BIN:-/usr/bin/docker}:/usr/bin/docker:ro
+      - ${HOST_DOCKER_COMPOSE_PLUGIN:-/usr/libexec/docker/cli-plugins/docker-compose}:/usr/libexec/docker/cli-plugins/docker-compose:ro
+    group_add:
+      - "${DOCKER_GID:-999}"
     env_file:
       - ./.envs/.production/.django
+      - ./.envs/.production/.postgres
+      - ./.envs/.production/.storage
+      - ./.envs/.production/.docker
+    environment:
+      SAML_LOGIN_ENABLED: "true"
+      SAML_DJANGO_USER_MAIN_ATTRIBUTE: "username"
+      SAML_USE_NAME_ID_AS_USERNAME: "false"
+      DB_BACKUP_ENABLED: "true"
+      DB_BACKUP_COMPOSE_FILE: "docker-compose.production.yml"
+      DB_BACKUP_COMPOSE_PROJECT_DIR: "/app"
+      DB_BACKUP_COMPOSE_PROJECT_NAME: "${COMPOSE_PROJECT_NAME:-lac-app}"
+      HUEY_IMMEDIATE: "false"
+      HUEY_WORKERS: "4"
+      LAC_MEDIA_TMP_DIR: "/app/.tmp/media-processing"
+    command: /bin/sh -c "python manage.py run_huey"
+    networks:
+      - lacos_production_network
+    dns:
+      - ${DNS_PRIMARY}
+      - ${DNS_SECONDARY}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "${S3_HOSTNAME}:${S3_IP}"
+
+  theme:
+    image: node:22-alpine
+    container_name: lacos_production_theme
+    working_dir: /app/theme/static_src
     volumes:
-      - lacos_production_postgres_data_backups:/backups:z
+      - .:/app:z
+    command: sh -c "npm ci && npm run build"
+    profiles:
+      - build
