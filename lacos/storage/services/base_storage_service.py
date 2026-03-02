@@ -328,9 +328,11 @@ class BaseStorageService:
             client_kwargs['endpoint_url'] = server_endpoint
             
             # S3-compatible endpoints (MinIO, Dell ECS) need path-style addressing
-            # and signature version matching the provider (Dell ECS uses v2 / 's3')
-            config_kwargs['signature_version'] = os.environ.get('AWS_S3_SIGNATURE_VERSION', 's3')
+            config_kwargs['signature_version'] = os.environ.get('AWS_S3_SIGNATURE_VERSION', 's3v4')
             config_kwargs['s3'] = {'addressing_style': 'path'}
+            # Dell ECS doesn't support newer checksum headers (x-amz-checksum-crc32)
+            config_kwargs['request_checksum_calculation'] = 'when_required'
+            config_kwargs['response_checksum_validation'] = 'when_required'
 
             # For MinIO in local development, we need special handling for presigned URLs
             if self.is_minio:

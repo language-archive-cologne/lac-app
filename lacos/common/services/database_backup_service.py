@@ -398,6 +398,8 @@ class DatabaseBackupService:
             client_kwargs["endpoint_url"] = endpoint_url
             config_kwargs["signature_version"] = getattr(settings, "AWS_S3_SIGNATURE_VERSION", "s3v4")
             config_kwargs["s3"] = {"addressing_style": "path"}
+            config_kwargs["request_checksum_calculation"] = "when_required"
+            config_kwargs["response_checksum_validation"] = "when_required"
         client_kwargs["config"] = Config(**config_kwargs)
 
         return boto3.client(**client_kwargs)
