@@ -100,13 +100,14 @@ USE_MINIO = env.bool("USE_MINIO", default=False)
 # STATIC & MEDIA
 # ------------------------
 if env.bool("DJANGO_USE_LOCAL_STATIC", default=False):
+    MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")  # after SecurityMiddleware
     STORAGES = {
         "default": {
             "BACKEND": "django.core.files.storage.FileSystemStorage",
             "OPTIONS": {"location": str(APPS_DIR / "media")},
         },
         "staticfiles": {
-            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+            "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
         },
     }
     MEDIA_URL = "/media/"
