@@ -68,6 +68,9 @@ RUN sed -i 's/\r$//g' /entrypoint && chmod +x /entrypoint
 COPY ./compose/local/django/start /start
 RUN sed -i 's/\r$//g' /start && chmod +x /start
 
+COPY ./compose/production/django/start /start-production
+RUN sed -i 's/\r$//g' /start-production && chmod +x /start-production
+
 # copy application code to WORKDIR
 COPY . ${APP_HOME}
 RUN chown -R dev-user:dev-user ${APP_HOME}

@@ -41,7 +41,7 @@ services:
       LAC_MEDIA_TMP_DIR: "/app/.tmp/media-processing"
     ports:
       - '127.0.0.1:8103:8000'
-    command: /start
+    command: /start-production
     networks:
       - lacos_production_network
     dns:
