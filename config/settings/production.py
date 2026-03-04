@@ -171,7 +171,9 @@ ANYMAIL = {
 # Collectfasta
 # ------------------------------------------------------------------------------
 # https://github.com/jasongi/collectfasta#installation
-INSTALLED_APPS = ["collectfasta", *INSTALLED_APPS]
+# Only enable collectfasta when using S3 storage (not with WhiteNoise local static)
+if not env.bool("DJANGO_USE_LOCAL_STATIC", default=False):
+    INSTALLED_APPS = ["collectfasta", *INSTALLED_APPS]
 
 # LOGGING
 # ------------------------------------------------------------------------------

@@ -32,7 +32,6 @@ services:
       - ./.envs/.production/.django
       - ./.envs/.production/.postgres
       - ./.envs/.production/.storage
-      - ./.envs/.production/.docker
     environment:
       SAML_LOGIN_ENABLED: "true"
       SAML_DJANGO_USER_MAIN_ATTRIBUTE: "username"
@@ -119,7 +118,6 @@ services:
       - ./.envs/.production/.django
       - ./.envs/.production/.postgres
       - ./.envs/.production/.storage
-      - ./.envs/.production/.docker
     environment:
       SAML_LOGIN_ENABLED: "true"
       SAML_DJANGO_USER_MAIN_ATTRIBUTE: "username"
