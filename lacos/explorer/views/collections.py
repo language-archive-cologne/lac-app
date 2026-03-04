@@ -436,6 +436,13 @@ class CollectionDetailView(HandleLookupMixin, DetailView):
         bundle_search = self.request.GET.get('bundle_search', '').strip()
         bundle_sort = self.request.GET.get('bundle_sort', 'name')
         bundle_order = self.request.GET.get('bundle_order', 'asc')
+        allowed_per_page = {10, 25, 50}
+        try:
+            bundle_per_page = int(self.request.GET.get('bundle_per_page', 10))
+        except (ValueError, TypeError):
+            bundle_per_page = 10
+        if bundle_per_page not in allowed_per_page:
+            bundle_per_page = 10
         if bundle_sort not in {"name", "access"}:
             bundle_sort = "name"
         if bundle_order not in {"asc", "desc"}:
@@ -443,17 +450,20 @@ class CollectionDetailView(HandleLookupMixin, DetailView):
         context['bundle_search'] = bundle_search
         context['bundle_current_sort'] = bundle_sort
         context['bundle_current_order'] = bundle_order
+        context['bundle_per_page'] = bundle_per_page
         page_obj, bundle_contexts = paginate_bundle_contexts(
             self.object,
             page_number,
+            per_page=bundle_per_page,
             search_query=bundle_search or None,
             sort=bundle_sort,
             order=bundle_order,
         )
 
         query_params = self.request.GET.copy()
-        if 'bundle_page' in query_params:
-            query_params.pop('bundle_page')
+        for key in ('bundle_page', 'bundle_per_page'):
+            if key in query_params:
+                query_params.pop(key)
         base_query = query_params.urlencode()
         if base_query:
             base_url = f"{self.request.path}?{base_query}"
@@ -462,7 +472,7 @@ class CollectionDetailView(HandleLookupMixin, DetailView):
         separator = '&' if '?' in base_url else '?'
 
         sort_query_params = self.request.GET.copy()
-        for key in ('bundle_page', 'bundle_sort', 'bundle_order'):
+        for key in ('bundle_page', 'bundle_per_page', 'bundle_sort', 'bundle_order'):
             if key in sort_query_params:
                 sort_query_params.pop(key)
         sort_base_query = sort_query_params.urlencode()

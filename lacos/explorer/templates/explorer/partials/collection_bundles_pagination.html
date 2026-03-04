@@ -7,12 +7,27 @@
           Showing {{ start }}–{{ end }} of {{ total }} bundles
         {% endblocktrans %}
       </div>
+      {% if bundles_total > 10 %}
+        <select
+          class="select select-sm select-bordered"
+          hx-get="{{ bundle_page_base_url }}{{ bundle_page_separator }}bundle_page=1"
+          hx-target="#collection-bundles-table"
+          hx-swap="innerHTML"
+          hx-push-url="false"
+          hx-include="this"
+          name="bundle_per_page"
+        >
+          <option value="10" {% if bundle_per_page == 10 %}selected{% endif %}>10 {% translate "per page" %}</option>
+          <option value="25" {% if bundle_per_page == 25 %}selected{% endif %}>25 {% translate "per page" %}</option>
+          <option value="50" {% if bundle_per_page == 50 %}selected{% endif %}>50 {% translate "per page" %}</option>
+        </select>
+      {% endif %}
     </div>
     <div class="flex gap-2">
       <button
         class="btn btn-sm btn-outline"
         {% if bundle_page_obj.number > 1 %}
-          hx-get="{{ bundle_page_base_url }}{{ bundle_page_separator }}bundle_page=1"
+          hx-get="{{ bundle_page_base_url }}{{ bundle_page_separator }}bundle_page=1&bundle_per_page={{ bundle_per_page }}"
           hx-target="#collection-bundles-table"
           hx-swap="innerHTML"
           hx-push-url="false"
@@ -25,7 +40,7 @@
       <button
         class="btn btn-sm btn-outline"
         {% if bundle_page_obj.has_previous %}
-          hx-get="{{ bundle_page_base_url }}{{ bundle_page_separator }}bundle_page={{ bundle_page_obj.previous_page_number }}"
+          hx-get="{{ bundle_page_base_url }}{{ bundle_page_separator }}bundle_page={{ bundle_page_obj.previous_page_number }}&bundle_per_page={{ bundle_per_page }}"
           hx-target="#collection-bundles-table"
           hx-swap="innerHTML"
           hx-push-url="false"
@@ -38,7 +53,7 @@
       <button
         class="btn btn-sm btn-outline"
         {% if bundle_page_obj.has_next %}
-          hx-get="{{ bundle_page_base_url }}{{ bundle_page_separator }}bundle_page={{ bundle_page_obj.next_page_number }}"
+          hx-get="{{ bundle_page_base_url }}{{ bundle_page_separator }}bundle_page={{ bundle_page_obj.next_page_number }}&bundle_per_page={{ bundle_per_page }}"
           hx-target="#collection-bundles-table"
           hx-swap="innerHTML"
           hx-push-url="false"
@@ -51,7 +66,7 @@
       <button
         class="btn btn-sm btn-outline"
         {% if bundle_page_obj.number < bundle_page_obj.paginator.num_pages %}
-          hx-get="{{ bundle_page_base_url }}{{ bundle_page_separator }}bundle_page={{ bundle_page_obj.paginator.num_pages }}"
+          hx-get="{{ bundle_page_base_url }}{{ bundle_page_separator }}bundle_page={{ bundle_page_obj.paginator.num_pages }}&bundle_per_page={{ bundle_per_page }}"
           hx-target="#collection-bundles-table"
           hx-swap="innerHTML"
           hx-push-url="false"
