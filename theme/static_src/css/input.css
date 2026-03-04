@@ -12,33 +12,54 @@
 
 /* daisyUI theme configuration */
 @plugin "daisyui" {
-  themes: corporate, dark, lacos;
+  themes: corporate, dark;
 }
 
-/* Custom lacos theme colors */
-@theme {
-  --color-primary: #3b82f6;
-  --color-secondary: #1e40af;
-  --color-accent: #06b6d4;
+/* Override corporate theme with UzK branding */
+@plugin "daisyui/theme" {
+  name: "corporate";
+  --color-primary: #005176;
+  --color-primary-content: #ffffff;
+  --color-secondary: #009dcc;
+  --color-secondary-content: #ffffff;
+  --color-accent: #ea564f;
+  --color-accent-content: #ffffff;
   --color-neutral: #32475b;
-  --color-base-100: #ffffff;
-  --color-base-200: #f9fafb;
-  --color-base-300: #32475b;
-  --color-info: #3abff8;
-  --color-success: #36d399;
-  --color-warning: #fbbd23;
-  --color-error: #f87272;
+}
+
+/* Override dark theme with UzK branding (lighter for dark backgrounds) */
+@plugin "daisyui/theme" {
+  name: "dark";
+  --color-primary: #1a8fbf;
+  --color-primary-content: #ffffff;
+  --color-secondary: #33b8de;
+  --color-secondary-content: #ffffff;
+  --color-accent: #ef7e79;
+  --color-accent-content: #ffffff;
+  --color-neutral: #3d5a73;
+}
+
+/* Albert Sans variable font */
+@font-face {
+  font-family: "Albert Sans";
+  src: url("/static/fonts/albert_sans/AlbertSans-VariableFont_wght.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Albert Sans";
+  src: url("/static/fonts/albert_sans/AlbertSans-Italic-VariableFont_wght.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
 }
 
 @layer base {
   body {
     font-family:
+      "Albert Sans",
       system-ui,
-      -apple-system,
-      BlinkMacSystemFont,
-      "Segoe UI",
-      "Helvetica Neue",
-      Arial,
       sans-serif;
   }
 }

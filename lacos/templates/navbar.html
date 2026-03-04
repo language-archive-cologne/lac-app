@@ -2,7 +2,7 @@
 {% load static %}
 <!-- Header/Navbar -->
 {% with current_view=request.resolver_match.view_name|default:'' %}
-<nav class="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 shadow-xl border-b border-slate-700/70">
+<nav class="bg-gradient-to-r from-[#003a54] via-[#005176] to-[#003a54] shadow-xl border-b border-[#004565]/70">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex items-center justify-between py-3 gap-4">
 
@@ -17,60 +17,60 @@
 
       <!-- Desktop Navigation -->
       <div class="hidden lg:flex items-center">
-        <div class="flex items-center gap-1 rounded-full bg-slate-800/80 border border-slate-700/70 px-2 py-1 shadow-md">
+        <div class="flex items-center gap-1 rounded-full bg-[#004565]/80 border border-[#004565]/70 px-2 py-1 shadow-md">
         <a href="{% url 'home' %}"
-           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if current_view == 'home' %}bg-slate-700/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-slate-700/70{% endif %}"
+           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if current_view == 'home' %}bg-[#006a99]/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-[#006a99]/70{% endif %}"
            {% if current_view == 'home' %}aria-current="page"{% endif %}>
           Home
         </a>
         <a href="{% url 'faceted_search' %}"
-           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if current_view == 'faceted_search' %}bg-slate-700/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-slate-700/70{% endif %}"
+           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if current_view == 'faceted_search' %}bg-[#006a99]/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-[#006a99]/70{% endif %}"
            {% if current_view == 'faceted_search' %}aria-current="page"{% endif %}>
           Search
         </a>
         {% if request.user.is_authenticated %}
         <a href="{% url 'storage:archivist_dashboard' %}"
-           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if current_view == 'storage:archivist_dashboard' %}bg-slate-700/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-slate-700/70{% endif %}"
+           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if current_view == 'storage:archivist_dashboard' %}bg-[#006a99]/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-[#006a99]/70{% endif %}"
            {% if current_view == 'storage:archivist_dashboard' %}aria-current="page"{% endif %}>
           Storage
         </a>
         <a href="{% url 'blam:blam_archivist_dashboard' %}"
-           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if current_view == 'blam:blam_archivist_dashboard' %}bg-slate-700/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-slate-700/70{% endif %}"
+           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if current_view == 'blam:blam_archivist_dashboard' %}bg-[#006a99]/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-[#006a99]/70{% endif %}"
            {% if current_view == 'blam:blam_archivist_dashboard' %}aria-current="page"{% endif %}>
           BLAM
         </a>
         {% endif %}
         {% if request.user.is_superuser %}
         <a href="{% url 'storage:acl_admin_dashboard' %}"
-           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if current_view == 'storage:acl_admin_dashboard' %}bg-slate-700/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-slate-700/70{% endif %}"
+           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if current_view == 'storage:acl_admin_dashboard' %}bg-[#006a99]/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-[#006a99]/70{% endif %}"
            {% if current_view == 'storage:acl_admin_dashboard' %}aria-current="page"{% endif %}>
           ACL
         </a>
         <a href="{% url 'dbadmin:dashboard' %}"
-           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if 'dbadmin:' in current_view %}bg-slate-700/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-slate-700/70{% endif %}"
+           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if 'dbadmin:' in current_view %}bg-[#006a99]/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-[#006a99]/70{% endif %}"
            {% if 'dbadmin:' in current_view %}aria-current="page"{% endif %}>
           Database
         </a>
         {% endif %}
         {% if request.user.is_staff %}
         <a href="{% url 'admin:index' %}"
-           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if current_view == 'admin:index' %}bg-slate-700/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-slate-700/70{% endif %}"
+           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if current_view == 'admin:index' %}bg-[#006a99]/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-[#006a99]/70{% endif %}"
            {% if current_view == 'admin:index' %}aria-current="page"{% endif %}>
           Admin
         </a>
         {% endif %}
         <a href="{% url 'oai-pmh' %}"
-           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if current_view == 'oai-pmh' %}bg-slate-700/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-slate-700/70{% endif %}"
+           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if current_view == 'oai-pmh' %}bg-[#006a99]/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-[#006a99]/70{% endif %}"
            {% if current_view == 'oai-pmh' %}aria-current="page"{% endif %}>
           OAI-PMH
         </a>
         <a href="{% url 'user-guides' %}"
-           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if current_view == 'user-guides' %}bg-slate-700/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-slate-700/70{% endif %}"
+           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if current_view == 'user-guides' %}bg-[#006a99]/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-[#006a99]/70{% endif %}"
            {% if current_view == 'user-guides' %}aria-current="page"{% endif %}>
           User Guides
         </a>
         <a href="{% url 'about' %}"
-           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if current_view == 'about' %}bg-slate-700/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-slate-700/70{% endif %}"
+           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if current_view == 'about' %}bg-[#006a99]/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-[#006a99]/70{% endif %}"
            {% if current_view == 'about' %}aria-current="page"{% endif %}>
           About
         </a>
@@ -80,7 +80,7 @@
       <!-- User Menu -->
       <div class="flex items-center gap-2">
         <!-- Theme Toggle -->
-        <button id="theme-toggle" class="text-slate-300 hover:text-white p-2 rounded-full border border-slate-700 bg-slate-800/70 hover:bg-slate-700/70 transition-colors" title="Toggle theme">
+        <button id="theme-toggle" class="text-slate-300 hover:text-white p-2 rounded-full border border-[#004565] bg-[#004565]/70 hover:bg-[#006a99]/70 transition-colors" title="Toggle theme">
           <!-- Sun icon (shown in dark mode) -->
           <svg id="theme-icon-light" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
@@ -93,7 +93,7 @@
 
         {% if request.user.is_authenticated %}
         <div class="relative">
-          <button id="user-menu-button" class="flex items-center gap-2 rounded-full border border-slate-700 bg-slate-800/70 px-2 py-1 text-slate-300 hover:text-white hover:bg-slate-700/70 transition-colors focus:outline-none">
+          <button id="user-menu-button" class="flex items-center gap-2 rounded-full border border-[#004565] bg-[#004565]/70 px-2 py-1 text-slate-300 hover:text-white hover:bg-[#006a99]/70 transition-colors focus:outline-none">
             <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold text-sm shadow-md">
               {{ request.user.username|slice:":1"|upper }}
             </div>
@@ -119,7 +119,7 @@
 
         <!-- Mobile menu button -->
         <div class="lg:hidden">
-          <button type="button" class="mobile-menu-button text-slate-300 hover:text-white focus:outline-none rounded-full border border-slate-700 bg-slate-800/70 p-2 hover:bg-slate-700/70 transition-colors" onclick="document.getElementById('mobile-menu').classList.toggle('hidden')">
+          <button type="button" class="mobile-menu-button text-slate-300 hover:text-white focus:outline-none rounded-full border border-[#004565] bg-[#004565]/70 p-2 hover:bg-[#006a99]/70 transition-colors" onclick="document.getElementById('mobile-menu').classList.toggle('hidden')">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
             </svg>
@@ -130,61 +130,61 @@
   </div>
 
   <!-- Mobile Navigation -->
-  <div id="mobile-menu" class="hidden lg:hidden bg-slate-900 border-t border-slate-700/70">
+  <div id="mobile-menu" class="hidden lg:hidden bg-[#003a54] border-t border-[#004565]/70">
     <div class="px-3 pt-3 pb-4 space-y-1">
       <a href="{% url 'home' %}"
-         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if current_view == 'home' %}bg-slate-800 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}"
+         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if current_view == 'home' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}"
          {% if current_view == 'home' %}aria-current="page"{% endif %}>
         Home
       </a>
       <a href="{% url 'faceted_search' %}"
-         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if current_view == 'faceted_search' %}bg-slate-800 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}"
+         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if current_view == 'faceted_search' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}"
          {% if current_view == 'faceted_search' %}aria-current="page"{% endif %}>
         Search
       </a>
       {% if request.user.is_authenticated %}
       <a href="{% url 'storage:archivist_dashboard' %}"
-         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if current_view == 'storage:archivist_dashboard' %}bg-slate-800 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}"
+         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if current_view == 'storage:archivist_dashboard' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}"
          {% if current_view == 'storage:archivist_dashboard' %}aria-current="page"{% endif %}>
         Storage
       </a>
       <a href="{% url 'blam:blam_archivist_dashboard' %}"
-         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if current_view == 'blam:blam_archivist_dashboard' %}bg-slate-800 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}"
+         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if current_view == 'blam:blam_archivist_dashboard' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}"
          {% if current_view == 'blam:blam_archivist_dashboard' %}aria-current="page"{% endif %}>
         BLAM
       </a>
       {% endif %}
       {% if request.user.is_superuser %}
       <a href="{% url 'storage:acl_admin_dashboard' %}"
-         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if current_view == 'storage:acl_admin_dashboard' %}bg-slate-800 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}"
+         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if current_view == 'storage:acl_admin_dashboard' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}"
          {% if current_view == 'storage:acl_admin_dashboard' %}aria-current="page"{% endif %}>
         ACL
       </a>
       <a href="{% url 'dbadmin:dashboard' %}"
-         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if 'dbadmin:' in current_view %}bg-slate-800 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}"
+         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if 'dbadmin:' in current_view %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}"
          {% if 'dbadmin:' in current_view %}aria-current="page"{% endif %}>
         Database
       </a>
       {% endif %}
       {% if request.user.is_staff %}
       <a href="{% url 'admin:index' %}"
-         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if current_view == 'admin:index' %}bg-slate-800 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}"
+         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if current_view == 'admin:index' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}"
          {% if current_view == 'admin:index' %}aria-current="page"{% endif %}>
         Admin
       </a>
       {% endif %}
       <a href="{% url 'oai-pmh' %}"
-         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if current_view == 'oai-pmh' %}bg-slate-800 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}"
+         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if current_view == 'oai-pmh' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}"
          {% if current_view == 'oai-pmh' %}aria-current="page"{% endif %}>
         OAI-PMH
       </a>
       <a href="{% url 'user-guides' %}"
-         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if current_view == 'user-guides' %}bg-slate-800 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}"
+         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if current_view == 'user-guides' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}"
          {% if current_view == 'user-guides' %}aria-current="page"{% endif %}>
         User Guides
       </a>
       <a href="{% url 'about' %}"
-         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if current_view == 'about' %}bg-slate-800 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}"
+         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if current_view == 'about' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}"
          {% if current_view == 'about' %}aria-current="page"{% endif %}>
         About
       </a>

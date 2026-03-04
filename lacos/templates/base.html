@@ -43,6 +43,8 @@
     })();
   </script>
   {% block css %}
+    <!-- Preload Albert Sans variable font -->
+    <link rel="preload" href="{% static 'fonts/albert_sans/AlbertSans-VariableFont_wght.woff2' %}" as="font" type="font/woff2" crossorigin />
     <!-- Tailwind CSS -->
     <link href="{% static 'css/output.css' %}" rel="stylesheet" />
     <!-- Third-party CSS libraries -->
