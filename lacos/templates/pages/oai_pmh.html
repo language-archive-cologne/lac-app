@@ -6,19 +6,19 @@
 {% block content %}
 <div class="max-w-5xl mx-auto">
   <!-- Hero Section -->
-  <section class="relative overflow-hidden rounded-xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white mb-8">
+  <section class="relative overflow-hidden rounded-xl bg-gradient-to-br from-[#005176] via-[#005176]/90 to-[#005176] text-white mb-8">
     <div class="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=\"30\" height=\"30\" viewBox=\"0 0 30 30\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cpath d=\"M1.22676 0C1.91374 0 2.45351 0.539773 2.45351 1.22676C2.45351 1.91374 1.91374 2.45351 1.22676 2.45351C0.539773 2.45351 0 1.91374 0 1.22676C0 0.539773 0.539773 0 1.22676 0Z\" fill=\"rgba(255,255,255,0.05)\"%3E%3C/path%3E%3C/svg%3E')] opacity-40"></div>
     <div class="relative p-8">
       <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
         <div>
           <h1 class="text-3xl font-bold text-white mb-2">{% translate "OAI-PMH" %}</h1>
-          <p class="text-slate-300 max-w-xl">
+          <p class="text-white/70 max-w-xl">
             {% blocktrans %}Open Archives Initiative Protocol for Metadata Harvesting.{% endblocktrans %}
           </p>
         </div>
-        <div class="flex-shrink-0 bg-slate-800/80 border border-slate-700/70 rounded-lg p-4">
-          <span class="text-xs uppercase tracking-widest text-slate-400">{% translate "Endpoint" %}</span>
-          <a href="{{ endpoint_url }}" target="_blank" rel="noopener noreferrer" class="block text-sm mt-1 text-blue-400 hover:text-blue-300 hover:underline break-all">{{ endpoint_url }}</a>
+        <div class="flex-shrink-0 bg-white/10 border border-white/20 rounded-lg p-4">
+          <span class="text-xs uppercase tracking-widest text-white/60">{% translate "Endpoint" %}</span>
+          <a href="{{ endpoint_url }}" target="_blank" rel="noopener noreferrer" class="block text-sm mt-1 text-[#009dcc] hover:text-[#009dcc]/80 hover:underline break-all">{{ endpoint_url }}</a>
         </div>
       </div>
     </div>
