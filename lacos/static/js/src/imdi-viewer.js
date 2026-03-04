@@ -372,7 +372,7 @@ function renderDetail(el, nodeType, container) {
 
   // Branch children summary
   if (branchChildren.length > 0) {
-    html += `<div><div class="text-xs text-base-content/50 mb-2">Children (${branchChildren.length})</div>`;
+    html += `<div><div class="text-xs text-base-content/50 mb-2">Sub-elements (${branchChildren.length})</div>`;
     html += `<div class="flex flex-wrap gap-1">`;
     for (const ch of branchChildren) {
       const chTag = localName(ch);
