@@ -24,7 +24,7 @@
   --color-secondary-content: #ffffff;
   --color-accent: #ea564f;
   --color-accent-content: #ffffff;
-  --color-neutral: #32475b;
+  --color-neutral: #003a54;
 }
 
 /* Override dark theme with UzK branding (lighter for dark backgrounds) */
@@ -36,7 +36,7 @@
   --color-secondary-content: #ffffff;
   --color-accent: #ef7e79;
   --color-accent-content: #ffffff;
-  --color-neutral: #3d5a73;
+  --color-neutral: #1a6a8f;
 }
 
 /* Albert Sans variable font */
