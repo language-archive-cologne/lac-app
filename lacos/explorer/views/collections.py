@@ -43,6 +43,7 @@ from .utils import (
     get_formatted_location,
     get_object_by_pk_or_handle,
     is_imdi_resource,
+    load_markdown_preview,
     load_xml_preview,
     paginate_bundle_contexts,
     render_imdi_modal_response,
@@ -728,6 +729,14 @@ class CollectionResourcesView(View):
                     location.s3_key,
                 )
 
+            markdown_html = None
+            if is_htmx and action in {'play', 'view'} and detected_media_type == 'markdown':
+                markdown_html = load_markdown_preview(
+                    resource_service,
+                    location.s3_bucket,
+                    location.s3_key,
+                )
+
             if action == 'download':
                 raise Http404("Direct downloads are not available")
 
@@ -766,6 +775,7 @@ class CollectionResourcesView(View):
                     request, file_name, file_description, mime_type,
                     detected_media_type, source_mime_type, presigned_url, download_url,
                     xml_preview=xml_preview,
+                    markdown_html=markdown_html,
                     download_bucket=location.s3_bucket,
                     download_key=location.s3_key,
                     peaks_url=peaks_url,
@@ -795,6 +805,7 @@ class CollectionResourcesView(View):
         self, request, file_name, file_description, mime_type,
         detected_media_type, source_mime_type, presigned_url, download_url,
         xml_preview=None,
+        markdown_html=None,
         download_bucket=None,
         download_key=None,
         peaks_url=None,
@@ -819,6 +830,7 @@ class CollectionResourcesView(View):
             'download_filename': file_name,
             'elan_context': None,
             'xml_content': xml_preview,
+            'markdown_html': markdown_html,
             'peaks_url': peaks_url,
             'spectrogram_data_url': spectrogram_data_url,
             'player_mode': player_mode,
