@@ -1,5 +1,6 @@
 import logging
 import json
+import unicodedata
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from lacos.storage.permissions import can_manage_collection, resolve_collection_from_path
@@ -280,7 +281,11 @@ def _fetch_markdown_html(bucket_service, bucket_name, object_path):
         if len(raw) > MAX_PREVIEW_BYTES:
             return {"markdown_html": None}
 
-        text = raw.decode("utf-8", errors="replace")
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            text = raw.decode("latin-1")
+        text = unicodedata.normalize("NFC", text)
         html = md.markdown(text, extensions=["fenced_code", "tables", "toc", "nl2br"])
         # Strip dangerous tags to prevent XSS from embedded HTML in markdown
         html = re.sub(r"<script[\s>].*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)

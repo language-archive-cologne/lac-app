@@ -1,6 +1,7 @@
 """S3 and storage utility functions."""
 
 import logging
+import unicodedata
 from pathlib import PurePosixPath
 from typing import Optional, Sequence, Tuple
 from urllib.parse import quote
@@ -136,7 +137,11 @@ def load_markdown_preview(
         if len(raw) > max_preview_bytes:
             return None
 
-        text = raw.decode("utf-8", errors="replace")
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            text = raw.decode("latin-1")
+        text = unicodedata.normalize("NFC", text)
         html = md.markdown(text, extensions=["fenced_code", "tables", "toc", "nl2br"])
         # Strip dangerous tags to prevent XSS from embedded HTML in markdown
         html = re.sub(r"<script[\s>].*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
