@@ -430,8 +430,9 @@ class ResourceAccessView(View):
 
             resource_play_url = f"{request.path}?action=play"
             resource_analyze_url = f"{request.path}?action=analyze"
+            resource_pitch_url = f"{request.path}?action=pitch"
 
-            if is_htmx and action in {'play', 'view', 'analyze'}:
+            if is_htmx and action in {'play', 'view', 'analyze', 'pitch'}:
                 return self._render_htmx_modal(
                     request, resource, mime_type, detected_media_type, source_mime_type,
                     presigned_url, download_url, elan_context, is_elan,
@@ -447,10 +448,11 @@ class ResourceAccessView(View):
                     pitch_available=pitch_available,
                     resource_play_url=resource_play_url,
                     resource_analyze_url=resource_analyze_url,
+                    resource_pitch_url=resource_pitch_url,
                     subtitle_url=subtitle_url,
                 )
 
-            if action in {'play', 'view', 'analyze'}:
+            if action in {'play', 'view', 'analyze', 'pitch'}:
                 return redirect(
                     'explorer:bundle_detail_by_handle',
                     handle=bundle.identifier,
@@ -524,6 +526,7 @@ class ResourceAccessView(View):
         pitch_available=False,
         resource_play_url=None,
         resource_analyze_url=None,
+        resource_pitch_url=None,
         subtitle_url=None,
     ):
         """Render the HTMX modal response for play/view actions."""
@@ -552,6 +555,7 @@ class ResourceAccessView(View):
             'pitch_available': pitch_available,
             'resource_play_url': resource_play_url,
             'resource_analyze_url': resource_analyze_url,
+            'resource_pitch_url': resource_pitch_url,
             'subtitle_url': subtitle_url,
         }
 

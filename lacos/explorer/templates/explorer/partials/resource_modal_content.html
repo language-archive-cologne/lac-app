@@ -10,15 +10,16 @@
       {% endif %}
     </div>
     <div class="flex items-center gap-2">
-      {% if spectrogram_available and media_type == 'audio' or spectrogram_available and media_type == 'elan' %}
+      {% if spectrogram_available and media_type == 'audio' or spectrogram_available and media_type == 'elan' or pitch_available and media_type == 'audio' or pitch_available and media_type == 'elan' %}
         <div class="join">
           <a href="{{ resource_play_url }}"
              hx-get="{{ resource_play_url }}"
              hx-target="#resource-modal-content"
              hx-swap="innerHTML"
-             class="btn btn-sm join-item {% if player_mode != 'analyze' %}btn-secondary{% else %}btn-ghost{% endif %}">
+             class="btn btn-sm join-item {% if player_mode == 'simple' %}btn-secondary{% else %}btn-ghost{% endif %}">
             {% translate "Oscillogram" %}
           </a>
+          {% if spectrogram_available %}
           <a href="{{ resource_analyze_url }}"
              hx-get="{{ resource_analyze_url }}"
              hx-target="#resource-modal-content"
@@ -26,6 +27,16 @@
              class="btn btn-sm join-item {% if player_mode == 'analyze' %}btn-secondary{% else %}btn-ghost{% endif %}">
             {% translate "Spectrogram" %}
           </a>
+          {% endif %}
+          {% if pitch_available %}
+          <a href="{{ resource_pitch_url }}"
+             hx-get="{{ resource_pitch_url }}"
+             hx-target="#resource-modal-content"
+             hx-swap="innerHTML"
+             class="btn btn-sm join-item {% if player_mode == 'pitch' %}btn-secondary{% else %}btn-ghost{% endif %}">
+            {% translate "Pitch" %}
+          </a>
+          {% endif %}
         </div>
       {% endif %}
       <button type="button" class="btn btn-sm btn-circle btn-ghost" aria-label="{% translate 'Close media viewer' %}" data-modal-close>
@@ -41,7 +52,8 @@
              data-audio-url="{{ stream_url }}"
              data-player-mode="{{ player_mode|default:'simple' }}"
              data-peaks-url="{{ peaks_url }}"
-             {% if spectrogram_data_url %}data-spectrogram-data-url="{{ spectrogram_data_url }}"{% endif %}>
+             {% if spectrogram_data_url %}data-spectrogram-data-url="{{ spectrogram_data_url }}"{% endif %}
+             {% if pitch_data_url %}data-pitch-data-url="{{ pitch_data_url }}"{% endif %}>
           <audio class="w-full hidden" preload="metadata" src="{{ stream_url }}">
             <p>{% translate "Your browser does not support the audio element." %}</p>
           </audio>
@@ -204,7 +216,8 @@
                  data-audio-url="{{ elan_context.audio_url }}"
                  data-player-mode="{{ player_mode|default:'simple' }}"
                  data-peaks-url="{{ peaks_url }}"
-                 {% if spectrogram_data_url %}data-spectrogram-data-url="{{ spectrogram_data_url }}"{% endif %}>
+                 {% if spectrogram_data_url %}data-spectrogram-data-url="{{ spectrogram_data_url }}"{% endif %}
+                 {% if pitch_data_url %}data-pitch-data-url="{{ pitch_data_url }}"{% endif %}>
               <audio class="w-full hidden" preload="metadata" src="{{ elan_context.audio_url }}">
                 <p>{% translate "Your browser does not support the audio element." %}</p>
               </audio>

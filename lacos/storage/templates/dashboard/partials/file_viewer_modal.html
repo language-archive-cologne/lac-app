@@ -9,15 +9,16 @@
         {% endif %}
     </div>
     <div class="flex items-center gap-2">
-        {% if viewer_type == "audio" and spectrogram_available %}
+        {% if viewer_type == "audio" and spectrogram_available or viewer_type == "audio" and pitch_available %}
             <div class="join">
                 <button type="button"
-                        class="btn btn-sm join-item {% if player_mode != 'analyze' %}btn-secondary{% else %}btn-ghost{% endif %}"
+                        class="btn btn-sm join-item {% if player_mode == 'simple' %}btn-secondary{% else %}btn-ghost{% endif %}"
                         hx-get="{% url 'storage:file_viewer_htmx' bucket_type=bucket_type object_path=object_path %}"
                         hx-target="#file-viewer-content"
                         hx-swap="innerHTML">
                     Oscillogram
                 </button>
+                {% if spectrogram_available %}
                 <button type="button"
                         class="btn btn-sm join-item {% if player_mode == 'analyze' %}btn-secondary{% else %}btn-ghost{% endif %}"
                         hx-get="{% url 'storage:file_viewer_htmx' bucket_type=bucket_type object_path=object_path %}?player_mode=analyze"
@@ -25,6 +26,16 @@
                         hx-swap="innerHTML">
                     Spectrogram
                 </button>
+                {% endif %}
+                {% if pitch_available %}
+                <button type="button"
+                        class="btn btn-sm join-item {% if player_mode == 'pitch' %}btn-secondary{% else %}btn-ghost{% endif %}"
+                        hx-get="{% url 'storage:file_viewer_htmx' bucket_type=bucket_type object_path=object_path %}?player_mode=pitch"
+                        hx-target="#file-viewer-content"
+                        hx-swap="innerHTML">
+                    Pitch
+                </button>
+                {% endif %}
             </div>
         {% endif %}
         <a href="{{ download_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-primary">Open in new tab</a>
@@ -47,7 +58,8 @@
          data-audio-url="{{ download_url }}"
          data-player-mode="{{ player_mode|default:'simple' }}"
          {% if peaks_url %}data-peaks-url="{{ peaks_url }}"{% endif %}
-         {% if spectrogram_data_url %}data-spectrogram-data-url="{{ spectrogram_data_url }}"{% endif %}>
+         {% if spectrogram_data_url %}data-spectrogram-data-url="{{ spectrogram_data_url }}"{% endif %}
+         {% if pitch_data_url %}data-pitch-data-url="{{ pitch_data_url }}"{% endif %}>
         <audio id="audioPlayer"
                class="w-full {% if peaks_url %}hidden{% endif %}"
                {% if not peaks_url %}controls{% endif %}
