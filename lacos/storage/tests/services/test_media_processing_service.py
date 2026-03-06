@@ -3,6 +3,7 @@ import struct
 from unittest.mock import MagicMock, patch
 
 import numpy as np
+import pytest
 
 from lacos.storage.services.media_processing_service import (
     FFT_SAMPLES,
@@ -170,3 +171,65 @@ def test_generate_peaks_preflight_stops_when_tmp_space_is_too_low():
     assert result["success"] is False
     assert result["error_code"] == "no_space"
     bucket_service.s3_client.download_file.assert_not_called()
+
+
+# ------------------------------------------------------------------
+# Pitch (YIN F0 extraction)
+# ------------------------------------------------------------------
+
+
+def _parse_pitch_binary(data):
+    """Parse binary pitch payload into (n_frames, hop_size, f0_floor, f0_ceil, f0_array)."""
+    assert len(data) >= 14, "Pitch binary must be at least 14 bytes"
+    n_frames, hop_size = struct.unpack_from("<IH", data, 0)
+    f0_floor, f0_ceil = struct.unpack_from("<ff", data, 6)
+    body = np.frombuffer(data[14:], dtype=np.float32)
+    assert len(body) == n_frames
+    return n_frames, hop_size, f0_floor, f0_ceil, body
+
+
+def test_compute_pitch_produces_correct_header():
+    samples = _make_samples(duration=1.0, freq=200.0)
+    service = MediaProcessingService(bucket_service=MagicMock())
+    with patch.object(service, "_decode_audio_to_pcm", return_value=samples):
+        result = service._compute_pitch("dummy.wav")
+    n_frames, hop_size, f0_floor, f0_ceil, f0 = _parse_pitch_binary(result)
+    assert hop_size == max(64, FFT_SAMPLES // HOP_DIVISOR)
+    assert f0_floor == pytest.approx(60.0)
+    assert f0_ceil == pytest.approx(450.0)
+    assert len(f0) == n_frames
+
+
+def test_compute_pitch_detects_tone():
+    samples = _make_samples(duration=1.0, freq=200.0)
+    service = MediaProcessingService(bucket_service=MagicMock())
+    with patch.object(service, "_decode_audio_to_pcm", return_value=samples):
+        result = service._compute_pitch("dummy.wav")
+    _, _, _, _, f0 = _parse_pitch_binary(result)
+    voiced = f0[f0 > 0]
+    assert len(voiced) > 0
+    assert abs(float(np.median(voiced)) - 200.0) < 15.0
+
+
+def test_compute_pitch_frame_count_matches_spectrogram():
+    samples = _make_samples(duration=2.0, freq=200.0)
+    service = MediaProcessingService(bucket_service=MagicMock())
+    with patch.object(service, "_decode_audio_to_pcm", return_value=samples):
+        pitch_data = service._compute_pitch("dummy.wav")
+        spec_data = service._compute_spectrogram("dummy.wav")
+    p_frames = struct.unpack_from("<I", pitch_data, 0)[0]
+    s_frames = struct.unpack_from("<I", spec_data, 0)[0]
+    assert p_frames == s_frames
+
+
+def test_compute_pitch_short_audio_returns_empty():
+    samples = np.zeros(100, dtype=np.float32)
+    service = MediaProcessingService(bucket_service=MagicMock())
+    with patch.object(service, "_decode_audio_to_pcm", return_value=samples):
+        result = service._compute_pitch("dummy.wav")
+    assert result == b""
+
+
+def test_pitch_key_suffix():
+    service = MediaProcessingService(bucket_service=MagicMock())
+    assert service._pitch_key("folder/audio.wav") == "folder/audio.wav.pitch.bin"

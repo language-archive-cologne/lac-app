@@ -483,6 +483,34 @@ class MediaProcessingService:
                     pass
 
     # ------------------------------------------------------------------
+    # Pitch (YIN F0 extraction)
+    # ------------------------------------------------------------------
+
+    def _compute_pitch(self, input_path: Path) -> bytes:
+        """Compute F0 pitch contour using YIN algorithm.
+
+        Returns binary payload: 14-byte header
+        (uint32 LE n_frames, uint16 LE hop_size, float32 LE f0_floor, float32 LE f0_ceil)
+        followed by n_frames × float32 LE values (Hz, 0.0 = unvoiced).
+        """
+        from lacos.storage.services.pitch import F0_CEIL, F0_FLOOR, compute_f0
+
+        samples = self._decode_audio_to_pcm(input_path)
+        hop_size = max(64, FFT_SAMPLES // HOP_DIVISOR)
+        n_frames = max(0, (len(samples) - FFT_SAMPLES) // hop_size + 1)
+        if n_frames == 0:
+            return b""
+
+        f0 = compute_f0(
+            samples,
+            TARGET_SAMPLE_RATE,
+            n_fft=FFT_SAMPLES,
+            hop_size=hop_size,
+        )
+        header = struct.pack("<IHff", len(f0), hop_size, F0_FLOOR, F0_CEIL)
+        return header + f0.tobytes()
+
+    # ------------------------------------------------------------------
     # Duration
     # ------------------------------------------------------------------
 
@@ -514,6 +542,9 @@ class MediaProcessingService:
 
     def _spectrogram_data_key(self, s3_key: str) -> str:
         return f"{s3_key}.spectrogram.bin"
+
+    def _pitch_key(self, s3_key: str) -> str:
+        return f"{s3_key}.pitch.bin"
 
     # ------------------------------------------------------------------
     # Freshness checks
