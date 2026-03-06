@@ -89,7 +89,8 @@
       typeof PitchRenderer !== 'undefined' &&
       playerMode === 'pitch'
     );
-    var height = analyzeMode ? 384 : this._height;
+    var overlayMode = analyzeMode || pitchMode;
+    var height = analyzeMode ? 384 : (pitchMode ? 256 : this._height);
 
     // Build plugins
     var plugins = [];
@@ -111,8 +112,8 @@
 
     this.wavesurfer = WaveSurfer.create({
       container: waveformEl,
-      waveColor: analyzeMode ? 'rgba(200,200,200,0.5)' : '#64748b',
-      progressColor: analyzeMode ? 'rgba(59,130,246,0.5)' : '#3b82f6',
+      waveColor: overlayMode ? 'rgba(200,200,200,0.5)' : '#64748b',
+      progressColor: overlayMode ? 'rgba(59,130,246,0.5)' : '#3b82f6',
       cursorColor: '#ef4444',
       cursorWidth: 2,
       height: height,
@@ -600,7 +601,7 @@
           var f0Ceil = view.getFloat32(10, true);
           if (!nFrames) throw new Error('Invalid pitch header');
 
-          var f0 = new Float32Array(buffer, 14, nFrames);
+          var f0 = new Float32Array(buffer.slice(14, 14 + nFrames * 4));
 
           var wrapper = self._createPitchWrapper();
           self._pitchRenderer = new PitchRenderer(wrapper, self.wavesurfer, {
@@ -627,16 +628,23 @@
     var wrapper = document.createElement('div');
     wrapper.style.position = 'relative';
     wrapper.style.display = 'block';
-    wrapper.style.width = '100%';
+    wrapper.style.width = '0px';
     wrapper.style.height = '256px';
     wrapper.style.overflow = 'hidden';
+    wrapper.style.pointerEvents = 'none';
 
-    // Insert after the waveform element.
-    var waveformEl = this._q('[data-ap-waveform]');
-    if (waveformEl && waveformEl.nextSibling) {
-      waveformEl.parentNode.insertBefore(wrapper, waveformEl.nextSibling);
-    } else if (waveformEl) {
-      waveformEl.parentNode.appendChild(wrapper);
+    // Match SpectrogramRenderer mounting: append inside WaveSurfer wrapper.
+    var mountEl = this.wavesurfer && this.wavesurfer.getWrapper ? this.wavesurfer.getWrapper() : null;
+    if (mountEl) {
+      mountEl.appendChild(wrapper);
+    } else {
+      // Fallback for unexpected initialization order.
+      var waveformEl = this._q('[data-ap-waveform]');
+      if (waveformEl && waveformEl.nextSibling) {
+        waveformEl.parentNode.insertBefore(wrapper, waveformEl.nextSibling);
+      } else if (waveformEl) {
+        waveformEl.parentNode.appendChild(wrapper);
+      }
     }
 
     return wrapper;

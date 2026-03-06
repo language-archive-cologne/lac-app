@@ -79,30 +79,32 @@
   // ─── Scroll element detection ────────────────────────────────────────
 
   PitchRenderer.prototype._findScrollEl = function () {
-    var wsWrapper = this._ws.getWrapper();
-    if (!wsWrapper) return null;
-    var parent = wsWrapper.parentElement;
+    var mountEl = this._wrapper ? this._wrapper.parentElement : this._ws.getWrapper();
+    if (!mountEl) return null;
+    var parent = mountEl.parentElement;
     if (parent) {
       var style = window.getComputedStyle(parent);
       var ox = style.overflowX || style.overflow;
       if (ox === 'auto' || ox === 'scroll') return parent;
     }
-    return wsWrapper;
+    return mountEl;
   };
 
-  /** Get content width from WaveSurfer's waveform wrapper children. */
+  /** Get content width from waveform siblings, excluding our own wrapper. */
   PitchRenderer.prototype._getContentWidth = function () {
-    var wsWrapper = this._ws.getWrapper();
-    if (!wsWrapper) return 0;
+    var mountEl = this._wrapper ? this._wrapper.parentElement : null;
+    if (!mountEl) return 0;
     var maxRight = 0;
-    var child = wsWrapper.firstElementChild;
+    var child = mountEl.firstElementChild;
     while (child) {
-      var w = Math.max(child.scrollWidth | 0, child.offsetWidth | 0);
-      var r = (child.offsetLeft | 0) + w;
-      if (r > maxRight) maxRight = r;
+      if (child !== this._wrapper) {
+        var w = Math.max(child.scrollWidth | 0, child.offsetWidth | 0);
+        var r = (child.offsetLeft | 0) + w;
+        if (r > maxRight) maxRight = r;
+      }
       child = child.nextElementSibling;
     }
-    return maxRight || (wsWrapper.scrollWidth | 0);
+    return maxRight || (mountEl.scrollWidth | 0);
   };
 
   // ─── Mounting ────────────────────────────────────────────────────────
@@ -155,16 +157,44 @@
       signal: controller ? controller.signal : undefined,
     })
       .then(function (resp) {
-        if (!resp.ok && resp.status !== 206) throw new Error(resp.status);
-        return resp.arrayBuffer();
+        if (!resp.ok || (resp.status !== 206 && resp.status !== 200)) {
+          throw new Error(resp.status);
+        }
+        return resp.arrayBuffer().then(function (buffer) {
+          return { status: resp.status, buffer: buffer };
+        });
       })
-      .then(function (buffer) {
+      .then(function (result) {
         if (self._destroyed) return;
+        var status = result.status;
+        var buffer = result.buffer;
 
-        self._f0 = new Float32Array(buffer);
-        self._bufStart = fetchStart;
-        self._bufEnd = fetchStart + self._f0.length;
+        if (status === 206) {
+          if ((buffer.byteLength % 4) !== 0) {
+            throw new Error('Invalid pitch range payload length');
+          }
+          self._f0 = new Float32Array(buffer);
+          self._bufStart = fetchStart;
+          self._bufEnd = fetchStart + self._f0.length;
+        } else {
+          // Some backends ignore Range and return the full pitch.bin.
+          if (buffer.byteLength < HEADER_BYTES) {
+            throw new Error('Pitch file too short');
+          }
+          var view = new DataView(buffer);
+          var nFrames = view.getUint32(0, true);
+          if (!nFrames) throw new Error('Invalid pitch header');
 
+          self._nFrames = nFrames;
+          self._f0 = new Float32Array(buffer.slice(HEADER_BYTES, HEADER_BYTES + nFrames * 4));
+          self._bufStart = 0;
+          self._bufEnd = self._f0.length;
+          self._rangeMode = false;
+          self._dataUrl = null;
+        }
+
+        self._debugLogged = false;
+        self._debugDotLogged = false;
         self._forceNext = true;
         self._scheduleRender(true);
       })
@@ -265,7 +295,24 @@
     var bufLen = this._rangeMode ? (this._bufEnd - this._bufStart) : nFrames;
     var framesPerPxDot = nFrames / fullWidth;
 
+    // DEBUG: log data stats once per fresh data load
+    if (!this._debugLogged && f0) {
+      var nonZero = 0, minHz = Infinity, maxHz = 0;
+      for (var di = 0; di < f0.length; di++) {
+        if (f0[di] > 0) { nonZero++; if (f0[di] < minHz) minHz = f0[di]; if (f0[di] > maxHz) maxHz = f0[di]; }
+      }
+      console.log('[PitchRenderer] f0 buffer:', {
+        length: f0.length, nonZero: nonZero, minHz: minHz, maxHz: maxHz,
+        nFrames: nFrames, bufOffset: bufOffset, bufLen: bufLen,
+        fullWidth: fullWidth, viewLeft: viewLeft, visibleWidth: visibleWidth,
+        framesPerPxDot: framesPerPxDot, f0Floor: f0Floor, f0Ceil: f0Ceil,
+        rangeMode: this._rangeMode, sample0: f0[0], sample1: f0[1], sample100: f0[100],
+      });
+      this._debugLogged = true;
+    }
+
     ctx.fillStyle = DOT_COLOR;
+    var totalDots = 0;
 
     for (var px = 0; px < visibleWidth; px++) {
       var worldX = viewLeft + px;
@@ -295,7 +342,16 @@
         ctx.beginPath();
         ctx.arc(px, dy, DOT_RADIUS, 0, 2 * Math.PI);
         ctx.fill();
+        totalDots++;
       }
+    }
+
+    // DEBUG
+    if (totalDots === 0 && f0) {
+      console.warn('[PitchRenderer] No dots drawn! Check f0 data.');
+    } else if (!this._debugDotLogged && totalDots > 0) {
+      console.log('[PitchRenderer] Drew', totalDots, 'dots');
+      this._debugDotLogged = true;
     }
 
     return true;
