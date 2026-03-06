@@ -29,8 +29,8 @@
 
   var HEADER_BYTES = 14;
   var HEIGHT = 256;
-  // Blue/slate palette to stay consistent with the player UI.
-  var BG_COLOR = '#111827';
+  // UzK University Blue background to match LAC branding.
+  var BG_COLOR = '#005176';
   var DOT_COLOR = '#ffffff';
   var GRID_COLOR = 'rgba(148,163,184,0.24)';
   var LABEL_COLOR = 'rgba(226,232,240,0.72)';
