@@ -52,7 +52,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     gettext \
     # XML Security tooling for SAML assertions
     xmlsec1 \
-    curl
+    curl \
+    gosu
 
 # Create non-root runtime user
 RUN groupadd --gid 1000 dev-user \
@@ -77,7 +78,6 @@ RUN chown -R dev-user:dev-user ${APP_HOME}
 
 # Web image target (Django/ASGI)
 FROM python-runtime-base AS web-run-stage
-USER dev-user
 ENTRYPOINT ["/entrypoint"]
 
 # Worker image target (Huey with media tooling)
@@ -103,5 +103,4 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && apt-get update && apt-get install -y --no-install-recommends /tmp/aw.deb \
     && rm /tmp/aw.deb
 
-USER dev-user
 ENTRYPOINT ["/entrypoint"]
