@@ -1,4 +1,4 @@
-"""Management command to backfill audio sidecars for existing audio files."""
+"""Management command to backfill audio sidecars (peaks, spectrogram, pitch) for existing audio files."""
 
 import logging
 
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = "Generate audio sidecars (peaks + spectrogram) for audio files"
+    help = "Generate audio sidecars (peaks + spectrogram + pitch) for audio files"
 
     def add_arguments(self, parser):
         parser.add_argument(
