@@ -145,7 +145,7 @@
               {% if collection.region_facet or collection.country_facet %}
                 {% if collection.geo_location %}
                   <button
-                    class="text-left text-primary hover:underline transition-colors"
+                    class="text-primary hover:underline transition-colors"
                     hx-get="{% url 'explorer:map_popup' %}?geo={{ collection.geo_location }}&title={% if collection.region_facet %}{{ collection.region_facet|urlencode }}{% endif %}{% if collection.region_facet and collection.country_facet %}, {% endif %}{% if collection.country_facet %}{{ collection.country_facet|urlencode }}{% endif %}"
                     hx-target="#map-modal-content"
                     hx-swap="innerHTML"
