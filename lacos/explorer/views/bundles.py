@@ -32,6 +32,7 @@ from .utils import (
     get_object_by_pk_or_handle,
     HandleLookupMixin,
     is_imdi_resource,
+    load_markdown_preview,
     load_xml_preview,
     parse_elan_document,
     pick_elan_audio_resource,
@@ -370,6 +371,10 @@ class ResourceAccessView(View):
             if is_htmx and action in {'play', 'view'} and detected_media_type == 'xml' and not is_elan:
                 xml_preview = load_xml_preview(resource_service, bucket_name, object_key)
 
+            markdown_html = None
+            if is_htmx and action in {'play', 'view'} and detected_media_type == 'markdown':
+                markdown_html = load_markdown_preview(resource_service, bucket_name, object_key)
+
             if action == 'download':
                 raise Http404("Direct downloads are not available")
 
@@ -420,6 +425,7 @@ class ResourceAccessView(View):
                     request, resource, mime_type, detected_media_type, source_mime_type,
                     presigned_url, download_url, elan_context, is_elan,
                     xml_preview=xml_preview,
+                    markdown_html=markdown_html,
                     download_bucket=bucket_name,
                     download_key=object_key,
                     peaks_url=peaks_url,
@@ -494,6 +500,7 @@ class ResourceAccessView(View):
         self, request, resource, mime_type, detected_media_type, source_mime_type,
         presigned_url, download_url, elan_context, is_elan,
         xml_preview=None,
+        markdown_html=None,
         download_bucket=None,
         download_key=None,
         peaks_url=None,
@@ -521,6 +528,7 @@ class ResourceAccessView(View):
             'download_filename': getattr(resource, 'file_name', None),
             'elan_context': elan_context,
             'xml_content': xml_preview,
+            'markdown_html': markdown_html,
             'peaks_url': peaks_url,
             'spectrogram_data_url': spectrogram_data_url,
             'player_mode': player_mode,

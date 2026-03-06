@@ -174,6 +174,9 @@ def file_viewer_htmx(request, bucket_type, object_path):
     if viewer_type in ("json", "xml"):
         context.update(_fetch_pretty_content(bucket_service, bucket_name, object_path, viewer_type))
 
+    if viewer_type == "markdown":
+        context.update(_fetch_markdown_html(bucket_service, bucket_name, object_path))
+
     html = render_to_string(
         "dashboard/partials/file_viewer_modal.html",
         context,
@@ -204,7 +207,9 @@ def _determine_viewer_type(content_type: str, file_name: str) -> str:
         return "json"
     if extension == "xml" or lowered_type in {"application/xml", "text/xml"}:
         return "xml"
-    if lowered_type.startswith("text/") or extension in {"txt", "html", "csv", "md"}:
+    if extension == "md" or lowered_type == "text/markdown":
+        return "markdown"
+    if lowered_type.startswith("text/") or extension in {"txt", "html", "csv"}:
         return "text"
     return "download"
 
@@ -260,6 +265,32 @@ def _fetch_pretty_content(bucket_service, bucket_name, object_path, viewer_type)
         logger.debug("Could not pretty-print %s for preview", object_path, exc_info=True)
 
     return {"file_content": None, "language_class": ""}
+
+
+def _fetch_markdown_html(bucket_service, bucket_name, object_path):
+    """Fetch a Markdown file from S3 and convert it to HTML for in-modal display."""
+    import re
+    import markdown as md
+
+    MAX_PREVIEW_BYTES = 2 * 1024 * 1024  # 2 MB cap
+
+    try:
+        result = bucket_service.get_file_content(bucket_name, object_path)
+        raw = result.get("content", b"")
+        if len(raw) > MAX_PREVIEW_BYTES:
+            return {"markdown_html": None}
+
+        text = raw.decode("utf-8", errors="replace")
+        html = md.markdown(text, extensions=["fenced_code", "tables", "toc", "nl2br"])
+        # Strip dangerous tags to prevent XSS from embedded HTML in markdown
+        html = re.sub(r"<script[\s>].*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
+        html = re.sub(r"<style[\s>].*?</style>", "", html, flags=re.DOTALL | re.IGNORECASE)
+        html = re.sub(r"\bon\w+\s*=", "", html, flags=re.IGNORECASE)
+        return {"markdown_html": html}
+    except Exception:
+        logger.debug("Could not render markdown %s for preview", object_path, exc_info=True)
+
+    return {"markdown_html": None}
 
 
 @method_decorator(login_required, name='dispatch')

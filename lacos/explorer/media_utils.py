@@ -51,6 +51,7 @@ IMAGE_EXTENSIONS = {
 
 PDF_EXTENSIONS = {".pdf"}
 XML_EXTENSIONS = {".xml", ".imdi", ".cmdi"}
+MARKDOWN_EXTENSIONS = {".md", ".markdown"}
 ANNOTATION_EXTENSIONS = {".eaf", ".elan"}
 SUBTITLE_EXTENSIONS = {".srt", ".vtt", ".sub"}
 
@@ -72,8 +73,8 @@ def determine_media_type(
     """
     Infer the media type for a resource based on its MIME type and file extension.
 
-    Returns one of ``audio``, ``video``, ``image``, ``pdf``, ``xml`` or ``None`` when no
-    sensible inference can be made.
+    Returns one of ``audio``, ``video``, ``image``, ``pdf``, ``xml``, ``markdown``
+    or ``None`` when no sensible inference can be made.
     """
     normalized_mime = _normalize_mime(mime_type)
     extension = _extract_extension(file_name)
@@ -88,6 +89,8 @@ def determine_media_type(
         return "pdf"
     if normalized_mime in {"application/xml", "text/xml"} or normalized_mime.endswith("+xml"):
         return "xml"
+    if normalized_mime == "text/markdown":
+        return "markdown"
 
     if extension in AUDIO_EXTENSIONS:
         return "audio"
@@ -99,6 +102,8 @@ def determine_media_type(
         return "pdf"
     if extension in XML_EXTENSIONS:
         return "xml"
+    if extension in MARKDOWN_EXTENSIONS:
+        return "markdown"
 
     return None
 

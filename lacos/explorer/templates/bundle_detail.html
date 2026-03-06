@@ -396,7 +396,7 @@
                         <path d="M8 5.14v14.72a1 1 0 001.5.86l11-7.36a1 1 0 000-1.72l-11-7.36A1 1 0 008 5.14z" />
                       </svg>
                     </a>
-                    {% elif resource|is_media_type:"image" or resource|is_media_type:"pdf" or resource|is_media_type:"xml" %}
+                    {% elif resource|is_media_type:"image" or resource|is_media_type:"pdf" or resource|is_media_type:"xml" or resource|is_media_type:"markdown" %}
                     <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view"
                        hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view"
                        hx-target="#resource-modal-content"
@@ -499,7 +499,7 @@
                         <path d="M8 5.14v14.72a1 1 0 001.5.86l11-7.36a1 1 0 000-1.72l-11-7.36A1 1 0 008 5.14z" />
                       </svg>
                     </a>
-                    {% elif resource|is_media_type:"image" or resource|is_media_type:"pdf" or resource|is_media_type:"xml" %}
+                    {% elif resource|is_media_type:"image" or resource|is_media_type:"pdf" or resource|is_media_type:"xml" or resource|is_media_type:"markdown" %}
                     <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view"
                        hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view"
                        hx-target="#resource-modal-content"
@@ -606,7 +606,7 @@
                         <path d="M8 5.14v14.72a1 1 0 001.5.86l11-7.36a1 1 0 000-1.72l-11-7.36A1 1 0 008 5.14z" />
                       </svg>
                     </a>
-                    {% elif resource|is_media_type:"image" or resource|is_media_type:"pdf" or resource|is_media_type:"xml" %}
+                    {% elif resource|is_media_type:"image" or resource|is_media_type:"pdf" or resource|is_media_type:"xml" or resource|is_media_type:"markdown" %}
                     <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view"
                        hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view"
                        hx-target="#resource-modal-content"
@@ -741,7 +741,7 @@
                         <path d="M8 5.14v14.72a1 1 0 001.5.86l11-7.36a1 1 0 000-1.72l-11-7.36A1 1 0 008 5.14z" />
                       </svg>
                     </a>
-                    {% elif metadata_file|is_media_type:"image" or metadata_file|is_media_type:"pdf" or metadata_file|is_media_type:"xml" %}
+                    {% elif metadata_file|is_media_type:"image" or metadata_file|is_media_type:"pdf" or metadata_file|is_media_type:"xml" or metadata_file|is_media_type:"markdown" %}
                     <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=metadata_file.id %}?action=view"
                        hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=metadata_file.id %}?action=view"
                        hx-target="#resource-modal-content"

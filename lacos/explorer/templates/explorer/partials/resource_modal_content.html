@@ -373,6 +373,16 @@
           </div>
         </div>
       </div>
+    {% elif media_type == 'markdown' %}
+      {% if markdown_html %}
+        <article class="prose prose-sm max-w-none overflow-auto max-h-[70vh]">
+          {{ markdown_html|safe }}
+        </article>
+      {% else %}
+        <div class="alert alert-info">
+          <span>{% translate "Markdown preview is unavailable for this file." %}</span>
+        </div>
+      {% endif %}
     {% elif media_type == 'xml' %}
       {% if xml_content %}
         <div class="border border-slate-200 rounded-lg overflow-hidden bg-base-100">

@@ -468,7 +468,7 @@
                       <path d="M8 5.14v14.72a1 1 0 001.5.86l11-7.36a1 1 0 000-1.72l-11-7.36A1 1 0 008 5.14z" />
                     </svg>
                   </a>
-                {% elif file|is_media_type:"image" or file|is_media_type:"pdf" or file|is_media_type:"xml" %}
+                {% elif file|is_media_type:"image" or file|is_media_type:"pdf" or file|is_media_type:"xml" or file|is_media_type:"markdown" %}
                   <!-- View button for images and PDFs -->
                   <a href="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=file.file_pid %}?action=view"
                      hx-get="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=file.file_pid %}?action=view"

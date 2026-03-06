@@ -88,6 +88,14 @@
     {% else %}
         <iframe src="{{ download_url }}" class="w-full h-full rounded-lg border bg-base-100" title="{{ filename }}"></iframe>
     {% endif %}
+{% elif viewer_type == "markdown" %}
+    {% if markdown_html %}
+        <article class="prose prose-sm max-w-none p-6 overflow-auto h-full bg-base-100 rounded-lg">
+            {{ markdown_html|safe }}
+        </article>
+    {% else %}
+        <iframe src="{{ download_url }}" class="w-full h-full rounded-lg border bg-base-100" title="{{ filename }}"></iframe>
+    {% endif %}
 {% elif viewer_type == "pdf" %}
     <iframe src="{{ download_url }}" class="w-full h-full rounded-lg border" title="{{ filename }}"></iframe>
 {% elif viewer_type == "text" %}

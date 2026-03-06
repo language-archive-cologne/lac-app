@@ -112,6 +112,47 @@ def load_xml_preview(
         return None
 
 
+def load_markdown_preview(
+    resource_service,
+    bucket_name: str,
+    object_key: str,
+    *,
+    max_preview_bytes: int = 2 * 1024 * 1024,
+) -> Optional[str]:
+    """Load Markdown content from S3 and convert to HTML for preview modals."""
+    import re
+    import markdown as md
+
+    if not bucket_name or not object_key:
+        return None
+
+    try:
+        response = resource_service.s3_client.get_object(Bucket=bucket_name, Key=object_key)
+        content_length = response.get("ContentLength")
+        if content_length is not None and content_length > max_preview_bytes:
+            return None
+
+        raw = response["Body"].read(max_preview_bytes + 1)
+        if len(raw) > max_preview_bytes:
+            return None
+
+        text = raw.decode("utf-8", errors="replace")
+        html = md.markdown(text, extensions=["fenced_code", "tables", "toc", "nl2br"])
+        # Strip dangerous tags to prevent XSS from embedded HTML in markdown
+        html = re.sub(r"<script[\s>].*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
+        html = re.sub(r"<style[\s>].*?</style>", "", html, flags=re.DOTALL | re.IGNORECASE)
+        html = re.sub(r"\bon\w+\s*=", "", html, flags=re.IGNORECASE)
+        return html
+    except Exception:
+        logger.debug(
+            "Could not build Markdown preview for s3://%s/%s",
+            bucket_name,
+            object_key,
+            exc_info=True,
+        )
+        return None
+
+
 def resolve_resource_to_presigned(
     resource_service,
     resource,
