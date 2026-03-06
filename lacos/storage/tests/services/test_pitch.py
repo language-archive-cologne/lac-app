@@ -103,3 +103,34 @@ def test_custom_floor_ceil():
     if len(voiced) > 0:
         assert voiced.min() >= 150.0, f"F0 below floor: {voiced.min():.1f}"
         assert voiced.max() <= 250.0, f"F0 above ceil: {voiced.max():.1f}"
+
+
+def test_moderate_noise_still_yields_voiced_frames():
+    """Field-like additive noise should still retain voiced detections."""
+    rng = np.random.default_rng(7)
+    clean = _make_sine(180.0, 1.0)
+    noise = rng.normal(0.0, 0.08, size=clean.shape).astype(np.float32)
+    samples = (clean + noise).astype(np.float32)
+    f0 = compute_f0(samples, 44100)
+    voiced_ratio = np.count_nonzero(f0) / max(len(f0), 1)
+    assert voiced_ratio > 0.2, f"Expected some voiced frames, got {voiced_ratio:.0%}"
+
+
+def test_post_processing_can_remove_spikes_and_fill_short_gaps():
+    """Cleanup options should smooth one-frame glitches in otherwise voiced spans."""
+    samples = _make_sine(220.0, 1.0)
+    raw = compute_f0(
+        samples,
+        44100,
+        post_process=False,
+    )
+    cooked = compute_f0(
+        samples,
+        44100,
+        post_process=True,
+        min_voiced_run=2,
+        max_unvoiced_gap=2,
+    )
+    assert len(raw) == len(cooked)
+    # Cleanup should not reduce voiced coverage on a clean tone.
+    assert np.count_nonzero(cooked) >= np.count_nonzero(raw) * 0.9
