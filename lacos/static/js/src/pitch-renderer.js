@@ -28,10 +28,11 @@
 
   var HEADER_BYTES = 14;
   var HEIGHT = 256;
-  var BG_COLOR = '#1e1b2e';
-  var DOT_COLOR = '#facc15';
-  var GRID_COLOR = 'rgba(255,255,255,0.12)';
-  var LABEL_COLOR = 'rgba(255,255,255,0.5)';
+  // Blue/slate palette to stay consistent with the player UI.
+  var BG_COLOR = '#111827';
+  var DOT_COLOR = '#ffffff';
+  var GRID_COLOR = 'rgba(148,163,184,0.24)';
+  var LABEL_COLOR = 'rgba(226,232,240,0.72)';
   var GRID_HZ = [100, 150, 200, 250, 300, 350, 400];
   var DOT_RADIUS = 1.5;
 
