@@ -144,11 +144,10 @@ def load_markdown_preview(
         html = re.sub(r"\bon\w+\s*=", "", html, flags=re.IGNORECASE)
         return html
     except Exception:
-        logger.debug(
+        logger.exception(
             "Could not build Markdown preview for s3://%s/%s",
             bucket_name,
             object_key,
-            exc_info=True,
         )
         return None
 

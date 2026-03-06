@@ -288,7 +288,7 @@ def _fetch_markdown_html(bucket_service, bucket_name, object_path):
         html = re.sub(r"\bon\w+\s*=", "", html, flags=re.IGNORECASE)
         return {"markdown_html": html}
     except Exception:
-        logger.debug("Could not render markdown %s for preview", object_path, exc_info=True)
+        logger.exception("Could not render markdown %s for preview", object_path)
 
     return {"markdown_html": None}
 
