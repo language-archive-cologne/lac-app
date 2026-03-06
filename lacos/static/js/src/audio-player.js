@@ -64,6 +64,7 @@
     var audioUrl = this._container.dataset.audioUrl;
     var peaksUrl = this._container.dataset.peaksUrl;
     var spectrogramDataUrl = this._container.dataset.spectrogramDataUrl;
+    var pitchDataUrl = this._container.dataset.pitchDataUrl;
     var playerMode = (this._container.dataset.playerMode || '').toLowerCase();
 
     // Fallback: no peaks data or WaveSurfer unavailable → native audio
@@ -82,6 +83,11 @@
       spectrogramDataUrl &&
       typeof SpectrogramRenderer !== 'undefined' &&
       (playerMode === 'analyze' || playerMode === '')
+    );
+    var pitchMode = Boolean(
+      pitchDataUrl &&
+      typeof PitchRenderer !== 'undefined' &&
+      playerMode === 'pitch'
     );
     var height = analyzeMode ? 384 : this._height;
 
@@ -130,6 +136,13 @@
       var self = this;
       this.wavesurfer.on('ready', function () {
         if (!self._destroyed) self._loadSpectrogram(spectrogramDataUrl, height);
+      });
+    }
+
+    if (pitchMode) {
+      var self2 = this;
+      this.wavesurfer.on('ready', function () {
+        if (!self2._destroyed) self2._loadPitch(pitchDataUrl);
       });
     }
   };
@@ -533,6 +546,102 @@
       });
   };
 
+  AudioPlayer.prototype._loadPitch = function (url) {
+    var self = this;
+
+    if (typeof AbortController !== 'undefined' && !this._pitchFetchController) {
+      this._pitchFetchController = new AbortController();
+    }
+    var controller = this._pitchFetchController;
+    var fetchOpts = controller ? { signal: controller.signal } : {};
+
+    // Try a Range request for the 14-byte header first.
+    var headerOpts = Object.assign({}, fetchOpts, {
+      headers: { Range: 'bytes=0-13' },
+    });
+
+    fetch(url, headerOpts)
+      .then(function (resp) {
+        if (!resp.ok && resp.status !== 206) throw new Error(resp.status);
+
+        if (resp.status === 206) {
+          // Server supports Range requests — parse header, use range mode.
+          return resp.arrayBuffer().then(function (buf) {
+            if (self._destroyed || !self.wavesurfer) return;
+            if (buf.byteLength < 14) throw new Error('Pitch header too short');
+
+            var view = new DataView(buf);
+            var nFrames = view.getUint32(0, true);
+            var hopSize = view.getUint16(4, true);
+            var f0Floor = view.getFloat32(6, true);
+            var f0Ceil = view.getFloat32(10, true);
+            if (!nFrames) throw new Error('Invalid pitch header');
+
+            var wrapper = self._createPitchWrapper();
+            self._pitchRenderer = new PitchRenderer(wrapper, self.wavesurfer, {
+              nFrames: nFrames,
+              hopSize: hopSize,
+              f0Floor: f0Floor,
+              f0Ceil: f0Ceil,
+              dataUrl: url,
+            });
+          });
+        }
+
+        // Status 200: full file returned.
+        return resp.arrayBuffer().then(function (buffer) {
+          if (self._destroyed || !self.wavesurfer) return;
+          if (buffer.byteLength < 14) throw new Error('Pitch file too short');
+
+          var view = new DataView(buffer);
+          var nFrames = view.getUint32(0, true);
+          var hopSize = view.getUint16(4, true);
+          var f0Floor = view.getFloat32(6, true);
+          var f0Ceil = view.getFloat32(10, true);
+          if (!nFrames) throw new Error('Invalid pitch header');
+
+          var f0 = new Float32Array(buffer, 14, nFrames);
+
+          var wrapper = self._createPitchWrapper();
+          self._pitchRenderer = new PitchRenderer(wrapper, self.wavesurfer, {
+            nFrames: nFrames,
+            hopSize: hopSize,
+            f0Floor: f0Floor,
+            f0Ceil: f0Ceil,
+            f0: f0,
+          });
+        });
+      })
+      .catch(function (err) {
+        if (err && err.name === 'AbortError') return;
+        console.warn('Pitch data unavailable:', err);
+      })
+      .finally(function () {
+        if (self._pitchFetchController === controller) {
+          self._pitchFetchController = null;
+        }
+      });
+  };
+
+  AudioPlayer.prototype._createPitchWrapper = function () {
+    var wrapper = document.createElement('div');
+    wrapper.style.position = 'relative';
+    wrapper.style.display = 'block';
+    wrapper.style.width = '100%';
+    wrapper.style.height = '256px';
+    wrapper.style.overflow = 'hidden';
+
+    // Insert after the waveform element.
+    var waveformEl = this._q('[data-ap-waveform]');
+    if (waveformEl && waveformEl.nextSibling) {
+      waveformEl.parentNode.insertBefore(wrapper, waveformEl.nextSibling);
+    } else if (waveformEl) {
+      waveformEl.parentNode.appendChild(wrapper);
+    }
+
+    return wrapper;
+  };
+
   AudioPlayer.prototype._spectrogramCacheKey = function (url) {
     if (typeof url !== 'string') return String(url);
     var qIdx = url.indexOf('?');
@@ -563,6 +672,16 @@
   AudioPlayer.prototype.destroy = function () {
     if (this._destroyed) return;
     this._destroyed = true;
+
+    if (this._pitchRenderer) {
+      this._pitchRenderer.destroy();
+      this._pitchRenderer = null;
+    }
+
+    if (this._pitchFetchController) {
+      this._pitchFetchController.abort();
+      this._pitchFetchController = null;
+    }
 
     if (this._spectrogramRenderer) {
       this._spectrogramRenderer.destroy();
