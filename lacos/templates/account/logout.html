@@ -13,8 +13,9 @@
     {% if redirect_field_value %}
       <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_field_value }}" />
     {% endif %}
-    <div class="form-control mt-2">
-      <button type="submit" class="btn btn-primary w-full">{% trans "Sign Out" %}</button>
+    <div class="flex gap-3 mt-2">
+      <a href="javascript:history.back()" class="btn btn-ghost flex-1">{% trans "Cancel" %}</a>
+      <button type="submit" class="btn btn-primary flex-1">{% trans "Sign Out" %}</button>
     </div>
   </form>
 {% endblock content %}
