@@ -310,15 +310,15 @@ def compute_f0(
     hop_size: int | None = None,
     f0_floor: float = F0_FLOOR,
     f0_ceil: float = F0_CEIL,
-    threshold: float = 0.22,
-    silence_threshold: float = 0.03,
+    threshold: float = 0.26,
+    silence_threshold: float = 0.01,
     octave_cost: float = 0.01,
     octave_jump_cost: float = 0.35,
     voiced_unvoiced_cost: float = 0.14,
     max_candidates: int = 5,
     post_process: bool = True,
-    min_voiced_run: int = 2,
-    max_unvoiced_gap: int = 2,
+    min_voiced_run: int = 1,
+    max_unvoiced_gap: int = 3,
 ) -> np.ndarray:
     """Extract F0 contour from mono audio using the YIN algorithm.
 

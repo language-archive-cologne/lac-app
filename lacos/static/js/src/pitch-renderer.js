@@ -1,7 +1,8 @@
 /**
  * PitchRenderer — viewport-based canvas renderer for F0 pitch contour data.
  *
- * Renders voiced frames as amber dots on a dark background with Hz grid lines.
+ * Renders voiced frames as a contour (line + dots) on a dark background
+ * with Hz grid lines.
  * Only renders the visible portion, fetching data via HTTP Range requests for
  * large files.
  *
@@ -33,8 +34,10 @@
   var DOT_COLOR = '#ffffff';
   var GRID_COLOR = 'rgba(148,163,184,0.24)';
   var LABEL_COLOR = 'rgba(226,232,240,0.72)';
-  var GRID_HZ = [100, 150, 200, 250, 300, 350, 400];
-  var DOT_RADIUS = 1.5;
+  var DOT_RADIUS = 1.55;
+  var LINE_WIDTH = 1.6;
+  var DOT_STRIDE = 1;
+  var MAX_DPR = 2;
 
   function PitchRenderer(wrapper, wsInstance, data) {
     this._ws = wsInstance;
@@ -254,13 +257,19 @@
     this._canvas.style.left = viewLeft + 'px';
     this._canvas.style.width = visibleWidth + 'px';
 
-    if (this._canvas.width !== visibleWidth || this._canvas.height !== this._height) {
-      this._canvas.width = visibleWidth;
-      this._canvas.height = this._height;
+    var dpr = Math.min(MAX_DPR, window.devicePixelRatio || 1);
+    var backingW = Math.max(1, Math.round(visibleWidth * dpr));
+    var backingH = Math.max(1, Math.round(this._height * dpr));
+    if (this._canvas.width !== backingW || this._canvas.height !== backingH) {
+      this._canvas.width = backingW;
+      this._canvas.height = backingH;
     }
 
     var ctx = this._ctx;
     var height = this._height;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
 
     // Clear with dark background.
     ctx.fillStyle = BG_COLOR;
@@ -273,12 +282,14 @@
 
     ctx.strokeStyle = GRID_COLOR;
     ctx.lineWidth = 1;
-    ctx.font = '10px monospace';
+    ctx.font = '11px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
     ctx.fillStyle = LABEL_COLOR;
     ctx.textBaseline = 'middle';
 
-    for (var gi = 0; gi < GRID_HZ.length; gi++) {
-      var hz = GRID_HZ[gi];
+    // Adaptive grid density keeps labels readable across different ranges.
+    var gridStep = hzRange > 500 ? 100 : (hzRange > 250 ? 50 : 25);
+    var gridStart = Math.ceil(f0Floor / gridStep) * gridStep;
+    for (var hz = gridStart; hz <= f0Ceil; hz += gridStep) {
       if (hz < f0Floor || hz > f0Ceil) continue;
       var yNorm = (hz - f0Floor) / hzRange;
       var gy = height - yNorm * height;
@@ -286,34 +297,16 @@
       ctx.moveTo(0, gy);
       ctx.lineTo(visibleWidth, gy);
       ctx.stroke();
-      ctx.fillText(hz + ' Hz', 4, gy - 6);
+      ctx.fillText(hz + ' Hz', 6, gy - 7);
     }
 
-    // Draw pitch dots.
+    // Build one averaged F0 value per pixel column.
     var nFrames = this._nFrames;
     var f0 = this._f0;
     var bufOffset = this._rangeMode ? this._bufStart : 0;
     var bufLen = this._rangeMode ? (this._bufEnd - this._bufStart) : nFrames;
     var framesPerPxDot = nFrames / fullWidth;
-
-    // DEBUG: log data stats once per fresh data load
-    if (!this._debugLogged && f0) {
-      var nonZero = 0, minHz = Infinity, maxHz = 0;
-      for (var di = 0; di < f0.length; di++) {
-        if (f0[di] > 0) { nonZero++; if (f0[di] < minHz) minHz = f0[di]; if (f0[di] > maxHz) maxHz = f0[di]; }
-      }
-      console.log('[PitchRenderer] f0 buffer:', {
-        length: f0.length, nonZero: nonZero, minHz: minHz, maxHz: maxHz,
-        nFrames: nFrames, bufOffset: bufOffset, bufLen: bufLen,
-        fullWidth: fullWidth, viewLeft: viewLeft, visibleWidth: visibleWidth,
-        framesPerPxDot: framesPerPxDot, f0Floor: f0Floor, f0Ceil: f0Ceil,
-        rangeMode: this._rangeMode, sample0: f0[0], sample1: f0[1], sample100: f0[100],
-      });
-      this._debugLogged = true;
-    }
-
-    ctx.fillStyle = DOT_COLOR;
-    var totalDots = 0;
+    var hzByPx = new Float32Array(visibleWidth);
 
     for (var px = 0; px < visibleWidth; px++) {
       var worldX = viewLeft + px;
@@ -336,24 +329,57 @@
         }
       }
 
-      if (count > 0) {
-        var avgHz = sum / count;
-        var yN = (avgHz - f0Floor) / hzRange;
-        var dy = height - yN * height;
-        ctx.beginPath();
-        ctx.arc(px, dy, DOT_RADIUS, 0, 2 * Math.PI);
-        ctx.fill();
-        totalDots++;
-      }
+      hzByPx[px] = count > 0 ? (sum / count) : 0;
     }
 
-    // DEBUG
-    if (totalDots === 0 && f0) {
-      console.warn('[PitchRenderer] No dots drawn! Check f0 data.');
-    } else if (!this._debugDotLogged && totalDots > 0) {
-      console.log('[PitchRenderer] Drew', totalDots, 'dots');
-      this._debugDotLogged = true;
+    // Draw connected contour for voiced regions.
+    ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+    ctx.lineWidth = LINE_WIDTH;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    var tracing = false;
+    var prevY = 0;
+    var jumpBreak = height * 0.22;
+
+    for (var lx = 0; lx < visibleWidth; lx++) {
+      var hzVal = hzByPx[lx];
+      if (hzVal <= 0) {
+        if (tracing) {
+          ctx.stroke();
+          tracing = false;
+        }
+        continue;
+      }
+      var yN = (hzVal - f0Floor) / hzRange;
+      var ly = height - yN * height;
+      if (!tracing || Math.abs(ly - prevY) > jumpBreak) {
+        if (tracing) ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(lx, ly);
+        tracing = true;
+      } else {
+        ctx.lineTo(lx, ly);
+      }
+      prevY = ly;
     }
+    if (tracing) {
+      ctx.stroke();
+    }
+
+    // Draw sparse dots on top for precise local points.
+    ctx.fillStyle = DOT_COLOR;
+    ctx.shadowColor = 'rgba(255,255,255,0.22)';
+    ctx.shadowBlur = 2.5;
+    for (var dx = 0; dx < visibleWidth; dx += DOT_STRIDE) {
+      var dhz = hzByPx[dx];
+      if (dhz <= 0) continue;
+      var dYN = (dhz - f0Floor) / hzRange;
+      var dy = height - dYN * height;
+      ctx.beginPath();
+      ctx.arc(dx, dy, DOT_RADIUS, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+    ctx.shadowBlur = 0;
 
     return true;
   };
