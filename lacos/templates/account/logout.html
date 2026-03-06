@@ -1,0 +1,20 @@
+{% extends "allauth/layouts/entrance.html" %}
+{% load i18n %}
+
+{% block head_title %}{% trans "Sign Out" %}{% endblock head_title %}
+
+{% block content %}
+  <h1 class="text-2xl font-bold text-center mb-6">{% trans "Sign Out" %}</h1>
+  <p class="text-center text-base-content/70 mb-6">
+    {% trans "Are you sure you want to sign out?" %}
+  </p>
+  <form method="post" action="{% url 'account_logout' %}">
+    {% csrf_token %}
+    {% if redirect_field_value %}
+      <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_field_value }}" />
+    {% endif %}
+    <div class="form-control mt-2">
+      <button type="submit" class="btn btn-primary w-full">{% trans "Sign Out" %}</button>
+    </div>
+  </form>
+{% endblock content %}
