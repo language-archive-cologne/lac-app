@@ -21,6 +21,16 @@ wait-for-it "${POSTGRES_HOST}:${POSTGRES_PORT}" -t 30
 
 >&2 echo 'PostgreSQL is available'
 
+# If the Docker socket is mounted, add dev-user to its group so the worker
+# can run docker commands (e.g. database backups via pg_dump in a container).
+if [ "$(id -u)" = "0" ] && [ -S /var/run/docker.sock ]; then
+    DOCKER_SOCK_GID="$(stat -c '%g' /var/run/docker.sock)"
+    if ! getent group "${DOCKER_SOCK_GID}" > /dev/null 2>&1; then
+        groupadd -g "${DOCKER_SOCK_GID}" docker-host
+    fi
+    usermod -aG "${DOCKER_SOCK_GID}" dev-user
+fi
+
 # Drop from root to the application user
 if [ "$(id -u)" = "0" ]; then
     exec gosu dev-user "$@"
