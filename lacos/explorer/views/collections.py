@@ -743,6 +743,8 @@ class CollectionResourcesView(View):
             peaks_url = None
             spectrogram_data_url = None
             spectrogram_available = False
+            pitch_data_url = None
+            pitch_available = False
             if detected_media_type == 'audio':
                 peaks_url = self._resolve_peaks_url(
                     resource_service,
@@ -760,11 +762,19 @@ class CollectionResourcesView(View):
                             location.s3_bucket,
                             f"{location.s3_key}.spectrogram.bin",
                         )
+                pitch_available = self._pitch_data_exists(
+                    resource_service, location.s3_bucket, location.s3_key,
+                )
+                if action == 'pitch' and pitch_available:
+                    pitch_data_url = resource_service.generate_presigned_url(
+                        location.s3_bucket, f"{location.s3_key}.pitch.bin",
+                    )
 
             player_mode = 'simple'
             if detected_media_type == 'audio':
-                has_precomputed_spectrogram = bool(spectrogram_data_url)
-                if action == 'analyze' and has_precomputed_spectrogram:
+                if action == 'pitch' and pitch_data_url:
+                    player_mode = 'pitch'
+                elif action == 'analyze' and bool(spectrogram_data_url):
                     player_mode = 'analyze'
 
             resource_play_url = f"{request.path}?action=play"
@@ -782,6 +792,8 @@ class CollectionResourcesView(View):
                     spectrogram_data_url=spectrogram_data_url,
                     player_mode=player_mode,
                     spectrogram_available=spectrogram_available,
+                    pitch_data_url=pitch_data_url,
+                    pitch_available=pitch_available,
                     resource_play_url=resource_play_url,
                     resource_analyze_url=resource_analyze_url,
                 )
@@ -812,6 +824,8 @@ class CollectionResourcesView(View):
         spectrogram_data_url=None,
         player_mode='simple',
         spectrogram_available=False,
+        pitch_data_url=None,
+        pitch_available=False,
         resource_play_url=None,
         resource_analyze_url=None,
     ):
@@ -835,6 +849,8 @@ class CollectionResourcesView(View):
             'spectrogram_data_url': spectrogram_data_url,
             'player_mode': player_mode,
             'spectrogram_available': spectrogram_available,
+            'pitch_data_url': pitch_data_url,
+            'pitch_available': pitch_available,
             'resource_play_url': resource_play_url,
             'resource_analyze_url': resource_analyze_url,
         }
@@ -870,6 +886,15 @@ class CollectionResourcesView(View):
         spectrogram_data_key = f"{object_key}.spectrogram.bin"
         try:
             resource_service.s3_client.head_object(Bucket=bucket_name, Key=spectrogram_data_key)
+            return True
+        except Exception:
+            return False
+
+    def _pitch_data_exists(self, resource_service, bucket_name, object_key):
+        """Check if pre-computed pitch sidecar exists."""
+        pitch_key = f"{object_key}.pitch.bin"
+        try:
+            resource_service.s3_client.head_object(Bucket=bucket_name, Key=pitch_key)
             return True
         except Exception:
             return False

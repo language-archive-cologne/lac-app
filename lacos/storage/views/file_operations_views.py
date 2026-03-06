@@ -118,12 +118,14 @@ def file_viewer_htmx(request, bucket_type, object_path):
 
     # Resolve pre-computed audio visualization sidecars only for WAV previews.
     requested_player_mode = (request.GET.get("player_mode") or "simple").lower()
-    if requested_player_mode not in {"simple", "analyze"}:
+    if requested_player_mode not in {"simple", "analyze", "pitch"}:
         requested_player_mode = "simple"
 
     peaks_url = None
     spectrogram_data_url = None
     spectrogram_available = False
+    pitch_data_url = None
+    pitch_available = False
     lowered_type = content_type.lower()
     file_ext = file_name.rsplit(".", 1)[-1].lower() if "." in file_name else ""
     is_wav_audio = viewer_type == "audio" and (
@@ -151,7 +153,24 @@ def file_viewer_htmx(request, bucket_type, object_path):
                 if spectrogram_data_presigned.get("success"):
                     spectrogram_data_url = spectrogram_data_presigned["url"]
 
-    effective_player_mode = "analyze" if spectrogram_data_url else "simple"
+        pitch_data_key = f"{object_path}.pitch.bin"
+        pitch_data_info = bucket_service.get_file_info(bucket_name, pitch_data_key)
+        pitch_available = bool(pitch_data_info.get("success"))
+
+        pitch_data_url = None
+        if requested_player_mode == "pitch" and pitch_available:
+            pitch_data_presigned = bucket_service.generate_presigned_download_url(
+                bucket_name, pitch_data_key,
+            )
+            if pitch_data_presigned.get("success"):
+                pitch_data_url = pitch_data_presigned["url"]
+
+    if pitch_data_url:
+        effective_player_mode = "pitch"
+    elif spectrogram_data_url:
+        effective_player_mode = "analyze"
+    else:
+        effective_player_mode = "simple"
 
     context = {
         "file_name": file_name,
@@ -170,6 +189,8 @@ def file_viewer_htmx(request, bucket_type, object_path):
         "spectrogram_data_url": spectrogram_data_url,
         "player_mode": effective_player_mode,
         "spectrogram_available": spectrogram_available,
+        "pitch_data_url": pitch_data_url,
+        "pitch_available": pitch_available,
     }
 
     if viewer_type in ("json", "xml"):

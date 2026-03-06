@@ -190,6 +190,7 @@ class MediaProcessingService:
         """
         peaks_key = self._peaks_key(s3_key)
         spectrogram_data_key = self._spectrogram_data_key(s3_key)
+        pitch_key = self._pitch_key(s3_key)
 
         source_etag = self._get_source_etag(bucket, s3_key)
         if not source_etag:
@@ -201,11 +202,13 @@ class MediaProcessingService:
             spectrogram_data_current = self._artifact_is_current(
                 bucket, spectrogram_data_key, source_etag,
             )
+            pitch_current = self._artifact_is_current(bucket, pitch_key, source_etag)
         else:
             peaks_current = False
             spectrogram_data_current = False
+            pitch_current = False
 
-        if peaks_current and spectrogram_data_current:
+        if peaks_current and spectrogram_data_current and pitch_current:
             logger.info("Audio derivatives already current for %s/%s", bucket, s3_key)
             return {
                 "success": True,
@@ -305,6 +308,32 @@ class MediaProcessingService:
                     except ClientError as exc:
                         logger.error("Failed to upload spectrogram data for %s: %s", s3_key, exc)
                         return {"success": False, "error": f"Upload failed: {exc}"}
+
+                if not pitch_current:
+                    try:
+                        pitch_data = self._compute_pitch(input_path)
+                    except Exception as exc:
+                        if "No space left on device" in str(exc):
+                            return {
+                                "success": False,
+                                "error_code": "no_space",
+                                "error": f"Pitch computation failed: {exc}",
+                            }
+                        logger.error("Failed to compute pitch for %s: %s", s3_key, exc)
+                        return {"success": False, "error": f"Pitch computation failed: {exc}"}
+
+                    if pitch_data:
+                        try:
+                            self.bucket_service.s3_client.put_object(
+                                Bucket=bucket,
+                                Key=pitch_key,
+                                Body=pitch_data,
+                                ContentType="application/octet-stream",
+                                Metadata={"source-etag": source_etag},
+                            )
+                        except ClientError as exc:
+                            logger.error("Failed to upload pitch for %s: %s", s3_key, exc)
+                            return {"success": False, "error": f"Upload failed: {exc}"}
         except OSError as exc:
             if exc.errno == errno.ENOSPC:
                 logger.error(
@@ -321,13 +350,14 @@ class MediaProcessingService:
             raise
 
         logger.info(
-            "Generated audio derivatives for %s/%s -> peaks=%s spectrogram_data=%s",
-            bucket, s3_key, peaks_key, spectrogram_data_key,
+            "Generated audio derivatives for %s/%s -> peaks=%s spectrogram_data=%s pitch=%s",
+            bucket, s3_key, peaks_key, spectrogram_data_key, pitch_key,
         )
         return {
             "success": True,
             "peaks_key": peaks_key,
             "spectrogram_data_key": spectrogram_data_key,
+            "pitch_key": pitch_key,
         }
 
     # ------------------------------------------------------------------
