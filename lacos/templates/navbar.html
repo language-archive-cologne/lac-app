@@ -58,6 +58,11 @@
           Admin
         </a>
         {% endif %}
+        <a href="{% url 'api-docs' %}"
+           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if current_view == 'api-docs' %}bg-[#006a99]/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-[#006a99]/70{% endif %}"
+           {% if current_view == 'api-docs' %}aria-current="page"{% endif %}>
+          API
+        </a>
         <a href="{% url 'oai-pmh' %}"
            class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors {% if current_view == 'oai-pmh' %}bg-[#006a99]/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-[#006a99]/70{% endif %}"
            {% if current_view == 'oai-pmh' %}aria-current="page"{% endif %}>
@@ -172,6 +177,11 @@
         Admin
       </a>
       {% endif %}
+      <a href="{% url 'api-docs' %}"
+         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if current_view == 'api-docs' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}"
+         {% if current_view == 'api-docs' %}aria-current="page"{% endif %}>
+        API
+      </a>
       <a href="{% url 'oai-pmh' %}"
          class="block px-3 py-2 rounded-lg text-base font-medium transition-colors {% if current_view == 'oai-pmh' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}"
          {% if current_view == 'oai-pmh' %}aria-current="page"{% endif %}>

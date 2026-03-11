@@ -510,10 +510,11 @@ CORS_URLS_REGEX = r"^/api/.*$"
 # See more configuration options at https://drf-spectacular.readthedocs.io/en/latest/settings.html#settings
 SPECTACULAR_SETTINGS = {
     "TITLE": "Language Archive Cologne API",
-    "DESCRIPTION": "Documentation of API endpoints of Language Archive Cologne",
-    "VERSION": "1.0.0",
-    "SERVE_PERMISSIONS": ["rest_framework.permissions.IsAdminUser"],
-    "SCHEMA_PATH_PREFIX": "/api/",
+    "DESCRIPTION": "REST API for the Language Archive Cologne",
+    "VERSION": "2.0.0",
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"],
+    "SCHEMA_PATH_PREFIX": "/api/v2/",
+    "PREPROCESSING_HOOKS": ["lacos.rest.v2.schema.filter_v2_endpoints"],
 }
 
 # SAML metadata refresh

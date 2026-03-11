@@ -1,7 +1,30 @@
 from drf_spectacular.utils import extend_schema
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework_simplejwt.tokens import RefreshToken
+
+
+@extend_schema(
+    summary="Exchange session for JWT",
+    description=(
+        "Issues a JWT access/refresh token pair for the currently authenticated session. "
+        "Use this after Shibboleth login to obtain tokens for API access."
+    ),
+    tags=["auth"],
+    responses={200: None, 401: None},
+)
+@api_view(["POST"])
+@authentication_classes([SessionAuthentication])
+@permission_classes([IsAuthenticated])
+def session_token(request):
+    """Exchange an active session (e.g. Shibboleth) for a JWT token pair."""
+    refresh = RefreshToken.for_user(request.user)
+    return Response({
+        "access": str(refresh.access_token),
+        "refresh": str(refresh),
+    })
 
 
 @extend_schema(

@@ -1,6 +1,7 @@
 from django.urls import path
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-from lacos.rest.v2.views import auth, bundles, collections, media, resources
+from lacos.rest.v2.views import auth, bundles, collections, resources
 
 app_name = "v2"
 
@@ -27,6 +28,8 @@ urlpatterns = [
         resources.resource_detail,
         name="resource-detail",
     ),
-    path("media/<path:handle>/", media.media_by_handle, name="media-by-handle"),
+    path("auth/token/", TokenObtainPairView.as_view(), name="token-obtain"),
+    path("auth/token/refresh/", TokenRefreshView.as_view(), name="token-refresh"),
+    path("auth/session-token/", auth.session_token, name="session-token"),
     path("auth/validate/", auth.validate_token, name="auth-validate"),
 ]
