@@ -1,0 +1,62 @@
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+
+from lacos.blam.models.bundle.bundle_repository import Bundle
+from lacos.blam.serializers.jsonld import BLAM_CONTEXT
+from lacos.rest.v2.resolvers import resolve_identifier
+from lacos.rest.v2.serializers.bundles import (
+    serialize_bundle_detail,
+    serialize_bundle_list_item,
+)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def bundle_list(request):
+    qs = Bundle.objects.prefetch_related(
+        "general_info__keywords",
+        "general_info__object_languages",
+        "administrative_info",
+        "structural_info__is_member_of_collection__general_info",
+    ).all()
+
+    collection = request.query_params.get("collection")
+    if collection:
+        qs = qs.filter(structural_info__is_member_of_collection__id=collection)
+
+    search = request.query_params.get("search")
+    if search:
+        qs = qs.filter(search_vector=search)
+
+    ordering = request.query_params.get("ordering", "-created_at")
+    qs = qs.order_by(ordering)
+
+    limit = min(int(request.query_params.get("limit", 10)), 100)
+    offset = int(request.query_params.get("offset", 0))
+    total = qs.count()
+    page = qs[offset : offset + limit]
+
+    results = [serialize_bundle_list_item(b) for b in page]
+
+    next_url = None
+    if offset + limit < total:
+        next_url = f"?limit={limit}&offset={offset + limit}"
+
+    return Response(
+        {
+            "@context": BLAM_CONTEXT,
+            "count": total,
+            "next": next_url,
+            "results": results,
+        },
+        content_type="application/ld+json",
+    )
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def bundle_detail(request, identifier):
+    bundle = resolve_identifier(Bundle, identifier)
+    data = serialize_bundle_detail(bundle)
+    return Response(data, content_type="application/ld+json")

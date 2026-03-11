@@ -2,6 +2,7 @@
 """Base settings to build other settings files upon."""
 
 
+from datetime import timedelta
 from pathlib import Path
 
 import environ
@@ -87,6 +88,7 @@ THIRD_PARTY_APPS = [
     "corsheaders",
     "drf_spectacular",
     "huey.contrib.djhuey",
+    "django_filters",
 ]
 if SAML_LOGIN_ENABLED:
     THIRD_PARTY_APPS.append("djangosaml2")
@@ -487,11 +489,18 @@ SOCIALACCOUNT_FORMS = {"signup": "lacos.users.forms.UserSocialSignupForm"}
 # django-rest-framework - https://www.django-rest-framework.org/api-guide/settings/
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
         "rest_framework.authentication.SessionAuthentication",
         "rest_framework.authentication.TokenAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=1),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
 # django-cors-headers - https://github.com/adamchainz/django-cors-headers#setup
