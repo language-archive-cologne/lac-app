@@ -3,6 +3,7 @@ from urllib.parse import unquote
 
 from django.contrib.contenttypes.models import ContentType
 from django.http import Http404, HttpResponseRedirect
+from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -97,6 +98,14 @@ def _build_auth_context(request):
     return f"anon:{request.META.get('REMOTE_ADDR')}"
 
 
+@extend_schema(
+    summary="Get resource metadata",
+    description="Returns metadata for a resource (media, written, or other). Accepts UUID or file PID as identifier.",
+    tags=["resources"],
+    parameters=[
+        OpenApiParameter("identifier", OpenApiTypes.STR, location=OpenApiParameter.PATH, description="Resource UUID or file PID (handle)"),
+    ],
+)
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def resource_detail(request, identifier):
@@ -116,6 +125,15 @@ def resource_detail(request, identifier):
     return Response(data, content_type="application/ld+json")
 
 
+@extend_schema(
+    summary="Get resource content",
+    description="Redirects (302) to a presigned S3 URL for the resource file. Requires read access to the parent bundle.",
+    tags=["resources"],
+    parameters=[
+        OpenApiParameter("identifier", OpenApiTypes.STR, location=OpenApiParameter.PATH, description="Resource UUID or file PID (handle)"),
+    ],
+    responses={302: None, 401: None, 403: None, 404: None},
+)
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def resource_content(request, identifier):

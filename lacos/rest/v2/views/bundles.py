@@ -1,3 +1,4 @@
+from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -11,6 +12,18 @@ from lacos.rest.v2.serializers.bundles import (
 )
 
 
+@extend_schema(
+    summary="List bundles",
+    description="Returns a paginated list of BLAM bundles with JSON-LD context. Optionally filter by collection.",
+    tags=["bundles"],
+    parameters=[
+        OpenApiParameter("collection", OpenApiTypes.UUID, description="Filter by parent collection UUID"),
+        OpenApiParameter("search", OpenApiTypes.STR, description="Full-text search query"),
+        OpenApiParameter("ordering", OpenApiTypes.STR, description="Field to order by (prefix with - for descending)", default="-created_at"),
+        OpenApiParameter("limit", OpenApiTypes.INT, description="Page size (max 100)", default=10),
+        OpenApiParameter("offset", OpenApiTypes.INT, description="Number of items to skip", default=0),
+    ],
+)
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def bundle_list(request):
@@ -54,6 +67,14 @@ def bundle_list(request):
     )
 
 
+@extend_schema(
+    summary="Get bundle detail",
+    description="Returns full JSON-LD metadata for a single bundle. Accepts UUID or handle as identifier.",
+    tags=["bundles"],
+    parameters=[
+        OpenApiParameter("identifier", OpenApiTypes.STR, location=OpenApiParameter.PATH, description="Bundle UUID or handle"),
+    ],
+)
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def bundle_detail(request, identifier):

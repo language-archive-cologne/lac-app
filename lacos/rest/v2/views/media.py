@@ -1,6 +1,7 @@
 from urllib.parse import unquote
 
 from django.http import Http404, HttpResponseRedirect
+from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -11,6 +12,15 @@ from lacos.storage.services.presigned_url_cache_service import PresignedUrlCache
 from .resources import _build_auth_context, _check_resource_access
 
 
+@extend_schema(
+    summary="Get media by handle",
+    description="Resolves a PID handle directly to a presigned S3 URL (302 redirect). Shorthand for looking up a resource by handle and redirecting to its content.",
+    tags=["media"],
+    parameters=[
+        OpenApiParameter("handle", OpenApiTypes.STR, location=OpenApiParameter.PATH, description="Resource PID handle (e.g. hdl:11341/0000-0000-0000-XXXX)"),
+    ],
+    responses={302: None, 401: None, 403: None, 404: None},
+)
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def media_by_handle(request, handle):

@@ -1,3 +1,4 @@
+from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -11,6 +12,17 @@ from lacos.rest.v2.serializers.collections import (
 )
 
 
+@extend_schema(
+    summary="List collections",
+    description="Returns a paginated list of BLAM collections with JSON-LD context.",
+    tags=["collections"],
+    parameters=[
+        OpenApiParameter("search", OpenApiTypes.STR, description="Full-text search query"),
+        OpenApiParameter("ordering", OpenApiTypes.STR, description="Field to order by (prefix with - for descending)", default="-created_at"),
+        OpenApiParameter("limit", OpenApiTypes.INT, description="Page size (max 100)", default=10),
+        OpenApiParameter("offset", OpenApiTypes.INT, description="Number of items to skip", default=0),
+    ],
+)
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def collection_list(request):
@@ -49,6 +61,14 @@ def collection_list(request):
     )
 
 
+@extend_schema(
+    summary="Get collection detail",
+    description="Returns full JSON-LD metadata for a single collection. Accepts UUID or handle as identifier.",
+    tags=["collections"],
+    parameters=[
+        OpenApiParameter("identifier", OpenApiTypes.STR, location=OpenApiParameter.PATH, description="Collection UUID or handle"),
+    ],
+)
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def collection_detail(request, identifier):
