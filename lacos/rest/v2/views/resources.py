@@ -13,8 +13,12 @@ from lacos.blam.models.bundle.bundle_structural_info import (
     OtherResource,
     WrittenResource,
 )
+from lacos.rest.v2.access import (
+    build_access_denied_response,
+    can_read_bundle,
+    get_parent_bundle_or_404,
+)
 from lacos.storage.models.s3_resource_location import S3ResourceLocation
-from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
 from lacos.storage.services.presigned_url_cache_service import PresignedUrlCacheService
 
 RESOURCE_MODELS = [MediaResource, WrittenResource, OtherResource]
@@ -36,44 +40,6 @@ def _find_resource(identifier):
             pass
 
     raise Http404(f"Resource not found: {identifier}")
-
-
-def _get_parent_bundle(resource):
-    """Find the parent bundle for a resource via BundleResources M2M."""
-    for field in [
-        "bundleresources_set",
-    ]:
-        qs = getattr(resource, field, None)
-        if qs is not None:
-            br = qs.first()
-            if br:
-                return br.bundle
-
-    # Try reverse M2M lookups
-    from lacos.blam.models.bundle.bundle_structural_info import BundleResources
-
-    if isinstance(resource, MediaResource):
-        br = BundleResources.objects.filter(bundle_media_resources=resource).first()
-    elif isinstance(resource, WrittenResource):
-        br = BundleResources.objects.filter(bundle_written_resources=resource).first()
-    elif isinstance(resource, OtherResource):
-        br = BundleResources.objects.filter(bundle_other_resources=resource).first()
-    else:
-        return None
-
-    return br.bundle if br else None
-
-
-def _check_resource_access(resource, user):
-    """Check if user can access this resource's content."""
-    bundle = _get_parent_bundle(resource)
-    if not bundle:
-        return True, "no parent bundle"
-
-    service = ACLEvaluationService()
-    allowed = service.can_read_bundle(user, bundle)
-    return allowed, "access denied" if not allowed else "ok"
-
 
 def _get_s3_location(resource):
     """Find S3 location for a resource."""
@@ -110,6 +76,10 @@ def _build_auth_context(request):
 @permission_classes([AllowAny])
 def resource_detail(request, identifier):
     resource = _find_resource(identifier)
+    bundle = get_parent_bundle_or_404(resource)
+    if not can_read_bundle(request.user, bundle):
+        return build_access_denied_response(request.user)
+
     data = {
         "@type": type(resource).__name__,
         "uuid": str(resource.id),
@@ -138,12 +108,9 @@ def resource_detail(request, identifier):
 @permission_classes([AllowAny])
 def resource_content(request, identifier):
     resource = _find_resource(identifier)
-
-    allowed, reason = _check_resource_access(resource, request.user)
-    if not allowed:
-        if request.user.is_anonymous:
-            return Response({"detail": "Authentication required"}, status=401)
-        return Response({"detail": reason}, status=403)
+    bundle = get_parent_bundle_or_404(resource)
+    if not can_read_bundle(request.user, bundle):
+        return build_access_denied_response(request.user)
 
     location = _get_s3_location(resource)
 

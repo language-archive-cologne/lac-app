@@ -5,6 +5,8 @@ from rest_framework.response import Response
 
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.serializers.jsonld import BLAM_CONTEXT
+from lacos.rest.v2.access import build_access_denied_response, can_read_bundle
+from lacos.rest.v2.query_params import build_next_url, parse_list_params
 from lacos.rest.v2.resolvers import resolve_identifier
 from lacos.rest.v2.serializers.bundles import (
     serialize_bundle_detail,
@@ -42,19 +44,23 @@ def bundle_list(request):
     if search:
         qs = qs.filter(search_vector=search)
 
-    ordering = request.query_params.get("ordering", "-created_at")
-    qs = qs.order_by(ordering)
+    params = parse_list_params(
+        request.query_params,
+        allowed_ordering={"identifier", "-identifier", "created_at", "-created_at"},
+    )
+    qs = qs.order_by(params.ordering)
 
-    limit = min(int(request.query_params.get("limit", 10)), 100)
-    offset = int(request.query_params.get("offset", 0))
     total = qs.count()
-    page = qs[offset : offset + limit]
+    page = qs[params.offset : params.offset + params.limit]
 
     results = [serialize_bundle_list_item(b) for b in page]
 
-    next_url = None
-    if offset + limit < total:
-        next_url = f"?limit={limit}&offset={offset + limit}"
+    next_url = build_next_url(
+        request.query_params,
+        limit=params.limit,
+        offset=params.offset,
+        total=total,
+    )
 
     return Response(
         {
@@ -79,5 +85,7 @@ def bundle_list(request):
 @permission_classes([AllowAny])
 def bundle_detail(request, identifier):
     bundle = resolve_identifier(Bundle, identifier)
+    if not can_read_bundle(request.user, bundle):
+        return build_access_denied_response(request.user)
     data = serialize_bundle_detail(bundle)
     return Response(data, content_type="application/ld+json")

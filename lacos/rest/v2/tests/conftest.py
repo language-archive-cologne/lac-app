@@ -1,8 +1,10 @@
 import pytest
+from django.contrib.contenttypes.models import ContentType
 from rest_framework.test import APIClient
 
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.collection.collection_repository import Collection
+from lacos.storage.models.acl_permissions import ACLPermissions
 
 
 @pytest.fixture
@@ -102,8 +104,6 @@ def media_resource(bundle_with_metadata):
 
 @pytest.fixture
 def media_resource_with_s3(media_resource):
-    from django.contrib.contenttypes.models import ContentType
-
     from lacos.storage.models.s3_resource_location import S3ResourceLocation
 
     ct = ContentType.objects.get_for_model(media_resource)
@@ -117,3 +117,44 @@ def media_resource_with_s3(media_resource):
         object_id=media_resource.id,
     )
     return media_resource
+
+
+@pytest.fixture
+def orphan_media_resource_with_s3(db):
+    from lacos.blam.models.bundle.bundle_structural_info import MediaResource
+    from lacos.storage.models.s3_resource_location import S3ResourceLocation
+
+    resource = MediaResource.objects.create(
+        file_name="orphan.wav",
+        file_pid="hdl:11341/0000-0000-0000-ORPHAN",
+        mime_type="audio/x-wav",
+        file_length="48000",
+    )
+    ct = ContentType.objects.get_for_model(resource)
+    S3ResourceLocation.objects.create(
+        resource_pid=resource.file_pid,
+        s3_bucket="lacos-production",
+        s3_key="orphan/orphan.wav",
+        mime_type=resource.mime_type,
+        size_bytes=8000000,
+        content_type=ct,
+        object_id=resource.id,
+    )
+    return resource
+
+
+@pytest.fixture
+def store_acl():
+    def _store_acl(obj, rules):
+        ct = ContentType.objects.get_for_model(obj)
+        return ACLPermissions.objects.update_or_create(
+            content_type=ct,
+            object_id=obj.pk,
+            defaults={
+                "ACL_file_bucket": "test-bucket",
+                "ACL_file_key": "test/key",
+                "permissions_data": rules,
+            },
+        )[0]
+
+    return _store_acl

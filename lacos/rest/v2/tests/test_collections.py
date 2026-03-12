@@ -20,6 +20,18 @@ class TestCollectionList:
         response = api_client.get("/api/v2/collections/")
         assert "application/ld+json" in response["Content-Type"]
 
+    def test_invalid_limit_returns_400(self, api_client):
+        response = api_client.get("/api/v2/collections/?limit=abc")
+        assert response.status_code == 400
+
+    def test_negative_offset_returns_400(self, api_client):
+        response = api_client.get("/api/v2/collections/?offset=-1")
+        assert response.status_code == 400
+
+    def test_invalid_ordering_returns_400(self, api_client):
+        response = api_client.get("/api/v2/collections/?ordering=does_not_exist")
+        assert response.status_code == 400
+
 
 @pytest.mark.django_db
 class TestCollectionDetail:
