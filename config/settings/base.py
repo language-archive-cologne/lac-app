@@ -630,9 +630,15 @@ if SAML_LOGIN_ENABLED:
         },
         "contact_person": [
             {
+                "contact_type": "technical",
+                "given_name": "Francisco",
+                "sur_name": "Mondaca",
+                "email_address": ["mailto:mondaca@uni-koeln.de"],
+            },
+            {
                 "contact_type": "support",
                 "email_address": ["mailto:lac-helpdesk@uni-koeln.de"],
-            }
+            },
         ],
         "security": {
             "wantAttributeStatementSigned": True,
