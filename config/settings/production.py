@@ -234,5 +234,17 @@ LOGGING = {
 SPECTACULAR_SETTINGS["SERVERS"] = [
     {"url": "https://lacos.uni-koeln.de", "description": "Production server"},
 ]
+# SAML defaults for production
+# ------------------------------------------------------------------------------
+if SAML_LOGIN_ENABLED:
+    SAML_CONFIG = dict(SAML_CONFIG)
+    _saml_key_file = env("SAML_SP_KEY_FILE", default="/etc/shibboleth/prod-sp-key.pem")
+    _saml_cert_file = env("SAML_SP_CERT_FILE", default="/etc/shibboleth/prod-sp-cert.pem")
+    SAML_CONFIG["key_file"] = _saml_key_file
+    SAML_CONFIG["cert_file"] = _saml_cert_file
+    SAML_CONFIG["encryption_keypairs"] = [
+        {"key_file": _saml_key_file, "cert_file": _saml_cert_file}
+    ]
+
 # Your stuff...
 # ------------------------------------------------------------------------------
