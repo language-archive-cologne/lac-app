@@ -7,10 +7,14 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
+from django.contrib.contenttypes.models import ContentType
 from django.core.cache import cache as django_cache
-from django.db.models import CharField, Count, F, QuerySet, Value
+from django.db.models import CharField, Count, F, OuterRef, QuerySet, Subquery, Value
 from django.db.models.functions import Cast, Coalesce
 from django.http import QueryDict
+
+from lacos.blam.models import Bundle, Collection
+from lacos.storage.models.acl_permissions import ACLPermissions
 
 logger = logging.getLogger(__name__)
 
@@ -222,6 +226,7 @@ class FacetService:
         NOTE: total_count is left as -1 here; the view should use the
         paginator's count to avoid a duplicate COUNT query.
         """
+        base_qs = self._ensure_required_annotations(base_qs)
         selections = self._parse_selections(params)
         filtered_qs = self._apply_filters(base_qs, selections)
 
@@ -245,6 +250,30 @@ class FacetService:
             facets=facets,
             active_filters=active_filters,
             total_count=-1,
+        )
+
+    def _ensure_required_annotations(self, qs: QuerySet) -> QuerySet:
+        needs_acl_access_level = any(
+            "acl_access_level" in (defn.value_field, defn.label_field, defn.filter_lookup)
+            for defn in self.definitions
+        )
+        if not needs_acl_access_level:
+            return qs
+
+        if "acl_access_level" in qs.query.annotations:
+            return qs
+
+        if qs.model not in {Collection, Bundle}:
+            return qs
+
+        content_type = ContentType.objects.get_for_model(qs.model)
+        return qs.annotate(
+            acl_access_level=Subquery(
+                ACLPermissions.objects.filter(
+                    content_type=content_type,
+                    object_id=Cast(OuterRef("pk"), output_field=CharField()),
+                ).values("access_level")[:1]
+            )
         )
 
     def _parse_selections(self, params: QueryDict) -> dict[str, list[str]]:
@@ -474,4 +503,3 @@ class FacetService:
                     }
                 )
         return active
-

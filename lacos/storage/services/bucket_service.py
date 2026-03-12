@@ -91,6 +91,24 @@ class BucketService(BaseStorageService):
         logger.info("BucketService initialized with helper services")
         self.initialized = True
 
+    def _get_service_context(self) -> StorageServiceContext:
+        if not hasattr(self, "_service_context"):
+            self._service_context = StorageServiceContext(
+                s3_client=self.s3_client,
+                workspace_buckets=getattr(self, "workspace_buckets", []),
+                ingest_bucket=getattr(self, "ingest_bucket", ""),
+                production_bucket=getattr(self, "production_bucket", ""),
+                is_minio=getattr(self, "is_minio", False),
+                endpoint_url=getattr(self, "endpoint_url", None),
+                folder_cache=getattr(self, "folder_cache", None),
+            )
+        return self._service_context
+
+    def _get_mutation_service(self) -> BucketMutationService:
+        if not hasattr(self, "_mutation_service"):
+            self._mutation_service = BucketMutationService(self._get_service_context())
+        return self._mutation_service
+
     def _download_directory(self, bucket_name: str, prefix: str, local_dir: str) -> None:
         """Download an S3 prefix to a local directory."""
         paginator = self.s3_client.get_paginator("list_objects_v2")
@@ -448,7 +466,7 @@ class BucketService(BaseStorageService):
             return {"success": False, "error": f"Failed to create bucket '{new_bucket}'"}
 
         # Delegate to mutation service
-        result = self._mutation_service.rename_bucket(current_bucket, new_bucket)
+        result = self._get_mutation_service().rename_bucket(current_bucket, new_bucket)
 
         # Update in-memory workspace buckets if successful
         if result.get("success"):
@@ -469,7 +487,7 @@ class BucketService(BaseStorageService):
 
         Delegates to BucketMutationService.
         """
-        return self._mutation_service.rename_folder(bucket_name, old_path, new_name)
+        return self._get_mutation_service().rename_folder(bucket_name, old_path, new_name)
 
     def rename_file(self, bucket_name: str, file_path: str, new_name: str) -> Dict[str, Any]:
         """
@@ -477,7 +495,7 @@ class BucketService(BaseStorageService):
 
         Delegates to BucketMutationService.
         """
-        return self._mutation_service.rename_file(bucket_name, file_path, new_name)
+        return self._get_mutation_service().rename_file(bucket_name, file_path, new_name)
     
     def list_bucket_contents(
         self,

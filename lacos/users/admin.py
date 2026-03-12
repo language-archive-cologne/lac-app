@@ -53,6 +53,15 @@ class UserAdmin(auth_admin.UserAdmin):
     form = UserAdminChangeForm
     add_form = UserAdminCreationForm
     readonly_fields = ("saml_persistent_id", "last_login", "date_joined")
+    add_fieldsets = (
+        (
+            None,
+            {
+                "classes": ("wide",),
+                "fields": ("username", "password1", "password2"),
+            },
+        ),
+    )
     fieldsets = (
         (None, {"fields": ("username", "password")}),
         (
@@ -103,6 +112,11 @@ class UserAdmin(auth_admin.UserAdmin):
     ]
     ordering = ("username",)
     inlines = [CollectionManagerAssignmentInline]
+
+    def get_inline_instances(self, request, obj=None):
+        if obj is None:
+            return []
+        return super().get_inline_instances(request, obj)
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)

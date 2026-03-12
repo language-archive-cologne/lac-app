@@ -26,6 +26,7 @@ from lacos.blam.models.bundle.bundle_publication_info import BundlePublicationIn
 from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
 from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo
 from lacos.blam.models.collection.collection_publication_info import CollectionPublicationInfo
+from lacos.explorer.text_search import build_fts_query
 from lacos.explorer.text_search import sanitize_search_term
 
 
@@ -51,11 +52,11 @@ class SearchResult:
 
 def _build_headline_source(identifier_field: str, title_field: str, description_field: str):
     return Concat(
-        Coalesce(F(identifier_field), Value("")),
+        Coalesce(F(identifier_field), Value(""), output_field=TextField()),
         Value(" "),
-        Coalesce(F(title_field), Value("")),
+        Coalesce(F(title_field), Value(""), output_field=TextField()),
         Value(" "),
-        Coalesce(F(description_field), Value("")),
+        Coalesce(F(description_field), Value(""), output_field=TextField()),
         output_field=TextField(),
     )
 
@@ -224,13 +225,12 @@ def search_archives(term: str, *, limit: int | None = None, use_stored_vectors: 
         return []
 
     sanitized = sanitize_search_term(normalized)
-    words = sanitized.split()
-    if not words:
+    if not sanitized.split():
         return []
 
-    # Add prefix matching (:*) to each word for partial word search
-    prefix_terms = " & ".join(f"{word}:*" for word in words)
-    query = SearchQuery(prefix_terms, config="simple", search_type="raw")
+    query = build_fts_query(normalized)
+    if query is None:
+        return []
 
     collection_results = _search_collections(query, normalized, use_stored_vectors)
     bundle_results = _search_bundles(query, normalized, use_stored_vectors)

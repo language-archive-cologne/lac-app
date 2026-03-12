@@ -142,18 +142,17 @@ def test_single_language_filter():
 
 
 @pytest.mark.django_db
-def test_topic_filter():
+def test_unknown_topic_filter_is_ignored():
     coll = _create_collection("C1", "Test Collection")
-    b1 = _create_bundle("B1", "Alpha", coll)
+    _create_bundle("B1", "Alpha", coll)
     _create_bundle("B2", "Beta", coll)
 
     result = _service().search(
         _make_params(topic=["narrative"]), Bundle.objects.all()
     )
 
-    assert result.queryset.count() == 1
-    pks = list(result.queryset.values_list("pk", flat=True))
-    assert b1.pk in pks
+    assert result.queryset.count() == 2
+    assert result.active_filters == []
 
 
 @pytest.mark.django_db
@@ -222,7 +221,7 @@ def test_cross_facet_counts_exclude_own_facet():
 
 
 @pytest.mark.django_db
-def test_topic_facet_counts():
+def test_bundle_facets_do_not_include_removed_topic_dimension():
     coll = _create_collection("C1", "Test Collection")
     _create_bundle("B1", "Alpha", coll)
     _create_bundle("B2", "Beta", coll)
@@ -230,11 +229,7 @@ def test_topic_facet_counts():
 
     result = _service().search(_make_params(), Bundle.objects.all())
 
-    topic_facet = next(f for f in result.facets if f.name == "topic")
-    topic_values = {fv.value: fv.count for fv in topic_facet.values}
-    assert topic_values["narrative"] == 2
-    assert topic_values["elicitation"] == 1
-    assert topic_values["wordlist"] == 1
+    assert all(f.name != "topic" for f in result.facets)
 
 
 @pytest.mark.django_db

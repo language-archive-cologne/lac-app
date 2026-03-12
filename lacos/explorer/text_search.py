@@ -19,6 +19,17 @@ def sanitize_search_term(term: str) -> str:
     return re.sub(r"[^\w\s]", " ", normalized, flags=re.UNICODE)
 
 
+def _expand_prefix_variants(word: str) -> list[str]:
+    variants = {word}
+    if len(word) > 3 and word.endswith("y"):
+        variants.add(f"{word[:-1]}ies")
+    if len(word) > 4 and word.endswith("ies"):
+        variants.add(f"{word[:-3]}y")
+    if len(word) > 3 and word.endswith("s") and not word.endswith("ss"):
+        variants.add(word[:-1])
+    return sorted(variants)
+
+
 def build_fts_query(search_term: str) -> SearchQuery | None:
     """Build a prefix-matching full-text search query.
 
@@ -28,7 +39,10 @@ def build_fts_query(search_term: str) -> SearchQuery | None:
     words = sanitized.split()
     if not words:
         return None
-    prefix_terms = " & ".join(f"{word}:*" for word in words)
+    prefix_terms = " & ".join(
+        "(" + " | ".join(f"{variant}:*" for variant in _expand_prefix_variants(word)) + ")"
+        for word in words
+    )
     return SearchQuery(prefix_terms, config="simple", search_type="raw")
 
 
