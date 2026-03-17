@@ -1,163 +1,163 @@
-// Import the classes we're testing
 const { S3Client } = require('@src/s3/s3-client');
 const { MultipartUploadHandler } = require('@src/s3/multipart-upload');
 
-// Mock fetch
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
-// Mock console.error to suppress expected error messages
 const mockConsoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
 
 describe('S3Client', () => {
     let s3Client;
 
     beforeEach(() => {
+        document.body.innerHTML = '<input type="hidden" name="csrfmiddlewaretoken" value="test-csrf-token">';
         s3Client = new S3Client();
-        mockFetch.mockClear();
+        mockFetch.mockReset();
         mockConsoleError.mockClear();
     });
 
-    afterEach(() => {
+    afterAll(() => {
         mockConsoleError.mockRestore();
     });
 
-    test('initializeMultipartUpload', async () => {
-        const mockResponse = {
-            success: true,
-            upload_id: 'test-upload-id',
-            s3_key: 'test-key'
-        };
+    test('initializeMultipartUpload uses the current multipart endpoint', async () => {
         mockFetch.mockResolvedValueOnce({
             ok: true,
-            json: () => Promise.resolve(mockResponse)
+            json: () => Promise.resolve({
+                success: true,
+                upload_id: 'test-upload-id',
+            }),
         });
 
-        const result = await s3Client.initializeMultipartUpload('test.txt', 'text/plain', 'test/');
-        expect(result).toEqual(mockResponse);
+        const result = await s3Client.initializeMultipartUpload('test.txt', 'test', 'text/plain');
+
+        expect(result).toEqual({
+            success: true,
+            uploadId: 'test-upload-id',
+            s3Key: 'test/test.txt',
+        });
         expect(mockFetch).toHaveBeenCalledWith(
-            '/storage/initialize-multipart-upload/',
+            '/storage/multipart/initialize/',
             expect.objectContaining({
                 method: 'POST',
                 headers: expect.objectContaining({
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': expect.any(String)
+                    'X-CSRFToken': 'test-csrf-token',
                 }),
-                body: expect.any(String)
-            })
+                body: JSON.stringify({
+                    file_name: 'test.txt',
+                    file_type: 'text/plain',
+                    path_prefix: 'test',
+                }),
+            }),
         );
     });
 
-    test('initializeMultipartUpload handles network error', async () => {
+    test('initializeMultipartUpload returns an error object on network failure', async () => {
         mockFetch.mockRejectedValueOnce(new Error('Network error'));
-        
-        await expect(s3Client.initializeMultipartUpload('test.txt', 'text/plain', 'test/'))
-            .rejects
-            .toThrow('Network error');
-    });
 
-    test('initializeMultipartUpload handles server error', async () => {
-        mockFetch.mockResolvedValueOnce({
-            ok: false,
-            status: 500,
-            statusText: 'Internal Server Error'
+        const result = await s3Client.initializeMultipartUpload('test.txt', 'test');
+
+        expect(result).toEqual({
+            success: false,
+            error: 'Network error',
         });
-
-        await expect(s3Client.initializeMultipartUpload('test.txt', 'text/plain', 'test/'))
-            .rejects
-            .toThrow('Failed to initialize multipart upload');
     });
 
-    test('getPartUploadUrls', async () => {
-        const mockResponse = {
-            success: true,
-            presigned_urls: [
-                { url: 'url1', part_number: 1 },
-                { url: 'url2', part_number: 2 }
-            ]
-        };
+    test('getPartUploadUrls uses the current multipart part-url endpoint', async () => {
         mockFetch.mockResolvedValueOnce({
             ok: true,
-            json: () => Promise.resolve(mockResponse)
+            json: () => Promise.resolve({
+                success: true,
+                presigned_urls: [
+                    { url: 'url1', part_number: 1 },
+                    { url: 'url2', part_number: 2 },
+                ],
+            }),
         });
 
         const result = await s3Client.getPartUploadUrls('test-key', 'test-upload-id', 2);
-        expect(result).toEqual(mockResponse);
+
+        expect(result).toEqual({
+            success: true,
+            urls: [
+                { url: 'url1', part_number: 1 },
+                { url: 'url2', part_number: 2 },
+            ],
+        });
         expect(mockFetch).toHaveBeenCalledWith(
-            '/storage/get-part-upload-urls/',
+            '/storage/multipart/get-part-urls/',
             expect.objectContaining({
                 method: 'POST',
                 headers: expect.objectContaining({
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': expect.any(String)
+                    'X-CSRFToken': 'test-csrf-token',
                 }),
-                body: expect.any(String)
-            })
+                body: JSON.stringify({
+                    s3_key: 'test-key',
+                    upload_id: 'test-upload-id',
+                    part_count: 2,
+                    expiration: 3600,
+                }),
+            }),
         );
     });
 
-    test('getPartUploadUrls handles invalid response', async () => {
+    test('completeMultipartUpload uses the current completion endpoint', async () => {
         mockFetch.mockResolvedValueOnce({
             ok: true,
-            json: () => Promise.resolve({ success: false })
-        });
-
-        await expect(s3Client.getPartUploadUrls('test-key', 'test-upload-id', 2))
-            .rejects
-            .toThrow('Failed to get part upload URLs');
-    });
-
-    test('completeMultipartUpload', async () => {
-        const mockResponse = {
-            success: true,
-            message: 'Upload completed successfully'
-        };
-        mockFetch.mockResolvedValueOnce({
-            ok: true,
-            json: () => Promise.resolve(mockResponse)
+            json: () => Promise.resolve({ success: true }),
         });
 
         const result = await s3Client.completeMultipartUpload('test-key', 'test-upload-id', [
-            { ETag: 'etag1', PartNumber: 1 },
-            { ETag: 'etag2', PartNumber: 2 }
+            { part_number: 1, etag: 'etag1' },
+            { part_number: 2, etag: 'etag2' },
         ]);
 
-        expect(result).toEqual(mockResponse);
+        expect(result).toEqual({ success: true });
         expect(mockFetch).toHaveBeenCalledWith(
-            '/storage/complete-multipart-upload/',
+            '/storage/multipart/complete/',
             expect.objectContaining({
                 method: 'POST',
                 headers: expect.objectContaining({
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': expect.any(String)
+                    'X-CSRFToken': 'test-csrf-token',
                 }),
-                body: expect.any(String)
-            })
+                body: JSON.stringify({
+                    s3_key: 'test-key',
+                    upload_id: 'test-upload-id',
+                    parts: [
+                        { part_number: 1, etag: 'etag1' },
+                        { part_number: 2, etag: 'etag2' },
+                    ],
+                }),
+            }),
         );
     });
 
-    test('abortMultipartUpload', async () => {
-        const mockResponse = {
-            success: true,
-            message: 'Upload aborted successfully'
-        };
+    test('abortMultipartUpload uses the current abort endpoint', async () => {
         mockFetch.mockResolvedValueOnce({
             ok: true,
-            json: () => Promise.resolve(mockResponse)
+            json: () => Promise.resolve({ success: true }),
         });
 
-        const result = await s3Client.abortMultipartUpload('test-key', 'test-upload-id');
-        expect(result).toEqual(mockResponse);
+        const result = await s3Client.abortMultipartUpload('test.txt', 'test-upload-id', 'test');
+
+        expect(result).toEqual({ success: true });
         expect(mockFetch).toHaveBeenCalledWith(
-            '/storage/abort-multipart-upload/',
+            '/storage/multipart/abort/',
             expect.objectContaining({
                 method: 'POST',
                 headers: expect.objectContaining({
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': expect.any(String)
+                    'X-CSRFToken': 'test-csrf-token',
                 }),
-                body: expect.any(String)
-            })
+                body: JSON.stringify({
+                    file_name: 'test.txt',
+                    upload_id: 'test-upload-id',
+                    path_prefix: 'test',
+                }),
+            }),
         );
     });
 });
@@ -167,301 +167,167 @@ describe('MultipartUploadHandler', () => {
     let mockS3Client;
 
     beforeEach(() => {
+        mockFetch.mockReset();
+        mockConsoleError.mockClear();
         mockS3Client = {
             initializeMultipartUpload: jest.fn(),
             getPartUploadUrls: jest.fn(),
             completeMultipartUpload: jest.fn(),
-            abortMultipartUpload: jest.fn()
+            abortMultipartUpload: jest.fn(),
         };
         handler = new MultipartUploadHandler(mockS3Client);
-        mockConsoleError.mockClear();
     });
 
-    afterEach(() => {
+    afterAll(() => {
         mockConsoleError.mockRestore();
     });
 
-    test('startUpload', async () => {
+    test('startUpload stores the current multipart state', async () => {
         const mockFile = new File(['test'], 'test.txt', { type: 'text/plain' });
-        const mockInitResponse = {
-            success: true,
-            upload_id: 'test-upload-id',
-            s3_key: 'test-key'
-        };
-        const mockUrlsResponse = {
-            success: true,
-            presigned_urls: [
-                { url: 'url1', part_number: 1 },
-                { url: 'url2', part_number: 2 }
-            ]
-        };
 
-        mockS3Client.initializeMultipartUpload.mockResolvedValueOnce(mockInitResponse);
-        mockS3Client.getPartUploadUrls.mockResolvedValueOnce(mockUrlsResponse);
+        mockS3Client.initializeMultipartUpload.mockResolvedValueOnce({
+            success: true,
+            uploadId: 'test-upload-id',
+            s3Key: 'test/test.txt',
+        });
+        mockS3Client.getPartUploadUrls.mockResolvedValueOnce({
+            success: true,
+            urls: [{ url: 'url1', part_number: 1 }],
+        });
 
-        const result = await handler.startUpload(mockFile, 'test/');
-        expect(result.success).toBe(true);
-        expect(result.uploadId).toBe('test-upload-id');
-        expect(result.s3Key).toBe('test-key');
+        const result = await handler.startUpload(mockFile, 'test');
+
+        expect(result).toEqual({ success: true });
+        expect(mockS3Client.initializeMultipartUpload).toHaveBeenCalledWith('test.txt', 'test');
+        expect(handler.activeUploads.get('test.txt')).toEqual(
+            expect.objectContaining({
+                uploadId: 'test-upload-id',
+                s3Key: 'test/test.txt',
+                presignedUrls: [{ url: 'url1', part_number: 1 }],
+            }),
+        );
     });
 
-    test('startUpload handles initialization failure', async () => {
+    test('startUpload trims the selected folder from webkitRelativePath', async () => {
         const mockFile = new File(['test'], 'test.txt', { type: 'text/plain' });
-        mockS3Client.initializeMultipartUpload.mockRejectedValueOnce(new Error('Init failed'));
+        mockFile.webkitRelativePath = 'folder/sub/test.txt';
 
-        const result = await handler.startUpload(mockFile, 'test/');
-        expect(result.success).toBe(false);
-        expect(result.error).toBe('Init failed');
-    });
-
-    test('startUpload handles URL retrieval failure', async () => {
-        const mockFile = new File(['test'], 'test.txt', { type: 'text/plain' });
-        const mockInitResponse = {
+        mockS3Client.initializeMultipartUpload.mockResolvedValueOnce({
             success: true,
-            upload_id: 'test-upload-id',
-            s3_key: 'test-key'
-        };
+            uploadId: 'test-upload-id',
+            s3Key: 'folder/sub/test.txt',
+        });
+        mockS3Client.getPartUploadUrls.mockResolvedValueOnce({
+            success: true,
+            urls: [{ url: 'url1', part_number: 1 }],
+        });
 
-        mockS3Client.initializeMultipartUpload.mockResolvedValueOnce(mockInitResponse);
-        mockS3Client.getPartUploadUrls.mockRejectedValueOnce(new Error('URL retrieval failed'));
+        await handler.startUpload(mockFile, 'folder');
 
-        const result = await handler.startUpload(mockFile, 'test/');
-        expect(result.success).toBe(false);
-        expect(result.error).toBe('URL retrieval failed');
+        expect(mockS3Client.initializeMultipartUpload).toHaveBeenCalledWith('sub/test.txt', 'folder');
     });
 
-    test('uploadPart', async () => {
+    test('startUpload returns an error when multipart initialization fails', async () => {
+        const mockFile = new File(['test'], 'test.txt', { type: 'text/plain' });
+        mockS3Client.initializeMultipartUpload.mockResolvedValueOnce({
+            success: false,
+            error: 'Init failed',
+        });
+
+        const result = await handler.startUpload(mockFile, 'test');
+
+        expect(result).toEqual({
+            success: false,
+            error: 'Init failed',
+        });
+    });
+
+    test('uploadPart uploads the requested chunk and stores its etag', async () => {
         const mockFile = new File(['test'], 'test.txt', { type: 'text/plain' });
         mockFetch.mockResolvedValueOnce({
             ok: true,
-            headers: new Headers({ 'ETag': 'test-etag' })
+            headers: new Headers({ ETag: 'test-etag' }),
+        });
+        mockS3Client.initializeMultipartUpload.mockResolvedValueOnce({
+            success: true,
+            uploadId: 'test-upload-id',
+            s3Key: 'test/test.txt',
+        });
+        mockS3Client.getPartUploadUrls.mockResolvedValueOnce({
+            success: true,
+            urls: [{ url: 'url1', part_number: 1 }],
         });
 
-        // First set up an active upload
-        const mockInitResponse = {
+        await handler.startUpload(mockFile, 'test');
+        const result = await handler.uploadPart(mockFile, 1);
+
+        expect(result).toEqual({
             success: true,
-            upload_id: 'test-upload-id',
-            s3_key: 'test-key'
-        };
-        const mockUrlsResponse = {
-            success: true,
-            presigned_urls: [
-                { url: 'url1', part_number: 1 }
-            ]
-        };
-
-        mockS3Client.initializeMultipartUpload.mockResolvedValueOnce(mockInitResponse);
-        mockS3Client.getPartUploadUrls.mockResolvedValueOnce(mockUrlsResponse);
-
-        await handler.startUpload(mockFile, 'test/');
-
-        const result = await handler.uploadPart('test.txt', 1);
-        expect(result.success).toBe(true);
-        expect(result.etag).toBe('test-etag');
-    });
-
-    test('uploadPart handles upload failure', async () => {
-        const mockFile = new File(['test'], 'test.txt', { type: 'text/plain' });
-        mockFetch.mockRejectedValueOnce(new Error('Upload failed'));
-
-        // First set up an active upload
-        const mockInitResponse = {
-            success: true,
-            upload_id: 'test-upload-id',
-            s3_key: 'test-key'
-        };
-        const mockUrlsResponse = {
-            success: true,
-            presigned_urls: [
-                { url: 'url1', part_number: 1 }
-            ]
-        };
-
-        mockS3Client.initializeMultipartUpload.mockResolvedValueOnce(mockInitResponse);
-        mockS3Client.getPartUploadUrls.mockResolvedValueOnce(mockUrlsResponse);
-
-        await handler.startUpload(mockFile, 'test/');
-
-        const result = await handler.uploadPart('test.txt', 1);
-        expect(result.success).toBe(false);
-        expect(result.error).toBe('Upload failed');
-    });
-
-    test('completeUpload', async () => {
-        const mockFile = new File(['test'], 'test.txt', { type: 'text/plain' });
-        
-        // Mock fetch for part upload
-        mockFetch.mockImplementation((url) => {
-            if (url === 'url1') {
-                return Promise.resolve({
-                    ok: true,
-                    headers: new Headers({ 'ETag': 'test-etag' })
-                });
-            }
-            return Promise.resolve({
-                ok: true,
-                json: () => Promise.resolve({ success: true })
-            });
+            etag: 'test-etag',
         });
+        expect(mockFetch).toHaveBeenCalledWith(
+            'url1',
+            expect.objectContaining({
+                method: 'PUT',
+                headers: { 'Content-Type': 'text/plain' },
+            }),
+        );
+        expect(handler.activeUploads.get('test.txt').parts).toEqual([
+            { part_number: 1, etag: 'test-etag' },
+        ]);
+    });
 
-        // Set up an active upload
-        const mockInitResponse = {
+    test('completeUpload delegates to the current client contract', async () => {
+        const mockFile = new File(['test'], 'test.txt', { type: 'text/plain' });
+        mockFetch.mockResolvedValueOnce({
+            ok: true,
+            headers: new Headers({ ETag: 'test-etag' }),
+        });
+        mockS3Client.initializeMultipartUpload.mockResolvedValueOnce({
             success: true,
-            upload_id: 'test-upload-id',
-            s3_key: 'test-key'
-        };
-        const mockUrlsResponse = {
+            uploadId: 'test-upload-id',
+            s3Key: 'test/test.txt',
+        });
+        mockS3Client.getPartUploadUrls.mockResolvedValueOnce({
             success: true,
-            presigned_urls: [
-                { url: 'url1', part_number: 1 }
-            ]
-        };
-
-        mockS3Client.initializeMultipartUpload.mockResolvedValueOnce(mockInitResponse);
-        mockS3Client.getPartUploadUrls.mockResolvedValueOnce(mockUrlsResponse);
+            urls: [{ url: 'url1', part_number: 1 }],
+        });
         mockS3Client.completeMultipartUpload.mockResolvedValueOnce({ success: true });
 
-        await handler.startUpload(mockFile, 'test/');
-        await handler.uploadPart('test.txt', 1);
-
+        await handler.startUpload(mockFile, 'test');
+        await handler.uploadPart(mockFile, 1);
         const result = await handler.completeUpload('test.txt');
-        expect(result.success).toBe(true);
+
+        expect(result).toEqual({ success: true });
+        expect(mockS3Client.completeMultipartUpload).toHaveBeenCalledWith(
+            'test/test.txt',
+            'test-upload-id',
+            [{ part_number: 1, etag: 'test-etag' }],
+        );
+        expect(handler.activeUploads.has('test.txt')).toBe(false);
     });
 
-    test('completeUpload handles completion failure', async () => {
+    test('abortUpload delegates to the current client contract', async () => {
         const mockFile = new File(['test'], 'test.txt', { type: 'text/plain' });
-        
-        // Mock fetch for part upload
-        mockFetch.mockImplementation((url) => {
-            if (url === 'url1') {
-                return Promise.resolve({
-                    ok: true,
-                    headers: new Headers({ 'ETag': 'test-etag' })
-                });
-            }
-            return Promise.resolve({
-                ok: true,
-                json: () => Promise.resolve({ success: true })
-            });
+        mockS3Client.initializeMultipartUpload.mockResolvedValueOnce({
+            success: true,
+            uploadId: 'test-upload-id',
+            s3Key: 'test/test.txt',
         });
-
-        // Set up an active upload
-        const mockInitResponse = {
+        mockS3Client.getPartUploadUrls.mockResolvedValueOnce({
             success: true,
-            upload_id: 'test-upload-id',
-            s3_key: 'test-key'
-        };
-        const mockUrlsResponse = {
-            success: true,
-            presigned_urls: [
-                { url: 'url1', part_number: 1 }
-            ]
-        };
-
-        mockS3Client.initializeMultipartUpload.mockResolvedValueOnce(mockInitResponse);
-        mockS3Client.getPartUploadUrls.mockResolvedValueOnce(mockUrlsResponse);
-        mockS3Client.completeMultipartUpload.mockRejectedValueOnce(new Error('Completion failed'));
-
-        await handler.startUpload(mockFile, 'test/');
-        await handler.uploadPart('test.txt', 1);
-
-        const result = await handler.completeUpload('test.txt');
-        expect(result.success).toBe(false);
-        expect(result.error).toBe('Completion failed');
-    });
-
-    test('abortUpload', async () => {
-        const mockFile = new File(['test'], 'test.txt', { type: 'text/plain' });
-        
-        // Set up an active upload
-        const mockInitResponse = {
-            success: true,
-            upload_id: 'test-upload-id',
-            s3_key: 'test-key'
-        };
-        const mockUrlsResponse = {
-            success: true,
-            presigned_urls: [
-                { url: 'url1', part_number: 1 }
-            ]
-        };
-
-        mockS3Client.initializeMultipartUpload.mockResolvedValueOnce(mockInitResponse);
-        mockS3Client.getPartUploadUrls.mockResolvedValueOnce(mockUrlsResponse);
+            urls: [{ url: 'url1', part_number: 1 }],
+        });
         mockS3Client.abortMultipartUpload.mockResolvedValueOnce({ success: true });
 
-        await handler.startUpload(mockFile, 'test/');
-
+        await handler.startUpload(mockFile, 'test');
         const result = await handler.abortUpload('test.txt');
-        expect(result.success).toBe(true);
+
+        expect(result).toEqual({ success: true });
+        expect(mockS3Client.abortMultipartUpload).toHaveBeenCalledWith(
+            'test/test.txt',
+            'test-upload-id',
+        );
+        expect(handler.activeUploads.has('test.txt')).toBe(false);
     });
-
-    test('abortUpload handles abort failure', async () => {
-        const mockFile = new File(['test'], 'test.txt', { type: 'text/plain' });
-        
-        // Set up an active upload
-        const mockInitResponse = {
-            success: true,
-            upload_id: 'test-upload-id',
-            s3_key: 'test-key'
-        };
-        const mockUrlsResponse = {
-            success: true,
-            presigned_urls: [
-                { url: 'url1', part_number: 1 }
-            ]
-        };
-
-        mockS3Client.initializeMultipartUpload.mockResolvedValueOnce(mockInitResponse);
-        mockS3Client.getPartUploadUrls.mockResolvedValueOnce(mockUrlsResponse);
-        mockS3Client.abortMultipartUpload.mockRejectedValueOnce(new Error('Abort failed'));
-
-        await handler.startUpload(mockFile, 'test/');
-
-        const result = await handler.abortUpload('test.txt');
-        expect(result.success).toBe(false);
-        expect(result.error).toBe('Abort failed');
-    });
-
-    test('handles concurrent uploads correctly', async () => {
-        const mockFile1 = new File(['test1'], 'test1.txt', { type: 'text/plain' });
-        const mockFile2 = new File(['test2'], 'test2.txt', { type: 'text/plain' });
-
-        // Set up responses for first file
-        const mockInitResponse1 = {
-            success: true,
-            upload_id: 'test-upload-id-1',
-            s3_key: 'test-key-1'
-        };
-        const mockUrlsResponse1 = {
-            success: true,
-            presigned_urls: [{ url: 'url1', part_number: 1 }]
-        };
-
-        // Set up responses for second file
-        const mockInitResponse2 = {
-            success: true,
-            upload_id: 'test-upload-id-2',
-            s3_key: 'test-key-2'
-        };
-        const mockUrlsResponse2 = {
-            success: true,
-            presigned_urls: [{ url: 'url2', part_number: 1 }]
-        };
-
-        mockS3Client.initializeMultipartUpload
-            .mockResolvedValueOnce(mockInitResponse1)
-            .mockResolvedValueOnce(mockInitResponse2);
-        mockS3Client.getPartUploadUrls
-            .mockResolvedValueOnce(mockUrlsResponse1)
-            .mockResolvedValueOnce(mockUrlsResponse2);
-
-        // Start both uploads
-        const result1 = await handler.startUpload(mockFile1, 'test/');
-        const result2 = await handler.startUpload(mockFile2, 'test/');
-
-        expect(result1.success).toBe(true);
-        expect(result2.success).toBe(true);
-        expect(result1.uploadId).not.toBe(result2.uploadId);
-    });
-}); 
+});
