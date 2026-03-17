@@ -179,3 +179,34 @@ def test_delete_orphaned_bundles_returns_empty_when_none():
 
     assert deleted == []
     assert Bundle.objects.filter(id=bundle.id).exists()
+
+
+@pytest.mark.django_db
+def test_delete_orphaned_bundles_only_deletes_target_collection_links():
+    collection_a = Collection.objects.create(identifier="test-target-a")
+    collection_b = Collection.objects.create(identifier="test-target-b")
+
+    orphan = Bundle.objects.create(
+        identifier="orphan-a",
+        import_object_key="col/orphan-a/v1/content/orphan-a.xml",
+    )
+    kept_other_collection = Bundle.objects.create(
+        identifier="kept-b",
+        import_object_key="col/kept-b/v1/content/kept-b.xml",
+    )
+
+    orphan_struct = BundleStructuralInfo.objects.create(
+        bundle=orphan,
+        is_member_of_collection=collection_a,
+    )
+    BundleStructuralInfo.objects.create(
+        bundle=kept_other_collection,
+        is_member_of_collection=collection_b,
+    )
+
+    deleted = delete_orphaned_bundles(collection_a.id, s3_bundle_keys=[])
+
+    assert orphan.id in deleted
+    assert not Bundle.objects.filter(id=orphan.id).exists()
+    assert not BundleStructuralInfo.objects.filter(id=orphan_struct.id).exists()
+    assert Bundle.objects.filter(id=kept_other_collection.id).exists()
