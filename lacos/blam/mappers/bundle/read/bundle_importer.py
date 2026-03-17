@@ -19,6 +19,7 @@ from lacos.blam.mappers.bundle.read.import_bundle_general_info import import_gen
 from lacos.blam.mappers.bundle.read.import_bundle_publication_info import import_publication_info
 from lacos.blam.mappers.bundle.read.import_bundle_structural_info import import_structural_info
 from lacos.blam.mappers.bundle.read.import_bundle_administrative_info import import_administrative_info
+from lacos.blam.mappers.bundle.read.import_bundle_project_info import import_project_info
 from lacos.blam.mappers.bundle.read.import_bundle_header import import_bundle_header
 
 logger = logging.getLogger(__name__)
@@ -140,6 +141,11 @@ class BundleImporter:
             cls._import_general_info(cmd_data, bundle)
             cls._import_publication_info(cmd_data, bundle)
             cls._import_administrative_info(cmd_data, bundle)
+            project_infos = cls._import_project_info(cmd_data, bundle)
+            if project_infos:
+                logger.info("Project info found and imported for update")
+            else:
+                logger.info("No project info found in XML - existing links cleared")
 
             bundle_struct_info = cls._import_structural_info(cmd_data, bundle)
             bundle_resources_id = existing_bundle_resources_id
@@ -206,6 +212,11 @@ class BundleImporter:
             cls._import_general_info(cmd_data, bundle)
             cls._import_publication_info(cmd_data, bundle)
             cls._import_administrative_info(cmd_data, bundle)
+            project_infos = cls._import_project_info(cmd_data, bundle)
+            if project_infos:
+                logger.info("Project info found and imported")
+            else:
+                logger.info("No project info found in XML")
             
             # Import structural info and get BundleResources ID
             bundle_struct_info = cls._import_structural_info(cmd_data, bundle)
@@ -244,6 +255,11 @@ class BundleImporter:
     def _import_administrative_info(cls, cmd_data: Any, bundle: Bundle):
         """Import administrative info from CMD data"""
         return import_administrative_info(cmd_data, bundle)
+
+    @classmethod
+    def _import_project_info(cls, cmd_data: Any, bundle: Bundle):
+        """Import project info from CMD data"""
+        return import_project_info(cmd_data, bundle)
 
     
     @classmethod

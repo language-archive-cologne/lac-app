@@ -2,6 +2,11 @@ import pytest
 
 from lacos.blam.mappers.bundle.read.bundle_importer import BundleImporter
 from lacos.blam.mappers.collection.read.collection_importer import CollectionImporter
+from lacos.blam.models.base_project_info import (
+    FunderIdentifier,
+    FunderInfo,
+    ProjectInfo,
+)
 from lacos.blam.models.bundle.bundle_administrative_info import (
     BundleIdenticalResource,
     BundleLicense,
@@ -108,6 +113,9 @@ def _build_bundle_xml(
     rights_holder_identifier: str,
     extra_keywords: list[str] | None = None,
     extra_rights_holders: list[tuple[str, str]] | None = None,
+    project_description: str | None = None,
+    funder_name: str | None = None,
+    funder_identifier: str | None = None,
 ) -> str:
     keywords_xml = ""
     keyword_values = [value for value in [keyword, *(extra_keywords or [])] if value]
@@ -148,6 +156,24 @@ def _build_bundle_xml(
         </RightsHolder>"""
         for name, identifier in rights_holders
     )
+
+    project_xml = ""
+    if project_description is not None and funder_name is not None and funder_identifier is not None:
+        project_xml = f"""
+      <ProjectInfo>
+        <Project>
+          <ProjectDisplayName>Bundle Project</ProjectDisplayName>
+          <ProjectDescription>{project_description}</ProjectDescription>
+          <FunderInfos>
+            <FunderInfo>
+              <FunderName>{funder_name}</FunderName>
+              <FunderIdentifier IdentifierType="ISNI">{funder_identifier}</FunderIdentifier>
+              <GrantIdentifier>grant-123</GrantIdentifier>
+              <GrantURI>https://example.com/grants/123</GrantURI>
+            </FunderInfo>
+          </FunderInfos>
+        </Project>
+      </ProjectInfo>"""
 
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <CMD xmlns="http://www.clarin.eu/cmd/" CMDVersion="1.1">
@@ -218,6 +244,7 @@ def _build_bundle_xml(
         <BundleIsMemberOfCollection IdentifierType="Handle">{collection_link}</BundleIsMemberOfCollection>
         <BundleResources/>
       </BundleStructuralInfo>
+{project_xml}
     </BLAM-bundle-repository_v1.1>
   </Components>
 </CMD>"""
@@ -241,6 +268,9 @@ def test_bundle_reindex_replaces_owned_metadata():
         license_identifier="https://creativecommons.org/licenses/by/4.0/",
         rights_holder_name="Rights Holder A",
         rights_holder_identifier="https://example.com/holders/a",
+        project_description="Original bundle project",
+        funder_name="Funder A",
+        funder_identifier="https://example.com/funders/a",
     )
     bundle, _ = BundleImporter.import_from_xml(xml_v1)
 
@@ -257,12 +287,16 @@ def test_bundle_reindex_replaces_owned_metadata():
         license_identifier="https://creativecommons.org/licenses/by-sa/4.0/",
         rights_holder_name="Rights Holder B",
         rights_holder_identifier="https://example.com/holders/b",
+        project_description="Updated bundle project",
+        funder_name="Funder B",
+        funder_identifier="https://example.com/funders/b",
     )
     BundleImporter.import_from_xml(xml_v2, update_existing=True)
 
     publication_info = bundle.publication_info.get()
     general_info = bundle.general_info.get()
     admin_info = bundle.administrative_info.get()
+    project = bundle.projects.get()
 
     creator = publication_info.creators.get()
     contributor = publication_info.contributors.get()
@@ -289,6 +323,35 @@ def test_bundle_reindex_replaces_owned_metadata():
     assert BundleLicense.objects.count() == 1
     assert BundleRightsHolder.objects.count() == 1
     assert BundleRightsHolderIdentifier.objects.count() == 1
+    assert project.project_description == "Updated bundle project"
+    funder = project.funder_infos.get()
+    assert funder.funder_name == "Funder B"
+    assert funder.funder_identifiers.get().value == "https://example.com/funders/b"
+    assert ProjectInfo.objects.count() == 1
+    assert FunderInfo.objects.count() == 1
+    assert FunderIdentifier.objects.count() == 1
+
+    xml_v3 = _build_bundle_xml(
+        self_link="hdl:test/bundle-metadata-001",
+        collection_link=collection_link,
+        creator_affiliation="University B",
+        contributor_affiliation="Institute B",
+        contributor_role="Translator",
+        keyword="keyword-two",
+        location_name="Village Two",
+        identical_uri="https://example.com/bundles/identical-two",
+        license_name="CC-BY-SA-4.0",
+        license_identifier="https://creativecommons.org/licenses/by-sa/4.0/",
+        rights_holder_name="Rights Holder B",
+        rights_holder_identifier="https://example.com/holders/b",
+    )
+    BundleImporter.import_from_xml(xml_v3, update_existing=True)
+
+    bundle.refresh_from_db()
+    assert bundle.projects.count() == 0
+    assert ProjectInfo.objects.count() == 0
+    assert FunderInfo.objects.count() == 0
+    assert FunderIdentifier.objects.count() == 0
 
 
 @pytest.mark.django_db
@@ -309,6 +372,9 @@ def test_bundle_reindex_isolates_owned_metadata_between_bundles():
         license_identifier="https://creativecommons.org/licenses/by/4.0/",
         rights_holder_name="Shared Rights Holder",
         rights_holder_identifier="https://example.com/holders/a",
+        project_description="Project description A",
+        funder_name="Funder A",
+        funder_identifier="https://example.com/funders/shared",
     )
     bundle_a, _ = BundleImporter.import_from_xml(xml_a)
 
@@ -325,6 +391,9 @@ def test_bundle_reindex_isolates_owned_metadata_between_bundles():
         license_identifier="https://creativecommons.org/licenses/by-sa/4.0/",
         rights_holder_name="Shared Rights Holder",
         rights_holder_identifier="https://example.com/holders/b",
+        project_description="Project description B",
+        funder_name="Funder B",
+        funder_identifier="https://example.com/funders/shared",
     )
     bundle_b, _ = BundleImporter.import_from_xml(xml_b)
 
@@ -348,6 +417,12 @@ def test_bundle_reindex_isolates_owned_metadata_between_bundles():
     assert rights_holder_b.rights_holder_identifiers.get().identifier == "https://example.com/holders/b"
     assert rights_holder_a.pk != rights_holder_b.pk
 
+    project_a = bundle_a.projects.get()
+    project_b = bundle_b.projects.get()
+    assert project_a.project_description == "Project description A"
+    assert project_b.project_description == "Project description B"
+    assert project_a.pk != project_b.pk
+
 
 @pytest.mark.django_db
 def test_bundle_reindex_is_idempotent_for_same_xml():
@@ -367,6 +442,9 @@ def test_bundle_reindex_is_idempotent_for_same_xml():
         license_identifier="https://creativecommons.org/licenses/by/4.0/",
         rights_holder_name="Rights Holder Stable",
         rights_holder_identifier="https://example.com/holders/stable",
+        project_description="Stable project",
+        funder_name="Stable Funder",
+        funder_identifier="https://example.com/funders/stable",
     )
     bundle, _ = BundleImporter.import_from_xml(xml)
     BundleImporter.import_from_xml(xml, update_existing=True)
@@ -375,6 +453,7 @@ def test_bundle_reindex_is_idempotent_for_same_xml():
     assert bundle.publication_info.get().contributors.count() == 1
     assert bundle.general_info.get().keywords.count() == 1
     assert bundle.administrative_info.get().rights_holders.count() == 1
+    assert bundle.projects.count() == 1
     assert BundleCreator.objects.count() == 1
     assert BundleContributor.objects.count() == 1
     assert BundleContributorName.objects.count() == 1
@@ -382,6 +461,9 @@ def test_bundle_reindex_is_idempotent_for_same_xml():
     assert BundleLicense.objects.count() == 1
     assert BundleRightsHolder.objects.count() == 1
     assert BundleRightsHolderIdentifier.objects.count() == 1
+    assert ProjectInfo.objects.count() == 1
+    assert FunderInfo.objects.count() == 1
+    assert FunderIdentifier.objects.count() == 1
 
 
 @pytest.mark.django_db
