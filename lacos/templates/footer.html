@@ -1,53 +1,53 @@
 {% load static %}
 <!-- Footer -->
 <footer class="bg-gradient-to-r from-[#003a54] via-[#005176] to-[#003a54] text-slate-300 mt-auto border-t border-[#004565]/70">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <!-- Partner Logos -->
-        <div class="flex flex-wrap items-center justify-center gap-12 lg:gap-16 mb-6">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-5">
+        <!-- University Partners -->
+        <div class="flex flex-wrap items-center justify-center gap-6 sm:gap-8 lg:gap-10 mb-3 sm:mb-4">
             <a href="http://ifl.phil-fak.uni-koeln.de" target="_blank"
-               class="hover:opacity-100 transition-opacity">
-                <img src="{% static 'images/asw.png' %}" alt="University of Cologne" class="h-12 w-auto opacity-90">
+               class="hover:opacity-100 transition-opacity duration-200">
+                <img src="{% static 'images/asw.png' %}" alt="University of Cologne" class="h-8 sm:h-9 w-auto opacity-90">
             </a>
             <a href="http://dch.phil-fak.uni-koeln.de" target="_blank"
-               class="hover:opacity-100 transition-opacity">
-                <img src="{% static 'images/dch_logo.png' %}" alt="DCH" class="h-8 w-auto brightness-0 invert opacity-90">
+               class="hover:opacity-100 transition-opacity duration-200">
+                <img src="{% static 'images/dch_logo.png' %}" alt="DCH" class="h-6 sm:h-7 w-auto brightness-0 invert opacity-90">
             </a>
             <a href="https://itcc.uni-koeln.de/" target="_blank"
-               class="hover:opacity-100 transition-opacity">
-                <img src="{% static 'images/itcc_logo.png' %}" alt="IT Center University of Cologne" class="h-12 w-auto opacity-90">
+               class="hover:opacity-100 transition-opacity duration-200">
+                <img src="{% static 'images/itcc_logo.png' %}" alt="IT Center University of Cologne" class="h-8 sm:h-9 w-auto opacity-90">
             </a>
         </div>
 
-        <!-- Certification & Network Logos -->
-        <div class="flex flex-wrap items-center justify-center gap-8 lg:gap-12 mb-6">
+        <!-- Memberships & Certifications -->
+        <div class="flex flex-wrap items-center justify-center gap-5 sm:gap-7 lg:gap-9 mb-3 sm:mb-4">
             <a href="https://www.coretrustseal.org/" target="_blank"
-               class="hover:opacity-100 transition-opacity">
-                <img src="{% static 'images/cts_logo.png' %}" alt="CoreTrustSeal" class="h-10 w-auto opacity-80">
+               class="hover:opacity-100 transition-opacity duration-200">
+                <img src="{% static 'images/cts_logo.png' %}" alt="CoreTrustSeal" class="h-7 sm:h-8 w-auto opacity-80">
             </a>
             <a href="https://www.clarin.eu" target="_blank"
-               class="hover:opacity-100 transition-opacity">
-                <img src="{% static 'images/clarin_logo.png' %}" alt="CLARIN" class="h-10 w-auto opacity-80">
+               class="hover:opacity-100 transition-opacity duration-200">
+                <img src="{% static 'images/clarin_logo.png' %}" alt="CLARIN" class="h-7 sm:h-8 w-auto opacity-80">
             </a>
             <a href="https://text-plus.org/" target="_blank"
-               class="hover:opacity-100 transition-opacity">
-                <img src="{% static 'images/text-plus-logo.svg' %}" alt="Text+" class="h-10 w-auto opacity-80">
+               class="hover:opacity-100 transition-opacity duration-200">
+                <img src="{% static 'images/text-plus-logo.svg' %}" alt="Text+" class="h-7 sm:h-8 w-auto opacity-80">
             </a>
             <a href="https://www.delaman.org/" target="_blank"
-               class="hover:opacity-100 transition-opacity">
-                <img src="{% static 'images/delaman_logo.png' %}" alt="DELAMAN" class="h-10 w-auto opacity-80">
+               class="hover:opacity-100 transition-opacity duration-200">
+                <img src="{% static 'images/delaman_logo.png' %}" alt="DELAMAN" class="h-7 sm:h-8 w-auto opacity-80">
             </a>
         </div>
 
         <!-- Divider -->
-        <div class="border-t border-[#004565]/70 my-6"></div>
+        <div class="border-t border-[#004565]/70 my-3"></div>
 
         <!-- Copyright and Links -->
-        <div class="flex flex-col sm:flex-row justify-between items-center gap-4 text-sm">
+        <div class="flex flex-col sm:flex-row justify-between items-center gap-2 text-xs sm:text-sm">
             <nav>
-                <ul class="flex flex-wrap justify-center sm:justify-start gap-6">
-                    <li><a href="{% url 'privacy-policy' %}" class="hover:text-white transition-colors">Datenschutz</a></li>
-                    <li><a href="{% url 'imprint' %}" class="hover:text-white transition-colors">Impressum</a></li>
-                    <li><a href="mailto:lac-helpdesk@uni-koeln.de" class="hover:text-white transition-colors">Kontakt</a></li>
+                <ul class="flex flex-wrap justify-center sm:justify-start gap-4 sm:gap-5">
+                    <li><a href="{% url 'privacy-policy' %}" class="hover:text-white transition-colors duration-200">Datenschutz</a></li>
+                    <li><a href="{% url 'imprint' %}" class="hover:text-white transition-colors duration-200">Impressum</a></li>
+                    <li><a href="mailto:lac-helpdesk@uni-koeln.de" class="hover:text-white transition-colors duration-200">Kontakt</a></li>
                     <li class="text-slate-400">© University of Cologne</li>
                 </ul>
             </nav>
