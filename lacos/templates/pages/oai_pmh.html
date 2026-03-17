@@ -29,15 +29,15 @@
     <!-- Tab Navigation -->
     <div class="flex border-b border-base-300">
       <input type="radio" name="oai-tabs" id="tab-core" class="peer/core hidden" checked>
-      <label for="tab-core" class="flex-1 px-6 py-4 text-sm font-medium text-center cursor-pointer transition-colors border-b-2 -mb-px text-base-content/60 border-transparent hover:text-base-content hover:bg-base-200 peer-checked/core:text-primary peer-checked/core:border-primary peer-checked/core:bg-base-100">
+      <label for="tab-core" class="flex-1 px-6 py-4 text-sm font-medium text-center cursor-pointer transition-colors duration-150 border-b-2 -mb-px text-base-content/60 border-transparent hover:text-base-content hover:bg-base-200 peer-checked/core:text-primary peer-checked/core:border-primary peer-checked/core:bg-base-100">
         {% translate "Core Verbs" %}
       </label>
       <input type="radio" name="oai-tabs" id="tab-identifiers" class="peer/identifiers hidden">
-      <label for="tab-identifiers" class="flex-1 px-6 py-4 text-sm font-medium text-center cursor-pointer transition-colors border-b-2 -mb-px text-base-content/60 border-transparent hover:text-base-content hover:bg-base-200 peer-checked/identifiers:text-primary peer-checked/identifiers:border-primary peer-checked/identifiers:bg-base-100">
+      <label for="tab-identifiers" class="flex-1 px-6 py-4 text-sm font-medium text-center cursor-pointer transition-colors duration-150 border-b-2 -mb-px text-base-content/60 border-transparent hover:text-base-content hover:bg-base-200 peer-checked/identifiers:text-primary peer-checked/identifiers:border-primary peer-checked/identifiers:bg-base-100">
         {% translate "ListIdentifiers" %}
       </label>
       <input type="radio" name="oai-tabs" id="tab-records" class="peer/records hidden">
-      <label for="tab-records" class="flex-1 px-6 py-4 text-sm font-medium text-center cursor-pointer transition-colors border-b-2 -mb-px text-base-content/60 border-transparent hover:text-base-content hover:bg-base-200 peer-checked/records:text-primary peer-checked/records:border-primary peer-checked/records:bg-base-100">
+      <label for="tab-records" class="flex-1 px-6 py-4 text-sm font-medium text-center cursor-pointer transition-colors duration-150 border-b-2 -mb-px text-base-content/60 border-transparent hover:text-base-content hover:bg-base-200 peer-checked/records:text-primary peer-checked/records:border-primary peer-checked/records:bg-base-100">
         {% translate "ListRecords" %}
       </label>
     </div>
@@ -48,10 +48,10 @@
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {% for verb in core_verbs %}
         <a href="{{ verb.href }}" target="_blank" rel="noopener noreferrer"
-           class="group block p-5 rounded-lg border border-base-300 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 transition-all">
+           class="group block p-5 rounded-lg border border-base-300 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 transition-[border-color,box-shadow,transform] duration-200 ease-out active:scale-[0.98]">
           <div class="flex items-center justify-between mb-2">
-            <h3 class="font-semibold text-base-content group-hover:text-primary transition-colors">{{ verb.verb }}</h3>
-            <svg class="w-4 h-4 text-base-content/40 group-hover:text-primary transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <h3 class="font-semibold text-base-content group-hover:text-primary transition-colors duration-150">{{ verb.verb }}</h3>
+            <svg class="w-4 h-4 text-base-content/40 group-hover:text-primary transition-colors duration-150" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
             </svg>
           </div>
