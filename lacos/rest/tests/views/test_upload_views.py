@@ -31,8 +31,9 @@ def authenticated_user():
 class TestUploadViews:
     """Test cases for the upload-related views."""
 
+    @patch('lacos.rest.views.upload_views.build_legacy_upload_denied_response', return_value=None)
     @patch('lacos.rest.views.upload_views.UploadService')
-    def test_get_upload_url_success(self, mock_upload_service, request_factory):
+    def test_get_upload_url_success(self, mock_upload_service, mock_access_check, request_factory, authenticated_user):
         """Test successful generation of a presigned URL."""
         # Configure the mock
         mock_instance = MagicMock()
@@ -56,6 +57,7 @@ class TestUploadViews:
             },
             content_type='application/json'
         )
+        force_authenticate(request, user=authenticated_user)
         response = get_upload_url(request)
 
         # Assert response
@@ -71,8 +73,9 @@ class TestUploadViews:
             path_prefix='folder'
         )
 
+    @patch('lacos.rest.views.upload_views.build_legacy_upload_denied_response', return_value=None)
     @patch('lacos.rest.views.upload_views.UploadService')
-    def test_get_upload_url_missing_params(self, mock_upload_service, request_factory):
+    def test_get_upload_url_missing_params(self, mock_upload_service, mock_access_check, request_factory, authenticated_user):
         """Test generation of a presigned URL with missing parameters."""
         # Make the request with missing file_type
         request = request_factory.post(
@@ -80,6 +83,7 @@ class TestUploadViews:
             data={'file_name': 'test.jpg'},
             content_type='application/json'
         )
+        force_authenticate(request, user=authenticated_user)
         response = get_upload_url(request)
 
         # Assert response
@@ -91,8 +95,9 @@ class TestUploadViews:
         mock_instance = mock_upload_service.return_value
         mock_instance.generate_presigned_post.assert_not_called()
 
+    @patch('lacos.rest.views.upload_views.build_legacy_upload_denied_response', return_value=None)
     @patch('lacos.rest.views.upload_views.UploadService')
-    def test_get_upload_url_service_error(self, mock_upload_service, request_factory):
+    def test_get_upload_url_service_error(self, mock_upload_service, mock_access_check, request_factory, authenticated_user):
         """Test handling of service errors when generating a presigned URL."""
         # Configure the mock to return an error
         mock_instance = MagicMock()
@@ -108,10 +113,12 @@ class TestUploadViews:
             '/api/get-upload-url/',
             data={
                 'file_name': 'test.jpg',
-                'file_type': 'image/jpeg'
+                'file_type': 'image/jpeg',
+                'folder_name': 'folder'
             },
             content_type='application/json'
         )
+        force_authenticate(request, user=authenticated_user)
         response = get_upload_url(request)
 
         # Assert response
@@ -119,8 +126,9 @@ class TestUploadViews:
         assert response.data['success'] is False
         assert response.data['error'] == 'Service unavailable'
 
+    @patch('lacos.rest.views.upload_views.build_legacy_upload_denied_response', return_value=None)
     @patch('lacos.rest.views.upload_views.UploadService')
-    def test_get_batch_upload_urls_success(self, mock_upload_service, request_factory):
+    def test_get_batch_upload_urls_success(self, mock_upload_service, mock_access_check, request_factory, authenticated_user):
         """Test successful generation of batch presigned URLs."""
         # Configure the mock
         mock_instance = MagicMock()
@@ -166,6 +174,7 @@ class TestUploadViews:
             data=data,
             content_type='application/json'
         )
+        force_authenticate(request, user=authenticated_user)
         response = get_batch_upload_urls(request)
 
         # Assert response
@@ -182,8 +191,9 @@ class TestUploadViews:
             expiration=7200
         )
 
+    @patch('lacos.rest.views.upload_views.build_legacy_upload_denied_response', return_value=None)
     @patch('lacos.rest.views.upload_views.UploadService')
-    def test_get_folder_upload_urls_success(self, mock_upload_service, request_factory, authenticated_user):
+    def test_get_folder_upload_urls_success(self, mock_upload_service, mock_access_check, request_factory, authenticated_user):
         """Test successful generation of folder upload URLs."""
         # Configure the mock
         mock_instance = MagicMock()
@@ -274,7 +284,6 @@ class TestUploadViews:
         call_args = mock_instance.generate_batch_presigned_posts.call_args[1]
         assert call_args['path_prefix'] == 'my_folder'
         assert call_args['expiration'] == 3600
-        assert call_args['use_multipart'] is False
         assert len(call_args['files_metadata']) == 2
         # We can't directly compare dicts because order might be different
         for expected, actual in zip(expected_files_metadata, call_args['files_metadata']):
@@ -283,8 +292,9 @@ class TestUploadViews:
             assert expected['path'] == actual['path']
             assert expected['size'] == actual['size']
 
+    @patch('lacos.rest.views.upload_views.build_legacy_upload_denied_response', return_value=None)
     @patch('lacos.rest.views.upload_views.UploadService')
-    def test_get_folder_upload_urls_missing_folder_name(self, mock_upload_service, request_factory, authenticated_user):
+    def test_get_folder_upload_urls_missing_folder_name(self, mock_upload_service, mock_access_check, request_factory, authenticated_user):
         """Test folder upload URL generation with missing folder name."""
         # Make the request without folder_name
         data = {
@@ -303,8 +313,22 @@ class TestUploadViews:
         # Assert response
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert 'error' in response.data
-        assert 'Missing required parameter: folder_name' in response.data['error']
+        assert 'Missing folder_name parameter' in response.data['error']
         
         # Make sure the service was not called
         mock_instance = mock_upload_service.return_value
-        mock_instance.generate_batch_presigned_posts.assert_not_called() 
+        mock_instance.generate_batch_presigned_posts.assert_not_called()
+
+    def test_get_upload_url_requires_authentication(self, request_factory):
+        request = request_factory.post(
+            '/api/get-upload-url/',
+            data={
+                'file_name': 'test.jpg',
+                'file_type': 'image/jpeg',
+                'folder_name': 'folder',
+            },
+            content_type='application/json'
+        )
+        response = get_upload_url(request)
+
+        assert response.status_code in {status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN}

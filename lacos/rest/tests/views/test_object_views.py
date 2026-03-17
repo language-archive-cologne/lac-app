@@ -25,8 +25,9 @@ def authenticated_user():
 class TestObjectViews:
     """Test cases for the object-related views."""
 
+    @patch('lacos.rest.views.object_views.build_legacy_upload_denied_response', return_value=None)
     @patch('lacos.rest.views.object_views.UploadService')
-    def test_copy_object_success(self, mock_upload_service, request_factory, authenticated_user):
+    def test_copy_object_success(self, mock_upload_service, mock_access_check, request_factory, authenticated_user):
         """Test successful copying of an object."""
         # Configure the mock
         mock_instance = MagicMock()
@@ -69,8 +70,9 @@ class TestObjectViews:
             dest_bucket='dest-bucket'
         )
 
+    @patch('lacos.rest.views.object_views.build_legacy_upload_denied_response', return_value=None)
     @patch('lacos.rest.views.object_views.UploadService')
-    def test_copy_object_missing_params(self, mock_upload_service, request_factory, authenticated_user):
+    def test_copy_object_missing_params(self, mock_upload_service, mock_access_check, request_factory, authenticated_user):
         """Test copying an object with missing parameters."""
         # Make the request with missing dest_key
         request = request_factory.post(
@@ -90,8 +92,9 @@ class TestObjectViews:
         mock_instance = mock_upload_service.return_value
         mock_instance.copy_object.assert_not_called()
 
+    @patch('lacos.rest.views.object_views.build_legacy_upload_denied_response', return_value=None)
     @patch('lacos.rest.views.object_views.UploadService')
-    def test_copy_object_service_error(self, mock_upload_service, request_factory, authenticated_user):
+    def test_copy_object_service_error(self, mock_upload_service, mock_access_check, request_factory, authenticated_user):
         """Test handling of service errors when copying an object."""
         # Configure the mock to return an error
         mock_instance = MagicMock()

@@ -1,17 +1,18 @@
 from django.shortcuts import render
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 import logging
 import json
 
+from lacos.rest.legacy_upload_access import build_legacy_upload_denied_response
 from lacos.storage.services.upload_service import UploadService
 
 logger = logging.getLogger(__name__)
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_upload_url(request):
     """
     Generate a presigned URL for direct upload to S3.
@@ -32,12 +33,19 @@ def get_upload_url(request):
     folder_name = data.get('folder_name')
     
     # Validate required parameters
-    if not file_name or not file_type:
+    if not file_name or not file_type or not folder_name:
         logger.warning("Missing required parameters for presigned URL generation")
         return Response(
-            {"success": False, "error": "Missing required parameters: file_name and file_type are required"},
+            {"success": False, "error": "Missing required parameters: file_name, file_type, and folder_name are required"},
             status=status.HTTP_400_BAD_REQUEST
         )
+
+    denied_response = build_legacy_upload_denied_response(
+        request.user,
+        path_hint=folder_name,
+    )
+    if denied_response is not None:
+        return denied_response
     
     # Call service layer
     service = UploadService()
@@ -57,7 +65,7 @@ def get_upload_url(request):
 
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_batch_upload_urls(request):
     """
     Generate presigned URLs for multiple files in one request.
@@ -78,12 +86,19 @@ def get_batch_upload_urls(request):
     expiration = data.get('expiration', 3600)  # 1 hour default
     
     # Validate required parameters
-    if not files or not isinstance(files, list):
+    if not files or not isinstance(files, list) or not folder_name:
         logger.warning("Missing or invalid 'files' parameter for batch URL generation")
         return Response(
-            {"success": False, "error": "Missing or invalid 'files' parameter. Expected a list of file metadata."},
+            {"success": False, "error": "Missing or invalid parameters. 'files' must be a list and folder_name is required."},
             status=status.HTTP_400_BAD_REQUEST
         )
+
+    denied_response = build_legacy_upload_denied_response(
+        request.user,
+        path_hint=folder_name,
+    )
+    if denied_response is not None:
+        return denied_response
     
     # Call service layer
     service = UploadService()
@@ -109,7 +124,7 @@ def get_batch_upload_urls(request):
 
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def get_accelerated_upload_url(request):
     """
     Generate a presigned URL with S3 Transfer Acceleration for maximum upload speed.
@@ -130,12 +145,19 @@ def get_accelerated_upload_url(request):
     folder_name = data.get('folder_name')
     
     # Validate required parameters
-    if not file_name or not file_type:
+    if not file_name or not file_type or not folder_name:
         logger.warning("Missing required parameters for accelerated presigned URL generation")
         return Response(
-            {"success": False, "error": "Missing required parameters: file_name and file_type are required"},
+            {"success": False, "error": "Missing required parameters: file_name, file_type, and folder_name are required"},
             status=status.HTTP_400_BAD_REQUEST
         )
+
+    denied_response = build_legacy_upload_denied_response(
+        request.user,
+        path_hint=folder_name,
+    )
+    if denied_response is not None:
+        return denied_response
     
     # Call service layer
     service = UploadService()
@@ -155,7 +177,7 @@ def get_accelerated_upload_url(request):
 
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def mark_upload_complete(request):
     """
     Mark an S3 upload as complete and verify the file exists.
@@ -178,6 +200,13 @@ def mark_upload_complete(request):
             {"success": False, "error": "Missing required parameter: s3_key"},
             status=status.HTTP_400_BAD_REQUEST
         )
+
+    denied_response = build_legacy_upload_denied_response(
+        request.user,
+        path_hint=s3_key,
+    )
+    if denied_response is not None:
+        return denied_response
     
     # Call service layer
     service = UploadService()
@@ -230,6 +259,23 @@ def get_folder_upload_urls(request):
                 {"success": False, "error": "Missing or invalid folder_structure parameter. Expected a list of file metadata."},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        denied_response = build_legacy_upload_denied_response(
+            request.user,
+            path_hint=folder_name,
+        )
+        if denied_response is not None:
+            return denied_response
+
+        normalized_files_metadata = []
+        for file_meta in files_metadata:
+            normalized_files_metadata.append({
+                'file_name': file_meta.get('file_name') or file_meta.get('filename'),
+                'file_type': file_meta.get('file_type') or file_meta.get('content_type'),
+                'path': file_meta.get('path', ''),
+                'size': file_meta.get('size', 0),
+                'file_size': file_meta.get('file_size') or file_meta.get('size', 0),
+            })
         
         # Log some sample files for debugging
         if files_metadata:
@@ -238,10 +284,9 @@ def get_folder_upload_urls(request):
         # Call service layer
         service = UploadService()
         result = service.generate_batch_presigned_posts(
-            files_metadata=files_metadata,
+            files_metadata=normalized_files_metadata,
             path_prefix=folder_name,
             expiration=3600,
-            use_multipart=False  # Use single-part uploads for folder uploads
         )
         
         # Handle service result

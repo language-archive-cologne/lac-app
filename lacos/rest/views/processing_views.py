@@ -1,12 +1,13 @@
 from django.shortcuts import render
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 import logging
 import json
 import os
 
+from lacos.rest.legacy_upload_access import build_legacy_upload_denied_response
 from lacos.storage.services.upload_service import UploadService
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,14 @@ def process_uploaded_files(request):
                 'success': False,
                 'error': 'Invalid uploaded_files JSON format'
             }, status=status.HTTP_400_BAD_REQUEST)
+
+        denied_response = build_legacy_upload_denied_response(
+            request.user,
+            path_hint=folder_name,
+            s3_keys=[file_info.get('s3_key') for file_info in uploaded_files if file_info.get('s3_key')],
+        )
+        if denied_response is not None:
+            return denied_response
         
         # Process each file based on its type
         processed_files = []
@@ -124,7 +133,7 @@ def process_uploaded_files(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def upload_error(request):
     """
     Log upload errors from the client.
@@ -143,6 +152,14 @@ def upload_error(request):
     file_name = data.get('file_name', 'unknown')
     s3_key = data.get('s3_key', 'unknown')
     error_message = data.get('error', 'No error details provided')
+
+    if s3_key != 'unknown':
+        denied_response = build_legacy_upload_denied_response(
+            request.user,
+            path_hint=s3_key,
+        )
+        if denied_response is not None:
+            return denied_response
     
     # Log the error
     logger.error("Client reported upload error", extra={"file_name": file_name, "s3_key": s3_key, "error": error_message})
@@ -178,6 +195,14 @@ def mark_upload_complete(request):
                 'success': False,
                 'error': 'Missing required parameters: folder_name and uploaded_files'
             }, status=status.HTTP_400_BAD_REQUEST)
+
+        denied_response = build_legacy_upload_denied_response(
+            request.user,
+            path_hint=folder_name,
+            s3_keys=[file_info.get('s3_key') for file_info in uploaded_files if file_info.get('s3_key')],
+        )
+        if denied_response is not None:
+            return denied_response
         
         # Process each file based on its type
         processed_files = []

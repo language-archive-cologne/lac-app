@@ -25,8 +25,9 @@ def authenticated_user():
 class TestProcessingViews:
     """Test cases for the processing-related views."""
 
+    @patch('lacos.rest.views.processing_views.build_legacy_upload_denied_response', return_value=None)
     @patch('lacos.rest.views.processing_views.UploadService')
-    def test_process_uploaded_files_success(self, mock_upload_service, request_factory, authenticated_user):
+    def test_process_uploaded_files_success(self, mock_upload_service, mock_access_check, request_factory, authenticated_user):
         """Test successful processing of uploaded files."""
         # Configure the mock
         mock_instance = MagicMock()
@@ -70,8 +71,9 @@ class TestProcessingViews:
         mock_instance.check_file_exists.assert_any_call('folder/test2.jpg')
         mock_instance.get_object_content.assert_called_once_with('folder/test1.xml')
 
+    @patch('lacos.rest.views.processing_views.build_legacy_upload_denied_response', return_value=None)
     @patch('lacos.rest.views.processing_views.UploadService')
-    def test_process_uploaded_files_missing_params(self, mock_upload_service, request_factory, authenticated_user):
+    def test_process_uploaded_files_missing_params(self, mock_upload_service, mock_access_check, request_factory, authenticated_user):
         """Test processing uploaded files with missing parameters."""
         # Make the request with missing uploaded_files
         request = request_factory.post(
@@ -91,8 +93,9 @@ class TestProcessingViews:
         mock_instance = mock_upload_service.return_value
         mock_instance.check_file_exists.assert_not_called()
 
+    @patch('lacos.rest.views.processing_views.build_legacy_upload_denied_response', return_value=None)
     @patch('lacos.rest.views.processing_views.UploadService')
-    def test_process_uploaded_files_nonexistent_file(self, mock_upload_service, request_factory, authenticated_user):
+    def test_process_uploaded_files_nonexistent_file(self, mock_upload_service, mock_access_check, request_factory, authenticated_user):
         """Test processing uploaded files where one file doesn't exist in S3."""
         # Configure the mock
         mock_instance = MagicMock()
@@ -131,8 +134,9 @@ class TestProcessingViews:
         assert response.data['failed_files'][0]['file_name'] == 'test2.jpg'
         assert 'File not found in S3' in response.data['failed_files'][0]['error']
 
+    @patch('lacos.rest.views.processing_views.build_legacy_upload_denied_response', return_value=None)
     @patch('lacos.rest.views.processing_views.UploadService')
-    def test_process_uploaded_files_processing_error(self, mock_upload_service, request_factory, authenticated_user):
+    def test_process_uploaded_files_processing_error(self, mock_upload_service, mock_access_check, request_factory, authenticated_user):
         """Test handling of errors during file processing."""
         # Configure the mock
         mock_instance = MagicMock()

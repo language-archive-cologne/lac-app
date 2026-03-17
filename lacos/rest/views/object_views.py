@@ -1,10 +1,11 @@
 from django.shortcuts import render
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 import logging
 
+from lacos.rest.legacy_upload_access import build_legacy_upload_denied_response
 from lacos.storage.services.upload_service import UploadService
 
 logger = logging.getLogger(__name__)
@@ -39,6 +40,13 @@ def copy_object(request):
             {"success": False, "error": "Missing required parameters: source_key and dest_key are required"},
             status=status.HTTP_400_BAD_REQUEST
         )
+
+    denied_response = build_legacy_upload_denied_response(
+        request.user,
+        s3_keys=[source_key, dest_key],
+    )
+    if denied_response is not None:
+        return denied_response
     
     # Call service layer
     service = UploadService()
