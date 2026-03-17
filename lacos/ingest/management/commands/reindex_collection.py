@@ -272,30 +272,61 @@ class Command(BaseCommand):
         dry_run: bool = False,
         discovery_service: Optional[FileDiscoveryService] = None,
     ) -> list:
-        """Reindex bundles for collection and return results."""
-        bundle_qs = Bundle.objects.filter(
-            structural_info__is_member_of_collection=collection
-        ).distinct()
-        bundle_keys = [
-            bundle.import_object_key
-            for bundle in bundle_qs
-            if bundle.import_object_key
-        ]
-        if not bundle_keys and collection.import_object_key:
+        """Reindex bundles for collection and return results.
+
+        After reindexing, removes orphaned bundles whose XML no longer
+        exists in S3.
+        """
+        service = discovery_service or FileDiscoveryService()
+
+        # Always discover bundle keys from S3 so we have the authoritative
+        # list for orphan cleanup — DB-derived keys would include orphans.
+        s3_bundle_keys = []
+        if collection.import_object_key:
             prefix = f"{collection.import_object_key.split('/')[0]}/"
-            service = discovery_service or FileDiscoveryService()
             candidates = service.find_collection_and_bundle_xmls_s3(
                 bucket,
                 prefix,
             )
-            bundle_keys = candidates.get("potential_bundle_xmls", [])
+            s3_bundle_keys = candidates.get("potential_bundle_xmls", [])
 
-        return self._reindex_bundle_keys(
+        if not s3_bundle_keys:
+            # Fallback to DB-derived keys when S3 discovery returns nothing
+            bundle_qs = Bundle.objects.filter(
+                structural_info__is_member_of_collection=collection
+            ).distinct()
+            s3_bundle_keys = [
+                b.import_object_key for b in bundle_qs if b.import_object_key
+            ]
+
+        results = self._reindex_bundle_keys(
             bucket,
-            bundle_keys,
+            s3_bundle_keys,
             dry_run=dry_run,
-            discovery_service=discovery_service,
+            discovery_service=service,
         )
+
+        # Remove bundles that no longer have XML in S3
+        if not dry_run:
+            self._cleanup_orphan_bundles(collection, s3_bundle_keys)
+
+        return results
+
+    def _cleanup_orphan_bundles(
+        self,
+        collection: Collection,
+        s3_bundle_keys: List[str],
+    ) -> None:
+        """Delete bundles linked to collection that have no XML in S3."""
+        from lacos.ingest.services.orphan_cleanup import delete_orphaned_bundles
+
+        deleted = delete_orphaned_bundles(collection.id, s3_bundle_keys)
+        if deleted:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Removed {len(deleted)} orphaned bundle(s) from {collection.identifier}"
+                )
+            )
 
     def _reindex_bundle_keys(
         self,
