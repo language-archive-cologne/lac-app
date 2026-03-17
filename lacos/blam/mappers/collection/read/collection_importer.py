@@ -27,9 +27,6 @@ from lacos.blam.mappers.collection.read.import_collection_general_info import (
     import_general_info,
 )
 from lacos.blam.mappers.collection.read.import_collection_header import import_collection_header
-from lacos.blam.mappers.collection.read.import_collection_license import (
-    import_collection_license,
-)
 from lacos.blam.mappers.collection.read.import_collection_project_info import (
     import_project_info,
 )
@@ -143,14 +140,14 @@ class CollectionImporter:
             cls._import_publication_info(cmd_data, collection)
             cls._import_administrative_info(cmd_data, collection)
             cls._import_structural_info(cmd_data, collection)
-            cls._import_license(cmd_data, collection)
 
             repository = getattr(cmd_data.components, "blam_collection_repository_v1_2", None)
-            if repository and getattr(repository, "project_info", None):
-                cls._import_project_info(cmd_data, collection)
-                logger.info("Project info found and imported for update")
-            else:
-                logger.info("No project info found in XML - this is optional")
+            if repository is not None:
+                project_infos = cls._import_project_info(cmd_data, collection)
+                if project_infos:
+                    logger.info("Project info found and imported for update")
+                else:
+                    logger.info("No project info found in XML - existing links cleared")
 
             update_fields = []
             md_self_link = None
@@ -186,14 +183,14 @@ class CollectionImporter:
             cls._import_publication_info(cmd_data, collection)
             cls._import_administrative_info(cmd_data, collection)
             cls._import_structural_info(cmd_data, collection)
-            cls._import_license(cmd_data, collection)
 
             repository = getattr(cmd_data.components, "blam_collection_repository_v1_2", None)
-            if repository and getattr(repository, "project_info", None):
-                cls._import_project_info(cmd_data, collection)
-                logger.info("Project info found and imported")
-            else:
-                logger.info("No project info found in XML - this is optional")
+            if repository is not None:
+                project_infos = cls._import_project_info(cmd_data, collection)
+                if project_infos:
+                    logger.info("Project info found and imported")
+                else:
+                    logger.info("No project info found in XML")
 
             return collection
 
@@ -213,19 +210,6 @@ class CollectionImporter:
         header = import_collection_header(cmd_data, collection)
         logger.info("Imported header for collection %s", collection.id)
         return header
-
-    @classmethod
-    def _import_license(cls, cmd_data: CollectionCmdAdapter, collection: Collection):
-        license_obj = import_collection_license(cmd_data, collection)
-        if license_obj:
-            logger.info(
-                "Imported license %s for collection %s",
-                license_obj.license_name,
-                collection.id,
-            )
-        else:
-            logger.info("No license found for collection %s", collection.id)
-        return license_obj
 
     @classmethod
     def _import_general_info(cls, cmd_data: CollectionCmdAdapter, collection: Collection):

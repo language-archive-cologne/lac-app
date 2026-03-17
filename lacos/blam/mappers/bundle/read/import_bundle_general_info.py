@@ -1,5 +1,9 @@
 from django.db import transaction
 from typing import Dict, Any, Optional, List
+from lacos.blam.mappers.import_cleanup import (
+    delete_unreferenced_records,
+    detach_parent_m2m_children,
+)
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
 from blam_schemas.bundle.blam_bundle_repository_v1_1 import (
     Cmd
@@ -30,15 +34,19 @@ def import_general_info(cmd_data: Cmd, bundle: 'Bundle') -> BundleGeneralInfo:
     """
     bundle_info = cmd_data.components.blam_bundle_repository_v1_1.bundle_general_info
     
+    existing_general_info = BundleGeneralInfo.objects.filter(bundle=bundle).first()
+    old_location_id = existing_general_info.location_id if existing_general_info else None
+
     # Create location first since it's needed as a foreign key
     location = create_bundle_location(bundle_info.bundle_location)
     
     # Create the main general info record
     general_info = create_bundle_general_info(bundle_info, location, bundle)
     
-    # Reset related objects to keep updates idempotent
-    general_info.keywords.clear()
-    general_info.object_languages.all().delete()
+    detach_parent_m2m_children(general_info, "keywords")
+    detach_parent_m2m_children(general_info, "object_languages")
+    if old_location_id and old_location_id != location.pk:
+        delete_unreferenced_records(BundleLocation, [old_location_id], ["bundle_general_info"])
 
     # Import keywords if present
     if bundle_info.bundle_keywords:
@@ -65,20 +73,10 @@ def create_bundle_general_info(bundle_info: Any, location: BundleLocation, bundl
     id_value = extract_id_value(bundle_info)
     id_type = extract_id_type(bundle_info)
     
-    general_info, created = BundleGeneralInfo.objects.get_or_create(
-        id_value=id_value,
-        defaults={
-            'id_type': id_type,
-            'display_title': bundle_info.bundle_display_title,
-            'description': bundle_info.bundle_description,
-            'version': bundle_info.bundle_version,
-            'recording_date': parse_recording_date(bundle_info.bundle_recording_date.value),
-            'location': location,
-            'bundle': bundle
-        }
-    )
-    if not created:
+    general_info = BundleGeneralInfo.objects.filter(bundle=bundle).first()
+    if general_info:
         general_info.id_type = id_type
+        general_info.id_value = id_value
         general_info.display_title = bundle_info.bundle_display_title
         general_info.description = bundle_info.bundle_description
         general_info.version = bundle_info.bundle_version
@@ -86,6 +84,17 @@ def create_bundle_general_info(bundle_info: Any, location: BundleLocation, bundl
         general_info.location = location
         general_info.bundle = bundle
         general_info.save()
+    else:
+        general_info = BundleGeneralInfo.objects.create(
+            id_type=id_type,
+            id_value=id_value,
+            display_title=bundle_info.bundle_display_title,
+            description=bundle_info.bundle_description,
+            version=bundle_info.bundle_version,
+            recording_date=parse_recording_date(bundle_info.bundle_recording_date.value),
+            location=location,
+            bundle=bundle,
+        )
     return general_info
 
 
@@ -185,19 +194,16 @@ def create_bundle_location(location_data: Any) -> BundleLocation:
     Returns:
         The created BundleLocation instance
     """
-    location, created = BundleLocation.objects.get_or_create(
+    return BundleLocation.objects.create(
         region_name=location_data.bundle_region_name,
         country_name=location_data.bundle_country_name,
         country_code=location_data.bundle_country_code.value,
-        defaults={
-            'geo_location': getattr(location_data, 'bundle_geo_location', None),
-            'location_name': getattr(location_data, 'bundle_location_name', None),
-            'location_facet': getattr(location_data, 'bundle_location_facet', None),
-            'region_facet': location_data.bundle_region_facet,
-            'country_facet': location_data.bundle_country_facet,
-        }
+        geo_location=getattr(location_data, 'bundle_geo_location', None),
+        location_name=getattr(location_data, 'bundle_location_name', None),
+        location_facet=getattr(location_data, 'bundle_location_facet', None),
+        region_facet=location_data.bundle_region_facet,
+        country_facet=location_data.bundle_country_facet,
     )
-    return location
 
 
 def import_keywords(general_info: BundleGeneralInfo, keywords: List[str]) -> None:
@@ -209,7 +215,7 @@ def import_keywords(general_info: BundleGeneralInfo, keywords: List[str]) -> Non
         keywords: List of keyword strings from the schema
     """
     for keyword_value in keywords:
-        keyword, created = BundleKeyword.objects.get_or_create(value=keyword_value)
+        keyword = BundleKeyword.objects.create(value=keyword_value)
         general_info.keywords.add(keyword)
 
 

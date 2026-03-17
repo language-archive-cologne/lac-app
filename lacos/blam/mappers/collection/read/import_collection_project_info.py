@@ -1,5 +1,6 @@
 from typing import Any
 from django.db import transaction
+from lacos.blam.mappers.import_cleanup import delete_unreferenced_records
 from lacos.blam.models.base_project_info import (
     ProjectInfo,
     FunderInfo,
@@ -35,6 +36,7 @@ def import_project_info(cmd_data: Any, collection: Collection) -> list[ProjectIn
     
     # Check if project_info exists in the schema
     if not hasattr(repo, 'project_info'):
+        clear_collection_project_info(collection)
         return []  # Return empty list if no project info in schema
         
     # Extract the project info section from the schema
@@ -42,11 +44,14 @@ def import_project_info(cmd_data: Any, collection: Collection) -> list[ProjectIn
     
     # Check if project attribute exists and has content
     if not hasattr(project_info_schema, 'project') or not project_info_schema.project:
+        clear_collection_project_info(collection)
         return []  # Return empty list if no projects defined
     
     # List to store all project info instances
     project_infos = []
     
+    clear_collection_project_info(collection)
+
     # Process each project in the schema
     for project_schema in project_info_schema.project:
         # Create and populate the project info model
@@ -58,16 +63,26 @@ def import_project_info(cmd_data: Any, collection: Collection) -> list[ProjectIn
         
         project_infos.append(project_info)
     
-    # Associate all project infos with the collection
-    # Clear existing project infos to avoid duplicates
-    if hasattr(collection, 'project_infos'):
-        collection.project_infos.clear()
-        
-        # Add all project infos to the collection
-        for project_info in project_infos:
-            collection.project_infos.add(project_info)
+    for project_info in project_infos:
+        collection.project_infos.add(project_info)
     
     return project_infos
+
+
+def clear_collection_project_info(collection: Collection) -> None:
+    project_ids = list(collection.project_infos.values_list("id", flat=True))
+    funder_ids = list(
+        FunderInfo.objects.filter(projects__id__in=project_ids).values_list("id", flat=True).distinct()
+    )
+    identifier_ids = list(
+        FunderIdentifier.objects.filter(funder_infos__id__in=funder_ids).values_list("id", flat=True).distinct()
+    )
+
+    collection.project_infos.clear()
+
+    delete_unreferenced_records(ProjectInfo, project_ids, ["collections", "bundles"])
+    delete_unreferenced_records(FunderInfo, funder_ids, ["projects"])
+    delete_unreferenced_records(FunderIdentifier, identifier_ids, ["funder_infos"])
 
 
 def create_project_info(project_schema) -> ProjectInfo:
@@ -86,18 +101,7 @@ def create_project_info(project_schema) -> ProjectInfo:
         'project_description': project_schema.project_description
     }
     
-    # Try to find an existing project with the same display name, or create a new one
-    project_info, created = ProjectInfo.objects.get_or_create(
-        project_display_name=project_data['project_display_name'],
-        defaults=project_data
-    )
-    
-    # Update description if the project already existed but description changed
-    if not created and project_info.project_description != project_data['project_description']:
-        project_info.project_description = project_data['project_description']
-        project_info.save()
-    
-    return project_info
+    return ProjectInfo.objects.create(**project_data)
 
 
 def import_funder_infos(project_info: ProjectInfo, funder_infos_schema) -> None:
@@ -125,21 +129,9 @@ def import_funder_infos(project_info: ProjectInfo, funder_infos_schema) -> None:
         if hasattr(funder_info_schema, 'grant_uri') and funder_info_schema.grant_uri:
             funder_data['grant_uri'] = funder_info_schema.grant_uri
         
-        # Try to find an existing funder with the same name, or create a new one
-        funder_info, created = FunderInfo.objects.get_or_create(
-            funder_name=funder_data['funder_name'],
-            defaults=funder_data
-        )
-        
-        # Update fields that might have changed
-        if not created:
-            for key, value in funder_data.items():
-                if key != 'funder_name':  # Don't update the key field
-                    setattr(funder_info, key, value)
-            funder_info.save()
+        funder_info = FunderInfo.objects.create(**funder_data)
         
         if hasattr(funder_info_schema, 'funder_identifier') and funder_info_schema.funder_identifier:
-            funder_info.funder_identifiers.clear()
             # Handle both single object and list cases
             identifiers = funder_info_schema.funder_identifier
             if not isinstance(identifiers, (list, tuple)):
@@ -153,7 +145,7 @@ def import_funder_infos(project_info: ProjectInfo, funder_infos_schema) -> None:
                 }
                 id_type = id_type_mapping.get(identifier_schema.identifier_type, "crossref_funder")
 
-                identifier, created = FunderIdentifier.objects.get_or_create(
+                identifier = FunderIdentifier.objects.create(
                     value=identifier_schema.value,
                     identifier_type=id_type
                 )

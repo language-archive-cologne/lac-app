@@ -1,5 +1,9 @@
 from typing import Any
 from django.db import transaction
+from lacos.blam.mappers.import_cleanup import (
+    delete_unreferenced_records,
+    detach_parent_m2m_children,
+)
 from lacos.blam.models.collection.collection_general_info import (
     CollectionGeneralInfo,
     CollectionLocation,
@@ -38,15 +42,19 @@ def import_general_info(cmd_data: Any, collection: Collection) -> CollectionGene
     # Extract the general info section from the schema
     general_info_schema = cmd_data.components.blam_collection_repository_v1_2.collection_general_info
     
+    existing_general_info = CollectionGeneralInfo.objects.filter(collection=collection).first()
+    old_location_id = existing_general_info.location_id if existing_general_info else None
+
     # Create location first since it's required by general info
     location = create_location(general_info_schema.collection_location)
     
     # Create base general info with reference to collection
     general_info = create_base_general_info(general_info_schema, location, collection)
     
-    # Reset related objects to keep updates idempotent
-    general_info.keywords.clear()
-    general_info.object_languages.all().delete()
+    detach_parent_m2m_children(general_info, "keywords")
+    detach_parent_m2m_children(general_info, "object_languages")
+    if old_location_id and old_location_id != location.pk:
+        delete_unreferenced_records(CollectionLocation, [old_location_id], ["location"])
 
     # Import related objects
     import_keywords(general_info, general_info_schema.collection_keywords)
@@ -93,33 +101,7 @@ def create_location(location_schema) -> CollectionLocation:
     if hasattr(location_schema, 'collection_country_code') and location_schema.collection_country_code:
         location_data['country_code'] = location_schema.collection_country_code.value
     
-    # Try to find an existing location with the same data or create a new one
-    # We use geo_location and country_code as unique identifiers
-    unique_fields = {
-        'geo_location': location_data.get('geo_location'),
-        'country_code': location_data.get('country_code')
-    }
-    
-    # Remove None values from unique fields
-    unique_fields = {k: v for k, v in unique_fields.items() if v is not None}
-    
-    # If we have no unique fields, create a new location
-    if not unique_fields:
-        return CollectionLocation.objects.create(**location_data)
-    
-    # Try to get or create the location
-    location, created = CollectionLocation.objects.get_or_create(
-        **unique_fields,
-        defaults=location_data
-    )
-    
-    # Update fields if the record already existed
-    if not created:
-        for key, value in location_data.items():
-            setattr(location, key, value)
-        location.save()
-    
-    return location
+    return CollectionLocation.objects.create(**location_data)
 
 
 def create_base_general_info(general_info_schema, location: CollectionLocation, collection: Collection) -> CollectionGeneralInfo:
@@ -208,7 +190,7 @@ def import_keywords(general_info: CollectionGeneralInfo, keywords_schema) -> Non
     keyword_values = getattr(keywords_schema, "collection_keyword", None) or []
     for keyword_value in keyword_values:
         if keyword_value and keyword_value.strip():
-            keyword, _ = CollectionKeyword.objects.get_or_create(value=keyword_value)
+            keyword = CollectionKeyword.objects.create(value=keyword_value)
             general_info.keywords.add(keyword)
 
 

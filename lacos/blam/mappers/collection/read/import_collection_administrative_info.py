@@ -1,6 +1,10 @@
 from typing import Any
 from django.db import transaction
 from django.utils.dateparse import parse_date
+from lacos.blam.mappers.import_cleanup import (
+    delete_unreferenced_records,
+    detach_parent_m2m_children,
+)
 from lacos.blam.models.collection.collection_administrative_info import (
     CollectionAdministrativeInfo,
     CollectionIdenticalResource,
@@ -36,10 +40,20 @@ def import_administrative_info(cmd_data: Any, collection: Collection) -> Collect
     # Create and populate the administrative info model with reference to collection
     admin_info = create_base_administrative_info(admin_info_schema, collection)
     
-    # Reset related objects to keep updates idempotent
-    admin_info.is_identical_to.clear()
-    admin_info.rights_holders.clear()
-    admin_info.licenses.clear()
+    old_rights_holder_identifier_ids = list(
+        admin_info.rights_holders.values_list(
+            "rights_holder_identifiers__id",
+            flat=True,
+        ).distinct()
+    )
+    detach_parent_m2m_children(admin_info, "is_identical_to")
+    detach_parent_m2m_children(admin_info, "rights_holders")
+    detach_parent_m2m_children(admin_info, "licenses")
+    delete_unreferenced_records(
+        CollectionRightsHolderIdentifier,
+        old_rights_holder_identifier_ids,
+        ["rights_holders_identifiers"],
+    )
 
     # Import related objects
     import_identical_resources(admin_info, admin_info_schema)
@@ -106,7 +120,7 @@ def import_identical_resources(admin_info: CollectionAdministrativeInfo, admin_i
     for identical_resource_uri in admin_info_schema.collection_is_identical_to:
         # Skip empty URIs
         if identical_resource_uri and identical_resource_uri.strip():
-            identical_resource, created = CollectionIdenticalResource.objects.get_or_create(
+            identical_resource = CollectionIdenticalResource.objects.create(
                 uri=identical_resource_uri
             )
             admin_info.is_identical_to.add(identical_resource)
@@ -123,9 +137,6 @@ def import_licenses(admin_info: CollectionAdministrativeInfo, admin_info_schema)
         admin_info: The CollectionAdministrativeInfo instance to add licenses to.
         admin_info_schema: The administrative info section of the BLAM collection repository schema.
     """
-    # Clear existing licenses to avoid duplicates
-    admin_info.licenses.clear()
-    
     # Skip if no licenses
     if not hasattr(admin_info_schema, 'license') or not admin_info_schema.license:
         return
@@ -150,7 +161,7 @@ def import_rights_holders(admin_info: CollectionAdministrativeInfo, admin_info_s
         admin_info_schema: The administrative info section of the BLAM collection repository schema.
     """
     for rights_holder_schema in admin_info_schema.rights_holder:
-        rights_holder, created = CollectionRightsHolder.objects.get_or_create(
+        rights_holder = CollectionRightsHolder.objects.create(
             rights_holder_name=rights_holder_schema.rights_holder_name
         )
         
@@ -162,7 +173,7 @@ def import_rights_holders(admin_info: CollectionAdministrativeInfo, admin_info_s
             if identifier_schema.identifier_type:
                  id_type_value = identifier_schema.identifier_type.value
 
-            identifier, created = CollectionRightsHolderIdentifier.objects.get_or_create(
+            identifier = CollectionRightsHolderIdentifier.objects.create(
                 identifier=identifier_schema.value or "", # Use empty string if value is None/empty
                 identifier_type=id_type_value # Use "OTHER" if type is missing
             )

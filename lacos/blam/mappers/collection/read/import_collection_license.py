@@ -152,16 +152,8 @@ def create_collection_license(admin_info_schema, license_schema=None) -> Optiona
     license_name = "" if license_data.license_name is None else str(license_data.license_name)
     license_identifier = "" if getattr(license_data, 'license_identifier', None) is None else str(license_data.license_identifier)
     
-    # Get or create the license
-    license_model, created = CollectionLicense.objects.get_or_create(
+    return CollectionLicense.objects.create(
         license_name=license_name,
         license_identifier=license_identifier,
-        defaults={'access': access}
+        access=access,
     )
-    
-    # Update access if needed
-    if not created and license_model.access != access:
-        license_model.access = access
-        license_model.save()
-    
-    return license_model 

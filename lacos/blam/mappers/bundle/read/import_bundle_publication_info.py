@@ -1,5 +1,9 @@
 from typing import Optional, List
 from django.db import transaction
+from lacos.blam.mappers.import_cleanup import (
+    delete_unreferenced_records,
+    detach_parent_m2m_children,
+)
 from lacos.blam.models.bundle.bundle_publication_info import (
     BundlePublicationInfo, BundlePublicationInfoCreator,
     BundleCreator, BundleContributor, BundleContributorName,
@@ -109,9 +113,16 @@ def import_publication_info(cmd_data: Cmd, bundle: 'Bundle') -> Optional[BundleP
         logger.error("Failed to create or update BundlePublicationInfo", extra={"error": e}, exc_info=True)
         return None # Or re-raise error
 
-    # Reset related objects to keep updates idempotent
-    bundle_pub_info.creators.clear()
-    bundle_pub_info.contributors.clear()
+    old_contributor_name_ids = list(
+        bundle_pub_info.contributors.values_list("contributor_name_id", flat=True)
+    )
+    detach_parent_m2m_children(bundle_pub_info, "creators")
+    detach_parent_m2m_children(bundle_pub_info, "contributors")
+    delete_unreferenced_records(
+        BundleContributorName,
+        old_contributor_name_ids,
+        ["contributors"],
+    )
 
     # Import creators (linking to the new bundle_pub_info)
     if hasattr(pub_info, 'bundle_creators') and pub_info.bundle_creators:
@@ -146,13 +157,10 @@ def import_creators(bundle_pub_info: BundlePublicationInfo, creators_data: List)
         if not creator_data.creator_name:
             continue
 
-        # Get or create creator using family_name and given_name as unique identifiers
-        creator, created = BundleCreator.objects.get_or_create(
+        creator = BundleCreator.objects.create(
             family_name=creator_data.creator_name.creator_family_name,
             given_name=creator_data.creator_name.creator_given_name or "",
-            defaults={
-                'affiliation': None,
-            }
+            affiliation=None,
         )
         
         # Handle identifiers
@@ -190,22 +198,19 @@ def import_contributors(bundle_pub_info: BundlePublicationInfo, contributors_dat
             continue
                 
         # Get or create contributor name
-        contributor_name, name_created = BundleContributorName.objects.get_or_create(
+        contributor_name = BundleContributorName.objects.create(
             contributor_family_name=contributor_data.contributor_name.contributor_family_name,
             contributor_given_name=contributor_data.contributor_name.contributor_given_name or ""
         )
         
-        # Get or create contributor
-        contributor, created = BundleContributor.objects.get_or_create(
+        contributor = BundleContributor.objects.create(
             contributor_name=contributor_name,
             family_name=contributor_data.contributor_name.contributor_family_name,
             given_name=contributor_data.contributor_name.contributor_given_name or "",
-            defaults={
-                'name_identifier': None,
-                'name_identifier_type': None,
-                'affiliation': None,
-                'role': None
-            }
+            name_identifier=None,
+            name_identifier_type=None,
+            affiliation=None,
+            role=None,
         )
         
         # Handle identifiers

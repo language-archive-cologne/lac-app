@@ -1,5 +1,9 @@
 from django.db import transaction
 from django.utils.dateparse import parse_date
+from lacos.blam.mappers.import_cleanup import (
+    delete_unreferenced_records,
+    detach_parent_m2m_children,
+)
 from lacos.blam.models.bundle.bundle_administrative_info import (
     BundleAdministrativeInfo,
     BundleIdenticalResource,
@@ -49,10 +53,20 @@ def import_administrative_info(bundle_schema: Cmd, bundle: 'Bundle') -> BundleAd
         # Create and populate the administrative info model
         admin_info = create_base_administrative_info(admin_info_schema, bundle)
 
-    # Reset related objects to keep updates idempotent
-    admin_info.is_identical_to.clear()
-    admin_info.licenses.clear()
-    admin_info.rights_holders.clear()
+    old_rights_holder_identifier_ids = list(
+        admin_info.rights_holders.values_list(
+            "rights_holder_identifiers__id",
+            flat=True,
+        ).distinct()
+    )
+    detach_parent_m2m_children(admin_info, "is_identical_to")
+    detach_parent_m2m_children(admin_info, "licenses")
+    detach_parent_m2m_children(admin_info, "rights_holders")
+    delete_unreferenced_records(
+        BundleRightsHolderIdentifier,
+        old_rights_holder_identifier_ids,
+        ["rights_holders_identifiers"],
+    )
 
     # Import related objects
     import_identical_resources(admin_info, admin_info_schema)
@@ -103,7 +117,7 @@ def import_identical_resources(admin_info: BundleAdministrativeInfo, admin_info_
         admin_info_schema: The administrative info section of the BLAM bundle repository schema.
     """
     for identical_resource_uri in admin_info_schema.bundle_is_identical_to:
-        identical_resource, created = BundleIdenticalResource.objects.get_or_create(
+        identical_resource = BundleIdenticalResource.objects.create(
             uri=identical_resource_uri
         )
         admin_info.is_identical_to.add(identical_resource)
@@ -136,17 +150,11 @@ def import_licenses(admin_info: BundleAdministrativeInfo, admin_info_schema) -> 
         license_name = license_schema.license_name or ""
         license_identifier = license_schema.license_identifier or ""
         
-        license_model, created = BundleLicense.objects.get_or_create(
+        license_model = BundleLicense.objects.create(
             license_name=license_name,
             license_identifier=license_identifier,
-            defaults={'access': access}
+            access=access,
         )
-        
-        # Update access if the license already existed
-        if not created:
-            license_model.access = access
-            license_model.save()
-            
         admin_info.licenses.add(license_model)
 
 
@@ -163,17 +171,16 @@ def import_rights_holders(admin_info: BundleAdministrativeInfo, admin_info_schem
         admin_info_schema: The administrative info section of the BLAM bundle repository schema.
     """
     for rights_holder_schema in admin_info_schema.rights_holder:
-        rights_holder, created = BundleRightsHolder.objects.get_or_create(
+        rights_holder = BundleRightsHolder.objects.create(
             rights_holder_name=rights_holder_schema.rights_holder_name
         )
         
         # Import rights holder identifiers
         for identifier_schema in rights_holder_schema.rights_holder_identifier:
-            identifier, created = BundleRightsHolderIdentifier.objects.get_or_create(
+            identifier_type = getattr(identifier_schema, "identifier_type", None)
+            identifier = BundleRightsHolderIdentifier.objects.create(
                 identifier=identifier_schema.value,
-                defaults={
-                    'identifier_type': 'ISNI'
-                }
+                identifier_type=(getattr(identifier_type, "value", None) or "OTHER").upper(),
             )
             rights_holder.rights_holder_identifiers.add(identifier)
         

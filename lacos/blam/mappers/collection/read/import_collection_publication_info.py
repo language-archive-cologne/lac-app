@@ -1,5 +1,6 @@
 from typing import Any
 from django.db import transaction
+from lacos.blam.mappers.import_cleanup import detach_parent_m2m_children
 from lacos.blam.models.collection.collection_publication_info import (
     CollectionPublicationInfo,
     CollectionPublicationInfoCreator,
@@ -38,9 +39,8 @@ def import_publication_info(cmd_data: Any, collection: Collection) -> Collection
     # Create and populate the publication info model
     publication_info = create_base_publication_info(publication_info_schema, collection)
     
-    # Reset related objects to keep updates idempotent
-    publication_info.creators.clear()
-    publication_info.contributors.clear()
+    detach_parent_m2m_children(publication_info, "creators")
+    detach_parent_m2m_children(publication_info, "contributors")
 
     # Import creators
     import_creators(publication_info, publication_info_schema)
@@ -131,11 +131,9 @@ def import_creators(publication_info: CollectionPublicationInfo, publication_inf
                 else:
                     creator_data['given_name'] = ""  # Required field, use empty string if missing
 
-            # Try to find an existing creator with the same name, or create a new one
-            creator, created = CollectionCreator.objects.get_or_create(
+            creator = CollectionCreator.objects.create(
                 family_name=creator_data['family_name'],
                 given_name=creator_data.get('given_name', ''),
-                defaults=creator_data,
             )
             
             # Add affiliations if they exist
@@ -198,13 +196,10 @@ def import_contributors(publication_info: CollectionPublicationInfo, publication
         display_name = f"{given_name} {family_name}".strip()
         contributor_data['contributor_display_name'] = display_name
         
-        # Try to find an existing contributor with the same family and given name, or create a new one
-        contributor, created = CollectionContributor.objects.get_or_create(
+        contributor = CollectionContributor.objects.create(
             family_name=contributor_data['family_name'],
             given_name=contributor_data.get('given_name', ''),
-            defaults={
-                'contributor_display_name': contributor_data['contributor_display_name']
-            }
+            contributor_display_name=contributor_data['contributor_display_name'],
         )
         
         # Add role if it exists
