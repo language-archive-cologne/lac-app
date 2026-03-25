@@ -18,8 +18,107 @@
       </span>
     </div>
   </div>
-  <!-- Table -->
-  <div class="overflow-x-auto">
+  <!-- Mobile card view -->
+  <div class="lg:hidden divide-y divide-base-200">
+    {% for bundle in bundles %}
+      {% with gi=bundle.get_general_info si=bundle.get_structural_info %}
+      <a href="{% url 'explorer:bundle_detail_by_handle' handle=bundle.identifier %}" class="block px-4 py-4 hover:bg-base-200 transition-colors">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0 flex-1">
+            <h3 class="font-semibold text-base-content leading-snug">
+              {% if gi and gi.display_title %}
+                {{ gi.display_title|highlight_query:search_query }}
+              {% else %}
+                {{ bundle.identifier|highlight_query:search_query }}
+              {% endif %}
+            </h3>
+            <div class="mt-1 space-y-0.5">
+              {% if si and si.is_member_of_collection %}
+                {% with coll=si.is_member_of_collection coll_gi=si.is_member_of_collection.get_general_info %}
+                  <p class="text-xs">
+                    <span class="uppercase tracking-wide font-semibold text-base-content/50">{% translate "Part of" %}</span>
+                    <span class="ml-1 font-medium text-base-content/75">
+                      {% if coll_gi and coll_gi.display_title %}
+                        {{ coll_gi.display_title|truncatewords:6 }}
+                      {% else %}
+                        {{ coll.identifier }}
+                      {% endif %}
+                    </span>
+                  </p>
+                {% endwith %}
+              {% endif %}
+              <div class="text-xs text-base-content/50 font-mono">{{ bundle.identifier }}</div>
+            </div>
+          </div>
+          <svg class="w-4 h-4 text-base-content/30 shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+          </svg>
+        </div>
+        <div class="mt-2 flex flex-wrap items-center gap-1.5">
+          {% if bundle.acl_access_level == 'public' %}
+            <span class="badge badge-success badge-xs">{% translate "Public" %}</span>
+          {% elif bundle.acl_access_level == 'academic' %}
+            <span class="badge badge-warning badge-xs">{% translate "Academic" %}</span>
+          {% elif bundle.acl_access_level %}
+            <span class="badge badge-xs bg-amber-600 text-white border-amber-600">{% translate "Restricted" %}</span>
+          {% endif %}
+          {% if gi and gi.object_languages.all %}
+            {% for language in gi.object_languages.all %}
+              <span class="inline-flex items-center gap-0.5 rounded-full border border-base-300 bg-base-200 px-1.5 py-0.5 text-xs text-base-content/70">
+                {{ language.name }}{% if language.iso_639_3_code %} <span class="text-base-content/40">[{{ language.iso_639_3_code }}]</span>{% endif %}
+              </span>
+            {% endfor %}
+          {% endif %}
+        </div>
+        {% if gi and gi.description %}
+          <p class="mt-1.5 text-xs text-base-content/60 line-clamp-2">{{ gi.description|truncatewords:20|highlight_query:search_query }}</p>
+        {% endif %}
+        {% if gi %}
+          {% with keywords=gi.keywords.all %}
+            {% if keywords %}
+              <div class="mt-2 flex flex-wrap gap-1">
+                {% for keyword in keywords|slice:":3" %}
+                  <span class="inline-flex max-w-[10rem] items-center rounded-full border border-base-300 bg-base-200 px-1.5 py-0.5 text-xs text-base-content/60">
+                    <span class="truncate">{{ keyword.value|highlight_query:search_query }}</span>
+                  </span>
+                {% endfor %}
+                {% if keywords|length > 3 %}
+                  <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-1.5 py-0.5 text-xs font-semibold text-base-content/50">+{{ keywords|length|add:"-3" }}</span>
+                {% endif %}
+              </div>
+            {% endif %}
+          {% endwith %}
+        {% endif %}
+        {% if search_query %}
+          <div class="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+            <span class="text-[11px] uppercase tracking-wide text-base-content/50">{% translate "Matched in" %}</span>
+            {% if searched_field_labels %}
+              {% for label in searched_field_labels %}
+                <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-[11px] font-medium text-base-content/75">
+                  {{ label }}
+                </span>
+              {% endfor %}
+            {% else %}
+              {% with reasons=bundle|bundle_match_reasons:search_query|split_csv %}
+                {% for reason in reasons %}
+                  <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-[11px] font-medium text-base-content/75">
+                    {{ reason|capfirst }}
+                  </span>
+                {% endfor %}
+              {% endwith %}
+            {% endif %}
+          </div>
+        {% endif %}
+      </a>
+      {% endwith %}
+    {% empty %}
+      <div class="px-4 py-12 text-center text-base-content/50">
+        {% translate "No bundles match the current filters." %}
+      </div>
+    {% endfor %}
+  </div>
+  <!-- Desktop table view -->
+  <div class="hidden lg:block overflow-x-auto">
     <table class="min-w-full text-sm">
       <thead class="bg-base-200 sticky top-0 z-10">
         <tr class="text-left">

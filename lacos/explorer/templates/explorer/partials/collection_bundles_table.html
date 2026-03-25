@@ -9,6 +9,84 @@
   </div>
 
   <div class="bg-base-100 shadow-sm border border-base-300 rounded-xl overflow-hidden">
+    <!-- Mobile card view -->
+    <div class="lg:hidden divide-y divide-base-200">
+      {% for bundle_info in bundle_contexts %}
+        {% with bundle=bundle_info.bundle level=bundle_info.access_level|default:bundle_info.acl_check_result.access_level %}
+          <a href="{% url 'explorer:bundle_detail' pk=bundle.pk %}" class="block px-4 py-4 hover:bg-base-200 transition-colors">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2">
+                  {% if level == 'public' %}
+                    <span class="badge badge-success badge-xs">{% translate "Public" %}</span>
+                  {% elif level == 'academic' %}
+                    <span class="badge badge-warning badge-xs">{% translate "Academic" %}</span>
+                  {% else %}
+                    <span class="badge badge-xs bg-amber-600 text-white border-amber-600">{% translate "Restricted" %}</span>
+                  {% endif %}
+                  <span class="font-semibold text-base-content leading-snug truncate">
+                    {% if bundle.get_general_info.display_title %}
+                      {{ bundle.get_general_info.display_title }}
+                    {% elif bundle.get_general_info.title %}
+                      {{ bundle.get_general_info.title }}
+                    {% else %}
+                      {{ bundle.identifier }}
+                    {% endif %}
+                  </span>
+                </div>
+                {% if bundle.identifier %}
+                  <div class="mt-1 text-xs font-mono text-base-content/50">{{ bundle.identifier }}</div>
+                {% endif %}
+              </div>
+              <svg class="w-4 h-4 text-base-content/30 shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+              </svg>
+            </div>
+            {% if bundle.get_general_info.description %}
+              <p class="mt-2 text-xs text-base-content/60 line-clamp-2">{{ bundle.get_general_info.description|truncatewords:25 }}</p>
+            {% endif %}
+            {% if bundle_info.primary_resources and bundle_info.can_read_bundle %}
+              <div class="mt-2 flex flex-wrap items-center gap-1.5">
+                {% if bundle_info.media_resources %}
+                  <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-xs text-base-content/70">
+                    {{ bundle_info.media_resources|length }} {% translate "media" %}
+                  </span>
+                {% endif %}
+                {% if bundle_info.written_resources %}
+                  <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-xs text-base-content/70">
+                    {{ bundle_info.written_resources|length }} {% translate "written" %}
+                  </span>
+                {% endif %}
+                {% if bundle_info.other_resources %}
+                  <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-xs text-base-content/70">
+                    {{ bundle_info.other_resources|length }} {% translate "other" %}
+                  </span>
+                {% endif %}
+                {% if bundle_info.metadata_files %}
+                  <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-xs text-base-content/70">
+                    {{ bundle_info.metadata_files|length }} {% translate "metadata" %}
+                  </span>
+                {% endif %}
+              </div>
+            {% elif bundle_info.primary_resources %}
+              {% if level == 'academic' %}
+                <div class="mt-2 text-xs text-warning flex items-center">
+                  <span aria-hidden="true" class="mr-1">⛔</span>
+                  {% translate "Sign in to access these files." %}
+                </div>
+              {% else %}
+                <div class="mt-2 text-xs text-amber-600 flex items-center">
+                  <span aria-hidden="true" class="mr-1">⛔</span>
+                  {% translate "Files are restricted to authorized users." %}
+                </div>
+              {% endif %}
+            {% endif %}
+          </a>
+        {% endwith %}
+      {% endfor %}
+    </div>
+    <!-- Desktop table view -->
+    <div class="hidden lg:block">
     <table class="min-w-full divide-y divide-base-300">
       <thead class="bg-base-200">
         <tr>
@@ -332,6 +410,7 @@
         {% endfor %}
       </tbody>
     </table>
+    </div><!-- /desktop table -->
   </div>
 
   <div class="mt-3">
