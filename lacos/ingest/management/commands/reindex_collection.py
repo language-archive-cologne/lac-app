@@ -174,7 +174,7 @@ class Command(BaseCommand):
                 # Update S3 resource locations
                 if collection_id:
                     self._update_s3_resource_locations(collection_id, bundle_results, dry_run=dry_run)
-                connection.close()
+            connection.close()
             return 0
 
         return 0
