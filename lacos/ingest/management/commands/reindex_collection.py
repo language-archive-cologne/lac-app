@@ -371,4 +371,4 @@ class Command(BaseCommand):
                     f"Failed to reindex bundle from {bucket}/{bundle_key}"
                 )
             )
-        return result
+        return results
