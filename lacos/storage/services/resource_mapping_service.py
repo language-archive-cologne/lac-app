@@ -381,6 +381,19 @@ class ResourceMappingService(BaseStorageService):
 
         return None
 
+    def _get_ocfl_additional_metadata_base_path(self, import_object_key: Optional[str]) -> Optional[str]:
+        """
+        Get the base path for additional metadata files within an OCFL object.
+
+        Additional metadata files are stored at: {object_path}/v1/metadata/additional_metadata/
+        """
+        if not import_object_key:
+            return None
+        base_path = self._extract_ocfl_base_path(import_object_key)
+        if base_path:
+            return base_path.rstrip('/') + '/v1/metadata/additional_metadata/'
+        return None
+
     def _get_ocfl_resource_base_path(self, bundle_import_object_key: Optional[str]) -> Optional[str]:
         """
         Get the base path for resources within a bundle's OCFL structure.
@@ -458,8 +471,7 @@ class ResourceMappingService(BaseStorageService):
             if structural_info:
                 additional_metadata_files = structural_info.additional_metadata_files.all()
                 if additional_metadata_files.exists():
-                    # Get the base path for resources using the same OCFL pattern as bundles
-                    collection_resources_base = self._get_ocfl_resource_base_path(collection.import_object_key)
+                    collection_resources_base = self._get_ocfl_additional_metadata_base_path(collection.import_object_key)
                     if collection_resources_base:
                         metadata_count = 0
                         for metadata_file in additional_metadata_files:
@@ -532,12 +544,13 @@ class ResourceMappingService(BaseStorageService):
 
                 # 2.5 Map bundle additional metadata files.
                 structural_info = bundle.structural_info.first()
-                if structural_info and resources_base_key:
+                additional_metadata_base_key = self._get_ocfl_additional_metadata_base_path(bundle.import_object_key)
+                if structural_info and additional_metadata_base_key:
                     metadata_count = 0
                     for metadata_file in structural_info.additional_metadata_files.all():
                         if hasattr(metadata_file, 'file_name') and metadata_file.file_name:
                             try:
-                                resource_s3_key = f"{resources_base_key}{metadata_file.file_name}"
+                                resource_s3_key = f"{additional_metadata_base_key}{metadata_file.file_name}"
                                 self.register_s3_location(metadata_file, bucket, resource_s3_key)
                                 metadata_count += 1
                                 total_mapped += 1

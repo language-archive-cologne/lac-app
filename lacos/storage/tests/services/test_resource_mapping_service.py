@@ -427,6 +427,10 @@ def test_map_collection_hierarchy_maps_bundle_additional_metadata(
     collection_id = collection.id
     bundle_id = bundle.id
 
+    # Set import_object_key so the OCFL path extraction works
+    bundle.import_object_key = f"test-coll/{bundle.identifier}/v1/metadata/{bundle.identifier}.xml"
+    bundle.save()
+
     metadata_file = BundleAdditionalMetadataFile.objects.create(
         file_name="bundle-metadata.xml",
         mime_type="application/xml",
@@ -457,7 +461,7 @@ def test_map_collection_hierarchy_maps_bundle_additional_metadata(
     )
     assert metadata_loc.s3_bucket == "test-bucket"
     assert metadata_loc.s3_key == (
-        f"collections/{collection_id}/bundles/{bundle_id}/resources/{metadata_file.file_name}"
+        f"test-coll/{bundle.identifier}/v1/metadata/additional_metadata/{metadata_file.file_name}"
     )
 
 # --- Add more tests for other methods like register_s3_location if needed ---
