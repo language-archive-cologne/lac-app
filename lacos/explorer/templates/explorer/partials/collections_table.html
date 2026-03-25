@@ -26,7 +26,75 @@
     </div>
   </div>
   {% include "explorer/partials/collections_table_pagination.html" with border_side="top" %}
-  <div class="overflow-x-auto">
+  <!-- Mobile card view -->
+  <div class="lg:hidden divide-y divide-base-200">
+    {% for collection in collection_list %}
+      <a href="{% url 'explorer:collection_detail_by_handle' handle=collection.identifier %}" class="block px-4 py-4 hover:bg-base-200 transition-colors">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0 flex-1">
+            <h3 class="font-semibold text-base-content leading-snug">{{ collection.list_display_title }}</h3>
+            <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-base-content/50">
+              <span class="font-mono">{{ collection.identifier }}</span>
+              <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 font-semibold text-base-content/70">
+                {{ collection.bundles_count }} {% translate "bundles" %}
+              </span>
+            </div>
+          </div>
+          <svg class="w-4 h-4 text-base-content/30 shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+          </svg>
+        </div>
+        {% with summary=collection.bundle_access_summary %}
+          {% if summary.total or collection.list_languages %}
+            <div class="mt-2 flex flex-wrap items-center gap-1.5">
+              {% if summary.public %}<span class="badge badge-success badge-xs">{% translate "Public" %} {{ summary.public }}</span>{% endif %}
+              {% if summary.academic %}<span class="badge badge-warning badge-xs">{% translate "Academic" %} {{ summary.academic }}</span>{% endif %}
+              {% if summary.restricted %}<span class="badge badge-xs bg-amber-600 text-white border-amber-600">{% translate "Restricted" %} {{ summary.restricted }}</span>{% endif %}
+              {% if collection.list_languages %}
+                {% for language in collection.list_languages %}
+                  <span class="inline-flex items-center gap-0.5 rounded-full border border-base-300 bg-base-200 px-1.5 py-0.5 text-xs text-base-content/70">
+                    {{ language.name }}{% if language.iso_639_3_code %} <span class="text-base-content/40">[{{ language.iso_639_3_code }}]</span>{% endif %}
+                  </span>
+                {% endfor %}
+              {% endif %}
+            </div>
+          {% endif %}
+        {% endwith %}
+        <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-base-content/50">
+          {% if collection.region_facet or collection.country_facet %}
+            <span>{% if collection.region_facet %}{{ collection.region_facet }}{% endif %}{% if collection.region_facet and collection.country_facet %}, {% endif %}{% if collection.country_facet %}{{ collection.country_facet }}{% endif %}</span>
+          {% endif %}
+          {% if collection.list_publication_year %}
+            <span>{{ collection.list_publication_year }}</span>
+          {% elif collection.list_general_info and collection.list_general_info.recording_date %}
+            <span>{{ collection.list_general_info.recording_date|date:"M Y" }}</span>
+          {% endif %}
+          {% if collection.list_creators_display %}
+            <span>{{ collection.list_creators_display }}</span>
+          {% endif %}
+        </div>
+        {% if collection.list_description %}
+          <p class="mt-1.5 text-xs text-base-content/60 line-clamp-2">{{ collection.list_description|truncatewords:20 }}</p>
+        {% endif %}
+        {% with keywords=collection.list_keywords %}
+          {% if keywords %}
+            <div class="mt-2 flex flex-wrap gap-1">
+              {% for keyword in keywords|slice:":3" %}
+                <span class="inline-flex max-w-[10rem] items-center rounded-full border border-base-300 bg-base-200 px-1.5 py-0.5 text-xs text-base-content/60">
+                  <span class="truncate">{{ keyword.value }}</span>
+                </span>
+              {% endfor %}
+              {% if keywords|length > 3 %}
+                <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-1.5 py-0.5 text-xs font-semibold text-base-content/50">+{{ keywords|length|add:"-3" }}</span>
+              {% endif %}
+            </div>
+          {% endif %}
+        {% endwith %}
+      </a>
+    {% endfor %}
+  </div>
+  <!-- Desktop table view -->
+  <div class="hidden lg:block overflow-x-auto">
     <table class="min-w-full text-sm">
       <thead class="bg-base-200 sticky top-0 z-10">
         <tr class="text-center">
@@ -176,6 +244,6 @@
         {% endfor %}
       </tbody>
     </table>
-  </div>
+  </div><!-- /desktop table -->
   {% include "explorer/partials/collections_table_pagination.html" with border_side="bottom" %}
 </div>
