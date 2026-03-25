@@ -362,16 +362,13 @@ class Command(BaseCommand):
                 results.append((bundle_id, bundle_resources_id))
                 self.stdout.write(
                     self.style.SUCCESS(
-                        "Reindexed bundle {bundle_id} (resources {bundle_resources_id})"
-                    ).format(
-                        bundle_id=bundle_id,
-                        bundle_resources_id=bundle_resources_id,
+                        f"Reindexed bundle {bundle_id} (resources {bundle_resources_id})"
                     )
                 )
             else:
                 self.stdout.write(
-                    self.style.ERROR(
-                        f"Failed to reindex bundle from {bucket}/{bundle_key}"
-                    )
+                self.style.ERROR(
+                    f"Failed to reindex bundle from {bucket}/{bundle_key}"
                 )
-        return results
+            )
+        return result

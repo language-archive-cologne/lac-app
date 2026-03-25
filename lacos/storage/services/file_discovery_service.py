@@ -451,6 +451,25 @@ class FileDiscoveryService(BaseStorageService):
         logger.info("Finished S3 XML discovery", extra={"collections_found": len(result['potential_collection_xmls']), "bundles_found": len(result['potential_bundle_xmls'])})
         return result
 
+    def head_s3_object(self, bucket: str, key: str) -> Optional[Dict[str, Any]]:
+        """
+        Get S3 object metadata via HEAD request without downloading the object.
+
+        Returns:
+            Dict with 'ETag', 'ContentLength', 'LastModified', or None if not found.
+        """
+        try:
+            response = self.s3_client.head_object(Bucket=bucket, Key=key)
+            return {
+                "ETag": response.get("ETag", "").strip('"'),
+                "ContentLength": response.get("ContentLength"),
+                "LastModified": response.get("LastModified"),
+            }
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "404":
+                return None
+            raise
+
     def read_s3_object(self, bucket: str = None, key: str = None) -> Optional[bytes]:
         """
         Read the contents of an S3 object.

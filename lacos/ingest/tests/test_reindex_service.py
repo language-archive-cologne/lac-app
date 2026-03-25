@@ -33,9 +33,9 @@ def test_reindex_collection_xml_updates_import_fields():
 
     assert result == collection.id
     mock_import.assert_called_once_with("<xml></xml>", update_existing=True)
-    collection.save.assert_called_once_with(
-        update_fields=["import_bucket", "import_object_key"]
-    )
+    # save called for import fields and then for ETag
+    save_calls = collection.save.call_args_list
+    assert save_calls[0].kwargs == {"update_fields": ["import_bucket", "import_object_key"]}
     assert collection.import_bucket == "test-bucket"
     assert collection.import_object_key == "collection.xml"
 
@@ -64,9 +64,9 @@ def test_reindex_bundle_xml_updates_import_fields():
 
     assert result == (bundle.id, resources_id)
     mock_import.assert_called_once_with("<xml></xml>", update_existing=True)
-    bundle.save.assert_called_once_with(
-        update_fields=["import_bucket", "import_object_key"]
-    )
+    # save called for import fields and then for ETag
+    save_calls = bundle.save.call_args_list
+    assert save_calls[0].kwargs == {"update_fields": ["import_bucket", "import_object_key"]}
     assert bundle.import_bucket == "test-bucket"
     assert bundle.import_object_key == "bundle.xml"
 
