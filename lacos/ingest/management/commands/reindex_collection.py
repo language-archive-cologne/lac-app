@@ -146,9 +146,10 @@ class Command(BaseCommand):
             return 0
 
         if options.get("all"):
-            collections = Collection.objects.all().iterator()
-            for collection in collections:
+            collection_ids = list(Collection.objects.values_list("id", flat=True))
+            for coll_id in collection_ids:
                 close_old_connections()
+                collection = Collection.objects.get(id=coll_id)
                 s3_key = collection.import_object_key
                 bucket_to_use = options.get("bucket") or collection.import_bucket or bucket
                 if not s3_key:
