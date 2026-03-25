@@ -165,3 +165,15 @@ def test_saml_login_view_sets_session_marker(client, settings):
     assert response.headers["Location"].endswith("/saml2/login/")
     session = client.session
     assert session.get(TRUSTED_SAML_SESSION_KEY) is True
+
+
+@pytest.mark.django_db
+def test_saml2_login_redirects_to_discovery_service(client, settings):
+    disco_url = "https://wayf.aai.dfn.de/DFN-AAI/wayf"
+    settings.SAML2_DISCO_URL = disco_url
+
+    response = client.get("/saml2/login/")
+
+    assert response.status_code == 302
+    location = response.headers["Location"]
+    assert location.startswith(disco_url)

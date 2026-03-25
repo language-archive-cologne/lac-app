@@ -36,6 +36,8 @@ services:
       SAML_LOGIN_ENABLED: "true"
       SAML_DJANGO_USER_MAIN_ATTRIBUTE: "username"
       SAML_USE_NAME_ID_AS_USERNAME: "false"
+      SAML2_DISCO_URL: "https://wayf.aai.dfn.de/DFN-AAI/wayf"
+      SAML_METADATA_MDQ_URL: "https://mdq.aai.dfn.de/"
       GUIDELINES_REPO_URL: /app/lac-guidelines
       LAC_MEDIA_TMP_DIR: "/app/.tmp/media-processing"
     ports:
@@ -122,6 +124,8 @@ services:
       SAML_LOGIN_ENABLED: "true"
       SAML_DJANGO_USER_MAIN_ATTRIBUTE: "username"
       SAML_USE_NAME_ID_AS_USERNAME: "false"
+      SAML2_DISCO_URL: "https://wayf.aai.dfn.de/DFN-AAI/wayf"
+      SAML_METADATA_MDQ_URL: "https://mdq.aai.dfn.de/"
       DB_BACKUP_ENABLED: "true"
       DB_BACKUP_COMPOSE_FILE: "docker-compose.production.yml"
       DB_BACKUP_COMPOSE_PROJECT_DIR: "/app"

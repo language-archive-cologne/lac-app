@@ -589,6 +589,8 @@ if SAML_LOGIN_ENABLED:
         {"url": url}
         for url in env.list("SAML_IDP_METADATA_REMOTE", default=[])
     ]
+    _saml_metadata_mdq_url = env("SAML_METADATA_MDQ_URL", default="")
+    SAML2_DISCO_URL = env("SAML2_DISCO_URL", default="")
     SAML_ATTRIBUTE_MAPPING = {
         "eduPersonPrincipalName": ("username",),
         "urn:oid:1.3.6.1.4.1.5923.1.1.1.6": ("username",),
@@ -598,6 +600,8 @@ if SAML_LOGIN_ENABLED:
         _saml_metadata["local"] = SAML_METADATA_LOCAL
     if SAML_METADATA_REMOTE:
         _saml_metadata["remote"] = SAML_METADATA_REMOTE
+    if _saml_metadata_mdq_url:
+        _saml_metadata["mdq"] = [{"url": _saml_metadata_mdq_url}]
     if not _saml_metadata:
         _saml_metadata["local"] = [str(BASE_DIR / "shibboleth.xml")]
     SAML_CONFIG = {
@@ -640,6 +644,7 @@ if SAML_LOGIN_ENABLED:
                 "required_attributes": ["eduPersonPrincipalName"],
             },
         },
+        "http_client_timeout": env.int("SAML_HTTP_CLIENT_TIMEOUT", default=10),
         "metadata": _saml_metadata,
         "organization": {
             "name": [("University of Cologne", "en")],
