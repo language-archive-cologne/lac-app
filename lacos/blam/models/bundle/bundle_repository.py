@@ -23,6 +23,12 @@ class Bundle(Repository):
         blank=True,
         help_text="Original S3 object key used for the bundle import",
     )
+    import_etag = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="S3 ETag from last successful reindex",
+    )
     projects = models.ManyToManyField(
         'blam.ProjectInfo',
         blank=True,
