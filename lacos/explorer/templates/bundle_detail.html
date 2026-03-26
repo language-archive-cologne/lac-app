@@ -256,9 +256,10 @@
               <dd>
                 <div class="flex flex-wrap gap-1.5">
                   {% for keyword in keywords %}
-                    <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-base-200 text-base-content border border-base-300">
+                    <a href="{% url 'bundle_faceted_search' %}?keyword={{ keyword.value|urlencode }}"
+                       class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-base-200 text-base-content border border-base-300 hover:bg-primary hover:text-primary-content hover:border-primary transition-colors">
                       {{ keyword.value }}
-                    </span>
+                    </a>
                   {% endfor %}
                 </div>
               </dd>
