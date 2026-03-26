@@ -24,8 +24,8 @@
   </div>
 
   <div class="bg-base-100 shadow-sm border border-base-300 rounded-xl mb-8">
-    <div class="px-8 py-6 border-b border-base-300">
-      <h1 class="text-3xl font-light text-base-content tracking-tight">
+    <div class="px-4 py-4 sm:px-8 sm:py-6 border-b border-base-300">
+      <h1 class="text-xl sm:text-3xl font-light text-base-content tracking-tight">
         {% if collection.get_general_info.display_title %}
           {{ collection.get_general_info.display_title }}
         {% elif collection.get_general_info.title %}
@@ -82,10 +82,10 @@
 
       {% if collection.identifier %}
         <!-- Handle -->
-        <div class="mt-3 flex items-center gap-2">
+        <div class="mt-3 flex flex-wrap items-center gap-1 sm:gap-2">
           <span class="text-xs font-medium text-base-content/60 uppercase tracking-wide">{% translate "Handle" %}:</span>
           <a href="{% url 'explorer:collection_detail_by_handle' handle=collection.identifier %}"
-             class="text-sm font-mono text-primary hover:underline"
+             class="text-xs sm:text-sm font-mono text-primary hover:underline break-all"
              title="{% translate 'Persistent link to this collection' %}">
             {{ collection.identifier }}
           </a>
@@ -95,7 +95,7 @@
             class="btn btn-xs btn-ghost btn-square text-base-content/60 hover:text-base-content"
             title="{% translate 'Copy handle URL' %}"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
           </button>
@@ -337,17 +337,15 @@
       <!-- Citation -->
       <div class="mt-8 pt-6 border-t border-base-300">
         <h2 class="text-xl font-light text-base-content mb-4 tracking-tight">{% translate "How to Cite" %}</h2>
-        <div class="flex items-start gap-3 p-4 rounded-xl bg-base-200/50 border border-base-300">
-          <div class="flex-1">
-            <p class="text-sm text-base-content leading-relaxed">{{ citation }}</p>
-          </div>
+        <div class="p-4 rounded-xl bg-base-200/50 border border-base-300">
+          <p class="text-sm text-base-content leading-relaxed break-words">{{ citation }}</p>
           <button
             type="button"
             onclick="navigator.clipboard.writeText('{{ citation|escapejs }}'); this.querySelector('span').textContent = '{% translate "Copied!" %}'; setTimeout(() => this.querySelector('span').textContent = '{% translate "Copy" %}', 2000);"
-            class="btn btn-sm btn-ghost gap-1 flex-shrink-0"
+            class="btn btn-xs btn-ghost gap-1 mt-2"
             title="{% translate 'Copy citation' %}"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
             <span>{% translate "Copy" %}</span>
@@ -381,7 +379,7 @@
         </div>
         <div id="collection-metadata-container" class="space-y-3" data-select-all-id="collection-select-all-checkbox">
           {% for file in additional_metadata_files %}
-            <div class="resource-item flex items-center justify-between p-4 rounded-xl bg-gradient-to-br from-base-200/50 to-base-200 border border-base-300 hover:border-primary/30 transition-all duration-200"
+            <div class="resource-item flex items-center justify-between p-3 bg-base-200 rounded-lg"
                  data-resource-id="{{ file.id }}"
                  data-size="{{ file.size_bytes|default:0 }}"
                  data-filename="{{ file.file_name }}"
@@ -389,46 +387,24 @@
                  data-key="{{ file.s3_location.s3_key|default:'' }}">
               <div class="flex items-center gap-3 flex-1 min-w-0">
                 <input type="checkbox" class="checkbox checkbox-sm resource-checkbox" />
-                <div class="flex-shrink-0 p-2 rounded-lg bg-base-100">
-                  {% if file.detected_media_type == 'audio' %}
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                    </svg>
-                  {% elif file.detected_media_type == 'video' %}
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                  {% elif file.detected_media_type == 'pdf' %}
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                    </svg>
-                  {% elif file.detected_media_type == 'image' %}
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-info" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                  {% else %}
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-base-content/60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  {% endif %}
-                </div>
                 <div class="flex-1 min-w-0">
-                  <p class="text-sm font-medium text-base-content truncate">{{ file.file_name }}</p>
+                  <div class="text-sm font-medium text-base-content break-words">{{ file.file_name }}</div>
                   {% with ext=file|file_extension %}
                     {% if ext %}
                       <span class="badge badge-xs badge-ghost font-mono text-base-content/60" title="{{ file.mime_type }}">{{ ext }}</span>
                     {% else %}
-                      <p class="text-xs text-base-content/60">{{ file.mime_type }}</p>
+                      <div class="text-xs text-base-content/60">{{ file.mime_type }}</div>
                     {% endif %}
                   {% endwith %}
                   {% if file.file_pid %}
-                    <div class="mt-1 flex items-center gap-2">
-                      <span class="text-xs font-mono text-base-content/80 break-all">{{ file.file_pid }}</span>
+                    <div class="mt-1 flex items-center gap-1">
+                      <span class="text-xs text-base-content/60 sm:hidden">Handle</span>
+                      <span class="text-xs font-mono text-base-content/80 break-all hidden sm:inline">{{ file.file_pid }}</span>
                       <button
                         type="button"
                         onclick="navigator.clipboard.writeText('{{ file.file_pid|escapejs }}'); this.classList.add('text-success'); setTimeout(() => this.classList.remove('text-success'), 2000);"
                         class="btn btn-xs btn-ghost btn-square text-base-content/60 hover:text-base-content"
-                        title="{% translate 'Copy handle' %}"
+                        title="{{ file.file_pid }}"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -437,11 +413,11 @@
                     </div>
                   {% endif %}
                   {% if file.file_description %}
-                    <p class="text-xs text-base-content/70 mt-1 line-clamp-2">{{ file.file_description }}</p>
+                    <div class="mt-1 text-sm text-base-content/70 break-words">{{ file.file_description }}</div>
                   {% endif %}
                 </div>
               </div>
-              <div class="flex items-center gap-2 flex-shrink-0 ml-4">
+              <div class="flex-shrink-0">
                 <!-- Download button -->
                 <button type="button"
                    class="btn btn-circle btn-primary btn-sm single-download-btn"
