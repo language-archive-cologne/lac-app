@@ -337,12 +337,12 @@
           <div class="space-y-4">
             {% for resource in media_resources %}
               <div class="resource-item flex items-center justify-between p-3 bg-base-200 rounded-lg" data-resource-id="{{ resource.id }}" data-size="{{ resource.size_bytes|default:0 }}" data-filename="{{ resource.file_name }}" data-bucket="{{ resource.s3_location.s3_bucket|default:'' }}" data-key="{{ resource.s3_location.s3_key|default:'' }}">
-                <div class="flex items-center gap-3 flex-1">
+                <div class="flex items-center gap-3 flex-1 min-w-0">
                   {% if can_read_bundle %}
                   <input type="checkbox" class="checkbox checkbox-sm resource-checkbox" />
                   {% endif %}
-                  <div class="flex-1">
-                    <div class="text-sm font-medium text-base-content">{{ resource.file_name }}</div>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium text-base-content break-words">{{ resource.file_name }}</div>
                     {% with ext=resource|file_extension %}
                       {% if ext %}
                         <span class="badge badge-xs badge-ghost font-mono text-base-content/60" title="{{ resource.mime_type }}">{{ ext }}</span>
@@ -366,11 +366,11 @@
                       </div>
                     {% endif %}
                     {% if resource.file_description %}
-                      <div class="mt-1 text-sm text-base-content/70">{{ resource.file_description }}</div>
+                      <div class="mt-1 text-sm text-base-content/70 break-words">{{ resource.file_description }}</div>
                     {% endif %}
                   </div>
                 </div>
-                <div>
+                <div class="flex-shrink-0">
                   {% if can_read_bundle %}
                   <div class="flex space-x-2">
                     <button type="button"
@@ -440,12 +440,12 @@
           <div class="space-y-4">
             {% for resource in written_resources %}
               <div class="resource-item flex items-center justify-between p-3 bg-base-200 rounded-lg" data-resource-id="{{ resource.id }}" data-size="{{ resource.size_bytes|default:0 }}" data-filename="{{ resource.file_name }}" data-bucket="{{ resource.s3_location.s3_bucket|default:'' }}" data-key="{{ resource.s3_location.s3_key|default:'' }}">
-                <div class="flex items-center gap-3 flex-1">
+                <div class="flex items-center gap-3 flex-1 min-w-0">
                   {% if can_read_bundle %}
                   <input type="checkbox" class="checkbox checkbox-sm resource-checkbox" />
                   {% endif %}
-                  <div class="flex-1">
-                    <div class="text-sm font-medium text-base-content">{{ resource.file_name }}</div>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium text-base-content break-words">{{ resource.file_name }}</div>
                     {% with ext=resource|file_extension %}
                       {% if ext %}
                         <span class="badge badge-xs badge-ghost font-mono text-base-content/60" title="{{ resource.mime_type }}">{{ ext }}</span>
@@ -469,11 +469,11 @@
                       </div>
                     {% endif %}
                     {% if resource.file_description %}
-                      <div class="mt-1 text-sm text-base-content/70">{{ resource.file_description }}</div>
+                      <div class="mt-1 text-sm text-base-content/70 break-words">{{ resource.file_description }}</div>
                     {% endif %}
                   </div>
                 </div>
-                <div>
+                <div class="flex-shrink-0">
                   {% if can_read_bundle %}
                   <div class="flex space-x-2">
                     <button type="button"
@@ -547,12 +547,12 @@
           <div class="space-y-4">
             {% for resource in other_resources %}
               <div class="resource-item flex items-center justify-between p-3 bg-base-200 rounded-lg" data-resource-id="{{ resource.id }}" data-size="{{ resource.size_bytes|default:0 }}" data-filename="{{ resource.file_name }}" data-bucket="{{ resource.s3_location.s3_bucket|default:'' }}" data-key="{{ resource.s3_location.s3_key|default:'' }}">
-                <div class="flex items-center gap-3 flex-1">
+                <div class="flex items-center gap-3 flex-1 min-w-0">
                   {% if can_read_bundle %}
                   <input type="checkbox" class="checkbox checkbox-sm resource-checkbox" />
                   {% endif %}
-                  <div class="flex-1">
-                    <div class="text-sm font-medium text-base-content">{{ resource.file_name }}</div>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium text-base-content break-words">{{ resource.file_name }}</div>
                     {% with ext=resource|file_extension %}
                       {% if ext %}
                         <span class="badge badge-xs badge-ghost font-mono text-base-content/60" title="{{ resource.mime_type }}">{{ ext }}</span>
@@ -576,11 +576,11 @@
                       </div>
                     {% endif %}
                     {% if resource.file_description %}
-                      <div class="mt-1 text-sm text-base-content/70">{{ resource.file_description }}</div>
+                      <div class="mt-1 text-sm text-base-content/70 break-words">{{ resource.file_description }}</div>
                     {% endif %}
                   </div>
                 </div>
-                <div>
+                <div class="flex-shrink-0">
                   {% if can_read_bundle %}
                   <div class="flex space-x-2">
                     <button type="button"
