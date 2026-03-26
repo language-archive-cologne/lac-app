@@ -122,7 +122,7 @@
       barRadius: 2,
       normalize: true,
       minPxPerSec: this._minPxPerSec,
-      hideScrollbar: false,
+      hideScrollbar: true,
       autoCenter: true,
       autoScroll: true,
       plugins: plugins,
@@ -340,45 +340,117 @@
   // ─── Top scrollbar (mirror of waveform horizontal scroll) ────────────
 
   AudioPlayer.prototype._setupTopScrollbar = function () {
-    var topBar = this._q('[data-ap-top-scrollbar]');
-    var topInner = this._q('[data-ap-top-scrollbar-inner]');
-    if (!topBar || !topInner) return;
-
     var ws = this.wavesurfer;
-    // WaveSurfer uses shadow DOM: getWrapper() returns .wrapper,
-    // its parent is .scroll (the actual overflow-x: auto container).
     var wrapper = ws.getWrapper ? ws.getWrapper() : null;
     var scrollContainer = wrapper ? wrapper.parentElement : null;
     if (!scrollContainer) return;
 
+    // Collect custom scrollbar pairs (top + bottom).
+    var bars = [];
+    var pairs = [
+      { track: '[data-ap-top-scrollbar]', thumb: '[data-ap-top-scrollbar-thumb]' },
+      { track: '[data-ap-bottom-scrollbar]', thumb: '[data-ap-bottom-scrollbar-thumb]' },
+    ];
+    for (var i = 0; i < pairs.length; i++) {
+      var t = this._q(pairs[i].track);
+      var th = this._q(pairs[i].thumb);
+      if (t && th) bars.push({ track: t, thumb: th });
+    }
+    if (!bars.length) return;
+
     var syncing = false;
 
-    var syncSize = function () {
-      topInner.style.width = scrollContainer.scrollWidth + 'px';
-      // Show only when content overflows (zoomed in)
-      topBar.style.display = scrollContainer.scrollWidth > scrollContainer.clientWidth ? '' : 'none';
+    var syncAll = function () {
+      var sw = scrollContainer.scrollWidth;
+      var cw = scrollContainer.clientWidth;
+      var overflows = sw > cw;
+      for (var i = 0; i < bars.length; i++) {
+        var b = bars[i];
+        if (!overflows) {
+          b.track.style.display = 'none';
+          continue;
+        }
+        b.track.style.display = '';
+        var trackW = b.track.clientWidth;
+        var ratio = cw / sw;
+        var thumbW = Math.max(30, Math.round(trackW * ratio));
+        var maxScroll = sw - cw;
+        var scrollRatio = maxScroll > 0 ? scrollContainer.scrollLeft / maxScroll : 0;
+        var thumbLeft = Math.round(scrollRatio * (trackW - thumbW));
+        b.thumb.style.width = thumbW + 'px';
+        b.thumb.style.left = thumbLeft + 'px';
+      }
     };
 
-    // Top → waveform
-    topBar.addEventListener('scroll', function () {
-      if (syncing) return;
-      syncing = true;
-      scrollContainer.scrollLeft = topBar.scrollLeft;
-      syncing = false;
-    });
-
-    // Waveform → top
+    // Waveform scroll → update all thumbs
     scrollContainer.addEventListener('scroll', function () {
-      if (syncing) return;
-      syncing = true;
-      topBar.scrollLeft = scrollContainer.scrollLeft;
-      syncing = false;
+      if (!syncing) syncAll();
     });
 
-    ws.on('ready', syncSize);
-    ws.on('zoom', syncSize);
-    // Initial hide
-    topBar.style.display = 'none';
+    // Drag / click logic for each bar
+    var dragging = false;
+    var dragStartX = 0;
+    var dragStartLeft = 0;
+
+    var onMove = function (clientX) {
+      var dx = clientX - dragStartX;
+      // Use first bar's track width (they're the same width)
+      var trackW = bars[0].track.clientWidth;
+      var thumbW = bars[0].thumb.offsetWidth;
+      var maxThumb = trackW - thumbW;
+      if (maxThumb <= 0) return;
+      var newLeft = Math.max(0, Math.min(maxThumb, dragStartLeft + dx));
+      var scrollRatio = newLeft / maxThumb;
+      var maxScroll = scrollContainer.scrollWidth - scrollContainer.clientWidth;
+      syncing = true;
+      scrollContainer.scrollLeft = Math.round(scrollRatio * maxScroll);
+      syncing = false;
+      syncAll();
+    };
+
+    for (var j = 0; j < bars.length; j++) {
+      (function (bar) {
+        bar.thumb.addEventListener('mousedown', function (e) {
+          e.preventDefault();
+          dragging = true;
+          dragStartX = e.clientX;
+          dragStartLeft = bar.thumb.offsetLeft;
+        });
+        bar.thumb.addEventListener('touchstart', function (e) {
+          dragging = true;
+          dragStartX = e.touches[0].clientX;
+          dragStartLeft = bar.thumb.offsetLeft;
+        }, { passive: true });
+
+        bar.track.addEventListener('click', function (e) {
+          if (e.target === bar.thumb) return;
+          var rect = bar.track.getBoundingClientRect();
+          var clickX = e.clientX - rect.left;
+          var trackW = bar.track.clientWidth;
+          var thumbW = bar.thumb.offsetWidth;
+          var maxThumb = trackW - thumbW;
+          if (maxThumb <= 0) return;
+          var newLeft = Math.max(0, Math.min(maxThumb, clickX - thumbW / 2));
+          var scrollRatio = newLeft / maxThumb;
+          var maxScroll = scrollContainer.scrollWidth - scrollContainer.clientWidth;
+          scrollContainer.scrollLeft = Math.round(scrollRatio * maxScroll);
+          syncAll();
+        });
+      })(bars[j]);
+    }
+
+    document.addEventListener('mousemove', function (e) {
+      if (dragging) onMove(e.clientX);
+    });
+    document.addEventListener('touchmove', function (e) {
+      if (dragging) onMove(e.touches[0].clientX);
+    }, { passive: true });
+    var stopDrag = function () { dragging = false; };
+    document.addEventListener('mouseup', stopDrag);
+    document.addEventListener('touchend', stopDrag);
+
+    ws.on('ready', syncAll);
+    ws.on('zoom', syncAll);
   };
 
   // ─── Regions (selection) ──────────────────────────────────────────────

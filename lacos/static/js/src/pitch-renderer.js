@@ -29,11 +29,10 @@
 
   var HEADER_BYTES = 14;
   var HEIGHT = 256;
-  // UzK University Blue background to match LAC branding.
-  var BG_COLOR = '#005176';
-  var DOT_COLOR = '#ffffff';
-  var GRID_COLOR = 'rgba(148,163,184,0.24)';
-  var LABEL_COLOR = 'rgba(226,232,240,0.72)';
+  var BG_COLOR = '#ffffff';
+  var DOT_COLOR = '#005176';
+  var GRID_COLOR = 'rgba(148,163,184,0.3)';
+  var LABEL_COLOR = 'rgba(51,65,85,0.72)';
   var DOT_RADIUS = 1.55;
   var LINE_WIDTH = 1.6;
   var DOT_STRIDE = 1;
@@ -333,7 +332,7 @@
     }
 
     // Draw connected contour for voiced regions.
-    ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+    ctx.strokeStyle = 'rgba(0,81,118,0.85)';
     ctx.lineWidth = LINE_WIDTH;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
@@ -368,7 +367,7 @@
 
     // Draw sparse dots on top for precise local points.
     ctx.fillStyle = DOT_COLOR;
-    ctx.shadowColor = 'rgba(255,255,255,0.22)';
+    ctx.shadowColor = 'rgba(0,81,118,0.22)';
     ctx.shadowBlur = 2.5;
     for (var dx = 0; dx < visibleWidth; dx += DOT_STRIDE) {
       var dhz = hzByPx[dx];

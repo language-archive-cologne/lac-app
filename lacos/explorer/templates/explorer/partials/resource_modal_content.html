@@ -2,21 +2,21 @@
 {% load static %}
 
 <div class="space-y-4" data-viewer-type="{{ media_type }}" data-player-mode="{{ player_mode|default:'simple' }}">
-  <div class="flex items-start justify-between gap-4">
-    <div>
-      <h2 class="text-lg font-semibold text-slate-800">{{ resource_name }}</h2>
+  <div class="flex items-start justify-between gap-2">
+    <div class="min-w-0">
+      <h2 class="text-sm font-semibold text-slate-800 truncate">{{ resource_name }}</h2>
       {% if resource_description %}
-        <p class="text-sm text-slate-500 mt-1">{{ resource_description }}</p>
+        <p class="text-xs text-slate-500 mt-0.5 truncate">{{ resource_description }}</p>
       {% endif %}
     </div>
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-1 flex-shrink-0">
       {% if spectrogram_available and media_type == 'audio' or spectrogram_available and media_type == 'elan' or pitch_available and media_type == 'audio' or pitch_available and media_type == 'elan' %}
         <div class="join">
           <a href="{{ resource_play_url }}"
              hx-get="{{ resource_play_url }}"
              hx-target="#resource-modal-content"
              hx-swap="innerHTML"
-             class="btn btn-sm join-item {% if player_mode == 'simple' %}btn-secondary{% else %}btn-ghost{% endif %}">
+             class="btn btn-xs join-item {% if player_mode == 'simple' %}btn-secondary{% else %}btn-ghost{% endif %}">
             {% translate "Oscillogram" %}
           </a>
           {% if spectrogram_available %}
@@ -24,7 +24,7 @@
              hx-get="{{ resource_analyze_url }}"
              hx-target="#resource-modal-content"
              hx-swap="innerHTML"
-             class="btn btn-sm join-item {% if player_mode == 'analyze' %}btn-secondary{% else %}btn-ghost{% endif %}">
+             class="btn btn-xs join-item {% if player_mode == 'analyze' %}btn-secondary{% else %}btn-ghost{% endif %}">
             {% translate "Spectrogram" %}
           </a>
           {% endif %}
@@ -33,13 +33,13 @@
              hx-get="{{ resource_pitch_url }}"
              hx-target="#resource-modal-content"
              hx-swap="innerHTML"
-             class="btn btn-sm join-item {% if player_mode == 'pitch' %}btn-secondary{% else %}btn-ghost{% endif %}">
+             class="btn btn-xs join-item {% if player_mode == 'pitch' %}btn-secondary{% else %}btn-ghost{% endif %}">
             {% translate "F0" %}
           </a>
           {% endif %}
         </div>
       {% endif %}
-      <button type="button" class="btn btn-sm btn-circle btn-ghost" aria-label="{% translate 'Close media viewer' %}" data-modal-close>
+      <button type="button" class="btn btn-xs btn-circle btn-ghost" aria-label="{% translate 'Close media viewer' %}" data-modal-close>
         ✕
       </button>
     </div>
@@ -59,7 +59,8 @@
           </audio>
           <div data-ap-waveform-player class="relative">
             <!-- Controls (sticky) -->
-            <div class="bg-base-200 rounded-t-lg px-3 py-2 flex items-center gap-3 flex-wrap sticky top-0 z-10">
+            <div class="bg-base-200 rounded-t-lg px-3 py-2 sticky top-0 z-10 flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2 sm:gap-3">
+              <!-- Transport -->
               <div class="flex items-center gap-2">
                 <button type="button" class="btn btn-sm btn-circle btn-primary" id="play-pause-btn" data-ap-play-pause title="{% translate 'Play/Pause' %}">
                   <svg class="play-icon w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -74,74 +75,78 @@
                     <rect x="4" y="4" width="12" height="12" rx="1"/>
                   </svg>
                 </button>
-              </div>
-              <div class="flex items-center gap-2 text-sm">
-                <span id="current-time" data-ap-current-time class="font-mono text-base-content/70">0:00.000</span>
-                <span class="text-base-content/50">/</span>
-                <span id="duration" data-ap-duration class="font-mono text-base-content/70">0:00.000</span>
-              </div>
-
-              <div class="divider divider-horizontal mx-1 hidden sm:flex"></div>
-
-              <!-- Zoom controls -->
-              <div class="flex items-center gap-2">
-                <span class="text-xs text-base-content/60 hidden sm:inline">{% translate 'Zoom' %}:</span>
-                <button type="button" class="btn btn-xs btn-ghost" id="zoom-out-btn" data-ap-zoom-out>−</button>
-                <input type="range" id="zoom-slider" data-ap-zoom-slider class="range range-xs range-primary w-16 sm:w-20" min="100" max="2000" value="500">
-                <button type="button" class="btn btn-xs btn-ghost" id="zoom-in-btn" data-ap-zoom-in>+</button>
+                <div class="flex items-center gap-1 text-xs ml-1">
+                  <span id="current-time" data-ap-current-time class="font-mono text-base-content/70">0:00.000</span>
+                  <span class="text-base-content/50">/</span>
+                  <span id="duration" data-ap-duration class="font-mono text-base-content/70">0:00.000</span>
+                </div>
               </div>
 
               <div class="divider divider-horizontal mx-1 hidden sm:flex"></div>
 
-              <!-- Speed controls -->
-              <div class="flex items-center gap-2">
-                <span class="text-xs text-base-content/60 hidden sm:inline">{% translate 'Speed' %}:</span>
-                <select id="speed-select" data-ap-speed class="select select-xs select-bordered">
-                  <option value="0.25">0.25x</option>
-                  <option value="0.5">0.5x</option>
-                  <option value="0.75">0.75x</option>
-                  <option value="1" selected>1x</option>
-                  <option value="1.25">1.25x</option>
-                  <option value="1.5">1.5x</option>
-                  <option value="2">2x</option>
-                </select>
-              </div>
+              <!-- Tools -->
+              <div class="flex items-center gap-2 flex-wrap">
+                <!-- Zoom -->
+                <div class="flex items-center gap-1">
+                  <span class="text-xs text-base-content/60 hidden sm:inline">{% translate 'Zoom' %}:</span>
+                  <button type="button" class="btn btn-xs btn-ghost" id="zoom-out-btn" data-ap-zoom-out>−</button>
+                  <input type="range" id="zoom-slider" data-ap-zoom-slider class="range range-xs range-primary w-16 sm:w-20" min="100" max="2000" value="500">
+                  <button type="button" class="btn btn-xs btn-ghost" id="zoom-in-btn" data-ap-zoom-in>+</button>
+                </div>
 
-              <div class="divider divider-horizontal mx-1 hidden sm:flex"></div>
+                <div class="divider divider-horizontal mx-0 hidden sm:flex"></div>
 
-              <!-- Selection controls -->
-              <div class="flex items-center gap-2">
-                <span class="text-xs text-base-content/60 hidden sm:inline">{% translate 'Selection' %}:</span>
-                <button type="button"
-                        class="btn btn-xs btn-outline btn-primary"
-                        id="select-toggle-btn"
-                        data-ap-select-toggle
-                        aria-pressed="true"
-                        title="{% translate 'Select segment' %}">
-                  {% translate 'Select' %}
-                </button>
-                <button type="button"
-                        class="btn btn-xs btn-outline btn-primary"
-                        id="play-selection-btn"
-                        data-ap-play-selection
-                        title="{% translate 'Play selection' %}"
-                        disabled>
-                  {% translate 'Play' %}
-                </button>
-                <button type="button"
-                        class="btn btn-xs btn-outline btn-primary"
-                        id="clear-selection-btn"
-                        data-ap-clear-selection
-                        title="{% translate 'Clear selection' %}"
-                        disabled>
-                  {% translate 'Clear' %}
-                </button>
+                <!-- Speed -->
+                <div class="flex items-center gap-1">
+                  <span class="text-xs text-base-content/60 hidden sm:inline">{% translate 'Speed' %}:</span>
+                  <select id="speed-select" data-ap-speed class="select select-xs select-bordered">
+                    <option value="0.25">0.25x</option>
+                    <option value="0.5">0.5x</option>
+                    <option value="0.75">0.75x</option>
+                    <option value="1" selected>1x</option>
+                    <option value="1.25">1.25x</option>
+                    <option value="1.5">1.5x</option>
+                    <option value="2">2x</option>
+                  </select>
+                </div>
+
+                <div class="divider divider-horizontal mx-0 hidden sm:flex"></div>
+
+                <!-- Selection -->
+                <div class="flex items-center gap-1">
+                  <span class="text-xs text-base-content/60 hidden sm:inline">{% translate 'Selection' %}:</span>
+                  <button type="button"
+                          class="btn btn-xs btn-outline btn-primary"
+                          id="select-toggle-btn"
+                          data-ap-select-toggle
+                          aria-pressed="true"
+                          title="{% translate 'Select segment' %}">
+                    {% translate 'Select' %}
+                  </button>
+                  <button type="button"
+                          class="btn btn-xs btn-outline btn-primary"
+                          id="play-selection-btn"
+                          data-ap-play-selection
+                          title="{% translate 'Play selection' %}"
+                          disabled>
+                    {% translate 'Play' %}
+                  </button>
+                  <button type="button"
+                          class="btn btn-xs btn-outline btn-primary"
+                          id="clear-selection-btn"
+                          data-ap-clear-selection
+                          title="{% translate 'Clear selection' %}"
+                          disabled>
+                    {% translate 'Clear' %}
+                  </button>
+                </div>
               </div>
             </div>
 
             <!-- Top scrollbar (synced with waveform) -->
-            <div data-ap-top-scrollbar class="overflow-x-auto border-x border-base-300" style="overflow-y: hidden;">
-              <div data-ap-top-scrollbar-inner style="height: 1px;"></div>
+            <!-- Top scrollbar track -->
+            <div data-ap-top-scrollbar class="border-x border-base-300 bg-base-200/50 relative touch-none" style="height: 16px; display: none;">
+              <div data-ap-top-scrollbar-thumb class="absolute top-1 bottom-1 rounded-full bg-primary/70 active:bg-primary cursor-pointer" style="left: 0; width: 50px;"></div>
             </div>
 
             <!-- Waveform -->
@@ -150,8 +155,13 @@
             </div>
 
             <!-- Timeline -->
-            <div class="bg-base-200 rounded-b-lg border-x border-b border-base-300">
+            <div class="bg-base-200 border-x border-base-300">
               <div id="timeline" data-ap-timeline style="height: 24px;"></div>
+            </div>
+
+            <!-- Bottom scrollbar track -->
+            <div data-ap-bottom-scrollbar class="border-x border-b border-base-300 bg-base-200/50 relative touch-none rounded-b-lg" style="height: 16px; display: none;">
+              <div data-ap-bottom-scrollbar-thumb class="absolute top-1 bottom-1 rounded-full bg-primary/70 active:bg-primary cursor-pointer" style="left: 0; width: 50px;"></div>
             </div>
 
             <!-- Loading state -->
@@ -229,7 +239,8 @@
               </audio>
               <div data-ap-waveform-player class="relative">
                 <!-- Controls (sticky) -->
-                <div class="bg-base-200 rounded-t-lg px-3 py-2 flex items-center gap-3 flex-wrap sticky top-0 z-10">
+                <div class="bg-base-200 rounded-t-lg px-3 py-2 sticky top-0 z-10 flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2 sm:gap-3">
+                  <!-- Transport -->
                   <div class="flex items-center gap-2">
                     <button type="button" class="btn btn-sm btn-circle btn-primary" data-ap-play-pause title="{% translate 'Play/Pause' %}">
                       <svg class="play-icon w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -244,44 +255,49 @@
                         <rect x="4" y="4" width="12" height="12" rx="1"/>
                       </svg>
                     </button>
+                    <div class="flex items-center gap-1 text-xs ml-1">
+                      <span data-ap-current-time class="font-mono text-base-content/70">0:00.000</span>
+                      <span class="text-base-content/50">/</span>
+                      <span data-ap-duration class="font-mono text-base-content/70">0:00.000</span>
+                    </div>
                   </div>
-                  <div class="flex items-center gap-2 text-sm">
-                    <span data-ap-current-time class="font-mono text-base-content/70">0:00.000</span>
-                    <span class="text-base-content/50">/</span>
-                    <span data-ap-duration class="font-mono text-base-content/70">0:00.000</span>
-                  </div>
+
                   <div class="divider divider-horizontal mx-1 hidden sm:flex"></div>
-                  <div class="flex items-center gap-2">
-                    <span class="text-xs text-base-content/60 hidden sm:inline">{% translate 'Zoom' %}:</span>
-                    <button type="button" class="btn btn-xs btn-ghost" data-ap-zoom-out>−</button>
-                    <input type="range" data-ap-zoom-slider class="range range-xs range-primary w-16 sm:w-20" min="100" max="2000" value="500">
-                    <button type="button" class="btn btn-xs btn-ghost" data-ap-zoom-in>+</button>
-                  </div>
-                  <div class="divider divider-horizontal mx-1 hidden sm:flex"></div>
-                  <div class="flex items-center gap-2">
-                    <span class="text-xs text-base-content/60 hidden sm:inline">{% translate 'Speed' %}:</span>
-                    <select data-ap-speed class="select select-xs select-bordered">
-                      <option value="0.25">0.25x</option>
-                      <option value="0.5">0.5x</option>
-                      <option value="0.75">0.75x</option>
-                      <option value="1" selected>1x</option>
-                      <option value="1.25">1.25x</option>
-                      <option value="1.5">1.5x</option>
-                      <option value="2">2x</option>
-                    </select>
-                  </div>
-                  <div class="divider divider-horizontal mx-1 hidden sm:flex"></div>
-                  <div class="flex items-center gap-2">
-                    <span class="text-xs text-base-content/60 hidden sm:inline">{% translate 'Selection' %}:</span>
-                    <button type="button" class="btn btn-xs btn-outline btn-primary" data-ap-select-toggle aria-pressed="true" title="{% translate 'Select segment' %}">
-                      {% translate 'Select' %}
-                    </button>
-                    <button type="button" class="btn btn-xs btn-outline btn-primary" data-ap-play-selection title="{% translate 'Play selection' %}" disabled>
-                      {% translate 'Play' %}
-                    </button>
-                    <button type="button" class="btn btn-xs btn-outline btn-primary" data-ap-clear-selection title="{% translate 'Clear selection' %}" disabled>
-                      {% translate 'Clear' %}
-                    </button>
+
+                  <!-- Tools -->
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <div class="flex items-center gap-1">
+                      <span class="text-xs text-base-content/60 hidden sm:inline">{% translate 'Zoom' %}:</span>
+                      <button type="button" class="btn btn-xs btn-ghost" data-ap-zoom-out>−</button>
+                      <input type="range" data-ap-zoom-slider class="range range-xs range-primary w-16 sm:w-20" min="100" max="2000" value="500">
+                      <button type="button" class="btn btn-xs btn-ghost" data-ap-zoom-in>+</button>
+                    </div>
+                    <div class="divider divider-horizontal mx-0 hidden sm:flex"></div>
+                    <div class="flex items-center gap-1">
+                      <span class="text-xs text-base-content/60 hidden sm:inline">{% translate 'Speed' %}:</span>
+                      <select data-ap-speed class="select select-xs select-bordered">
+                        <option value="0.25">0.25x</option>
+                        <option value="0.5">0.5x</option>
+                        <option value="0.75">0.75x</option>
+                        <option value="1" selected>1x</option>
+                        <option value="1.25">1.25x</option>
+                        <option value="1.5">1.5x</option>
+                        <option value="2">2x</option>
+                      </select>
+                    </div>
+                    <div class="divider divider-horizontal mx-0 hidden sm:flex"></div>
+                    <div class="flex items-center gap-1">
+                      <span class="text-xs text-base-content/60 hidden sm:inline">{% translate 'Selection' %}:</span>
+                      <button type="button" class="btn btn-xs btn-outline btn-primary" data-ap-select-toggle aria-pressed="true" title="{% translate 'Select segment' %}">
+                        {% translate 'Select' %}
+                      </button>
+                      <button type="button" class="btn btn-xs btn-outline btn-primary" data-ap-play-selection title="{% translate 'Play selection' %}" disabled>
+                        {% translate 'Play' %}
+                      </button>
+                      <button type="button" class="btn btn-xs btn-outline btn-primary" data-ap-clear-selection title="{% translate 'Clear selection' %}" disabled>
+                        {% translate 'Clear' %}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
