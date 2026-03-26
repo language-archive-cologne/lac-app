@@ -131,6 +131,7 @@
     this._bindControls();
     this._bindEvents();
     this._bindRegions();
+    this._setupTopScrollbar();
     this._loadPeaks(audioUrl, peaksUrl);
 
     if (analyzeMode) {
@@ -334,6 +335,50 @@
     this._loadingFallbackTimer = setTimeout(function () {
       hideLoading();
     }, 3000);
+  };
+
+  // ─── Top scrollbar (mirror of waveform horizontal scroll) ────────────
+
+  AudioPlayer.prototype._setupTopScrollbar = function () {
+    var topBar = this._q('[data-ap-top-scrollbar]');
+    var topInner = this._q('[data-ap-top-scrollbar-inner]');
+    if (!topBar || !topInner) return;
+
+    var ws = this.wavesurfer;
+    // WaveSurfer uses shadow DOM: getWrapper() returns .wrapper,
+    // its parent is .scroll (the actual overflow-x: auto container).
+    var wrapper = ws.getWrapper ? ws.getWrapper() : null;
+    var scrollContainer = wrapper ? wrapper.parentElement : null;
+    if (!scrollContainer) return;
+
+    var syncing = false;
+
+    var syncSize = function () {
+      topInner.style.width = scrollContainer.scrollWidth + 'px';
+      // Show only when content overflows (zoomed in)
+      topBar.style.display = scrollContainer.scrollWidth > scrollContainer.clientWidth ? '' : 'none';
+    };
+
+    // Top → waveform
+    topBar.addEventListener('scroll', function () {
+      if (syncing) return;
+      syncing = true;
+      scrollContainer.scrollLeft = topBar.scrollLeft;
+      syncing = false;
+    });
+
+    // Waveform → top
+    scrollContainer.addEventListener('scroll', function () {
+      if (syncing) return;
+      syncing = true;
+      topBar.scrollLeft = scrollContainer.scrollLeft;
+      syncing = false;
+    });
+
+    ws.on('ready', syncSize);
+    ws.on('zoom', syncSize);
+    // Initial hide
+    topBar.style.display = 'none';
   };
 
   // ─── Regions (selection) ──────────────────────────────────────────────

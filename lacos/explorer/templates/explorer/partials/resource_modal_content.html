@@ -58,8 +58,8 @@
             <p>{% translate "Your browser does not support the audio element." %}</p>
           </audio>
           <div data-ap-waveform-player class="relative">
-            <!-- Controls bar -->
-            <div class="bg-base-200 rounded-t-lg p-3 flex items-center gap-3 flex-wrap">
+            <!-- Controls (sticky) -->
+            <div class="bg-base-200 rounded-t-lg px-3 py-2 flex items-center gap-3 flex-wrap sticky top-0 z-10">
               <div class="flex items-center gap-2">
                 <button type="button" class="btn btn-sm btn-circle btn-primary" id="play-pause-btn" data-ap-play-pause title="{% translate 'Play/Pause' %}">
                   <svg class="play-icon w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -75,7 +75,6 @@
                   </svg>
                 </button>
               </div>
-
               <div class="flex items-center gap-2 text-sm">
                 <span id="current-time" data-ap-current-time class="font-mono text-base-content/70">0:00.000</span>
                 <span class="text-base-content/50">/</span>
@@ -109,6 +108,8 @@
               </div>
 
               <div class="divider divider-horizontal mx-1 hidden sm:flex"></div>
+
+              <!-- Selection controls -->
               <div class="flex items-center gap-2">
                 <span class="text-xs text-base-content/60 hidden sm:inline">{% translate 'Selection' %}:</span>
                 <button type="button"
@@ -136,9 +137,14 @@
                   {% translate 'Clear' %}
                 </button>
               </div>
-
             </div>
 
+            <!-- Top scrollbar (synced with waveform) -->
+            <div data-ap-top-scrollbar class="overflow-x-auto border-x border-base-300" style="overflow-y: hidden;">
+              <div data-ap-top-scrollbar-inner style="height: 1px;"></div>
+            </div>
+
+            <!-- Waveform -->
             <div class="bg-base-100 border-x border-base-300">
               <div id="waveform" data-ap-waveform style="min-height: 128px;"></div>
             </div>
@@ -222,7 +228,8 @@
                 <p>{% translate "Your browser does not support the audio element." %}</p>
               </audio>
               <div data-ap-waveform-player class="relative">
-                <div class="bg-base-200 rounded-t-lg p-3 flex items-center gap-3 flex-wrap">
+                <!-- Controls (sticky) -->
+                <div class="bg-base-200 rounded-t-lg px-3 py-2 flex items-center gap-3 flex-wrap sticky top-0 z-10">
                   <div class="flex items-center gap-2">
                     <button type="button" class="btn btn-sm btn-circle btn-primary" data-ap-play-pause title="{% translate 'Play/Pause' %}">
                       <svg class="play-icon w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -277,9 +284,18 @@
                     </button>
                   </div>
                 </div>
+
+                <!-- Top scrollbar (synced with waveform) -->
+                <div data-ap-top-scrollbar class="overflow-x-auto border-x border-base-300" style="overflow-y: hidden;">
+                  <div data-ap-top-scrollbar-inner style="height: 1px;"></div>
+                </div>
+
+                <!-- Waveform -->
                 <div class="bg-base-100 border-x border-base-300">
                   <div data-ap-waveform style="min-height: 128px;"></div>
                 </div>
+
+                <!-- Timeline -->
                 <div class="bg-base-200 rounded-b-lg border-x border-b border-base-300">
                   <div data-ap-timeline style="height: 24px;"></div>
                 </div>
