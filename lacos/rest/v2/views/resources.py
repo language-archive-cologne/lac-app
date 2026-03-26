@@ -1,3 +1,4 @@
+import logging
 import uuid as uuid_mod
 from urllib.parse import unquote
 
@@ -19,7 +20,10 @@ from lacos.rest.v2.access import (
     get_parent_bundle_or_404,
 )
 from lacos.storage.models.s3_resource_location import S3ResourceLocation
+from lacos.storage.services.bucket_service import BucketService
 from lacos.storage.services.presigned_url_cache_service import PresignedUrlCacheService
+
+logger = logging.getLogger(__name__)
 
 RESOURCE_MODELS = [MediaResource, WrittenResource, OtherResource]
 
@@ -92,6 +96,19 @@ def resource_detail(request, identifier):
         data["file_length"] = resource.file_length
     if hasattr(resource, "file_description") and resource.file_description:
         data["file_description"] = resource.file_description
+
+    try:
+        location = _get_s3_location(resource)
+        if location.size_bytes is None:
+            info = BucketService().get_file_info(location.s3_bucket, location.s3_key)
+            if info.get("success") and info.get("file_size"):
+                location.size_bytes = info["file_size"]
+                location.save(update_fields=["size_bytes"])
+        if location.size_bytes is not None:
+            data["size_bytes"] = location.size_bytes
+    except Exception:
+        logger.warning("Could not resolve size_bytes for resource %s", identifier)
+
     return Response(data, content_type="application/ld+json")
 
 
