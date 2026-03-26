@@ -1,0 +1,160 @@
+{% extends "explorer_base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{{ resource_name }} - {% translate "Resource" %} - {{ block.super }}{% endblock title %}
+
+{% block explorer_content %}
+  <!-- Breadcrumb -->
+  <nav class="text-sm breadcrumbs mb-4">
+    <ul>
+      <li><a href="{% url 'explorer:bundle_detail' bundle.pk %}" class="link link-hover">{{ bundle.general_info.first.display_title|default:bundle.identifier }}</a></li>
+      <li class="text-base-content/60">{{ resource_name }}</li>
+    </ul>
+  </nav>
+
+  {% if resource.file_pid %}
+  <div class="flex items-center gap-2 mb-4 text-sm text-base-content/70">
+    <span class="font-mono">{{ resource.file_pid }}</span>
+    <button type="button"
+            onclick="navigator.clipboard.writeText('{{ resource.file_pid|escapejs }}'); this.classList.add('text-success'); setTimeout(() => this.classList.remove('text-success'), 2000);"
+            class="btn btn-xs btn-ghost btn-square"
+            title="{% translate 'Copy handle' %}">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+      </svg>
+    </button>
+  </div>
+  {% endif %}
+
+  <!-- Resource viewer -->
+  <style>[data-standalone-viewer] [data-modal-close] { display: none; }</style>
+  <div class="bg-base-100 shadow rounded-2xl p-6 border border-base-300">
+    <div id="resource-viewer-content" data-resource-container data-standalone-viewer>
+      {% include "explorer/partials/resource_modal_content.html" %}
+    </div>
+  </div>
+{% endblock explorer_content %}
+
+{% block inline_javascript %}
+  {{ block.super }}
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      var container = document.getElementById('resource-viewer-content');
+      if (!container) return;
+
+      // Initialize audio player
+      var playerContainer = container.querySelector('#linguist-audio-player');
+      var audioPlayer = null;
+
+      if (playerContainer && playerContainer.dataset.audioUrl && window.AudioPlayer) {
+        try {
+          audioPlayer = new AudioPlayer(playerContainer);
+        } catch (error) {
+          console.error('Resource page player init failed:', error);
+        }
+      }
+
+      // Initialize ELAN annotation controls
+      var viewerRoot = container.querySelector('[data-viewer-type]');
+      if (viewerRoot && viewerRoot.dataset.viewerType === 'elan') {
+        var ws = audioPlayer && audioPlayer.wavesurfer;
+
+        // Annotation row highlighting
+        var rows = viewerRoot.querySelectorAll('tr[data-annotation-start]');
+        var activeRow = null;
+        var highlight = function(currentTime) {
+          var matched = null;
+          for (var i = 0; i < rows.length; i++) {
+            var s = parseFloat(rows[i].dataset.annotationStart);
+            var e = parseFloat(rows[i].dataset.annotationEnd);
+            if (!isNaN(s) && !isNaN(e) && currentTime >= s && currentTime < e) {
+              matched = rows[i];
+              break;
+            }
+          }
+          if (matched !== activeRow) {
+            if (activeRow) activeRow.classList.remove('bg-blue-100');
+            activeRow = matched;
+            if (activeRow) {
+              activeRow.classList.add('bg-blue-100');
+              activeRow.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+          }
+        };
+
+        if (ws) {
+          // Wire annotation play buttons to WaveSurfer
+          viewerRoot.querySelectorAll('button[data-annotation-start]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+              var start = parseFloat(btn.dataset.annotationStart || '');
+              var end = parseFloat(btn.dataset.annotationEnd || '');
+              if (isNaN(start)) return;
+              audioPlayer._selectionEndTime = isNaN(end) ? null : end;
+              audioPlayer._selectionPlaybackActive = !isNaN(end);
+              audioPlayer._selectionPlayStartedAt = Date.now();
+              ws.setTime(start);
+              ws.play();
+            });
+          });
+          ws.on('timeupdate', highlight);
+        } else {
+          // Fallback: native audio
+          var audioEl = viewerRoot.querySelector('audio');
+          if (audioEl) {
+            var segmentEnd = null;
+            audioEl.addEventListener('timeupdate', function() { highlight(audioEl.currentTime); });
+            viewerRoot.querySelectorAll('button[data-annotation-start]').forEach(function(btn) {
+              btn.addEventListener('click', function() {
+                var start = parseFloat(btn.dataset.annotationStart || '');
+                var end = parseFloat(btn.dataset.annotationEnd || '');
+                if (isNaN(start)) return;
+                segmentEnd = isNaN(end) ? null : end;
+                audioEl.currentTime = Math.max(start, 0);
+                audioEl.play().catch(function() {});
+              });
+            });
+            audioEl.addEventListener('timeupdate', function() {
+              if (segmentEnd !== null && audioEl.currentTime >= segmentEnd) {
+                audioEl.pause();
+                segmentEnd = null;
+              }
+            });
+          }
+        }
+      }
+
+      // Keyboard shortcuts
+      document.addEventListener('keydown', function(event) {
+        var ws = audioPlayer && audioPlayer.wavesurfer;
+        if (!ws) return;
+        var tag = document.activeElement.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        switch (event.code) {
+          case 'Space': event.preventDefault(); ws.playPause(); break;
+          case 'ArrowLeft': event.preventDefault(); ws.skip(-1); break;
+          case 'ArrowRight': event.preventDefault(); ws.skip(1); break;
+        }
+      });
+
+      // Handle HTMX swaps for mode switching (oscillogram/spectrogram/F0)
+      document.addEventListener('htmx:afterSwap', function(event) {
+        if (event.detail && event.detail.target &&
+            event.detail.target.id === 'resource-viewer-content') {
+          if (audioPlayer) {
+            audioPlayer.destroy();
+            audioPlayer = null;
+          }
+          var newPlayer = container.querySelector('#linguist-audio-player');
+          if (newPlayer && newPlayer.dataset.audioUrl && window.AudioPlayer) {
+            try {
+              audioPlayer = new AudioPlayer(newPlayer);
+            } catch (e) {
+              console.error('Player re-init failed:', e);
+            }
+          }
+        }
+      });
+    });
+  </script>
+{% endblock inline_javascript %}

@@ -14,7 +14,12 @@ from django.views import View
 from django.views.generic import DetailView
 
 from lacos.blam.models import Bundle
-from lacos.blam.models.bundle.bundle_structural_info import BundleAdditionalMetadataFile
+from lacos.blam.models.bundle.bundle_structural_info import (
+    BundleAdditionalMetadataFile,
+    MediaResource,
+    OtherResource,
+    WrittenResource,
+)
 from lacos.blam.mappers.bundle.write.bundle_exporter import BundleExporter
 from lacos.blam.serializers import BundleJsonLdSerializer
 from lacos.explorer.media_utils import determine_media_type, guess_source_mime_type
@@ -278,11 +283,24 @@ class ResourceAccessView(View):
 
     permission_denied_message = _("You do not have permission to access this resource.")
 
-    def get(self, request, bundle_id, resource_id):
-        bundle = get_object_or_404(Bundle, pk=bundle_id)
+    def get(self, request, bundle_id=None, resource_id=None, handle=None, resource_pid=None):
+        # Resolve bundle by UUID or handle
+        if bundle_id:
+            bundle = get_object_or_404(Bundle, pk=bundle_id)
+        elif handle:
+            bundle = Bundle.objects.filter(identifier=handle).first()
+            if not bundle:
+                raise Http404(f"Bundle with handle '{handle}' not found")
+        else:
+            raise Http404("No bundle identifier provided")
 
-        # Find resource first to check if it's additional metadata (always public)
-        resource = find_resource_in_bundle(bundle, resource_id=resource_id)
+        # Resolve resource by UUID or file_pid
+        if resource_id:
+            resource = find_resource_in_bundle(bundle, resource_id=resource_id)
+        elif resource_pid:
+            resource = find_resource_in_bundle(bundle, file_pid=resource_pid)
+        else:
+            resource = None
 
         # Additional metadata files are always public, skip ACL check for them
         is_additional_metadata = isinstance(resource, BundleAdditionalMetadataFile)
@@ -294,7 +312,8 @@ class ResourceAccessView(View):
                 return HttpResponseForbidden(html)
 
         if not resource:
-            raise Http404(f"Resource with id {resource_id} not found in bundle {bundle_id}")
+            res_ref = resource_id or resource_pid
+            raise Http404(f"Resource '{res_ref}' not found in bundle")
 
         collection_for_path = None
         if hasattr(bundle, 'structural_info') and bundle.structural_info.first():
@@ -453,9 +472,24 @@ class ResourceAccessView(View):
                 )
 
             if action in {'play', 'view', 'analyze', 'pitch'}:
-                return redirect(
-                    'explorer:bundle_detail_by_handle',
-                    handle=bundle.identifier,
+                return self._render_resource_page(
+                    request, resource, bundle, mime_type,
+                    detected_media_type, source_mime_type,
+                    presigned_url, download_url, elan_context, is_elan,
+                    xml_preview=xml_preview,
+                    markdown_html=markdown_html,
+                    download_bucket=bucket_name,
+                    download_key=object_key,
+                    peaks_url=peaks_url,
+                    spectrogram_data_url=spectrogram_data_url,
+                    player_mode=player_mode,
+                    spectrogram_available=spectrogram_available,
+                    pitch_data_url=pitch_data_url,
+                    pitch_available=pitch_available,
+                    resource_play_url=resource_play_url,
+                    resource_analyze_url=resource_analyze_url,
+                    resource_pitch_url=resource_pitch_url,
+                    subtitle_url=subtitle_url,
                 )
 
             raise Http404("Unsupported action")
@@ -567,6 +601,45 @@ class ResourceAccessView(View):
         response['HX-Trigger'] = json.dumps({'showResourceModal': True})
         return response
 
+    def _render_resource_page(
+        self, request, resource, bundle, mime_type, detected_media_type,
+        source_mime_type, presigned_url, download_url, elan_context, is_elan,
+        **kwargs,
+    ):
+        """Render a standalone resource landing page."""
+        media_type = 'elan' if is_elan else detected_media_type
+
+        context = {
+            'resource_name': resource.file_name,
+            'resource_description': getattr(resource, 'file_description', ''),
+            'mime_type': mime_type,
+            'media_type': media_type,
+            'source_mime_type': source_mime_type,
+            'stream_url': presigned_url if media_type in {'audio', 'video'} else None,
+            'preview_url': presigned_url,
+            'download_url': download_url,
+            'download_bucket': kwargs.get('download_bucket'),
+            'download_key': kwargs.get('download_key'),
+            'download_filename': getattr(resource, 'file_name', None),
+            'elan_context': elan_context,
+            'xml_content': kwargs.get('xml_preview'),
+            'markdown_html': kwargs.get('markdown_html'),
+            'peaks_url': kwargs.get('peaks_url'),
+            'spectrogram_data_url': kwargs.get('spectrogram_data_url'),
+            'player_mode': kwargs.get('player_mode', 'simple'),
+            'spectrogram_available': kwargs.get('spectrogram_available', False),
+            'pitch_data_url': kwargs.get('pitch_data_url'),
+            'pitch_available': kwargs.get('pitch_available', False),
+            'resource_play_url': kwargs.get('resource_play_url'),
+            'resource_analyze_url': kwargs.get('resource_analyze_url'),
+            'resource_pitch_url': kwargs.get('resource_pitch_url'),
+            'subtitle_url': kwargs.get('subtitle_url'),
+            'bundle': bundle,
+            'resource': resource,
+        }
+
+        return render(request, 'resource_detail.html', context)
+
     def _resolve_peaks_url(self, resource_service, bucket_name, object_key):
         """Check if pre-computed peaks exist and return a presigned URL."""
         peaks_key = f"{object_key}.peaks.json"
@@ -602,6 +675,35 @@ class ResourceAccessView(View):
             return True
         except Exception:
             return False
+
+
+class ResourceByHandleView(View):
+    """Resolve a flat resource handle to its resource landing page.
+
+    Supports the legacy LAC URL pattern: /resource/<handle_id>/
+    e.g. /resource/11341/00-0000-0000-0000-1B28-A
+    which maps to file_pid = "hdl:11341/00-0000-0000-0000-1B28-A"
+    """
+
+    def get(self, request, handle_id):
+        file_pid = f"hdl:{handle_id}"
+
+        # Search across all resource types; reverse path goes through
+        # BundleResources (M2M container) → Bundle.resources
+        for model in (MediaResource, WrittenResource, OtherResource):
+            resource = model.objects.filter(file_pid=file_pid).first()
+            if resource:
+                bundle = Bundle.objects.filter(
+                    resources__in=resource.bundleresources_set.all()
+                ).first()
+                if bundle:
+                    return redirect(
+                        'explorer:resource_access_by_handle',
+                        handle=bundle.identifier,
+                        resource_pid=file_pid,
+                    )
+
+        raise Http404(f"Resource with handle '{file_pid}' not found")
 
 
 class BundleJsonLdView(View):

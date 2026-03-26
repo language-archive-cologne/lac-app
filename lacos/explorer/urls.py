@@ -38,6 +38,11 @@ urlpatterns = [
     ),
     # Handle-based patterns last (path: is greedy, matches slashes)
     path(
+        "bundles/<path:handle>/resources/<path:resource_pid>/",
+        view=views.ResourceAccessView.as_view(),
+        name="resource_access_by_handle",
+    ),
+    path(
         "collections/<path:handle>/resources/<path:resource_id>/",
         view=views.CollectionResourcesView.as_view(),
         name="collection_resource_by_handle",

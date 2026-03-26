@@ -14,7 +14,7 @@
         <div class="join">
           <a href="{{ resource_play_url }}"
              hx-get="{{ resource_play_url }}"
-             hx-target="#resource-modal-content"
+             hx-target="closest [data-resource-container]"
              hx-swap="innerHTML"
              class="btn btn-xs join-item {% if player_mode == 'simple' %}btn-secondary{% else %}btn-ghost{% endif %}">
             {% translate "Oscillogram" %}
@@ -22,7 +22,7 @@
           {% if spectrogram_available %}
           <a href="{{ resource_analyze_url }}"
              hx-get="{{ resource_analyze_url }}"
-             hx-target="#resource-modal-content"
+             hx-target="closest [data-resource-container]"
              hx-swap="innerHTML"
              class="btn btn-xs join-item {% if player_mode == 'analyze' %}btn-secondary{% else %}btn-ghost{% endif %}">
             {% translate "Spectrogram" %}
@@ -31,7 +31,7 @@
           {% if pitch_available %}
           <a href="{{ resource_pitch_url }}"
              hx-get="{{ resource_pitch_url }}"
-             hx-target="#resource-modal-content"
+             hx-target="closest [data-resource-container]"
              hx-swap="innerHTML"
              class="btn btn-xs join-item {% if player_mode == 'pitch' %}btn-secondary{% else %}btn-ghost{% endif %}">
             {% translate "F0" %}

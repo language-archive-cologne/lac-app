@@ -3,7 +3,7 @@
 Re-exports all views for backwards compatibility with existing URL patterns.
 """
 
-from .bundles import BundleDetailView, BundleJsonLdView, BundleResourcesView, BundleXmlView, ResourceAccessView
+from .bundles import BundleDetailView, BundleJsonLdView, BundleResourcesView, BundleXmlView, ResourceAccessView, ResourceByHandleView
 from .collections import CollectionDetailView, CollectionJsonLdView, CollectionListView, CollectionResourcesView, CollectionXmlView
 from .bundle_faceted_search import BundleFacetedSearchView
 from .faceted_search import FacetedSearchView
@@ -31,6 +31,7 @@ __all__ = [
     "BundleResourcesView",
     "BundleXmlView",
     "ResourceAccessView",
+    "ResourceByHandleView",
     # IMDI views
     "ImdiXmlView",
     # Utility views
