@@ -515,13 +515,23 @@ SIMPLE_JWT = {
 CORS_URLS_REGEX = r"^/api/.*$"
 CORS_ALLOW_ALL_ORIGINS = True
 
-# By Default swagger ui is available only to admin user(s). You can change permission classes to change that
-# See more configuration options at https://drf-spectacular.readthedocs.io/en/latest/settings.html#settings
 SPECTACULAR_SETTINGS = {
     "TITLE": "Language Archive Cologne API",
-    "DESCRIPTION": "REST API for the Language Archive Cologne",
+    "DESCRIPTION": (
+        "BLAM (Basic Language Archive Metadata) API for the Language Archive Cologne.\n\n"
+        "Public records are available without authentication. "
+        "Restricted records require a JWT token.\n\n"
+        "## Getting a token\n\n"
+        "**Service accounts:** `POST /auth/token/` with username and password.\n\n"
+        "**University users (Shibboleth):** Log in at `/saml2/login/`, "
+        "then use the `/auth/session-token/` endpoint below (Try it out) to "
+        "exchange your session for a JWT. Copy the token from the response. "
+        "There is no programmatic Shibboleth flow.\n\n"
+        "Include the token as `Authorization: Bearer <token>`. "
+        "Tokens expire after 1 hour — use `/auth/token/refresh/` to renew."
+    ),
     "VERSION": "2.0.0",
-    "SERVE_PERMISSIONS": ["rest_framework.permissions.IsAdminUser"],
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"],
     "SCHEMA_PATH_PREFIX": "/api/v2/",
     "PREPROCESSING_HOOKS": ["lacos.rest.v2.schema.filter_v2_endpoints"],
 }
