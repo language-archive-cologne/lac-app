@@ -602,6 +602,10 @@ if SAML_LOGIN_ENABLED:
     ]
     _saml_metadata_mdq_url = env("SAML_METADATA_MDQ_URL", default="")
     SAML2_DISCO_URL = env("SAML2_DISCO_URL", default="")
+    EDUGAIN_METADATA_URL = env(
+        "EDUGAIN_METADATA_URL",
+        default="https://www.aai.dfn.de/fileadmin/metadata/dfn-aai-edugain+idp-metadata.xml",
+    )
     SAML_ATTRIBUTE_MAPPING = {
         "eduPersonPrincipalName": ("username",),
         "urn:oid:1.3.6.1.4.1.5923.1.1.1.6": ("username",),

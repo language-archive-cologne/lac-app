@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% load i18n static %}
+
+{% block title %}{% trans "Select your institution" %}{% endblock title %}
+
+{% block body %}
+<div class="min-h-screen bg-base-200 py-12">
+  <div class="max-w-2xl mx-auto px-4">
+    <div class="card bg-base-100 shadow-xl">
+      <div class="card-body">
+        <h1 class="card-title text-2xl mb-2">{% trans "Select your institution" %}</h1>
+        <p class="text-base-content/70 mb-4">
+          {% trans "Search for your institution to sign in via your university account." %}
+        </p>
+
+        <div class="flex flex-col sm:flex-row gap-3 mb-4">
+          <input type="text"
+                 id="idp-search"
+                 name="search"
+                 placeholder="{% trans 'Search by name...' %}"
+                 class="input input-bordered flex-1"
+                 hx-get="{% url 'users:saml_discovery_idp_list' %}"
+                 hx-trigger="input changed delay:300ms, search"
+                 hx-target="#idp-results"
+                 hx-include="#country-select"
+                 autocomplete="off" />
+
+          <select id="country-select"
+                  name="country"
+                  class="select select-bordered w-full sm:w-48"
+                  hx-get="{% url 'users:saml_discovery_idp_list' %}"
+                  hx-trigger="change"
+                  hx-target="#idp-results"
+                  hx-include="#idp-search">
+            <option value="">{% trans "All countries" %}</option>
+            {% for c in countries %}
+              <option value="{{ c.code }}">{{ c.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        {% if next %}
+          <input type="hidden" name="next" value="{{ next }}" id="next-url" />
+        {% endif %}
+
+        <div id="idp-results">
+          <p class="text-center text-base-content/50 py-8">{% trans "Type to search for your institution" %}</p>
+        </div>
+
+        <div class="divider text-sm">{% trans "or" %}</div>
+        <a href="{% url 'account_login' %}" class="btn btn-ghost btn-sm w-full">
+          {% trans "Sign in with credentials" %}
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock body %}

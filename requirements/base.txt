@@ -41,3 +41,5 @@ markdown==3.7 # https://github.com/Python-Markdown/markdown
 altcha==0.2.0 # https://github.com/altcha-org/altcha-lib-py
 #python-json-logger - structured JSON logging
 python-json-logger==4.0.0 # https://github.com/nhairs/python-json-logger
+#pycountry - ISO country codes for eduGAIN discovery
+pycountry==24.6.1 # https://github.com/pycountry/pycountry

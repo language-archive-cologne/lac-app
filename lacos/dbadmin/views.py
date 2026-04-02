@@ -21,6 +21,7 @@ from lacos.blam.tasks import (
     reindex_collections_task,
     reindex_search_vectors_task,
 )
+from lacos.users.tasks import index_edugain_idps
 from lacos.storage.models import BackgroundTask
 from lacos.storage.services.background_task_service import BackgroundTaskService
 
@@ -98,6 +99,12 @@ TASK_ACTIONS = {
         callable_name="decompress_spectrograms_task",
         extra_fields=("bucket_name",),
     ),
+    "index-edugain": TaskAction(
+        task_name="index_edugain_idps",
+        description="Fetch eduGAIN metadata and index IdPs for discovery",
+        start_message="eduGAIN IdP indexing queued.",
+        callable_name="index_edugain_idps",
+    ),
 }
 
 _TASK_CALLABLES = {
@@ -106,6 +113,7 @@ _TASK_CALLABLES = {
     "reindex_collections_task": reindex_collections_task,
     "generate_all_peaks_task": generate_all_peaks_task,
     "decompress_spectrograms_task": decompress_spectrograms_task,
+    "index_edugain_idps": index_edugain_idps,
 }
 
 

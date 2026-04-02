@@ -73,6 +73,44 @@ class GroupACL(models.Model):
         return f"{self.group.name} ACL profile"
 
 
+class SamlCountry(models.Model):
+    code = models.CharField(max_length=4, unique=True)
+    name = models.CharField(max_length=255)
+
+    class Meta:
+        verbose_name = _("SAML country")
+        verbose_name_plural = _("SAML countries")
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.code})"
+
+
+class SamlIdp(models.Model):
+    entity_id = models.TextField(unique=True)
+    display_name = models.CharField(max_length=512)
+    logo = models.TextField(blank=True, default="")
+    country = models.ForeignKey(
+        SamlCountry,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="idps",
+    )
+
+    class Meta:
+        verbose_name = _("SAML identity provider")
+        verbose_name_plural = _("SAML identity providers")
+        ordering = ["display_name"]
+        indexes = [
+            models.Index(fields=["display_name"]),
+            models.Index(fields=["country"]),
+        ]
+
+    def __str__(self) -> str:
+        return self.display_name
+
+
 class CollectionManagerAssignment(models.Model):
     """
     Assigns a user to manage one or more collections.

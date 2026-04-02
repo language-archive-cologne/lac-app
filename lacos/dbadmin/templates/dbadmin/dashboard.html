@@ -104,6 +104,13 @@
                                         Decompress spectrograms
                                     </button>
                                 </div>
+                                <button
+                                    hx-post="{% url 'dbadmin:task_enqueue' 'index-edugain' %}"
+                                    hx-target="#active-task-list"
+                                    hx-swap="afterbegin"
+                                    class="btn btn-sm btn-info w-full">
+                                    Index eduGAIN IdPs
+                                </button>
                             </div>
                         </div>
                     </div>

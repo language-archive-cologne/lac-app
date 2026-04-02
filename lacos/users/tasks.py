@@ -4,11 +4,14 @@ import hashlib
 import logging
 import os
 import tempfile
+from io import BytesIO
 from pathlib import Path
 from urllib import error, request
+from urllib.parse import urlparse
 from xml.etree import ElementTree
 
 from django.conf import settings
+from django.db import transaction
 from huey.contrib.djhuey import task
 
 try:
@@ -190,3 +193,248 @@ if HUEY_PERIODIC_AVAILABLE:
 else:
     def refresh_shibboleth_metadata_periodic() -> dict:  # pragma: no cover - fallback
         return _run_refresh_metadata()
+
+
+# ---------------------------------------------------------------------------
+# eduGAIN IdP discovery index
+# ---------------------------------------------------------------------------
+
+EDUGAIN_METADATA_URL = (
+    "https://www.aai.dfn.de/fileadmin/metadata/dfn-aai-edugain+idp-metadata.xml"
+)
+
+NS_MD = "urn:oasis:names:tc:SAML:2.0:metadata"
+NS_MDUI = "urn:oasis:names:tc:SAML:metadata:ui"
+
+COUNTRY_CORRECTIONS = {"UK": "GB"}
+COUNTRY_WHITELIST = {"EU": "European Union", "UK": "United Kingdom"}
+
+_ISO_CODES: set[str] | None = None
+
+
+def _iso_country_codes() -> set[str]:
+    global _ISO_CODES
+    if _ISO_CODES is None:
+        import pycountry
+        _ISO_CODES = {c.alpha_2 for c in pycountry.countries}
+    return _ISO_CODES
+
+
+def _country_name(code: str) -> str:
+    if code in COUNTRY_WHITELIST:
+        return COUNTRY_WHITELIST[code]
+    import pycountry
+    country = pycountry.countries.get(alpha_2=code)
+    return country.name if country else code
+
+
+def _extract_country_code(entity_id: str) -> str | None:
+    try:
+        hostname = urlparse(entity_id).hostname or ""
+    except Exception:
+        return None
+    tld = hostname.rsplit(".", 1)[-1].upper() if hostname else None
+    if not tld:
+        return None
+    tld = COUNTRY_CORRECTIONS.get(tld, tld)
+    if tld in _iso_country_codes() or tld in COUNTRY_WHITELIST:
+        return tld
+    return None
+
+
+def _extract_display_name(entity: ElementTree.Element) -> str | None:
+    # Try MDUI DisplayName (prefer English)
+    for idpsso in entity.iter(f"{{{NS_MD}}}IDPSSODescriptor"):
+        for ext in idpsso.iter(f"{{{NS_MDUI}}}UIInfo"):
+            names = ext.findall(f"{{{NS_MDUI}}}DisplayName")
+            en_name = None
+            first_name = None
+            for n in names:
+                text = (n.text or "").strip()
+                if not text:
+                    continue
+                if first_name is None:
+                    first_name = text
+                lang = n.get("{http://www.w3.org/XML/1998/namespace}lang", "")
+                if lang == "en":
+                    en_name = text
+            if en_name:
+                return en_name
+            if first_name:
+                return first_name
+
+    # Fallback to Organization DisplayName
+    for org in entity.iter(f"{{{NS_MD}}}Organization"):
+        names = org.findall(f"{{{NS_MD}}}OrganizationDisplayName")
+        en_name = None
+        first_name = None
+        for n in names:
+            text = (n.text or "").strip()
+            if not text:
+                continue
+            if first_name is None:
+                first_name = text
+            lang = n.get("{http://www.w3.org/XML/1998/namespace}lang", "")
+            if lang == "en":
+                en_name = text
+        if en_name:
+            return en_name
+        if first_name:
+            return first_name
+
+    return None
+
+
+def _extract_logo(entity: ElementTree.Element) -> str:
+    best_url = ""
+    best_width = -1
+    for idpsso in entity.iter(f"{{{NS_MD}}}IDPSSODescriptor"):
+        for ext in idpsso.iter(f"{{{NS_MDUI}}}UIInfo"):
+            for logo in ext.findall(f"{{{NS_MDUI}}}Logo"):
+                url = (logo.text or "").strip()
+                if not url:
+                    continue
+                try:
+                    width = int(logo.get("width", "0"))
+                except ValueError:
+                    width = 0
+                if width > best_width:
+                    best_width = width
+                    best_url = url
+    return best_url
+
+
+def _parse_edugain_metadata(payload: bytes) -> list[dict]:
+    idps = []
+    for _event, elem in ElementTree.iterparse(BytesIO(payload), events=("end",)):
+        if not elem.tag.endswith("EntityDescriptor"):
+            continue
+        # Only process IdPs
+        if elem.find(f"{{{NS_MD}}}IDPSSODescriptor") is None:
+            elem.clear()
+            continue
+
+        entity_id = elem.get("entityID", "")
+        display_name = _extract_display_name(elem)
+        if not entity_id or not display_name:
+            elem.clear()
+            continue
+
+        idps.append({
+            "entity_id": entity_id,
+            "display_name": display_name,
+            "logo": _extract_logo(elem),
+            "country_code": _extract_country_code(entity_id),
+        })
+        elem.clear()
+    return idps
+
+
+def _run_index_edugain() -> dict:
+    if not getattr(settings, "SAML_LOGIN_ENABLED", False):
+        return {"success": False, "skipped": "saml_login_disabled"}
+
+    url = str(getattr(settings, "EDUGAIN_METADATA_URL", EDUGAIN_METADATA_URL))
+    timeout = _get_timeout_seconds()
+
+    logger.info("Fetching eduGAIN metadata from %s", url)
+
+    request_obj = request.Request(url, headers={"User-Agent": "lacos-edugain-index"})
+    try:
+        with request.urlopen(request_obj, timeout=max(timeout, 60)) as response:
+            payload = response.read()
+    except Exception as exc:
+        logger.error("Failed to fetch eduGAIN metadata: %s", exc, exc_info=True)
+        return {"success": False, "error": "fetch_failed", "detail": str(exc)}
+
+    if not payload:
+        return {"success": False, "error": "empty_response"}
+
+    logger.info("Parsing eduGAIN metadata (%d bytes)", len(payload))
+    idps = _parse_edugain_metadata(payload)
+    logger.info("Found %d IdPs in eduGAIN metadata", len(idps))
+
+    from lacos.users.models import SamlCountry, SamlIdp
+
+    country_cache: dict[str, SamlCountry] = {}
+    seen_entity_ids: set[str] = set()
+
+    with transaction.atomic():
+        for idp_data in idps:
+            seen_entity_ids.add(idp_data["entity_id"])
+            country_code = idp_data["country_code"]
+            country_obj = None
+
+            if country_code:
+                if country_code not in country_cache:
+                    country_obj, _ = SamlCountry.objects.update_or_create(
+                        code=country_code,
+                        defaults={"name": _country_name(country_code)},
+                    )
+                    country_cache[country_code] = country_obj
+                else:
+                    country_obj = country_cache[country_code]
+
+            SamlIdp.objects.update_or_create(
+                entity_id=idp_data["entity_id"],
+                defaults={
+                    "display_name": idp_data["display_name"],
+                    "logo": idp_data["logo"],
+                    "country": country_obj,
+                },
+            )
+
+        deleted_count, _ = SamlIdp.objects.exclude(
+            entity_id__in=seen_entity_ids
+        ).delete()
+        if deleted_count:
+            logger.info("Removed %d stale IdPs from discovery index", deleted_count)
+
+    return {"success": True, "indexed": len(idps), "removed": deleted_count if 'deleted_count' in dir() else 0}
+
+
+@task(retries=3, retry_delay=120)
+def index_edugain_idps(tracking_id: str | None = None) -> dict:
+    from lacos.storage.services.background_task_service import BackgroundTaskService
+
+    if tracking_id:
+        BackgroundTaskService.mark_running(tracking_id, message="Fetching eduGAIN metadata")
+    try:
+        result = _run_index_edugain()
+    except Exception as exc:
+        if tracking_id:
+            BackgroundTaskService.mark_failed(tracking_id, error_message=str(exc))
+        raise
+    if tracking_id:
+        if result.get("success"):
+            BackgroundTaskService.mark_success(
+                tracking_id,
+                message=f"Indexed {result.get('indexed', 0)} IdPs",
+                result=result,
+            )
+        else:
+            BackgroundTaskService.mark_failed(
+                tracking_id,
+                error_message=result.get("error", "unknown"),
+                result=result,
+            )
+    return result
+
+
+if HUEY_PERIODIC_AVAILABLE:
+    @db_periodic_task(
+        crontab(
+            minute=getattr(settings, "EDUGAIN_INDEX_CRON_MINUTE", 30),
+            hour=getattr(settings, "EDUGAIN_INDEX_CRON_HOUR", 3),
+        )
+    )
+    @tracked_periodic(
+        task_name="periodic_edugain_index",
+        description="eduGAIN IdP Discovery Index (periodic)",
+        schedule="30 3 * * *",
+    )
+    def index_edugain_idps_periodic() -> dict:
+        return _run_index_edugain()
+else:
+    def index_edugain_idps_periodic() -> dict:  # pragma: no cover - fallback
+        return _run_index_edugain()

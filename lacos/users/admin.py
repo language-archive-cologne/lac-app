@@ -7,7 +7,7 @@ from django.utils.translation import gettext_lazy as _
 
 from .forms import UserAdminChangeForm
 from .forms import UserAdminCreationForm
-from .models import CollectionManagerAssignment, GroupACL, User
+from .models import CollectionManagerAssignment, GroupACL, SamlCountry, SamlIdp, User
 
 if settings.DJANGO_ADMIN_FORCE_ALLAUTH:
     # Force the `admin` sign in process to go through the `django-allauth` workflow:
@@ -159,3 +159,18 @@ class CollectionManagerAssignmentAdmin(admin.ModelAdmin):
     list_display = ("user", "collection", "created_at")
     search_fields = ("user__username", "user__email", "collection__identifier")
     autocomplete_fields = ("user", "collection")
+
+
+@admin.register(SamlIdp)
+class SamlIdpAdmin(admin.ModelAdmin):
+    list_display = ("display_name", "country", "entity_id")
+    search_fields = ("display_name", "entity_id")
+    list_filter = ("country",)
+    readonly_fields = ("entity_id", "display_name", "logo", "country")
+
+
+@admin.register(SamlCountry)
+class SamlCountryAdmin(admin.ModelAdmin):
+    list_display = ("code", "name")
+    search_fields = ("code", "name")
+    readonly_fields = ("code", "name")
