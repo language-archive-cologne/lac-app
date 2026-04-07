@@ -93,7 +93,8 @@ def saml_discovery_idp_list(request: HttpRequest) -> HttpResponse:
         qs = qs.filter(display_name__icontains=search)
     if country_code:
         qs = qs.filter(country__code=country_code)
-    qs = qs[:50]
+    if not search and not country_code:
+        qs = qs.none()
 
     return render(request, "users/partials/saml_idp_list.html", {
         "idps": qs,

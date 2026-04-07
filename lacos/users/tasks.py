@@ -202,6 +202,9 @@ else:
 EDUGAIN_METADATA_URL = (
     "https://www.aai.dfn.de/fileadmin/metadata/dfn-aai-edugain+idp-metadata.xml"
 )
+DFN_AAI_METADATA_URL = (
+    "https://www.aai.dfn.de/fileadmin/metadata/dfn-aai-basic-metadata.xml"
+)
 
 NS_MD = "urn:oasis:names:tc:SAML:2.0:metadata"
 NS_MDUI = "urn:oasis:names:tc:SAML:metadata:ui"
@@ -330,29 +333,44 @@ def _parse_edugain_metadata(payload: bytes) -> list[dict]:
     return idps
 
 
+def _fetch_metadata(url: str, timeout: int) -> bytes | None:
+    logger.info("Fetching metadata from %s", url)
+    req = request.Request(url, headers={"User-Agent": "lacos-edugain-index"})
+    try:
+        with request.urlopen(req, timeout=max(timeout, 60)) as response:
+            return response.read()
+    except Exception as exc:
+        logger.error("Failed to fetch metadata from %s: %s", url, exc, exc_info=True)
+        return None
+
+
 def _run_index_edugain() -> dict:
     if not getattr(settings, "SAML_LOGIN_ENABLED", False):
         return {"success": False, "skipped": "saml_login_disabled"}
 
-    url = str(getattr(settings, "EDUGAIN_METADATA_URL", EDUGAIN_METADATA_URL))
     timeout = _get_timeout_seconds()
+    urls = [
+        str(getattr(settings, "EDUGAIN_METADATA_URL", EDUGAIN_METADATA_URL)),
+        str(getattr(settings, "DFN_AAI_METADATA_URL", DFN_AAI_METADATA_URL)),
+    ]
 
-    logger.info("Fetching eduGAIN metadata from %s", url)
+    # Merge IdPs from all feeds; first occurrence wins (eduGAIN first).
+    merged: dict[str, dict] = {}
+    for url in urls:
+        payload = _fetch_metadata(url, timeout)
+        if not payload:
+            logger.warning("Skipping empty/failed metadata from %s", url)
+            continue
+        logger.info("Parsing metadata (%d bytes) from %s", len(payload), url)
+        for idp_data in _parse_edugain_metadata(payload):
+            if idp_data["entity_id"] not in merged:
+                merged[idp_data["entity_id"]] = idp_data
 
-    request_obj = request.Request(url, headers={"User-Agent": "lacos-edugain-index"})
-    try:
-        with request.urlopen(request_obj, timeout=max(timeout, 60)) as response:
-            payload = response.read()
-    except Exception as exc:
-        logger.error("Failed to fetch eduGAIN metadata: %s", exc, exc_info=True)
-        return {"success": False, "error": "fetch_failed", "detail": str(exc)}
+    if not merged:
+        return {"success": False, "error": "all_feeds_empty"}
 
-    if not payload:
-        return {"success": False, "error": "empty_response"}
-
-    logger.info("Parsing eduGAIN metadata (%d bytes)", len(payload))
-    idps = _parse_edugain_metadata(payload)
-    logger.info("Found %d IdPs in eduGAIN metadata", len(idps))
+    idps = list(merged.values())
+    logger.info("Found %d unique IdPs across %d feeds", len(idps), len(urls))
 
     from lacos.users.models import SamlCountry, SamlIdp
 
