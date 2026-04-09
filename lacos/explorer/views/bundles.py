@@ -80,7 +80,7 @@ class BundleDetailView(HandleLookupMixin, ACLPermissionMixin, DetailView):
         """
         accept = self.request.headers.get('Accept', '')
         if 'application/x-cmdi+xml' in accept:
-            return redirect('explorer:bundle_xml_by_handle', handle=self.object.identifier)
+            return redirect('explorer:bundle_xml_by_handle', handle=self.object.handle_path)
 
         return super().render_to_response(context, **response_kwargs)
 
@@ -289,6 +289,8 @@ class ResourceAccessView(View):
             bundle = get_object_or_404(Bundle, pk=bundle_id)
         elif handle:
             bundle = Bundle.objects.filter(identifier=handle).first()
+            if not bundle and not handle.startswith('hdl:'):
+                bundle = Bundle.objects.filter(identifier=f"hdl:{handle}").first()
             if not bundle:
                 raise Http404(f"Bundle with handle '{handle}' not found")
         else:
@@ -299,6 +301,8 @@ class ResourceAccessView(View):
             resource = find_resource_in_bundle(bundle, resource_id=resource_id)
         elif resource_pid:
             resource = find_resource_in_bundle(bundle, file_pid=resource_pid)
+            if not resource and not resource_pid.startswith('hdl:'):
+                resource = find_resource_in_bundle(bundle, file_pid=f"hdl:{resource_pid}")
         else:
             resource = None
 
@@ -680,7 +684,7 @@ class ResourceAccessView(View):
 class ResourceByHandleView(View):
     """Resolve a flat resource handle to its resource landing page.
 
-    Supports the legacy LAC URL pattern: /resource/<handle_id>/
+    Supports the direct URL pattern: /resource/<handle_id>/
     e.g. /resource/11341/00-0000-0000-0000-1B28-A
     which maps to file_pid = "hdl:11341/00-0000-0000-0000-1B28-A"
     """
@@ -697,8 +701,10 @@ class ResourceByHandleView(View):
                     resources__in=resource.bundleresources_set.all()
                 ).first()
                 if bundle:
-                    return redirect(
-                        'explorer:resource_access_by_handle',
+                    # Render directly via ResourceAccessView
+                    view = ResourceAccessView()
+                    return view.get(
+                        request,
                         handle=bundle.identifier,
                         resource_pid=file_pid,
                     )
@@ -739,6 +745,8 @@ class BundleJsonLdView(View):
             bundle = queryset.filter(pk=pk).first()
         elif handle is not None:
             bundle = queryset.filter(identifier=handle).first()
+            if bundle is None and not handle.startswith('hdl:'):
+                bundle = queryset.filter(identifier=f"hdl:{handle}").first()
         else:
             raise Http404("No bundle identifier provided")
 
@@ -798,6 +806,8 @@ class BundleXmlView(View):
             bundle = queryset.filter(pk=pk).first()
         elif handle is not None:
             bundle = queryset.filter(identifier=handle).first()
+            if bundle is None and not handle.startswith('hdl:'):
+                bundle = queryset.filter(identifier=f"hdl:{handle}").first()
         else:
             raise Http404("No bundle identifier provided")
 

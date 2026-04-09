@@ -632,7 +632,7 @@ class CollectionDetailView(HandleLookupMixin, DetailView):
         # CLARIN content negotiation: return CMDI/XML if requested
         accept = self.request.headers.get('Accept', '')
         if 'application/x-cmdi+xml' in accept:
-            return redirect('explorer:collection_xml_by_handle', handle=self.object.identifier)
+            return redirect('explorer:collection_xml_by_handle', handle=self.object.handle_path)
 
         if self.request.headers.get('HX-Request'):
             if (
@@ -668,6 +668,10 @@ class CollectionResourcesView(View):
             decoded_resource_id = unquote(resource_id)
             if decoded_resource_id.startswith('ID_'):
                 decoded_resource_id = decoded_resource_id[3:]
+
+            # URLs no longer include hdl: prefix, but DB stores it
+            if not decoded_resource_id.startswith('hdl:'):
+                decoded_resource_id = f"hdl:{decoded_resource_id}"
 
             # Try to find the metadata file in the collection's additional metadata
             metadata_file = None
@@ -941,6 +945,8 @@ class CollectionJsonLdView(View):
             collection = queryset.filter(pk=pk).first()
         elif handle is not None:
             collection = queryset.filter(identifier=handle).first()
+            if collection is None and not handle.startswith('hdl:'):
+                collection = queryset.filter(identifier=f"hdl:{handle}").first()
         else:
             raise Http404("No collection identifier provided")
 
@@ -1003,6 +1009,8 @@ class CollectionXmlView(View):
             collection = queryset.filter(pk=pk).first()
         elif handle is not None:
             collection = queryset.filter(identifier=handle).first()
+            if collection is None and not handle.startswith('hdl:'):
+                collection = queryset.filter(identifier=f"hdl:{handle}").first()
         else:
             raise Http404("No collection identifier provided")
 

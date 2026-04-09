@@ -54,7 +54,7 @@ class CollectionSitemap(Sitemap):
 
     def location(self, obj):
         return reverse(
-            "explorer:collection_detail_by_handle", kwargs={"handle": obj.identifier}
+            "explorer:collection_detail_by_handle", kwargs={"handle": obj.handle_path}
         )
 
     def lastmod(self, obj):
@@ -72,7 +72,7 @@ class BundleSitemap(Sitemap):
 
     def location(self, obj):
         return reverse(
-            "explorer:bundle_detail_by_handle", kwargs={"handle": obj.identifier}
+            "explorer:bundle_detail_by_handle", kwargs={"handle": obj.handle_path}
         )
 
     def lastmod(self, obj):

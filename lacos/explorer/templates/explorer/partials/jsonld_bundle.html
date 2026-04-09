@@ -5,7 +5,7 @@
   "@type": "Dataset",
   "name": "{% if bundle.get_general_info.display_title %}{{ bundle.get_general_info.display_title|escapejs }}{% elif bundle.get_general_info.title %}{{ bundle.get_general_info.title|escapejs }}{% else %}{{ bundle.identifier|escapejs }}{% endif %}",
   {% if bundle.get_general_info.description %}"description": "{{ bundle.get_general_info.description|escapejs }}",{% endif %}
-  "url": "{{ request.scheme }}://{{ request.get_host }}{% url 'explorer:bundle_detail_by_handle' handle=bundle.identifier %}",
+  "url": "{{ request.scheme }}://{{ request.get_host }}{% url 'explorer:bundle_detail_by_handle' handle=bundle.handle_path %}",
   "identifier": "{{ bundle.identifier|escapejs }}",
   "encodingFormat": "audio-visual",
   "provider": {
@@ -21,7 +21,7 @@
   "isPartOf": {
     "@type": "Dataset",
     "name": "{% if collection.get_general_info.display_title %}{{ collection.get_general_info.display_title|escapejs }}{% elif collection.get_general_info.title %}{{ collection.get_general_info.title|escapejs }}{% else %}{{ collection.identifier|escapejs }}{% endif %}",
-    "url": "{{ request.scheme }}://{{ request.get_host }}{% url 'explorer:collection_detail_by_handle' handle=collection.identifier %}"
+    "url": "{{ request.scheme }}://{{ request.get_host }}{% url 'explorer:collection_detail_by_handle' handle=collection.handle_path %}"
   }{% endif %}{% if bundle.get_general_info and bundle.get_general_info.object_languages and bundle.get_general_info.object_languages.all %},
   "inLanguage": [{% for language in bundle.get_general_info.object_languages.all %}{% if language.iso_639_3_code %}"{{ language.iso_639_3_code|escapejs }}"{% else %}"{{ language.name|escapejs }}"{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}],
   "about": [{% for language in bundle.get_general_info.object_languages.all %}{"@type": "Language", "name": "{{ language.name|escapejs }}"{% if language.iso_639_3_code %}, "alternateName": "{{ language.iso_639_3_code|escapejs }}"{% endif %}}{% if not forloop.last %}, {% endif %}{% endfor %}]{% endif %}{% if bundle.formatted_location %},

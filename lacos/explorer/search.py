@@ -522,7 +522,9 @@ def _search_bundles(query: SearchQuery, term: str, use_stored_vectors: bool = Tr
                 parent_collection_url=(
                     reverse(
                         "explorer:collection_detail_by_handle",
-                        kwargs={"handle": bundle.parent_collection_identifier},
+                        kwargs={"handle": bundle.parent_collection_identifier[4:]
+                                if bundle.parent_collection_identifier.startswith('hdl:')
+                                else bundle.parent_collection_identifier},
                     )
                     if bundle.parent_collection_identifier
                     else ""

@@ -88,6 +88,15 @@ def facet_sort_url(context, sort_field):
 
 @register.filter
 @stringfilter
+def strip_hdl(value):
+    """Strip the hdl: prefix from a handle/identifier string for use in URLs."""
+    if value.startswith('hdl:'):
+        return value[4:]
+    return value
+
+
+@register.filter
+@stringfilter
 def urlize_text(text):
     """
     Convert plain text URLs and DOIs in the text to clickable links.

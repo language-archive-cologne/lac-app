@@ -23,7 +23,10 @@ def get_object_by_pk_or_handle(model, pk=None, handle=None):
         return get_object_or_404(model, pk=pk)
 
     if handle is not None:
+        # Try as-is first, then with hdl: prefix (URLs no longer include hdl:)
         obj = model.objects.filter(identifier=handle).first()
+        if obj is None and not handle.startswith('hdl:'):
+            obj = model.objects.filter(identifier=f"hdl:{handle}").first()
         if obj is None:
             raise Http404(f"{model.__name__} with handle '{handle}' not found")
         return obj
@@ -51,6 +54,9 @@ class HandleLookupMixin:
         if pk is not None:
             queryset = queryset.filter(pk=pk)
         elif handle is not None:
+            # Try as-is first, then with hdl: prefix (URLs no longer include hdl:)
+            if not handle.startswith('hdl:') and not queryset.filter(identifier=handle).exists():
+                handle = f"hdl:{handle}"
             queryset = queryset.filter(identifier=handle)
         else:
             raise AttributeError(
