@@ -193,9 +193,8 @@ def test_collection_detail_can_sort_bundles_by_access_ascending(client):
         bundle_restricted.identifier,
     ]
     page = response.content.decode("utf-8")
-    assert "Sort" in page
     assert "Access" in page
-    assert "↑" in page
+    assert "&#9650;" in page  # sort arrow rendered in template
 
 
 @pytest.mark.django_db

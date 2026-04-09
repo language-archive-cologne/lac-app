@@ -554,9 +554,17 @@ class CollectionDetailView(HandleLookupMixin, DetailView):
         context["metadata_license"] = None
         context["metadata_license_uri"] = None
         context["content_licenses"] = []
+
+        # Prefer md_license from CollectionHeader when available
+        header = self.object.header.first() if hasattr(self.object, "header") else None
+        if header and header.md_license:
+            context["metadata_license"] = header.md_license
+            context["metadata_license_uri"] = header.md_license_uri or ""
+
         if hasattr(self.object, "administrative_info") and self.object.administrative_info.first():
             context["content_licenses"] = self.object.administrative_info.first().licenses.all()
-            if context["content_licenses"]:
+            # Fall back to administrative license if no md_license
+            if not context["metadata_license"] and context["content_licenses"]:
                 first_license = context["content_licenses"].first()
                 if first_license:
                     context["metadata_license"] = first_license.license_name
