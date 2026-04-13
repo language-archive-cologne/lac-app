@@ -36,6 +36,7 @@ from lacos.explorer.search import search_archives
 from lacos.explorer.views.utils import build_content_disposition
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
 from lacos.storage.models.acl_permissions import ACLPermissions
+from lacos.storage.services.media_processing_service import MediaProcessingService
 from lacos.storage.services.resource_mapping_service import ResourceMappingService
 
 from .utils import (
@@ -836,14 +837,15 @@ class CollectionResourcesView(View):
                     if spectrogram_available:
                         spectrogram_data_url = resource_service.generate_presigned_url(
                             location.s3_bucket,
-                            f"{location.s3_key}.spectrogram.bin",
+                            MediaProcessingService._derivative_s3_key(location.s3_key, ".spectrogram.bin"),
                         )
                 pitch_available = self._pitch_data_exists(
                     resource_service, location.s3_bucket, location.s3_key,
                 )
                 if action == 'pitch' and pitch_available:
                     pitch_data_url = resource_service.generate_presigned_url(
-                        location.s3_bucket, f"{location.s3_key}.pitch.bin",
+                        location.s3_bucket,
+                        MediaProcessingService._derivative_s3_key(location.s3_key, ".pitch.bin"),
                     )
 
             player_mode = 'simple'
@@ -945,7 +947,7 @@ class CollectionResourcesView(View):
 
     def _resolve_peaks_url(self, resource_service, bucket_name, object_key):
         """Check if pre-computed peaks exist and return a presigned URL."""
-        peaks_key = f"{object_key}.peaks.json"
+        peaks_key = MediaProcessingService._derivative_s3_key(object_key, ".peaks.json")
         try:
             resource_service.s3_client.head_object(Bucket=bucket_name, Key=peaks_key)
             return resource_service.generate_presigned_url(bucket_name, peaks_key)
@@ -954,7 +956,7 @@ class CollectionResourcesView(View):
 
     def _resolve_spectrogram_data_url(self, resource_service, bucket_name, object_key):
         """Check if pre-computed spectrogram frequencies exist and return a presigned URL."""
-        spectrogram_data_key = f"{object_key}.spectrogram.bin"
+        spectrogram_data_key = MediaProcessingService._derivative_s3_key(object_key, ".spectrogram.bin")
         try:
             resource_service.s3_client.head_object(Bucket=bucket_name, Key=spectrogram_data_key)
             return resource_service.generate_presigned_url(bucket_name, spectrogram_data_key)
@@ -963,7 +965,7 @@ class CollectionResourcesView(View):
 
     def _spectrogram_data_exists(self, resource_service, bucket_name, object_key):
         """Check if pre-computed spectrogram sidecar exists."""
-        spectrogram_data_key = f"{object_key}.spectrogram.bin"
+        spectrogram_data_key = MediaProcessingService._derivative_s3_key(object_key, ".spectrogram.bin")
         try:
             resource_service.s3_client.head_object(Bucket=bucket_name, Key=spectrogram_data_key)
             return True
@@ -972,7 +974,7 @@ class CollectionResourcesView(View):
 
     def _pitch_data_exists(self, resource_service, bucket_name, object_key):
         """Check if pre-computed pitch sidecar exists."""
-        pitch_key = f"{object_key}.pitch.bin"
+        pitch_key = MediaProcessingService._derivative_s3_key(object_key, ".pitch.bin")
         try:
             resource_service.s3_client.head_object(Bucket=bucket_name, Key=pitch_key)
             return True
