@@ -84,14 +84,14 @@
         <!-- Handle -->
         <div class="mt-3 flex flex-wrap items-center gap-1 sm:gap-2">
           <span class="text-xs font-medium text-base-content/60 uppercase tracking-wide">{% translate "Handle" %}:</span>
-          <a href="{% url 'explorer:collection_detail_by_handle' handle=collection.identifier %}"
+          <a href="{% url 'explorer:collection_detail_by_handle' handle=collection.handle_path %}"
              class="text-xs sm:text-sm font-mono text-primary hover:underline break-all"
              title="{% translate 'Persistent link to this collection' %}">
             {{ collection.identifier }}
           </a>
           <button
             type="button"
-            onclick="navigator.clipboard.writeText('{{ request.scheme }}://{{ request.get_host }}{% url 'explorer:collection_detail_by_handle' handle=collection.identifier %}'); this.classList.add('text-success'); setTimeout(() => this.classList.remove('text-success'), 2000);"
+            onclick="navigator.clipboard.writeText('{{ request.scheme }}://{{ request.get_host }}{% url 'explorer:collection_detail_by_handle' handle=collection.handle_path %}'); this.classList.add('text-success'); setTimeout(() => this.classList.remove('text-success'), 2000);"
             class="btn btn-xs btn-ghost btn-square text-base-content/60 hover:text-base-content"
             title="{% translate 'Copy handle URL' %}"
           >
@@ -113,7 +113,7 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                 </svg>
               </button>
-              <a href="{% url 'explorer:collection_jsonld_by_handle' handle=collection.identifier %}" download class="btn btn-xs btn-ghost btn-square" title="{% translate 'Download' %}">
+              <a href="{% url 'explorer:collection_jsonld_by_handle' handle=collection.handle_path %}" download class="btn btn-xs btn-ghost btn-square" title="{% translate 'Download' %}">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
@@ -127,7 +127,7 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                 </svg>
               </button>
-              <a href="{% url 'explorer:collection_xml_by_handle' handle=collection.identifier %}" download class="btn btn-xs btn-ghost btn-square" title="{% translate 'Download' %}">
+              <a href="{% url 'explorer:collection_xml_by_handle' handle=collection.handle_path %}" download class="btn btn-xs btn-ghost btn-square" title="{% translate 'Download' %}">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
@@ -425,7 +425,7 @@
                    data-bucket="{{ file.s3_location.s3_bucket|default:'' }}"
                    data-key="{{ file.s3_location.s3_key|default:'' }}"
                    data-filename="{{ file.file_name }}"
-                   data-resource-url="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=file.file_pid %}">
+                   data-resource-url="{% url 'explorer:collection_resource_by_handle' handle=collection.handle_path resource_id=file.file_pid|strip_hdl %}">
                   <svg xmlns="http://www.w3.org/2000/svg" class="size-[1.2em]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
@@ -433,8 +433,8 @@
 
                 <!-- Play button for audio/video -->
                 {% if file|is_media_type:"audio" or file|is_media_type:"video" %}
-                  <a href="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=file.file_pid %}?action=play"
-                     hx-get="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=file.file_pid %}?action=play"
+                  <a href="{% url 'explorer:collection_resource_by_handle' handle=collection.handle_path resource_id=file.file_pid|strip_hdl %}?action=play"
+                     hx-get="{% url 'explorer:collection_resource_by_handle' handle=collection.handle_path resource_id=file.file_pid|strip_hdl %}?action=play"
                      hx-target="#resource-modal-content"
                      hx-swap="innerHTML"
                      hx-push-url="false"
@@ -446,8 +446,8 @@
                   </a>
                 {% elif file|is_media_type:"image" or file|is_media_type:"pdf" or file|is_media_type:"xml" or file|is_media_type:"markdown" %}
                   <!-- View button for images and PDFs -->
-                  <a href="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=file.file_pid %}?action=view"
-                     hx-get="{% url 'explorer:collection_resource_by_handle' handle=collection.identifier resource_id=file.file_pid %}?action=view"
+                  <a href="{% url 'explorer:collection_resource_by_handle' handle=collection.handle_path resource_id=file.file_pid|strip_hdl %}?action=view"
+                     hx-get="{% url 'explorer:collection_resource_by_handle' handle=collection.handle_path resource_id=file.file_pid|strip_hdl %}?action=view"
                      hx-target="#resource-modal-content"
                      hx-swap="innerHTML"
                      hx-push-url="false"
@@ -539,7 +539,7 @@
               type="button"
               id="btn-jsonld"
               class="btn btn-sm join-item btn-active"
-              hx-get="{% url 'explorer:collection_jsonld_by_handle' handle=collection.identifier %}"
+              hx-get="{% url 'explorer:collection_jsonld_by_handle' handle=collection.handle_path %}"
               hx-target="#metadata-preview-container"
               hx-swap="innerHTML"
               hx-indicator="#metadata-loading"
@@ -550,7 +550,7 @@
               type="button"
               id="btn-xml"
               class="btn btn-sm join-item"
-              hx-get="{% url 'explorer:collection_xml_by_handle' handle=collection.identifier %}"
+              hx-get="{% url 'explorer:collection_xml_by_handle' handle=collection.handle_path %}"
               hx-target="#metadata-preview-container"
               hx-swap="innerHTML"
               hx-indicator="#metadata-loading"
@@ -573,7 +573,7 @@
           </button>
           <a
             id="download-link"
-            href="{% url 'explorer:collection_jsonld_by_handle' handle=collection.identifier %}"
+            href="{% url 'explorer:collection_jsonld_by_handle' handle=collection.handle_path %}"
             class="btn btn-sm btn-primary gap-2"
             download>
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -605,8 +605,8 @@
 
   <script>
     const metadataUrls = {
-      jsonld: '{% url "explorer:collection_jsonld_by_handle" handle=collection.identifier %}',
-      xml: '{% url "explorer:collection_xml_by_handle" handle=collection.identifier %}'
+      jsonld: '{% url "explorer:collection_jsonld_by_handle" handle=collection.handle_path %}',
+      xml: '{% url "explorer:collection_xml_by_handle" handle=collection.handle_path %}'
     };
     let currentFormat = 'jsonld';
 

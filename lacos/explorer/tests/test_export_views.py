@@ -141,7 +141,7 @@ def test_bundle_xml_export_success():
     """Bundle with full data exports as valid XML."""
     bundle = _create_bundle()
     client = Client()
-    response = client.get(f"/explorer/bundles/{bundle.identifier}/metadata.xml")
+    response = client.get(f"/bundles/{bundle.identifier}/metadata.xml")
     assert response.status_code == 200
     assert response["Content-Type"] == "application/xml"
     assert b"<" in response.content
@@ -152,7 +152,7 @@ def test_bundle_xml_export_without_publication():
     """Bundle without publication info should export successfully."""
     bundle = _create_bundle(with_publication=False)
     client = Client()
-    response = client.get(f"/explorer/bundles/{bundle.identifier}/metadata.xml")
+    response = client.get(f"/bundles/{bundle.identifier}/metadata.xml")
     assert response.status_code == 200
     assert response["Content-Type"] == "application/xml"
 
@@ -163,7 +163,7 @@ def test_bundle_xml_htmx_returns_html():
     bundle = _create_bundle()
     client = Client()
     response = client.get(
-        f"/explorer/bundles/{bundle.identifier}/metadata.xml",
+        f"/bundles/{bundle.identifier}/metadata.xml",
         HTTP_HX_REQUEST="true",
     )
     assert response.status_code == 200
@@ -176,7 +176,7 @@ def test_bundle_jsonld_htmx_returns_html():
     bundle = _create_bundle()
     client = Client()
     response = client.get(
-        f"/explorer/bundles/{bundle.identifier}/metadata.jsonld",
+        f"/bundles/{bundle.identifier}/metadata.jsonld",
         HTTP_HX_REQUEST="true",
     )
     assert response.status_code == 200
@@ -192,7 +192,7 @@ def test_collection_xml_export_success():
     collection = _create_collection()
     client = Client()
     response = client.get(
-        f"/explorer/collections/{collection.identifier}/metadata.xml"
+        f"/collections/{collection.identifier}/metadata.xml"
     )
     assert response.status_code == 200
     assert response["Content-Type"] == "application/xml"
@@ -205,7 +205,7 @@ def test_collection_xml_export_without_publication():
     collection = _create_collection(with_publication=False)
     client = Client()
     response = client.get(
-        f"/explorer/collections/{collection.identifier}/metadata.xml"
+        f"/collections/{collection.identifier}/metadata.xml"
     )
     assert response.status_code == 200
     assert response["Content-Type"] == "application/xml"
@@ -217,7 +217,7 @@ def test_collection_xml_htmx_returns_html():
     collection = _create_collection()
     client = Client()
     response = client.get(
-        f"/explorer/collections/{collection.identifier}/metadata.xml",
+        f"/collections/{collection.identifier}/metadata.xml",
         HTTP_HX_REQUEST="true",
     )
     assert response.status_code == 200
@@ -230,7 +230,7 @@ def test_collection_jsonld_htmx_returns_html():
     collection = _create_collection()
     client = Client()
     response = client.get(
-        f"/explorer/collections/{collection.identifier}/metadata.jsonld",
+        f"/collections/{collection.identifier}/metadata.jsonld",
         HTTP_HX_REQUEST="true",
     )
     assert response.status_code == 200

@@ -26,6 +26,7 @@ from lacos.explorer.media_utils import determine_media_type, guess_source_mime_t
 from lacos.explorer.permissions import ACLPermissionMixin
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
 from lacos.storage.services.file_discovery_service import FileDiscoveryService
+from lacos.storage.services.media_processing_service import MediaProcessingService
 from lacos.storage.services.resource_mapping_service import ResourceMappingService
 
 from .utils import (
@@ -80,7 +81,7 @@ class BundleDetailView(HandleLookupMixin, ACLPermissionMixin, DetailView):
         """
         accept = self.request.headers.get('Accept', '')
         if 'application/x-cmdi+xml' in accept:
-            return redirect('explorer:bundle_xml_by_handle', handle=self.object.identifier)
+            return redirect('explorer:bundle_xml_by_handle', handle=self.object.handle_path)
 
         return super().render_to_response(context, **response_kwargs)
 
@@ -289,6 +290,8 @@ class ResourceAccessView(View):
             bundle = get_object_or_404(Bundle, pk=bundle_id)
         elif handle:
             bundle = Bundle.objects.filter(identifier=handle).first()
+            if not bundle and not handle.startswith('hdl:'):
+                bundle = Bundle.objects.filter(identifier=f"hdl:{handle}").first()
             if not bundle:
                 raise Http404(f"Bundle with handle '{handle}' not found")
         else:
@@ -299,6 +302,8 @@ class ResourceAccessView(View):
             resource = find_resource_in_bundle(bundle, resource_id=resource_id)
         elif resource_pid:
             resource = find_resource_in_bundle(bundle, file_pid=resource_pid)
+            if not resource and not resource_pid.startswith('hdl:'):
+                resource = find_resource_in_bundle(bundle, file_pid=f"hdl:{resource_pid}")
         else:
             resource = None
 
@@ -424,7 +429,7 @@ class ResourceAccessView(View):
                     if spectrogram_available:
                         spectrogram_data_url = resource_service.generate_presigned_url(
                             sidecar_bucket,
-                            f"{sidecar_key}.spectrogram.bin",
+                            MediaProcessingService._derivative_s3_key(sidecar_key, ".spectrogram.bin"),
                         )
                 pitch_available = self._pitch_data_exists(
                     resource_service, sidecar_bucket, sidecar_key,
@@ -432,7 +437,8 @@ class ResourceAccessView(View):
                 pitch_data_url = None
                 if action == 'pitch' and pitch_available:
                     pitch_data_url = resource_service.generate_presigned_url(
-                        sidecar_bucket, f"{sidecar_key}.pitch.bin",
+                        sidecar_bucket,
+                        MediaProcessingService._derivative_s3_key(sidecar_key, ".pitch.bin"),
                     )
             player_mode = 'simple'
             if sidecar_bucket and sidecar_key:
@@ -642,7 +648,7 @@ class ResourceAccessView(View):
 
     def _resolve_peaks_url(self, resource_service, bucket_name, object_key):
         """Check if pre-computed peaks exist and return a presigned URL."""
-        peaks_key = f"{object_key}.peaks.json"
+        peaks_key = MediaProcessingService._derivative_s3_key(object_key, ".peaks.json")
         try:
             resource_service.s3_client.head_object(Bucket=bucket_name, Key=peaks_key)
             return resource_service.generate_presigned_url(bucket_name, peaks_key)
@@ -651,7 +657,7 @@ class ResourceAccessView(View):
 
     def _resolve_spectrogram_data_url(self, resource_service, bucket_name, object_key):
         """Check if pre-computed spectrogram frequencies exist and return a presigned URL."""
-        spectrogram_data_key = f"{object_key}.spectrogram.bin"
+        spectrogram_data_key = MediaProcessingService._derivative_s3_key(object_key, ".spectrogram.bin")
         try:
             resource_service.s3_client.head_object(Bucket=bucket_name, Key=spectrogram_data_key)
             return resource_service.generate_presigned_url(bucket_name, spectrogram_data_key)
@@ -660,7 +666,7 @@ class ResourceAccessView(View):
 
     def _spectrogram_data_exists(self, resource_service, bucket_name, object_key):
         """Check if pre-computed spectrogram sidecar exists."""
-        spectrogram_data_key = f"{object_key}.spectrogram.bin"
+        spectrogram_data_key = MediaProcessingService._derivative_s3_key(object_key, ".spectrogram.bin")
         try:
             resource_service.s3_client.head_object(Bucket=bucket_name, Key=spectrogram_data_key)
             return True
@@ -669,7 +675,7 @@ class ResourceAccessView(View):
 
     def _pitch_data_exists(self, resource_service, bucket_name, object_key):
         """Check if pre-computed pitch sidecar exists."""
-        pitch_key = f"{object_key}.pitch.bin"
+        pitch_key = MediaProcessingService._derivative_s3_key(object_key, ".pitch.bin")
         try:
             resource_service.s3_client.head_object(Bucket=bucket_name, Key=pitch_key)
             return True
@@ -680,7 +686,7 @@ class ResourceAccessView(View):
 class ResourceByHandleView(View):
     """Resolve a flat resource handle to its resource landing page.
 
-    Supports the legacy LAC URL pattern: /resource/<handle_id>/
+    Supports the direct URL pattern: /resource/<handle_id>/
     e.g. /resource/11341/00-0000-0000-0000-1B28-A
     which maps to file_pid = "hdl:11341/00-0000-0000-0000-1B28-A"
     """
@@ -697,8 +703,10 @@ class ResourceByHandleView(View):
                     resources__in=resource.bundleresources_set.all()
                 ).first()
                 if bundle:
-                    return redirect(
-                        'explorer:resource_access_by_handle',
+                    # Render directly via ResourceAccessView
+                    view = ResourceAccessView()
+                    return view.get(
+                        request,
                         handle=bundle.identifier,
                         resource_pid=file_pid,
                     )
@@ -739,6 +747,8 @@ class BundleJsonLdView(View):
             bundle = queryset.filter(pk=pk).first()
         elif handle is not None:
             bundle = queryset.filter(identifier=handle).first()
+            if bundle is None and not handle.startswith('hdl:'):
+                bundle = queryset.filter(identifier=f"hdl:{handle}").first()
         else:
             raise Http404("No bundle identifier provided")
 
@@ -798,6 +808,8 @@ class BundleXmlView(View):
             bundle = queryset.filter(pk=pk).first()
         elif handle is not None:
             bundle = queryset.filter(identifier=handle).first()
+            if bundle is None and not handle.startswith('hdl:'):
+                bundle = queryset.filter(identifier=f"hdl:{handle}").first()
         else:
             raise Http404("No bundle identifier provided")
 

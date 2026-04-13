@@ -5,7 +5,7 @@
   "@type": "Dataset",
   "name": "{% if collection.get_general_info.display_title %}{{ collection.get_general_info.display_title|escapejs }}{% elif collection.get_general_info.title %}{{ collection.get_general_info.title|escapejs }}{% else %}{{ collection.identifier|escapejs }}{% endif %}",
   {% if collection.get_general_info.description %}"description": "{{ collection.get_general_info.description|escapejs }}",{% endif %}
-  "url": "{{ request.scheme }}://{{ request.get_host }}{% url 'explorer:collection_detail_by_handle' handle=collection.identifier %}",
+  "url": "{{ request.scheme }}://{{ request.get_host }}{% url 'explorer:collection_detail_by_handle' handle=collection.handle_path %}",
   "identifier": "{{ collection.identifier|escapejs }}",
   "encodingFormat": "audio-visual",
   "provider": {

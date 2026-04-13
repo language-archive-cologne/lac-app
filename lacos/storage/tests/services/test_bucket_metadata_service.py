@@ -44,15 +44,17 @@ class BucketMetadataServiceTest(TestCase):
 
         # Mock database query
         mock_qs = Mock()
-        mock_qs.filter.return_value.values_list.return_value = [("col1", 123)]
+        mock_qs.filter.return_value.values_list.return_value = [
+            ("col1/col1/v1/metadata/col1.xml", 123),
+        ]
         mock_collection.objects = mock_qs
 
-        items = [{"path": "col1/", "is_dir": True, "name": "col1"}]
+        items = [{"path": "col1/col1/", "is_dir": True, "name": "col1"}]
         result = self.service.build_blam_metadata_index("production", items)
 
-        self.assertIn("col1/", result)
-        self.assertTrue(result["col1/"]["is_blam_object"])
-        self.assertEqual(result["col1/"]["blam_type"], "collection")
+        self.assertIn("col1/col1/", result)
+        self.assertTrue(result["col1/col1/"]["is_blam_object"])
+        self.assertEqual(result["col1/col1/"]["blam_type"], "collection")
 
     @patch('lacos.storage.services.bucket_metadata_service.Bundle')
     @patch('lacos.storage.services.bucket_metadata_service.Collection')
@@ -67,11 +69,15 @@ class BucketMetadataServiceTest(TestCase):
         )
 
         mock_collection_qs = Mock()
-        mock_collection_qs.filter.return_value.values_list.return_value = [("same", 101)]
+        mock_collection_qs.filter.return_value.values_list.return_value = [
+            ("same/same/v1/metadata/same.xml", 101),
+        ]
         mock_collection.objects = mock_collection_qs
 
         mock_bundle_qs = Mock()
-        mock_bundle_qs.filter.return_value.values_list.return_value = [("same", 202)]
+        mock_bundle_qs.filter.return_value.values_list.return_value = [
+            ("other/same/v1/metadata/same.xml", 202),
+        ]
         mock_bundle.objects = mock_bundle_qs
 
         items = [

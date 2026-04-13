@@ -29,7 +29,7 @@
   <!-- Mobile card view -->
   <div class="lg:hidden divide-y divide-base-200">
     {% for collection in collection_list %}
-      <a href="{% url 'explorer:collection_detail_by_handle' handle=collection.identifier %}" class="block px-4 py-4 hover:bg-base-200 transition-colors">
+      <a href="{% url 'explorer:collection_detail_by_handle' handle=collection.handle_path %}" class="block px-4 py-4 hover:bg-base-200 transition-colors">
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0 flex-1">
             <h3 class="font-semibold text-base-content leading-snug">{{ collection.list_display_title }}</h3>
@@ -137,7 +137,7 @@
             <td class="px-6 py-5 align-top">
               <div class="space-y-2">
                 <a
-                  href="{% url 'explorer:collection_detail_by_handle' handle=collection.identifier %}"
+                  href="{% url 'explorer:collection_detail_by_handle' handle=collection.handle_path %}"
                   class="text-base-content hover:text-primary font-semibold"
                   title="{{ collection.list_display_title }}"
                 >
@@ -156,7 +156,7 @@
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                     </svg>
                   </button>
-                  <a href="{% url 'explorer:collection_detail_by_handle' handle=collection.identifier %}" class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-xs font-semibold text-base-content/70 hover:bg-primary hover:text-primary-content transition-colors">
+                  <a href="{% url 'explorer:collection_detail_by_handle' handle=collection.handle_path %}" class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-xs font-semibold text-base-content/70 hover:bg-primary hover:text-primary-content transition-colors">
                     {{ collection.bundles_count }} {% translate "bundles" %}
                   </a>
                 </div>

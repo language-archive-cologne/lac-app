@@ -101,15 +101,17 @@ urlpatterns = [
     path("accounts/", include("allauth.urls")),
     path("storage/", include("lacos.storage.urls", namespace="storage")),
     path("blam/", include("lacos.blam.urls")),
+    # Explorer app URLs (at root level, must come before legacy path: patterns)
+    path("", include("lacos.explorer.urls", namespace="explorer")),
     # Legacy flat handle resolution (e.g. /collection/11341/..., /bundle/11341/..., /resource/11341/...)
     path(
         "collection/<path:handle_id>/",
-        lambda request, handle_id: redirect("explorer:collection_detail_by_handle", handle=f"hdl:{handle_id}"),
+        lambda request, handle_id: redirect("explorer:collection_detail_by_handle", handle=handle_id),
         name="collection_by_handle",
     ),
     path(
         "bundle/<path:handle_id>/",
-        lambda request, handle_id: redirect("explorer:bundle_detail_by_handle", handle=f"hdl:{handle_id}"),
+        lambda request, handle_id: redirect("explorer:bundle_detail_by_handle", handle=handle_id),
         name="bundle_by_handle",
     ),
     path(
@@ -117,7 +119,6 @@ urlpatterns = [
         ResourceByHandleView.as_view(),
         name="resource_by_handle",
     ),
-    path("explorer/", include("lacos.explorer.urls", namespace="explorer")),
     path("dbadmin/", include("lacos.dbadmin.urls")),
     path("oai/", include("lacos.oaipmh.urls", namespace="oaipmh")),
 

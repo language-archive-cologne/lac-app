@@ -16,6 +16,13 @@ class Repository(BaseModel):
             return next(iter(cache[related_name]), None)
         return getattr(self, related_name).first()
 
+    @property
+    def handle_path(self):
+        """Return identifier without hdl: prefix, for use in URLs."""
+        if self.identifier and self.identifier.startswith('hdl:'):
+            return self.identifier[4:]
+        return self.identifier or ''
+
     class Meta:
         abstract = True
 

@@ -35,6 +35,7 @@ from lacos.explorer.search import search_archives
 from lacos.explorer.views.utils import build_content_disposition
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
 from lacos.storage.models.acl_permissions import ACLPermissions
+from lacos.storage.services.media_processing_service import MediaProcessingService
 from lacos.storage.services.resource_mapping_service import ResourceMappingService
 
 from .utils import (
@@ -554,9 +555,17 @@ class CollectionDetailView(HandleLookupMixin, DetailView):
         context["metadata_license"] = None
         context["metadata_license_uri"] = None
         context["content_licenses"] = []
+
+        # Prefer md_license from CollectionHeader when available
+        header = self.object.header.first() if hasattr(self.object, "header") else None
+        if header and header.md_license:
+            context["metadata_license"] = header.md_license
+            context["metadata_license_uri"] = header.md_license_uri or ""
+
         if hasattr(self.object, "administrative_info") and self.object.administrative_info.first():
             context["content_licenses"] = self.object.administrative_info.first().licenses.all()
-            if context["content_licenses"]:
+            # Fall back to administrative license if no md_license
+            if not context["metadata_license"] and context["content_licenses"]:
                 first_license = context["content_licenses"].first()
                 if first_license:
                     context["metadata_license"] = first_license.license_name
@@ -632,7 +641,7 @@ class CollectionDetailView(HandleLookupMixin, DetailView):
         # CLARIN content negotiation: return CMDI/XML if requested
         accept = self.request.headers.get('Accept', '')
         if 'application/x-cmdi+xml' in accept:
-            return redirect('explorer:collection_xml_by_handle', handle=self.object.identifier)
+            return redirect('explorer:collection_xml_by_handle', handle=self.object.handle_path)
 
         if self.request.headers.get('HX-Request'):
             if (
@@ -668,6 +677,10 @@ class CollectionResourcesView(View):
             decoded_resource_id = unquote(resource_id)
             if decoded_resource_id.startswith('ID_'):
                 decoded_resource_id = decoded_resource_id[3:]
+
+            # URLs no longer include hdl: prefix, but DB stores it
+            if not decoded_resource_id.startswith('hdl:'):
+                decoded_resource_id = f"hdl:{decoded_resource_id}"
 
             # Try to find the metadata file in the collection's additional metadata
             metadata_file = None
@@ -760,14 +773,15 @@ class CollectionResourcesView(View):
                     if spectrogram_available:
                         spectrogram_data_url = resource_service.generate_presigned_url(
                             location.s3_bucket,
-                            f"{location.s3_key}.spectrogram.bin",
+                            MediaProcessingService._derivative_s3_key(location.s3_key, ".spectrogram.bin"),
                         )
                 pitch_available = self._pitch_data_exists(
                     resource_service, location.s3_bucket, location.s3_key,
                 )
                 if action == 'pitch' and pitch_available:
                     pitch_data_url = resource_service.generate_presigned_url(
-                        location.s3_bucket, f"{location.s3_key}.pitch.bin",
+                        location.s3_bucket,
+                        MediaProcessingService._derivative_s3_key(location.s3_key, ".pitch.bin"),
                     )
 
             player_mode = 'simple'
@@ -869,7 +883,7 @@ class CollectionResourcesView(View):
 
     def _resolve_peaks_url(self, resource_service, bucket_name, object_key):
         """Check if pre-computed peaks exist and return a presigned URL."""
-        peaks_key = f"{object_key}.peaks.json"
+        peaks_key = MediaProcessingService._derivative_s3_key(object_key, ".peaks.json")
         try:
             resource_service.s3_client.head_object(Bucket=bucket_name, Key=peaks_key)
             return resource_service.generate_presigned_url(bucket_name, peaks_key)
@@ -878,7 +892,7 @@ class CollectionResourcesView(View):
 
     def _resolve_spectrogram_data_url(self, resource_service, bucket_name, object_key):
         """Check if pre-computed spectrogram frequencies exist and return a presigned URL."""
-        spectrogram_data_key = f"{object_key}.spectrogram.bin"
+        spectrogram_data_key = MediaProcessingService._derivative_s3_key(object_key, ".spectrogram.bin")
         try:
             resource_service.s3_client.head_object(Bucket=bucket_name, Key=spectrogram_data_key)
             return resource_service.generate_presigned_url(bucket_name, spectrogram_data_key)
@@ -887,7 +901,7 @@ class CollectionResourcesView(View):
 
     def _spectrogram_data_exists(self, resource_service, bucket_name, object_key):
         """Check if pre-computed spectrogram sidecar exists."""
-        spectrogram_data_key = f"{object_key}.spectrogram.bin"
+        spectrogram_data_key = MediaProcessingService._derivative_s3_key(object_key, ".spectrogram.bin")
         try:
             resource_service.s3_client.head_object(Bucket=bucket_name, Key=spectrogram_data_key)
             return True
@@ -896,7 +910,7 @@ class CollectionResourcesView(View):
 
     def _pitch_data_exists(self, resource_service, bucket_name, object_key):
         """Check if pre-computed pitch sidecar exists."""
-        pitch_key = f"{object_key}.pitch.bin"
+        pitch_key = MediaProcessingService._derivative_s3_key(object_key, ".pitch.bin")
         try:
             resource_service.s3_client.head_object(Bucket=bucket_name, Key=pitch_key)
             return True
@@ -941,6 +955,8 @@ class CollectionJsonLdView(View):
             collection = queryset.filter(pk=pk).first()
         elif handle is not None:
             collection = queryset.filter(identifier=handle).first()
+            if collection is None and not handle.startswith('hdl:'):
+                collection = queryset.filter(identifier=f"hdl:{handle}").first()
         else:
             raise Http404("No collection identifier provided")
 
@@ -1003,6 +1019,8 @@ class CollectionXmlView(View):
             collection = queryset.filter(pk=pk).first()
         elif handle is not None:
             collection = queryset.filter(identifier=handle).first()
+            if collection is None and not handle.startswith('hdl:'):
+                collection = queryset.filter(identifier=f"hdl:{handle}").first()
         else:
             raise Http404("No collection identifier provided")
 
