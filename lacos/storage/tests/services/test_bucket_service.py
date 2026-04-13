@@ -197,11 +197,11 @@ def test_get_folder_contents_enriches_blam_metadata(MockCollection, MockBundle, 
     )
 
     collection_qs = MagicMock()
-    collection_qs.values_list.return_value = [('collectionA', 101)]
+    collection_qs.values_list.return_value = [('collectionA/collectionA/v1/metadata/collectionA.xml', 101)]
     MockCollection.objects.filter.return_value = collection_qs
 
     bundle_qs = MagicMock()
-    bundle_qs.values_list.return_value = [('bundleB', 202)]
+    bundle_qs.values_list.return_value = [('bundles/bundleB/v1/metadata/bundleB.xml', 202)]
     MockBundle.objects.filter.return_value = bundle_qs
 
     result_page = mock_bucket_service.get_folder_contents(TEST_PRODUCTION_BUCKET, '')
