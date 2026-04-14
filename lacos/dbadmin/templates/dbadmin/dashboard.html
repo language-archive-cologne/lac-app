@@ -111,6 +111,13 @@
                                     class="btn btn-sm btn-info w-full">
                                     Index eduGAIN IdPs
                                 </button>
+                                <button
+                                    hx-post="{% url 'dbadmin:task_enqueue' 'audit-derivatives' %}"
+                                    hx-target="#active-task-list"
+                                    hx-swap="afterbegin"
+                                    class="btn btn-sm btn-accent w-full">
+                                    Audit derivative status
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -146,6 +153,81 @@
                     </div>
                 </div>
             </div>
+        </div>
+
+        <input type="radio" name="dbadmin_tabs" class="tab" aria-label="Derivatives" />
+        <div class="tab-content bg-base-100 border-base-300 p-6">
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h3 class="text-lg font-semibold">Audio Derivative Status</h3>
+                    <p class="text-sm text-base-content/60">
+                        Overview of peaks, spectrogram, and pitch sidecars for WAV files in lacos-production.
+                        {% if derivative_stats.last_audit %}
+                        Last audited {{ derivative_stats.last_audit|timesince }} ago.
+                        {% else %}
+                        No audit has been run yet.
+                        {% endif %}
+                    </p>
+                </div>
+                <button
+                    hx-post="{% url 'dbadmin:task_enqueue' 'audit-derivatives' %}"
+                    hx-target="#active-task-list"
+                    hx-swap="afterbegin"
+                    class="btn btn-sm btn-accent active:scale-[0.97] transition-transform duration-150">
+                    Run Audit Now
+                </button>
+            </div>
+
+            {% if derivative_stats.total > 0 %}
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+                <div class="stat bg-base-200 rounded-lg px-4 py-3">
+                    <div class="stat-title text-xs">Total WAVs</div>
+                    <div class="stat-value text-2xl">{{ derivative_stats.total }}</div>
+                </div>
+                <div class="stat bg-base-200 rounded-lg px-4 py-3">
+                    <div class="stat-title text-xs">With Peaks</div>
+                    <div class="stat-value text-2xl text-success">{{ derivative_stats.with_peaks }}</div>
+                </div>
+                <div class="stat bg-base-200 rounded-lg px-4 py-3">
+                    <div class="stat-title text-xs">With Spectrogram</div>
+                    <div class="stat-value text-2xl text-success">{{ derivative_stats.with_spectrogram }}</div>
+                </div>
+                <div class="stat bg-base-200 rounded-lg px-4 py-3">
+                    <div class="stat-title text-xs">With Pitch</div>
+                    <div class="stat-value text-2xl text-success">{{ derivative_stats.with_pitch }}</div>
+                </div>
+                <div class="stat bg-base-200 rounded-lg px-4 py-3">
+                    <div class="stat-title text-xs">All Complete</div>
+                    <div class="stat-value text-2xl text-info">{{ derivative_stats.complete }}</div>
+                </div>
+                <div class="stat bg-base-200 rounded-lg px-4 py-3">
+                    <div class="stat-title text-xs">Missing All</div>
+                    <div class="stat-value text-2xl {% if derivative_stats.missing_all > 0 %}text-error{% endif %}">{{ derivative_stats.missing_all }}</div>
+                </div>
+            </div>
+
+            <!-- Progress bar -->
+            {% widthratio derivative_stats.complete derivative_stats.total 100 as pct_complete %}
+            {% widthratio derivative_stats.missing_all derivative_stats.total 100 as pct_missing %}
+            <div class="mb-2 text-xs text-base-content/60">
+                Coverage: {{ pct_complete }}% complete, {{ pct_missing }}% missing all derivatives
+            </div>
+            <div class="w-full bg-base-300 rounded-full h-3 overflow-hidden flex">
+                <div class="bg-success h-full transition-[width] duration-300" style="width: {{ pct_complete }}%"></div>
+                <div class="bg-warning h-full transition-[width] duration-300" style="width: {% widthratio derivative_stats.with_peaks derivative_stats.total 100 %}%"></div>
+                <div class="bg-error h-full transition-[width] duration-300" style="width: {{ pct_missing }}%"></div>
+            </div>
+            <div class="flex gap-4 mt-1 text-xs text-base-content/50">
+                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-success inline-block"></span> Complete</span>
+                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-warning inline-block"></span> Partial</span>
+                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-error inline-block"></span> Missing</span>
+            </div>
+            {% else %}
+            <div class="text-center py-10 text-base-content/50">
+                <p class="text-lg mb-2">No derivative data yet</p>
+                <p class="text-sm">Run the audit to scan lacos-production for WAV files and check their derivatives.</p>
+            </div>
+            {% endif %}
         </div>
 
         <input type="radio" name="dbadmin_tabs" class="tab" aria-label="Scheduled" />

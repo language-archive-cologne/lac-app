@@ -1,6 +1,7 @@
 import pytest
 
 from lacos.dbadmin.services import DatabaseStatsService
+from lacos.storage.models import BackgroundTask
 
 
 @pytest.mark.django_db
@@ -41,3 +42,20 @@ class TestDatabaseStatsService:
     def test_get_health_warnings_returns_list(self):
         warnings = DatabaseStatsService.get_health_warnings()
         assert isinstance(warnings, list)
+
+    def test_get_periodic_tasks_summary_includes_derivative_audit(self):
+        BackgroundTask.objects.create(
+            task_name="periodic_derivative_audit",
+            status=BackgroundTask.Status.SUCCESS,
+            message="Completed",
+        )
+
+        summary = DatabaseStatsService.get_periodic_tasks_summary()
+        derivative_audit = next(
+            item for item in summary if item["task_name"] == "periodic_derivative_audit"
+        )
+
+        assert derivative_audit["label"] == "Derivative Audit"
+        assert derivative_audit["schedule"] == "0 3 * * *"
+        assert derivative_audit["last_status"] == BackgroundTask.Status.SUCCESS
+        assert derivative_audit["total_success"] == 1
