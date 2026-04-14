@@ -31,6 +31,7 @@ from lacos.blam.models.collection.collection_structural_info import (
 from lacos.explorer.glottolog import lookup_glottolog_entry
 from lacos.explorer.map_utils import get_collection_map_markers
 from lacos.explorer.media_utils import determine_media_type, guess_source_mime_type
+from lacos.explorer.permissions import ACLPermissionMixin
 from lacos.explorer.search import search_archives
 from lacos.explorer.views.utils import build_content_disposition
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
@@ -56,6 +57,68 @@ logger = logging.getLogger(__name__)
 
 LANGUAGE_COUNT_CACHE_KEY = "explorer:language_count"
 LANGUAGE_COUNT_CACHE_TIMEOUT = 86400  # 24 hours (invalidated on collection changes)
+COLLECTION_PERMISSION_DENIED_MESSAGE = _(
+    "This collection is restricted. If you believe you should have access, "
+    "please contact lac-helpdesk@uni-koeln.de."
+)
+
+
+def _get_collection_by_pk_or_handle(queryset, pk=None, handle=None):
+    if pk is not None:
+        return queryset.filter(pk=pk).first()
+    if handle is not None:
+        collection = queryset.filter(identifier=handle).first()
+        if collection is None and not handle.startswith("hdl:"):
+            collection = queryset.filter(identifier=f"hdl:{handle}").first()
+        return collection
+    raise Http404("No collection identifier provided")
+
+
+class CollectionLookupPermissionMixin(ACLPermissionMixin):
+    permission_denied_message = COLLECTION_PERMISSION_DENIED_MESSAGE
+    _resolved_collection = None
+
+    def get_collection_queryset(self):
+        raise NotImplementedError
+
+    def get_collection(self, pk=None, handle=None):
+        if self._resolved_collection is not None:
+            return self._resolved_collection
+        collection = _get_collection_by_pk_or_handle(
+            self.get_collection_queryset(),
+            pk=pk,
+            handle=handle,
+        )
+        if collection is None:
+            raise Http404("Collection not found")
+        self._resolved_collection = collection
+        return collection
+
+    def get_acl_object(self, request, *args, **kwargs):
+        return self.get_collection(
+            pk=kwargs.get("pk"),
+            handle=kwargs.get("handle"),
+        )
+
+
+class CollectionACLPermissionMixin(ACLPermissionMixin):
+    permission_denied_message = COLLECTION_PERMISSION_DENIED_MESSAGE
+
+    def dispatch(self, request, *args, **kwargs):
+        acl_object = self.get_acl_object(request, *args, **kwargs)
+        if acl_object is None:
+            raise Http404("Collection not found")
+
+        service = self.get_acl_service()
+        result = service.evaluate(request.user, acl_object, mode=self.required_acl_mode)
+        self.acl_result = result
+
+        permissions = service._get_permissions(acl_object)
+        has_explicit_acl_rules = bool(permissions and permissions.permissions_data)
+        if service.enforcement_enabled and has_explicit_acl_rules and not result.allowed:
+            return self.handle_no_permission(result)
+
+        return super(ACLPermissionMixin, self).dispatch(request, *args, **kwargs)
 
 
 class CollectionListView(ListView):
@@ -397,12 +460,13 @@ class CollectionListView(ListView):
         return super().render_to_response(context, **response_kwargs)
 
 
-class CollectionDetailView(HandleLookupMixin, DetailView):
+class CollectionDetailView(HandleLookupMixin, CollectionACLPermissionMixin, DetailView):
     """Detail view for a collection, accessible by UUID or handle."""
 
     model = Collection
     template_name = "collection_detail.html"
     context_object_name = "collection"
+    permission_denied_message = COLLECTION_PERMISSION_DENIED_MESSAGE
 
     def get_queryset(self):
         return Collection.objects.prefetch_related(
@@ -916,10 +980,10 @@ class CollectionResourcesView(View):
             return False
 
 
-class CollectionJsonLdView(View):
+class CollectionJsonLdView(CollectionLookupPermissionMixin, CollectionACLPermissionMixin, View):
     """Export collection metadata as JSON-LD."""
 
-    def get_queryset(self):
+    def get_collection_queryset(self):
         return Collection.objects.prefetch_related(
             "header",
             "general_info",
@@ -948,18 +1012,7 @@ class CollectionJsonLdView(View):
         )
 
     def get(self, request, pk=None, handle=None):
-        queryset = self.get_queryset()
-        if pk is not None:
-            collection = queryset.filter(pk=pk).first()
-        elif handle is not None:
-            collection = queryset.filter(identifier=handle).first()
-            if collection is None and not handle.startswith('hdl:'):
-                collection = queryset.filter(identifier=f"hdl:{handle}").first()
-        else:
-            raise Http404("No collection identifier provided")
-
-        if collection is None:
-            raise Http404("Collection not found")
+        collection = self.get_collection(pk=pk, handle=handle)
 
         serializer = CollectionJsonLdSerializer(collection)
         data = serializer.serialize()
@@ -985,11 +1038,11 @@ class CollectionJsonLdView(View):
         return response
 
 
-class CollectionXmlView(View):
+class CollectionXmlView(CollectionLookupPermissionMixin, CollectionACLPermissionMixin, View):
     """Export collection metadata as BLAM XML."""
 
-    def get(self, request, pk=None, handle=None):
-        queryset = Collection.objects.prefetch_related(
+    def get_collection_queryset(self):
+        return Collection.objects.prefetch_related(
             "header",
             "general_info",
             "general_info__keywords",
@@ -1013,17 +1066,8 @@ class CollectionXmlView(View):
             "project_infos__funder_infos__funder_identifiers",
         )
 
-        if pk is not None:
-            collection = queryset.filter(pk=pk).first()
-        elif handle is not None:
-            collection = queryset.filter(identifier=handle).first()
-            if collection is None and not handle.startswith('hdl:'):
-                collection = queryset.filter(identifier=f"hdl:{handle}").first()
-        else:
-            raise Http404("No collection identifier provided")
-
-        if collection is None:
-            raise Http404("Collection not found")
+    def get(self, request, pk=None, handle=None):
+        collection = self.get_collection(pk=pk, handle=handle)
 
         exporter = CollectionExporter()
         try:
