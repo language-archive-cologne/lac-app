@@ -17,67 +17,99 @@
       <!-- Desktop Navigation -->
       <div class="hidden lg:flex items-center">
         <div class="flex items-center gap-1 rounded-full bg-[#004565]/80 border border-[#004565]/70 px-2 py-1 shadow-md">
+
+        <!-- Home -->
         <a href="{% url 'home' %}"
            class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors duration-150 {% if current_view == 'home' %}bg-[#006a99]/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-[#006a99]/70{% endif %}"
            {% if current_view == 'home' %}aria-current="page"{% endif %}>
           Home
         </a>
+
+        <!-- Search -->
         <a href="{% url 'faceted_search' %}"
            class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors duration-150 {% if current_view == 'faceted_search' %}bg-[#006a99]/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-[#006a99]/70{% endif %}"
            {% if current_view == 'faceted_search' %}aria-current="page"{% endif %}>
           Search
         </a>
+
         {% if request.user.is_authenticated %}
-        <a href="{% url 'storage:archivist_dashboard' %}"
-           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors duration-150 {% if current_view == 'storage:archivist_dashboard' %}bg-[#006a99]/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-[#006a99]/70{% endif %}"
-           {% if current_view == 'storage:archivist_dashboard' %}aria-current="page"{% endif %}>
-          Storage
-        </a>
-        <a href="{% url 'blam:blam_archivist_dashboard' %}"
-           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors duration-150 {% if current_view == 'blam:blam_archivist_dashboard' %}bg-[#006a99]/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-[#006a99]/70{% endif %}"
-           {% if current_view == 'blam:blam_archivist_dashboard' %}aria-current="page"{% endif %}>
-          BLAM
-        </a>
+        <!-- Manage dropdown -->
+        <div class="relative nav-dropdown-wrapper">
+          <button type="button"
+                  class="nav-dropdown-trigger flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-[color,background-color] duration-150 active:scale-[0.97] {% if current_view == 'storage:archivist_dashboard' or current_view == 'blam:blam_archivist_dashboard' or current_view == 'storage:acl_admin_dashboard' %}bg-[#006a99]/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-[#006a99]/70{% endif %}">
+            Manage
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+          <div class="nav-dropdown-menu absolute left-0 mt-1 w-44 rounded-lg py-1.5 z-50 border border-[#3e8fc0]/35 shadow-[0_18px_40px_rgba(0,42,61,0.45)] transition-[opacity,transform] duration-150 origin-top-left overflow-hidden" style="opacity:0; transform:scale(0.95); pointer-events:none; background-color:#004f73; background-image:linear-gradient(180deg, #0b79ab 0%, #005b86 42%, #003e5c 100%); transition-timing-function:cubic-bezier(0.23,1,0.32,1);">
+            <a href="{% url 'storage:archivist_dashboard' %}" class="block px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-[#006a99]/70 rounded-md mx-1 {% if current_view == 'storage:archivist_dashboard' %}font-semibold{% endif %}">
+              Storage
+            </a>
+            <a href="{% url 'blam:blam_archivist_dashboard' %}" class="block px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-[#006a99]/70 rounded-md mx-1 {% if current_view == 'blam:blam_archivist_dashboard' %}font-semibold{% endif %}">
+              BLAM
+            </a>
+            {% if request.user.is_superuser %}
+            <a href="{% url 'storage:acl_admin_dashboard' %}" class="block px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-[#006a99]/70 rounded-md mx-1 {% if current_view == 'storage:acl_admin_dashboard' %}font-semibold{% endif %}">
+              ACL
+            </a>
+            {% endif %}
+          </div>
+        </div>
         {% endif %}
-        {% if request.user.is_superuser %}
-        <a href="{% url 'storage:acl_admin_dashboard' %}"
-           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors duration-150 {% if current_view == 'storage:acl_admin_dashboard' %}bg-[#006a99]/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-[#006a99]/70{% endif %}"
-           {% if current_view == 'storage:acl_admin_dashboard' %}aria-current="page"{% endif %}>
-          ACL
-        </a>
-        <a href="{% url 'dbadmin:dashboard' %}"
-           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors duration-150 {% if 'dbadmin:' in current_view %}bg-[#006a99]/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-[#006a99]/70{% endif %}"
-           {% if 'dbadmin:' in current_view %}aria-current="page"{% endif %}>
-          Database
-        </a>
+
+        {% if request.user.is_superuser or request.user.is_staff %}
+        <!-- System dropdown -->
+        <div class="relative nav-dropdown-wrapper">
+          <button type="button"
+                  class="nav-dropdown-trigger flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-[color,background-color] duration-150 active:scale-[0.97] {% if 'dbadmin:' in current_view or current_view == 'admin:index' %}bg-[#006a99]/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-[#006a99]/70{% endif %}">
+            System
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+          <div class="nav-dropdown-menu absolute left-0 mt-1 w-44 rounded-lg py-1.5 z-50 border border-[#3e8fc0]/35 shadow-[0_18px_40px_rgba(0,42,61,0.45)] transition-[opacity,transform] duration-150 origin-top-left overflow-hidden" style="opacity:0; transform:scale(0.95); pointer-events:none; background-color:#004f73; background-image:linear-gradient(180deg, #0b79ab 0%, #005b86 42%, #003e5c 100%); transition-timing-function:cubic-bezier(0.23,1,0.32,1);">
+            {% if request.user.is_superuser %}
+            <a href="{% url 'dbadmin:dashboard' %}" class="block px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-[#006a99]/70 rounded-md mx-1 {% if 'dbadmin:' in current_view %}font-semibold{% endif %}">
+              Database
+            </a>
+            {% endif %}
+            {% if request.user.is_staff %}
+            <a href="{% url 'admin:index' %}" class="block px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-[#006a99]/70 rounded-md mx-1 {% if current_view == 'admin:index' %}font-semibold{% endif %}">
+              Admin
+            </a>
+            {% endif %}
+          </div>
+        </div>
         {% endif %}
-        {% if request.user.is_staff %}
-        <a href="{% url 'admin:index' %}"
-           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors duration-150 {% if current_view == 'admin:index' %}bg-[#006a99]/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-[#006a99]/70{% endif %}"
-           {% if current_view == 'admin:index' %}aria-current="page"{% endif %}>
-          Admin
-        </a>
-        {% endif %}
-        <a href="{% url 'api-docs' %}"
-           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors duration-150 {% if current_view == 'api-docs' %}bg-[#006a99]/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-[#006a99]/70{% endif %}"
-           {% if current_view == 'api-docs' %}aria-current="page"{% endif %}>
-          API
-        </a>
-        <a href="{% url 'oai-pmh' %}"
-           class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors duration-150 {% if current_view == 'oai-pmh' %}bg-[#006a99]/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-[#006a99]/70{% endif %}"
-           {% if current_view == 'oai-pmh' %}aria-current="page"{% endif %}>
-          OAI-PMH
-        </a>
+
+        <!-- APIs dropdown -->
+        <div class="relative nav-dropdown-wrapper">
+          <button type="button"
+                  class="nav-dropdown-trigger flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-[color,background-color] duration-150 active:scale-[0.97] {% if current_view == 'api-docs' or current_view == 'oai-pmh' %}bg-[#006a99]/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-[#006a99]/70{% endif %}">
+            APIs
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+          <div class="nav-dropdown-menu absolute left-0 mt-1 w-44 rounded-lg py-1.5 z-50 border border-[#3e8fc0]/35 shadow-[0_18px_40px_rgba(0,42,61,0.45)] transition-[opacity,transform] duration-150 origin-top-left overflow-hidden" style="opacity:0; transform:scale(0.95); pointer-events:none; background-color:#004f73; background-image:linear-gradient(180deg, #0b79ab 0%, #005b86 42%, #003e5c 100%); transition-timing-function:cubic-bezier(0.23,1,0.32,1);">
+            <a href="{% url 'api-docs' %}" class="block px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-[#006a99]/70 rounded-md mx-1 {% if current_view == 'api-docs' %}font-semibold{% endif %}">
+              REST API
+            </a>
+            <a href="{% url 'oai-pmh' %}" class="block px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-[#006a99]/70 rounded-md mx-1 {% if current_view == 'oai-pmh' %}font-semibold{% endif %}">
+              OAI-PMH
+            </a>
+          </div>
+        </div>
+
+        <!-- User Guides -->
         <a href="{% url 'user-guides' %}"
            class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors duration-150 {% if current_view == 'user-guides' %}bg-[#006a99]/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-[#006a99]/70{% endif %}"
            {% if current_view == 'user-guides' %}aria-current="page"{% endif %}>
           User Guides
         </a>
+
+        <!-- About -->
         <a href="{% url 'about' %}"
            class="px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide transition-colors duration-150 {% if current_view == 'about' %}bg-[#006a99]/80 text-white shadow-md{% else %}text-slate-300 hover:text-white hover:bg-[#006a99]/70{% endif %}"
            {% if current_view == 'about' %}aria-current="page"{% endif %}>
           About
         </a>
+
         </div>
       </div>
 
@@ -106,11 +138,11 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
             </svg>
           </button>
-          <div id="user-menu-dropdown" class="absolute right-0 mt-2 w-48 bg-base-100 rounded-md shadow-lg py-1 z-50 border border-base-300 transition-[opacity,transform] duration-150 ease-out origin-top-right" style="opacity: 0; transform: scale(0.95); pointer-events: none;">
-            <a href="{% url 'users:detail' request.user.username %}" class="block px-4 py-2 text-sm text-base-content hover:bg-base-200">
+          <div id="user-menu-dropdown" class="absolute right-0 mt-2 w-48 rounded-lg py-1.5 z-50 border border-[#3e8fc0]/35 shadow-[0_18px_40px_rgba(0,42,61,0.45)] transition-[opacity,transform] duration-150 origin-top-right overflow-hidden" style="opacity:0; transform:scale(0.95); pointer-events:none; background-color:#004f73; background-image:linear-gradient(180deg, #0b79ab 0%, #005b86 42%, #003e5c 100%); transition-timing-function:cubic-bezier(0.23,1,0.32,1);">
+            <a href="{% url 'users:detail' request.user.username %}" class="block px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-[#006a99]/70 rounded-md mx-1">
               {% translate "My Profile" %}
             </a>
-            <a href="{% url 'account_logout' %}" class="block px-4 py-2 text-sm text-base-content hover:bg-base-200">
+            <a href="{% url 'account_logout' %}" class="block px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-[#006a99]/70 rounded-md mx-1">
               {% translate "Sign Out" %}
             </a>
           </div>
@@ -137,64 +169,67 @@
   <div id="mobile-menu" class="lg:hidden bg-[#003a54] border-t border-[#004565]/70 overflow-hidden transition-[max-height,opacity] duration-200 ease-out max-h-0 opacity-0">
     <div class="px-3 pt-3 pb-4 space-y-1">
       <a href="{% url 'home' %}"
-         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 {% if current_view == 'home' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}"
-         {% if current_view == 'home' %}aria-current="page"{% endif %}>
+         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 {% if current_view == 'home' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}">
         Home
       </a>
       <a href="{% url 'faceted_search' %}"
-         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 {% if current_view == 'faceted_search' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}"
-         {% if current_view == 'faceted_search' %}aria-current="page"{% endif %}>
+         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 {% if current_view == 'faceted_search' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}">
         Search
       </a>
+
       {% if request.user.is_authenticated %}
+      <!-- Manage group -->
+      <div class="pt-2 pb-1 px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Manage</div>
       <a href="{% url 'storage:archivist_dashboard' %}"
-         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 {% if current_view == 'storage:archivist_dashboard' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}"
-         {% if current_view == 'storage:archivist_dashboard' %}aria-current="page"{% endif %}>
+         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 pl-6 {% if current_view == 'storage:archivist_dashboard' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}">
         Storage
       </a>
       <a href="{% url 'blam:blam_archivist_dashboard' %}"
-         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 {% if current_view == 'blam:blam_archivist_dashboard' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}"
-         {% if current_view == 'blam:blam_archivist_dashboard' %}aria-current="page"{% endif %}>
+         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 pl-6 {% if current_view == 'blam:blam_archivist_dashboard' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}">
         BLAM
       </a>
-      {% endif %}
       {% if request.user.is_superuser %}
       <a href="{% url 'storage:acl_admin_dashboard' %}"
-         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 {% if current_view == 'storage:acl_admin_dashboard' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}"
-         {% if current_view == 'storage:acl_admin_dashboard' %}aria-current="page"{% endif %}>
+         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 pl-6 {% if current_view == 'storage:acl_admin_dashboard' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}">
         ACL
       </a>
+      {% endif %}
+      {% endif %}
+
+      {% if request.user.is_superuser or request.user.is_staff %}
+      <!-- System group -->
+      <div class="pt-2 pb-1 px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">System</div>
+      {% if request.user.is_superuser %}
       <a href="{% url 'dbadmin:dashboard' %}"
-         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 {% if 'dbadmin:' in current_view %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}"
-         {% if 'dbadmin:' in current_view %}aria-current="page"{% endif %}>
+         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 pl-6 {% if 'dbadmin:' in current_view %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}">
         Database
       </a>
       {% endif %}
       {% if request.user.is_staff %}
       <a href="{% url 'admin:index' %}"
-         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 {% if current_view == 'admin:index' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}"
-         {% if current_view == 'admin:index' %}aria-current="page"{% endif %}>
+         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 pl-6 {% if current_view == 'admin:index' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}">
         Admin
       </a>
       {% endif %}
+      {% endif %}
+
+      <!-- APIs group -->
+      <div class="pt-2 pb-1 px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">APIs</div>
       <a href="{% url 'api-docs' %}"
-         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 {% if current_view == 'api-docs' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}"
-         {% if current_view == 'api-docs' %}aria-current="page"{% endif %}>
-        API
+         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 pl-6 {% if current_view == 'api-docs' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}">
+        REST API
       </a>
       <a href="{% url 'oai-pmh' %}"
-         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 {% if current_view == 'oai-pmh' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}"
-         {% if current_view == 'oai-pmh' %}aria-current="page"{% endif %}>
+         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 pl-6 {% if current_view == 'oai-pmh' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}">
         OAI-PMH
       </a>
+
       <a href="{% url 'user-guides' %}"
-         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 {% if current_view == 'user-guides' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}"
-         {% if current_view == 'user-guides' %}aria-current="page"{% endif %}>
+         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 {% if current_view == 'user-guides' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}">
         User Guides
       </a>
       <a href="{% url 'about' %}"
-         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 {% if current_view == 'about' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}"
-         {% if current_view == 'about' %}aria-current="page"{% endif %}>
+         class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 {% if current_view == 'about' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}">
         About
       </a>
     </div>
@@ -260,6 +295,57 @@
       if (open && !dropdown.contains(e.target) && !button.contains(e.target)) {
         hide();
       }
+    });
+  })();
+
+  // Nav dropdown menus
+  (function() {
+    const wrappers = document.querySelectorAll('.nav-dropdown-wrapper');
+
+    wrappers.forEach(function(wrapper) {
+      const trigger = wrapper.querySelector('.nav-dropdown-trigger');
+      const menu = wrapper.querySelector('.nav-dropdown-menu');
+      if (!trigger || !menu) return;
+
+      let open = false;
+      let hideTimeout = null;
+
+      function show() {
+        clearTimeout(hideTimeout);
+        open = true;
+        menu.style.opacity = '1';
+        menu.style.transform = 'scale(1)';
+        menu.style.pointerEvents = 'auto';
+      }
+      function hide() {
+        open = false;
+        menu.style.opacity = '0';
+        menu.style.transform = 'scale(0.95)';
+        menu.style.pointerEvents = 'none';
+      }
+      function delayedHide() {
+        hideTimeout = setTimeout(hide, 150);
+      }
+
+      trigger.addEventListener('click', function(e) {
+        e.stopPropagation();
+        open ? hide() : show();
+      });
+
+      wrapper.addEventListener('mouseenter', show);
+      wrapper.addEventListener('mouseleave', delayedHide);
+    });
+
+    // Close all on outside click
+    document.addEventListener('click', function() {
+      wrappers.forEach(function(wrapper) {
+        const menu = wrapper.querySelector('.nav-dropdown-menu');
+        if (menu) {
+          menu.style.opacity = '0';
+          menu.style.transform = 'scale(0.95)';
+          menu.style.pointerEvents = 'none';
+        }
+      });
     });
   })();
 
