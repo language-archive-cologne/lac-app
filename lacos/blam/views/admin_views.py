@@ -8,6 +8,7 @@ from django.template.loader import render_to_string
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.common.mixins import HtmxTemplateHelperMixin
+from lacos.storage.permissions import is_archivist
 
 
 class ArchivistMetadataPanelView(LoginRequiredMixin, UserPassesTestMixin, HtmxTemplateHelperMixin, View):
@@ -16,7 +17,7 @@ class ArchivistMetadataPanelView(LoginRequiredMixin, UserPassesTestMixin, HtmxTe
     """
 
     def test_func(self):
-        return self.request.user.is_staff
+        return is_archivist(self.request.user) or self.request.user.is_staff
 
     def get(self, request, *args, **kwargs):
         from django.db.models import Q
@@ -95,7 +96,7 @@ class ArchivistDashboardView(HtmxTemplateHelperMixin, LoginRequiredMixin, UserPa
     template_name = "blam/dashboard/archivist_control_panel.html"
 
     def test_func(self):
-        return self.request.user.is_staff
+        return is_archivist(self.request.user) or self.request.user.is_staff
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

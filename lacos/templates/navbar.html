@@ -32,7 +32,7 @@
           Search
         </a>
 
-        {% if request.user.is_authenticated %}
+        {% if NAVBAR_ACCESS.show_manage_group %}
         <!-- Manage dropdown -->
         <div class="relative nav-dropdown-wrapper">
           <button type="button"
@@ -40,14 +40,18 @@
             Manage
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
           </button>
-          <div class="nav-dropdown-menu absolute left-0 mt-1 w-44 rounded-lg py-1.5 z-50 border border-[#3e8fc0]/35 shadow-[0_18px_40px_rgba(0,42,61,0.45)] transition-[opacity,transform] duration-150 origin-top-left overflow-hidden" style="opacity:0; transform:scale(0.95); pointer-events:none; background-color:#004f73; background-image:linear-gradient(180deg, #0b79ab 0%, #005b86 42%, #003e5c 100%); transition-timing-function:cubic-bezier(0.23,1,0.32,1);">
+          <div class="nav-dropdown-menu absolute left-0 mt-1 w-44 rounded-lg py-1.5 z-50 border-0 shadow-[0_18px_40px_rgba(0,42,61,0.45)] transition-[opacity,transform] duration-150 origin-top-left overflow-hidden" style="opacity:0; transform:scale(0.95); pointer-events:none; background-color:#004f73; background-image:linear-gradient(180deg, #0b79ab 0%, #005b86 42%, #003e5c 100%); transition-timing-function:cubic-bezier(0.23,1,0.32,1);">
+            {% if NAVBAR_ACCESS.show_storage %}
             <a href="{% url 'storage:archivist_dashboard' %}" class="block px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-[#006a99]/70 rounded-md mx-1 {% if current_view == 'storage:archivist_dashboard' %}font-semibold{% endif %}">
               Storage
             </a>
+            {% endif %}
+            {% if NAVBAR_ACCESS.show_blam %}
             <a href="{% url 'blam:blam_archivist_dashboard' %}" class="block px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-[#006a99]/70 rounded-md mx-1 {% if current_view == 'blam:blam_archivist_dashboard' %}font-semibold{% endif %}">
               BLAM
             </a>
-            {% if request.user.is_superuser %}
+            {% endif %}
+            {% if NAVBAR_ACCESS.show_acl %}
             <a href="{% url 'storage:acl_admin_dashboard' %}" class="block px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-[#006a99]/70 rounded-md mx-1 {% if current_view == 'storage:acl_admin_dashboard' %}font-semibold{% endif %}">
               ACL
             </a>
@@ -56,7 +60,7 @@
         </div>
         {% endif %}
 
-        {% if request.user.is_superuser or request.user.is_staff %}
+        {% if NAVBAR_ACCESS.show_system_group %}
         <!-- System dropdown -->
         <div class="relative nav-dropdown-wrapper">
           <button type="button"
@@ -64,13 +68,13 @@
             System
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
           </button>
-          <div class="nav-dropdown-menu absolute left-0 mt-1 w-44 rounded-lg py-1.5 z-50 border border-[#3e8fc0]/35 shadow-[0_18px_40px_rgba(0,42,61,0.45)] transition-[opacity,transform] duration-150 origin-top-left overflow-hidden" style="opacity:0; transform:scale(0.95); pointer-events:none; background-color:#004f73; background-image:linear-gradient(180deg, #0b79ab 0%, #005b86 42%, #003e5c 100%); transition-timing-function:cubic-bezier(0.23,1,0.32,1);">
-            {% if request.user.is_superuser %}
+          <div class="nav-dropdown-menu absolute left-0 mt-1 w-44 rounded-lg py-1.5 z-50 border-0 shadow-[0_18px_40px_rgba(0,42,61,0.45)] transition-[opacity,transform] duration-150 origin-top-left overflow-hidden" style="opacity:0; transform:scale(0.95); pointer-events:none; background-color:#004f73; background-image:linear-gradient(180deg, #0b79ab 0%, #005b86 42%, #003e5c 100%); transition-timing-function:cubic-bezier(0.23,1,0.32,1);">
+            {% if NAVBAR_ACCESS.show_dbadmin %}
             <a href="{% url 'dbadmin:dashboard' %}" class="block px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-[#006a99]/70 rounded-md mx-1 {% if 'dbadmin:' in current_view %}font-semibold{% endif %}">
               Database
             </a>
             {% endif %}
-            {% if request.user.is_staff %}
+            {% if NAVBAR_ACCESS.show_admin %}
             <a href="{% url 'admin:index' %}" class="block px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-[#006a99]/70 rounded-md mx-1 {% if current_view == 'admin:index' %}font-semibold{% endif %}">
               Admin
             </a>
@@ -86,11 +90,11 @@
             APIs
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
           </button>
-          <div class="nav-dropdown-menu absolute left-0 mt-1 w-44 rounded-lg py-1.5 z-50 border border-[#3e8fc0]/35 shadow-[0_18px_40px_rgba(0,42,61,0.45)] transition-[opacity,transform] duration-150 origin-top-left overflow-hidden" style="opacity:0; transform:scale(0.95); pointer-events:none; background-color:#004f73; background-image:linear-gradient(180deg, #0b79ab 0%, #005b86 42%, #003e5c 100%); transition-timing-function:cubic-bezier(0.23,1,0.32,1);">
+          <div class="nav-dropdown-menu absolute left-0 mt-1 w-44 rounded-lg py-1.5 z-50 border-0 shadow-[0_18px_40px_rgba(0,42,61,0.45)] transition-[opacity,transform] duration-150 origin-top-left overflow-hidden" style="opacity:0; transform:scale(0.95); pointer-events:none; background-color:#004f73; background-image:linear-gradient(180deg, #0b79ab 0%, #005b86 42%, #003e5c 100%); transition-timing-function:cubic-bezier(0.23,1,0.32,1);">
             <a href="{% url 'api-docs' %}" class="block px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-[#006a99]/70 rounded-md mx-1 {% if current_view == 'api-docs' %}font-semibold{% endif %}">
-              REST API
+              REST
             </a>
-            <a href="{% url 'oai-pmh' %}" class="block px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-[#006a99]/70 rounded-md mx-1 {% if current_view == 'oai-pmh' %}font-semibold{% endif %}">
+            <a href="{% url 'oai-pmh' %}" class="block px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-[#006a99]/70 rounded-md mx-1 whitespace-nowrap {% if current_view == 'oai-pmh' %}font-semibold{% endif %}">
               OAI-PMH
             </a>
           </div>
@@ -138,7 +142,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
             </svg>
           </button>
-          <div id="user-menu-dropdown" class="absolute right-0 mt-2 w-48 rounded-lg py-1.5 z-50 border border-[#3e8fc0]/35 shadow-[0_18px_40px_rgba(0,42,61,0.45)] transition-[opacity,transform] duration-150 origin-top-right overflow-hidden" style="opacity:0; transform:scale(0.95); pointer-events:none; background-color:#004f73; background-image:linear-gradient(180deg, #0b79ab 0%, #005b86 42%, #003e5c 100%); transition-timing-function:cubic-bezier(0.23,1,0.32,1);">
+          <div id="user-menu-dropdown" class="absolute right-0 mt-2 w-48 rounded-lg py-1.5 z-50 border-0 shadow-[0_18px_40px_rgba(0,42,61,0.45)] transition-[opacity,transform] duration-150 origin-top-right overflow-hidden" style="opacity:0; transform:scale(0.95); pointer-events:none; background-color:#004f73; background-image:linear-gradient(180deg, #0b79ab 0%, #005b86 42%, #003e5c 100%); transition-timing-function:cubic-bezier(0.23,1,0.32,1);">
             <a href="{% url 'users:detail' request.user.username %}" class="block px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-[#006a99]/70 rounded-md mx-1">
               {% translate "My Profile" %}
             </a>
@@ -177,18 +181,22 @@
         Search
       </a>
 
-      {% if request.user.is_authenticated %}
+      {% if NAVBAR_ACCESS.show_manage_group %}
       <!-- Manage group -->
       <div class="pt-2 pb-1 px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Manage</div>
+      {% if NAVBAR_ACCESS.show_storage %}
       <a href="{% url 'storage:archivist_dashboard' %}"
          class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 pl-6 {% if current_view == 'storage:archivist_dashboard' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}">
         Storage
       </a>
+      {% endif %}
+      {% if NAVBAR_ACCESS.show_blam %}
       <a href="{% url 'blam:blam_archivist_dashboard' %}"
          class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 pl-6 {% if current_view == 'blam:blam_archivist_dashboard' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}">
         BLAM
       </a>
-      {% if request.user.is_superuser %}
+      {% endif %}
+      {% if NAVBAR_ACCESS.show_acl %}
       <a href="{% url 'storage:acl_admin_dashboard' %}"
          class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 pl-6 {% if current_view == 'storage:acl_admin_dashboard' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}">
         ACL
@@ -196,16 +204,16 @@
       {% endif %}
       {% endif %}
 
-      {% if request.user.is_superuser or request.user.is_staff %}
+      {% if NAVBAR_ACCESS.show_system_group %}
       <!-- System group -->
       <div class="pt-2 pb-1 px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">System</div>
-      {% if request.user.is_superuser %}
+      {% if NAVBAR_ACCESS.show_dbadmin %}
       <a href="{% url 'dbadmin:dashboard' %}"
          class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 pl-6 {% if 'dbadmin:' in current_view %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}">
         Database
       </a>
       {% endif %}
-      {% if request.user.is_staff %}
+      {% if NAVBAR_ACCESS.show_admin %}
       <a href="{% url 'admin:index' %}"
          class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 pl-6 {% if current_view == 'admin:index' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}">
         Admin
@@ -217,7 +225,7 @@
       <div class="pt-2 pb-1 px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">APIs</div>
       <a href="{% url 'api-docs' %}"
          class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 pl-6 {% if current_view == 'api-docs' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}">
-        REST API
+        REST
       </a>
       <a href="{% url 'oai-pmh' %}"
          class="block px-3 py-2 rounded-lg text-base font-medium transition-colors duration-150 pl-6 {% if current_view == 'oai-pmh' %}bg-[#004565] text-white{% else %}text-slate-300 hover:text-white hover:bg-[#004565]{% endif %}">

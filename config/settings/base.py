@@ -232,6 +232,7 @@ TEMPLATES = [
                 "lacos.users.context_processors.allauth_settings",
                 "lacos.users.context_processors.version_info",
                 "lacos.storage.context_processors.upload_client_config",
+                "lacos.storage.context_processors.navbar_access",
             ],
         },
     },
