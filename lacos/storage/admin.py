@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import S3ResourceLocation, S3FileObject, UploadSession, ACLPermissions
+from .models import S3ResourceLocation, S3FileObject, UploadSession, ACLPermissions, DerivativeStatus
 
 
 def format_file_size(size_bytes):
@@ -174,6 +174,59 @@ class UploadSessionAdmin(admin.ModelAdmin):
     @admin.display(description='Size')
     def formatted_size(self, obj):
         return format_file_size(obj.total_size_bytes)
+
+@admin.register(DerivativeStatus)
+class DerivativeStatusAdmin(admin.ModelAdmin):
+    list_display = (
+        'truncated_key',
+        'bucket_name',
+        'peaks_badge',
+        'spectrogram_badge',
+        'pitch_badge',
+        'source_etag_short',
+        'last_checked_at',
+    )
+    list_filter = ('bucket_name', 'peaks_exists', 'spectrogram_exists', 'pitch_exists')
+    search_fields = ('source_s3_key',)
+    readonly_fields = ('id', 'created_at', 'updated_at')
+    ordering = ('-last_checked_at',)
+    list_per_page = 50
+
+    @admin.display(description='S3 Key')
+    def truncated_key(self, obj):
+        key = obj.source_s3_key
+        if len(key) > 60:
+            return format_html('<span title="{}">{}&hellip;</span>', key, key[:57])
+        return key
+
+    @admin.display(description='ETag')
+    def source_etag_short(self, obj):
+        etag = obj.source_etag
+        if etag and len(etag) > 12:
+            return format_html('<span title="{}">{}&hellip;</span>', etag, etag[:12])
+        return etag or '-'
+
+    def _bool_badge(self, value, label):
+        color = '#10b981' if value else '#ef4444'
+        text = label if value else f'no {label}'
+        return format_html(
+            '<span style="background:{}; color:white; padding:2px 8px; '
+            'border-radius:4px; font-size:11px;">{}</span>',
+            color, text,
+        )
+
+    @admin.display(description='Peaks', boolean=False)
+    def peaks_badge(self, obj):
+        return self._bool_badge(obj.peaks_exists, 'peaks')
+
+    @admin.display(description='Spectrogram', boolean=False)
+    def spectrogram_badge(self, obj):
+        return self._bool_badge(obj.spectrogram_exists, 'spectrogram')
+
+    @admin.display(description='Pitch', boolean=False)
+    def pitch_badge(self, obj):
+        return self._bool_badge(obj.pitch_exists, 'pitch')
+
 
 @admin.register(ACLPermissions)
 class ACLPermissionsAdmin(admin.ModelAdmin):

@@ -173,6 +173,25 @@ def test_generate_peaks_preflight_stops_when_tmp_space_is_too_low():
     bucket_service.s3_client.download_file.assert_not_called()
 
 
+def test_generate_peaks_skipped_returns_full_status_metadata():
+    service = MediaProcessingService(bucket_service=MagicMock())
+
+    with (
+        patch.object(service, "_get_source_etag", return_value="etag-1"),
+        patch.object(service, "_artifact_is_current", return_value=True),
+    ):
+        result = service.generate_peaks("bucket", "folder/audio.wav")
+
+    assert result == {
+        "success": True,
+        "source_etag": "etag-1",
+        "peaks_key": "folder/audio.wav.peaks.json",
+        "spectrogram_data_key": "folder/audio.wav.spectrogram.bin",
+        "pitch_key": "folder/audio.wav.pitch.bin",
+        "skipped": True,
+    }
+
+
 # ------------------------------------------------------------------
 # Pitch (YIN F0 extraction)
 # ------------------------------------------------------------------
