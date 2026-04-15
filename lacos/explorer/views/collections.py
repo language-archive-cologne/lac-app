@@ -48,6 +48,7 @@ from .utils import (
     load_markdown_preview,
     load_xml_preview,
     paginate_bundle_contexts,
+    resolve_collection_metadata_to_presigned,
     render_imdi_modal_response,
     summarize_bundle_access_levels_by_collection_ids,
     summarize_collection_bundle_access_levels,
@@ -754,13 +755,32 @@ class CollectionResourcesView(View):
                     file_pid=decoded_resource_id
                 ).first()
 
-            resource_service = ResourceMappingService()
-            location = resource_service.resolve_pid_to_s3(decoded_resource_id)
-            if not location:
+            resource_service = ResourceMappingService(skip_bucket_check=True)
+            storage_resolution = None
+            if metadata_file:
+                storage_resolution = resolve_collection_metadata_to_presigned(
+                    resource_service,
+                    metadata_file,
+                    collection,
+                )
+
+            if not storage_resolution:
+                location = resource_service.resolve_pid_to_s3(decoded_resource_id)
+                if location:
+                    storage_resolution = {
+                        "bucket": location.s3_bucket,
+                        "key": location.s3_key,
+                        "url": resource_service.generate_presigned_url(
+                            location.s3_bucket,
+                            location.s3_key,
+                        ),
+                    }
+
+            if not storage_resolution:
                 raise ValueError(f"No S3 location found for PID: {decoded_resource_id}")
 
             # Get file information for display
-            file_name = metadata_file.file_name if metadata_file else location.s3_key.split('/')[-1]
+            file_name = metadata_file.file_name if metadata_file else storage_resolution["key"].split('/')[-1]
             file_description = metadata_file.file_description if metadata_file else ''
             mime_type = metadata_file.mime_type if metadata_file else 'application/octet-stream'
 
@@ -768,10 +788,7 @@ class CollectionResourcesView(View):
             source_mime_type = guess_source_mime_type(mime_type, file_name, detected_media_type)
 
             # Generate presigned URL for streaming/preview
-            presigned_url = resource_service.generate_presigned_url(
-                location.s3_bucket,
-                location.s3_key
-            )
+            presigned_url = storage_resolution["url"]
 
             # Generate download URL with proper content disposition
             download_headers = {
@@ -781,8 +798,8 @@ class CollectionResourcesView(View):
                 download_headers['ResponseContentType'] = source_mime_type
 
             download_url = resource_service.generate_presigned_url(
-                location.s3_bucket,
-                location.s3_key,
+                storage_resolution["bucket"],
+                storage_resolution["key"],
                 response_headers=download_headers,
             )
 
@@ -791,8 +808,8 @@ class CollectionResourcesView(View):
                 imdi_modal_response = render_imdi_modal_response(
                     request,
                     s3_client=getattr(resource_service, "s3_client", None),
-                    bucket=location.s3_bucket,
-                    key=location.s3_key,
+                    bucket=storage_resolution["bucket"],
+                    key=storage_resolution["key"],
                     collection=collection,
                 )
                 if imdi_modal_response is not None:
@@ -802,16 +819,16 @@ class CollectionResourcesView(View):
             if is_htmx and action in {'play', 'view'} and detected_media_type == 'xml':
                 xml_preview = load_xml_preview(
                     resource_service,
-                    location.s3_bucket,
-                    location.s3_key,
+                    storage_resolution["bucket"],
+                    storage_resolution["key"],
                 )
 
             markdown_html = None
             if is_htmx and action in {'play', 'view'} and detected_media_type == 'markdown':
                 markdown_html = load_markdown_preview(
                     resource_service,
-                    location.s3_bucket,
-                    location.s3_key,
+                    storage_resolution["bucket"],
+                    storage_resolution["key"],
                 )
 
             if action == 'download':
@@ -825,27 +842,29 @@ class CollectionResourcesView(View):
             if detected_media_type == 'audio':
                 peaks_url = self._resolve_peaks_url(
                     resource_service,
-                    location.s3_bucket,
-                    location.s3_key,
+                    storage_resolution["bucket"],
+                    storage_resolution["key"],
                 )
                 spectrogram_available = self._spectrogram_data_exists(
                     resource_service,
-                    location.s3_bucket,
-                    location.s3_key,
+                    storage_resolution["bucket"],
+                    storage_resolution["key"],
                 )
                 if action == 'analyze':
                     if spectrogram_available:
                         spectrogram_data_url = resource_service.generate_presigned_url(
-                            location.s3_bucket,
-                            MediaProcessingService._derivative_s3_key(location.s3_key, ".spectrogram.bin"),
+                            storage_resolution["bucket"],
+                            MediaProcessingService._derivative_s3_key(storage_resolution["key"], ".spectrogram.bin"),
                         )
                 pitch_available = self._pitch_data_exists(
-                    resource_service, location.s3_bucket, location.s3_key,
+                    resource_service,
+                    storage_resolution["bucket"],
+                    storage_resolution["key"],
                 )
                 if action == 'pitch' and pitch_available:
                     pitch_data_url = resource_service.generate_presigned_url(
-                        location.s3_bucket,
-                        MediaProcessingService._derivative_s3_key(location.s3_key, ".pitch.bin"),
+                        storage_resolution["bucket"],
+                        MediaProcessingService._derivative_s3_key(storage_resolution["key"], ".pitch.bin"),
                     )
 
             player_mode = 'simple'
@@ -865,8 +884,8 @@ class CollectionResourcesView(View):
                     detected_media_type, source_mime_type, presigned_url, download_url,
                     xml_preview=xml_preview,
                     markdown_html=markdown_html,
-                    download_bucket=location.s3_bucket,
-                    download_key=location.s3_key,
+                    download_bucket=storage_resolution["bucket"],
+                    download_key=storage_resolution["key"],
                     peaks_url=peaks_url,
                     spectrogram_data_url=spectrogram_data_url,
                     player_mode=player_mode,

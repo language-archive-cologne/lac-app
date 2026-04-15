@@ -168,7 +168,7 @@ class BundleResourcesView(View):
             if decoded_resource_id.startswith('ID_'):
                 decoded_resource_id = decoded_resource_id[3:]
 
-            resource_service = ResourceMappingService()
+            resource_service = ResourceMappingService(skip_bucket_check=True)
             location = resource_service.resolve_pid_to_s3(decoded_resource_id)
             if not location:
                 raise ValueError(f"No S3 location found for PID: {decoded_resource_id}")
@@ -336,7 +336,7 @@ class ResourceAccessView(View):
             )
             is_elan = extension in {'eaf', 'elan'} or normalized_mime_type == 'text/x-eaf+xml'
 
-            resource_service = ResourceMappingService()
+            resource_service = ResourceMappingService(skip_bucket_check=True)
 
             storage_resolution = resolve_resource_to_presigned(
                 resource_service,

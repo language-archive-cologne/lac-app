@@ -59,7 +59,7 @@ def test_bundle_imdi_resource_renders_imdi_modal_for_htmx_view(client, monkeypat
 
     monkeypatch.setattr(
         "lacos.explorer.views.bundles.ResourceMappingService",
-        lambda: DummyService(),
+        lambda *args, **kwargs: DummyService(),
     )
     monkeypatch.setattr(
         "lacos.explorer.views.bundles.resolve_resource_to_presigned",
@@ -101,10 +101,7 @@ def test_collection_imdi_resource_renders_imdi_modal_for_htmx_view(client, monke
         s3_client = _FakeS3Client(b"<METATRANSCRIPT/>")
 
         def resolve_pid_to_s3(self, _pid):
-            return SimpleNamespace(
-                s3_bucket="bucket-a",
-                s3_key="path/collection_metadata.imdi",
-            )
+            return None
 
         def generate_presigned_url(self, _bucket, _key, response_headers=None):
             if response_headers:
@@ -113,7 +110,15 @@ def test_collection_imdi_resource_renders_imdi_modal_for_htmx_view(client, monke
 
     monkeypatch.setattr(
         "lacos.explorer.views.collections.ResourceMappingService",
-        lambda: DummyService(),
+        lambda *args, **kwargs: DummyService(),
+    )
+    monkeypatch.setattr(
+        "lacos.explorer.views.collections.resolve_collection_metadata_to_presigned",
+        lambda *_args, **_kwargs: {
+            "bucket": "bucket-a",
+            "key": "path/collection_metadata.imdi",
+            "url": "https://example.test/preview",
+        },
     )
 
     response = client.get(
