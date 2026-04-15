@@ -16,6 +16,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from lacos.storage.models import DerivativeStatus
+from lacos.storage.services.bucket_service import BucketService
 from lacos.storage.services.media_processing_service import MediaProcessingService
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,9 @@ class DerivativeAuditService:
         self,
         media_service: Optional[MediaProcessingService] = None,
     ) -> None:
-        self.media_service = media_service or MediaProcessingService()
+        self.media_service = media_service or MediaProcessingService(
+            bucket_service=BucketService(skip_bucket_check=True)
+        )
         # Pause between existence checks/files/pages to avoid overwhelming the S3 endpoint.
         self.artifact_delay = self._resolve_delay(
             "DERIVATIVE_AUDIT_ARTIFACT_DELAY_SECONDS",

@@ -72,6 +72,23 @@ def test_audit_no_wav_files(MockMPS):
     assert DerivativeStatus.objects.count() == 0
 
 
+@patch("lacos.storage.services.derivative_audit_service.MediaProcessingService")
+@patch("lacos.storage.services.derivative_audit_service.BucketService")
+def test_audit_default_service_skips_bucket_check(
+    MockBucketService,
+    MockMPS,
+):
+    bucket_service = MockBucketService.return_value
+    media_service = MockMPS.return_value
+    media_service.bucket_service = bucket_service
+
+    service = DerivativeAuditService()
+
+    MockBucketService.assert_called_once_with(skip_bucket_check=True)
+    MockMPS.assert_called_once_with(bucket_service=bucket_service)
+    assert service.media_service is media_service
+
+
 @patch("lacos.storage.services.derivative_audit_service.logger")
 @patch("lacos.storage.services.derivative_audit_service.MediaProcessingService")
 @override_settings(
