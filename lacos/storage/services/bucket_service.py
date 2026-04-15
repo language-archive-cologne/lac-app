@@ -730,7 +730,7 @@ class BucketService(BaseStorageService):
         if expires_in is None:
             expires_in = getattr(settings, 'PRESIGNED_URL_EXPIRATION', 3600)
 
-        client = getattr(self, "presigned_client", self.s3_client)
+        client = self.get_presigned_client()
 
         try:
             url = client.generate_presigned_url(

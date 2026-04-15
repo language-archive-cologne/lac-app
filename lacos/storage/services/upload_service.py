@@ -119,9 +119,8 @@ class UploadService(BaseStorageService):
                             'bucket_name': init_result.get('bucket_name')
                         }
 
-            # Single-part upload for smaller files or when multipart is not needed
-            # Use the presigned client if available, otherwise use the regular client
-            client = getattr(self, 'presigned_client', self.s3_client)
+            # Single-part upload for smaller files requires an explicit browser endpoint.
+            client = self.get_presigned_client()
 
             # Use provided bucket or fall back to default ingest bucket
             target_bucket = bucket_name or self.ingest_bucket
@@ -704,7 +703,7 @@ class UploadService(BaseStorageService):
             target_bucket = bucket_name or self.ingest_bucket
             for part_number in range(1, part_count + 1):
                 # Generate a presigned URL for this part using the presigned client
-                url = self.presigned_client.generate_presigned_url(
+                url = self.get_presigned_client().generate_presigned_url(
                     'upload_part',
                     Params={
                         'Bucket': target_bucket,

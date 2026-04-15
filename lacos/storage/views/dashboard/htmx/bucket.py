@@ -42,9 +42,10 @@ class BucketContentHTMXView(HtmxTemplateHelperMixin, View):
                 except ValueError:
                     requested_max_keys = 0
 
-                # Determine prefetch behavior - default True for initial loads
-                # Only defer loading when explicitly paginating or requested
-                prefetch_root = True
+                # Defer the expensive root listing by default so bucket switching
+                # updates the UI immediately. If the caller is explicitly paginating,
+                # prefetch the first page in the same request.
+                prefetch_root = bool(continuation_token or requested_max_keys > 0)
                 prefetch_param = request.GET.get("prefetch_root")
                 if prefetch_param is not None:
                     prefetch_root = prefetch_param.lower() == "true"

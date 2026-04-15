@@ -2,7 +2,11 @@ import os
 import pytest
 from botocore.exceptions import ClientError
 from django.core.cache import cache
+from django.core.exceptions import ImproperlyConfigured
+from django.test import override_settings
 from unittest.mock import MagicMock, patch
+
+from lacos.storage.services.base_storage_service import BaseStorageService
 
 # Import constants from test_constants.py
 from .test_constants import TEST_BUCKET_NAME, TEST_INGEST_BUCKET, TEST_PRODUCTION_BUCKET
@@ -127,3 +131,60 @@ def test_get_all_accessible_buckets_uses_dynamic_discovery_for_wildcard(mock_bas
 
     assert result == ["grails-dev", "lacos-production"]
     mock_base_service.s3_client.list_buckets.assert_called_once_with()
+
+
+@override_settings(
+    AWS_S3_ENDPOINT_URL="http://storage.internal:9000",
+    AWS_S3_BROWSER_ENDPOINT_URL="https://storage.example.test",
+    USE_MINIO=False,
+    S3_WORKSPACE_BUCKETS=["lacos-ingest"],
+)
+def test_base_storage_service_uses_separate_presigned_client():
+    BaseStorageService._instance = None
+    BaseStorageService._buckets_checked = False
+
+    server_client = MagicMock(name="server_client")
+    presigned_client = MagicMock(name="presigned_client")
+
+    with patch(
+        "lacos.storage.services.base_storage_service.boto3.client",
+        side_effect=[server_client, presigned_client],
+    ) as mock_boto_client:
+        service = BaseStorageService(skip_bucket_check=True)
+
+    assert service.endpoint_url == "http://storage.internal:9000"
+    assert service.browser_endpoint_url == "https://storage.example.test"
+    assert service.s3_client is server_client
+    assert service.get_presigned_client() is presigned_client
+
+    server_call = mock_boto_client.call_args_list[0]
+    presigned_call = mock_boto_client.call_args_list[1]
+    assert server_call.kwargs["endpoint_url"] == "http://storage.internal:9000"
+    assert presigned_call.kwargs["endpoint_url"] == "https://storage.example.test"
+
+    BaseStorageService._instance = None
+    BaseStorageService._buckets_checked = False
+
+
+@override_settings(
+    AWS_S3_ENDPOINT_URL="http://storage.internal:9000",
+    USE_MINIO=False,
+    S3_WORKSPACE_BUCKETS=["lacos-ingest"],
+)
+def test_base_storage_service_requires_browser_endpoint_for_presigned_urls(monkeypatch):
+    BaseStorageService._instance = None
+    BaseStorageService._buckets_checked = False
+    monkeypatch.delenv("AWS_S3_BROWSER_ENDPOINT_URL", raising=False)
+
+    server_client = MagicMock(name="server_client")
+
+    with patch("lacos.storage.services.base_storage_service.boto3.client", return_value=server_client):
+        service = BaseStorageService(skip_bucket_check=True)
+
+    assert service.s3_client is server_client
+    assert service.browser_endpoint_url is None
+    with pytest.raises(ImproperlyConfigured, match="AWS_S3_BROWSER_ENDPOINT_URL"):
+        service.get_presigned_client()
+
+    BaseStorageService._instance = None
+    BaseStorageService._buckets_checked = False
