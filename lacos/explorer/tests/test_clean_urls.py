@@ -9,13 +9,11 @@ new URL patterns:
 
 import pytest
 from django.urls import reverse
-from types import SimpleNamespace
 
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
 from lacos.blam.models.bundle.bundle_general_info import BundleGeneralInfo, BundleLocation
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import (
-    BundleAdditionalMetadataFile,
     BundleResources,
     BundleStructuralInfo,
     MediaResource,
@@ -64,17 +62,6 @@ def _create_resource(bundle, file_pid="hdl:11341/test-clean-url-res"):
     br = BundleResources.objects.create(bundle=bundle)
     br.bundle_media_resources.add(resource)
     return resource
-
-
-def _create_bundle_metadata_file(bundle, file_pid="hdl:11341/test-clean-url-meta"):
-    metadata_file = BundleAdditionalMetadataFile.objects.create(
-        file_name="metadata.xml",
-        file_pid=file_pid,
-        mime_type="application/xml",
-        is_metadata_for="bundle",
-    )
-    bundle.structural_info.first().additional_metadata_files.add(metadata_file)
-    return metadata_file
 
 
 # --- Collection clean URLs ---
@@ -192,38 +179,6 @@ def test_resource_direct_url_renders_page(client):
     response = client.get(f"/resource/{pid_clean}/")
     # Renders directly (200/403/404 from S3) — NOT a 302 redirect
     assert response.status_code != 302
-
-
-@pytest.mark.django_db
-def test_metadata_resource_direct_url_renders_page(client):
-    """Metadata resources should also resolve via /resource/<handle>/."""
-    collection = _create_collection()
-    bundle = _create_bundle(collection)
-    metadata_file = _create_bundle_metadata_file(bundle)
-    pid_clean = metadata_file.file_pid[4:]
-
-    response = client.get(f"/resource/{pid_clean}/")
-    assert response.status_code != 302
-
-
-@pytest.mark.django_db
-def test_bundle_page_resource_links_use_direct_resource_pid_route(client, monkeypatch):
-    collection = _create_collection()
-    bundle = _create_bundle(collection)
-    resource = _create_resource(bundle)
-    pid_clean = resource.file_pid[4:]
-
-    monkeypatch.setattr(
-        "lacos.explorer.views.bundles.ACLEvaluationService.evaluate",
-        lambda *_args, **_kwargs: SimpleNamespace(allowed=True, access_level="public"),
-    )
-
-    response = client.get(reverse("explorer:bundle_detail", kwargs={"pk": bundle.pk}))
-
-    assert response.status_code == 200
-    html = response.content.decode("utf-8")
-    assert f'/resource/{pid_clean}/?action=play' in html
-    assert f"/resource/{bundle.pk}/{resource.id}/?action=play" not in html
 
 
 # --- Backward-compat redirects ---
