@@ -90,6 +90,86 @@ def test_person_rule_matches_acl_agent_uri():
 
 
 @pytest.mark.django_db
+def test_person_rule_matches_bare_email_acl_agent_for_saml_user():
+    collection = _create_collection()
+    bundle = _create_bundle(collection)
+    _store_acl(bundle, [{"agentClass": "foaf:Person", "agent": "alice@uni-koeln.de", "mode": ["acl:Read"]}])
+
+    service = ACLEvaluationService()
+
+    user = get_user_model().objects.create_user(
+        username="alice@uni-koeln.de",
+        password="pass",
+        saml_persistent_id="persistent-id-1",
+        acl_agent_uri="urn:lacos:eppn:alice@uni-koeln.de",
+    )
+    result = service.evaluate(user, bundle)
+
+    assert result.allowed is True
+    assert result.access_level == ACL_LEVEL_RESTRICTED
+    assert result.matched_rule["agent"] == "alice@uni-koeln.de"
+
+
+@pytest.mark.django_db
+def test_person_rule_with_bare_email_denies_non_matching_saml_user():
+    collection = _create_collection()
+    bundle = _create_bundle(collection)
+    _store_acl(bundle, [{"agentClass": "foaf:Person", "agent": "alice@uni-koeln.de", "mode": ["acl:Read"]}])
+
+    service = ACLEvaluationService()
+
+    other_user = get_user_model().objects.create_user(
+        username="bob@uni-koeln.de",
+        password="pass",
+        saml_persistent_id="persistent-id-2",
+        acl_agent_uri="urn:lacos:eppn:bob@uni-koeln.de",
+    )
+
+    denied = service.evaluate(other_user, bundle)
+    assert denied.allowed is False
+    assert denied.default_applied is True
+    assert denied.access_level == ACL_LEVEL_RESTRICTED
+
+
+@pytest.mark.django_db
+def test_group_rule_matches_normalized_bare_group_agent():
+    collection = _create_collection()
+    bundle = _create_bundle(collection)
+    _store_acl(bundle, [{"agentClass": "foaf:Group", "agent": "researchers", "mode": ["acl:Read"]}])
+
+    service = ACLEvaluationService()
+
+    group = Group.objects.create(name="Researchers")
+    GroupACL.objects.create(group=group, acl_agent_uri="urn:lacos:agent:researchers")
+
+    user = get_user_model().objects.create_user(username="groupie", password="pass")
+    user.groups.add(group)
+
+    allowed = service.evaluate(user, bundle)
+    assert allowed.allowed is True
+    assert allowed.access_level == ACL_LEVEL_RESTRICTED
+
+
+@pytest.mark.django_db
+def test_group_rule_with_bare_group_agent_denies_non_member():
+    collection = _create_collection()
+    bundle = _create_bundle(collection)
+    _store_acl(bundle, [{"agentClass": "foaf:Group", "agent": "researchers", "mode": ["acl:Read"]}])
+
+    service = ACLEvaluationService()
+
+    group = Group.objects.create(name="Researchers")
+    GroupACL.objects.create(group=group, acl_agent_uri="urn:lacos:agent:researchers")
+
+    outsider = get_user_model().objects.create_user(username="outsider", password="pass")
+
+    denied = service.evaluate(outsider, bundle)
+    assert denied.allowed is False
+    assert denied.default_applied is True
+    assert denied.access_level == ACL_LEVEL_RESTRICTED
+
+
+@pytest.mark.django_db
 def test_group_rule_matches_group_profile():
     collection = _create_collection()
     bundle = _create_bundle(collection)

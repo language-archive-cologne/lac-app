@@ -15,7 +15,7 @@ from lacos.storage.constants import (
     WAC_AUTHENTICATED_AGENT,
 )
 from lacos.storage.permissions import is_archivist
-from lacos.storage.utils.acl import determine_access_level
+from lacos.storage.utils.acl import determine_access_level, normalize_agent_uri
 from lacos.storage.models.acl_config import ACLConfig
 
 logger = logging.getLogger(__name__)
@@ -208,11 +208,11 @@ class ACLEvaluationService:
             return getattr(user, "is_authenticated", False)
 
         if agent_class == "foaf:Person":
-            agent_uri = rule.get("agent")
+            agent_uri = normalize_agent_uri(rule.get("agent"))
             return bool(agent_uri and agent_uri in self._get_user_agent_uris(user))
 
         if agent_class == "foaf:Group":
-            agent_uri = rule.get("agent")
+            agent_uri = normalize_agent_uri(rule.get("agent"))
             return bool(agent_uri and agent_uri in self._get_user_group_uris(user))
 
         return False
