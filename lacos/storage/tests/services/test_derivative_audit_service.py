@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from botocore.exceptions import EndpointConnectionError
 from django.test import override_settings
 from django.utils import timezone
 
@@ -188,6 +189,7 @@ def test_audit_counts_existing_derivatives_even_when_not_current(MockMPS):
 
 @pytest.mark.django_db
 @override_settings(
+    DERIVATIVE_AUDIT_ARTIFACT_DELAY_SECONDS=0.4,
     DERIVATIVE_AUDIT_FILE_DELAY_SECONDS=0.25,
     DERIVATIVE_AUDIT_PAGE_DELAY_SECONDS=2.5,
 )
@@ -210,21 +212,81 @@ def test_audit_uses_configured_throttle_delays(MockMPS):
         result = service.audit_bucket(bucket_name="lacos-production")
 
     assert result["success"] is True
+    assert service.artifact_delay == 0.4
     assert service.throttle_delay == 0.25
     assert service.throttle_page_delay == 2.5
     assert mock_sleep.call_args_list == [
+        ((0.4,), {}),
+        ((0.4,), {}),
         ((0.25,), {}),
         ((2.5,), {}),
     ]
 
 
 @override_settings(
+    DERIVATIVE_AUDIT_ARTIFACT_DELAY_SECONDS=-1,
     DERIVATIVE_AUDIT_FILE_DELAY_SECONDS="invalid",
     DERIVATIVE_AUDIT_PAGE_DELAY_SECONDS=-3,
+    DERIVATIVE_AUDIT_CONNECTIVITY_BACKOFF_BASE_SECONDS="invalid",
+    DERIVATIVE_AUDIT_CONNECTIVITY_BACKOFF_MAX_SECONDS=-2,
+    DERIVATIVE_AUDIT_MAX_CONSECUTIVE_CONNECTIVITY_FAILURES=0,
 )
 @patch("lacos.storage.services.derivative_audit_service.MediaProcessingService")
 def test_audit_throttle_settings_fall_back_or_clamp(MockMPS):
     service = DerivativeAuditService(media_service=MockMPS.return_value)
 
+    assert service.artifact_delay == 0.0
     assert service.throttle_delay == service.DEFAULT_THROTTLE_DELAY
     assert service.throttle_page_delay == 0.0
+    assert service.connectivity_backoff_base == service.DEFAULT_CONNECTIVITY_BACKOFF_BASE
+    assert service.connectivity_backoff_max == 0.0
+    assert (
+        service.max_consecutive_connectivity_failures == 1
+    )
+
+
+@pytest.mark.django_db
+@override_settings(
+    DERIVATIVE_AUDIT_ARTIFACT_DELAY_SECONDS=0,
+    DERIVATIVE_AUDIT_FILE_DELAY_SECONDS=0,
+    DERIVATIVE_AUDIT_PAGE_DELAY_SECONDS=0,
+    DERIVATIVE_AUDIT_CONNECTIVITY_BACKOFF_BASE_SECONDS=1.5,
+    DERIVATIVE_AUDIT_CONNECTIVITY_BACKOFF_MAX_SECONDS=5.0,
+    DERIVATIVE_AUDIT_MAX_CONSECUTIVE_CONNECTIVITY_FAILURES=2,
+)
+@patch("lacos.storage.services.derivative_audit_service.MediaProcessingService")
+def test_audit_aborts_after_repeated_connectivity_failures(MockMPS):
+    mock_service = MockMPS.return_value
+    paginator = MagicMock()
+    paginator.paginate.return_value = [
+        _make_s3_page(
+            [
+                ("audio1.wav", "etag1"),
+                ("audio2.wav", "etag2"),
+                ("audio3.wav", "etag3"),
+            ]
+        ),
+    ]
+    mock_service.bucket_service.s3_client.get_paginator.return_value = paginator
+    mock_service._artifact_exists.side_effect = EndpointConnectionError(
+        endpoint_url="https://s3.example.test"
+    )
+    mock_service._peaks_key.side_effect = lambda k: f"{k}.peaks.json"
+    mock_service._spectrogram_data_key.side_effect = lambda k: f"{k}.spectrogram.bin"
+    mock_service._pitch_key.side_effect = lambda k: f"{k}.pitch.bin"
+
+    service = DerivativeAuditService(media_service=mock_service)
+
+    with patch("lacos.storage.services.derivative_audit_service.time.sleep") as mock_sleep:
+        result = service.audit_bucket(bucket_name="lacos-production")
+
+    assert result["success"] is False
+    assert result["aborted"] is True
+    assert result["errors"] == 2
+    assert result["total_wav_files"] == 2
+    assert "connectivity failures" in result["error"].lower()
+    assert DerivativeStatus.objects.count() == 0
+    assert mock_sleep.call_args_list == [
+        ((1.5,), {}),
+        ((3.0,), {}),
+    ]
