@@ -31,12 +31,10 @@ from lacos.blam.models.collection.collection_structural_info import (
 from lacos.explorer.glottolog import lookup_glottolog_entry
 from lacos.explorer.map_utils import get_collection_map_markers
 from lacos.explorer.media_utils import determine_media_type, guess_source_mime_type
-from lacos.explorer.permissions import ACLPermissionMixin
 from lacos.explorer.search import search_archives
 from lacos.explorer.views.utils import build_content_disposition
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
 from lacos.storage.models.acl_permissions import ACLPermissions
-from lacos.storage.services.media_processing_service import MediaProcessingService
 from lacos.storage.services.resource_mapping_service import ResourceMappingService
 
 from .utils import (
@@ -58,68 +56,6 @@ logger = logging.getLogger(__name__)
 
 LANGUAGE_COUNT_CACHE_KEY = "explorer:language_count"
 LANGUAGE_COUNT_CACHE_TIMEOUT = 86400  # 24 hours (invalidated on collection changes)
-COLLECTION_PERMISSION_DENIED_MESSAGE = _(
-    "This collection is restricted. If you believe you should have access, "
-    "please contact lac-helpdesk@uni-koeln.de."
-)
-
-
-def _get_collection_by_pk_or_handle(queryset, pk=None, handle=None):
-    if pk is not None:
-        return queryset.filter(pk=pk).first()
-    if handle is not None:
-        collection = queryset.filter(identifier=handle).first()
-        if collection is None and not handle.startswith("hdl:"):
-            collection = queryset.filter(identifier=f"hdl:{handle}").first()
-        return collection
-    raise Http404("No collection identifier provided")
-
-
-class CollectionLookupPermissionMixin(ACLPermissionMixin):
-    permission_denied_message = COLLECTION_PERMISSION_DENIED_MESSAGE
-    _resolved_collection = None
-
-    def get_collection_queryset(self):
-        raise NotImplementedError
-
-    def get_collection(self, pk=None, handle=None):
-        if self._resolved_collection is not None:
-            return self._resolved_collection
-        collection = _get_collection_by_pk_or_handle(
-            self.get_collection_queryset(),
-            pk=pk,
-            handle=handle,
-        )
-        if collection is None:
-            raise Http404("Collection not found")
-        self._resolved_collection = collection
-        return collection
-
-    def get_acl_object(self, request, *args, **kwargs):
-        return self.get_collection(
-            pk=kwargs.get("pk"),
-            handle=kwargs.get("handle"),
-        )
-
-
-class CollectionACLPermissionMixin(ACLPermissionMixin):
-    permission_denied_message = COLLECTION_PERMISSION_DENIED_MESSAGE
-
-    def dispatch(self, request, *args, **kwargs):
-        acl_object = self.get_acl_object(request, *args, **kwargs)
-        if acl_object is None:
-            raise Http404("Collection not found")
-
-        service = self.get_acl_service()
-        result = service.evaluate(request.user, acl_object, mode=self.required_acl_mode)
-        self.acl_result = result
-
-        permissions = service._get_permissions(acl_object)
-        has_explicit_acl_rules = bool(permissions and permissions.permissions_data)
-        if service.enforcement_enabled and has_explicit_acl_rules and not result.allowed:
-            return self.handle_no_permission(result)
-
-        return super(ACLPermissionMixin, self).dispatch(request, *args, **kwargs)
 
 
 class CollectionListView(ListView):
@@ -461,13 +397,12 @@ class CollectionListView(ListView):
         return super().render_to_response(context, **response_kwargs)
 
 
-class CollectionDetailView(HandleLookupMixin, CollectionACLPermissionMixin, DetailView):
+class CollectionDetailView(HandleLookupMixin, DetailView):
     """Detail view for a collection, accessible by UUID or handle."""
 
     model = Collection
     template_name = "collection_detail.html"
     context_object_name = "collection"
-    permission_denied_message = COLLECTION_PERMISSION_DENIED_MESSAGE
 
     def get_queryset(self):
         return Collection.objects.prefetch_related(
@@ -837,15 +772,14 @@ class CollectionResourcesView(View):
                     if spectrogram_available:
                         spectrogram_data_url = resource_service.generate_presigned_url(
                             location.s3_bucket,
-                            MediaProcessingService._derivative_s3_key(location.s3_key, ".spectrogram.bin"),
+                            f"{location.s3_key}.spectrogram.bin",
                         )
                 pitch_available = self._pitch_data_exists(
                     resource_service, location.s3_bucket, location.s3_key,
                 )
                 if action == 'pitch' and pitch_available:
                     pitch_data_url = resource_service.generate_presigned_url(
-                        location.s3_bucket,
-                        MediaProcessingService._derivative_s3_key(location.s3_key, ".pitch.bin"),
+                        location.s3_bucket, f"{location.s3_key}.pitch.bin",
                     )
 
             player_mode = 'simple'
@@ -947,7 +881,7 @@ class CollectionResourcesView(View):
 
     def _resolve_peaks_url(self, resource_service, bucket_name, object_key):
         """Check if pre-computed peaks exist and return a presigned URL."""
-        peaks_key = MediaProcessingService._derivative_s3_key(object_key, ".peaks.json")
+        peaks_key = f"{object_key}.peaks.json"
         try:
             resource_service.s3_client.head_object(Bucket=bucket_name, Key=peaks_key)
             return resource_service.generate_presigned_url(bucket_name, peaks_key)
@@ -956,7 +890,7 @@ class CollectionResourcesView(View):
 
     def _resolve_spectrogram_data_url(self, resource_service, bucket_name, object_key):
         """Check if pre-computed spectrogram frequencies exist and return a presigned URL."""
-        spectrogram_data_key = MediaProcessingService._derivative_s3_key(object_key, ".spectrogram.bin")
+        spectrogram_data_key = f"{object_key}.spectrogram.bin"
         try:
             resource_service.s3_client.head_object(Bucket=bucket_name, Key=spectrogram_data_key)
             return resource_service.generate_presigned_url(bucket_name, spectrogram_data_key)
@@ -965,7 +899,7 @@ class CollectionResourcesView(View):
 
     def _spectrogram_data_exists(self, resource_service, bucket_name, object_key):
         """Check if pre-computed spectrogram sidecar exists."""
-        spectrogram_data_key = MediaProcessingService._derivative_s3_key(object_key, ".spectrogram.bin")
+        spectrogram_data_key = f"{object_key}.spectrogram.bin"
         try:
             resource_service.s3_client.head_object(Bucket=bucket_name, Key=spectrogram_data_key)
             return True
@@ -974,7 +908,7 @@ class CollectionResourcesView(View):
 
     def _pitch_data_exists(self, resource_service, bucket_name, object_key):
         """Check if pre-computed pitch sidecar exists."""
-        pitch_key = MediaProcessingService._derivative_s3_key(object_key, ".pitch.bin")
+        pitch_key = f"{object_key}.pitch.bin"
         try:
             resource_service.s3_client.head_object(Bucket=bucket_name, Key=pitch_key)
             return True
@@ -982,10 +916,10 @@ class CollectionResourcesView(View):
             return False
 
 
-class CollectionJsonLdView(CollectionLookupPermissionMixin, CollectionACLPermissionMixin, View):
+class CollectionJsonLdView(View):
     """Export collection metadata as JSON-LD."""
 
-    def get_collection_queryset(self):
+    def get_queryset(self):
         return Collection.objects.prefetch_related(
             "header",
             "general_info",
@@ -1014,7 +948,18 @@ class CollectionJsonLdView(CollectionLookupPermissionMixin, CollectionACLPermiss
         )
 
     def get(self, request, pk=None, handle=None):
-        collection = self.get_collection(pk=pk, handle=handle)
+        queryset = self.get_queryset()
+        if pk is not None:
+            collection = queryset.filter(pk=pk).first()
+        elif handle is not None:
+            collection = queryset.filter(identifier=handle).first()
+            if collection is None and not handle.startswith('hdl:'):
+                collection = queryset.filter(identifier=f"hdl:{handle}").first()
+        else:
+            raise Http404("No collection identifier provided")
+
+        if collection is None:
+            raise Http404("Collection not found")
 
         serializer = CollectionJsonLdSerializer(collection)
         data = serializer.serialize()
@@ -1040,11 +985,11 @@ class CollectionJsonLdView(CollectionLookupPermissionMixin, CollectionACLPermiss
         return response
 
 
-class CollectionXmlView(CollectionLookupPermissionMixin, CollectionACLPermissionMixin, View):
+class CollectionXmlView(View):
     """Export collection metadata as BLAM XML."""
 
-    def get_collection_queryset(self):
-        return Collection.objects.prefetch_related(
+    def get(self, request, pk=None, handle=None):
+        queryset = Collection.objects.prefetch_related(
             "header",
             "general_info",
             "general_info__keywords",
@@ -1068,8 +1013,17 @@ class CollectionXmlView(CollectionLookupPermissionMixin, CollectionACLPermission
             "project_infos__funder_infos__funder_identifiers",
         )
 
-    def get(self, request, pk=None, handle=None):
-        collection = self.get_collection(pk=pk, handle=handle)
+        if pk is not None:
+            collection = queryset.filter(pk=pk).first()
+        elif handle is not None:
+            collection = queryset.filter(identifier=handle).first()
+            if collection is None and not handle.startswith('hdl:'):
+                collection = queryset.filter(identifier=f"hdl:{handle}").first()
+        else:
+            raise Http404("No collection identifier provided")
+
+        if collection is None:
+            raise Http404("Collection not found")
 
         exporter = CollectionExporter()
         try:

@@ -47,7 +47,7 @@ deploy_dev_fast:
       when: never
     - if: '$CI_COMMIT_BRANCH == "dev"'
   script:
-    - ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd /opt/lacos/lac-app && git fetch origin dev && git checkout dev && git reset --hard origin/dev && export DOCKER_GID=\$(stat -c '%g' /var/run/docker.sock) && docker compose -f docker-compose.dev.yml --profile build run --rm --no-deps theme && docker compose -f docker-compose.dev.yml stop -t 30 huey django && docker compose -f docker-compose.dev.yml up -d --no-build --force-recreate huey django"
+    - ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd /opt/lacos/lac-app && git fetch origin dev && git checkout dev && git reset --hard origin/dev && export DOCKER_GID=\$(stat -c '%g' /var/run/docker.sock) && docker compose -f docker-compose.dev.yml --profile build run --rm --no-deps theme && docker compose -f docker-compose.dev.yml stop -t 30 huey && docker compose -f docker-compose.dev.yml up -d --no-build huey && docker compose -f docker-compose.dev.yml restart django"
 
 deploy_prod_full:
   extends: .deploy_base
@@ -81,7 +81,7 @@ deploy_prod_fast:
       when: never
     - if: '$CI_COMMIT_BRANCH == "main"'
   script:
-    - ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd /opt/lacos/lac-app-production && git fetch origin main && git checkout main && git reset --hard origin/main && export DOCKER_GID=\$(stat -c '%g' /var/run/docker.sock) && docker compose -f docker-compose.production.yml --profile build run --rm --no-deps theme && docker compose -f docker-compose.production.yml stop -t 30 huey django && docker compose -f docker-compose.production.yml up -d --no-build --force-recreate huey django"
+    - ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd /opt/lacos/lac-app-production && git fetch origin main && git checkout main && git reset --hard origin/main && export DOCKER_GID=\$(stat -c '%g' /var/run/docker.sock) && docker compose -f docker-compose.production.yml --profile build run --rm --no-deps theme && docker compose -f docker-compose.production.yml stop -t 30 huey && docker compose -f docker-compose.production.yml up -d --no-build huey && docker compose -f docker-compose.production.yml restart django"
 
 prune_dev:
   extends: .deploy_base

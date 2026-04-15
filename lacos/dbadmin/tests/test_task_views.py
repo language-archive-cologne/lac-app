@@ -95,41 +95,6 @@ def test_task_enqueue_creates_tracked_collection_reindex_task(
 
 @pytest.mark.django_db
 @patch("lacos.dbadmin.views.transaction.on_commit")
-def test_task_enqueue_creates_tracked_derivative_audit_task(
-    mock_on_commit,
-    superuser_client,
-):
-    mock_task = MagicMock(return_value=SimpleNamespace(id="huey-789"))
-    callbacks = []
-    mock_on_commit.side_effect = callbacks.append
-
-    with patch.dict(
-        "lacos.dbadmin.views._TASK_CALLABLES",
-        {"audit_derivatives_task": mock_task},
-    ):
-        response = superuser_client.post(
-            reverse(
-                "dbadmin:task_enqueue",
-                kwargs={"action": "audit-derivatives"},
-            ),
-            HTTP_HX_REQUEST="true",
-        )
-
-    task = BackgroundTask.objects.get(task_name="audit_derivatives")
-    assert response.status_code == 200
-    assert task.metadata["action"] == "audit-derivatives"
-    assert task.metadata["source"] == "dbadmin"
-    assert "task_id" not in task.metadata
-    mock_task.assert_not_called()
-    assert len(callbacks) == 1
-    callbacks[0]()
-    task.refresh_from_db()
-    assert task.metadata["task_id"] == "huey-789"
-    assert f"dbadmin-task-{task.id}" in response.content.decode()
-
-
-@pytest.mark.django_db
-@patch("lacos.dbadmin.views.transaction.on_commit")
 def test_task_enqueue_marks_failed_when_on_commit_enqueue_crashes(
     mock_on_commit,
     superuser_client,

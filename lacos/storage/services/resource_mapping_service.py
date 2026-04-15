@@ -297,7 +297,7 @@ class ResourceMappingService(BaseStorageService):
         if response_headers:
             params.update(response_headers)
 
-        url = self.presigned_client.generate_presigned_url(
+        url = self.get_presigned_client().generate_presigned_url(
             'get_object',
             Params=params,
             ExpiresIn=expires_in

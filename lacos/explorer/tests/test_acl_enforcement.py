@@ -82,55 +82,6 @@ def test_bundle_detail_allows_public_access(client):
 
 @pytest.mark.django_db
 @override_settings(ACL_ENFORCEMENT_ENABLED=True)
-def test_collection_detail_denies_when_acl_restricts(client):
-    collection = _create_collection("restricted-collection-detail")
-    _store_acl(
-        collection,
-        [{"agentClass": "foaf:Person", "agent": "http://example.org/users/allowed", "mode": ["acl:Read"]}],
-    )
-
-    response = client.get(reverse("explorer:collection_detail", kwargs={"pk": collection.pk}))
-
-    assert response.status_code == 403
-    assert "This collection is restricted" in response.content.decode("utf-8")
-
-
-@pytest.mark.django_db
-@override_settings(ACL_ENFORCEMENT_ENABLED=True)
-def test_collection_metadata_jsonld_denies_when_acl_restricts(client):
-    collection = _create_collection("restricted-collection-jsonld")
-    _store_acl(
-        collection,
-        [{"agentClass": "foaf:Person", "agent": "http://example.org/users/allowed", "mode": ["acl:Read"]}],
-    )
-
-    response = client.get(
-        reverse("explorer:collection_jsonld_by_handle", kwargs={"handle": collection.handle_path})
-    )
-
-    assert response.status_code == 403
-    assert "This collection is restricted" in response.content.decode("utf-8")
-
-
-@pytest.mark.django_db
-@override_settings(ACL_ENFORCEMENT_ENABLED=True)
-def test_collection_metadata_xml_denies_when_acl_restricts(client):
-    collection = _create_collection("restricted-collection-xml")
-    _store_acl(
-        collection,
-        [{"agentClass": "foaf:Person", "agent": "http://example.org/users/allowed", "mode": ["acl:Read"]}],
-    )
-
-    response = client.get(
-        reverse("explorer:collection_xml_by_handle", kwargs={"handle": collection.handle_path})
-    )
-
-    assert response.status_code == 403
-    assert "This collection is restricted" in response.content.decode("utf-8")
-
-
-@pytest.mark.django_db
-@override_settings(ACL_ENFORCEMENT_ENABLED=True)
 def test_bundle_detail_denies_when_acl_restricts(client):
     collection = _create_collection("restricted-collection")
     bundle = _create_bundle(collection, "restricted-bundle")

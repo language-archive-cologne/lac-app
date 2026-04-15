@@ -245,9 +245,3 @@ from lacos.storage.upload_verification_tasks import (  # noqa: E402,F401
 
 # Ensure media processing tasks are registered with Huey.
 from lacos.storage.media_tasks import generate_peaks_task  # noqa: E402,F401
-
-# Ensure derivative audit tasks are registered with Huey.
-from lacos.storage.derivative_audit_tasks import (  # noqa: E402,F401
-    audit_derivatives_task,
-    periodic_derivative_audit,
-)

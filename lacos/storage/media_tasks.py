@@ -123,9 +123,7 @@ def generate_peaks_task(
                 error_message=result.get("error", "Unknown error"),
             )
 
-    if result.get("success"):
-        _update_derivative_status(bucket_name, s3_key, result)
-    else:
+    if not result.get("success"):
         logger.error(
             "Audio sidecar generation failed for %s/%s: %s",
             bucket_name,
@@ -134,26 +132,3 @@ def generate_peaks_task(
         )
 
     return result
-
-
-def _update_derivative_status(bucket_name: str, s3_key: str, result: dict) -> None:
-    """Upsert DerivativeStatus after successful peak generation."""
-    try:
-        from django.utils import timezone
-        from lacos.storage.models import DerivativeStatus
-
-        DerivativeStatus.objects.update_or_create(
-            bucket_name=bucket_name,
-            source_s3_key=s3_key,
-            defaults={
-                "source_etag": result.get("source_etag", ""),
-                "peaks_exists": bool(result.get("peaks_key")),
-                "spectrogram_exists": bool(result.get("spectrogram_data_key")),
-                "pitch_exists": bool(result.get("pitch_key")),
-                "last_checked_at": timezone.now(),
-            },
-        )
-    except Exception:
-        logger.exception(
-            "Failed to update DerivativeStatus for %s/%s", bucket_name, s3_key
-        )

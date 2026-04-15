@@ -21,7 +21,6 @@ from lacos.blam.tasks import (
     reindex_collections_task,
     reindex_search_vectors_task,
 )
-from lacos.storage.derivative_audit_tasks import audit_derivatives_task
 from lacos.users.tasks import index_edugain_idps
 from lacos.storage.models import BackgroundTask
 from lacos.storage.services.background_task_service import BackgroundTaskService
@@ -51,152 +50,7 @@ class DashboardView(SuperuserRequiredMixin, TemplateView):
         context["collection_buckets"] = sorted(
             b for b in Collection.objects.values_list("import_bucket", flat=True).distinct() if b
         )
-        context["derivative_stats"] = self._get_derivative_stats()
-        context["derivative_collections"] = self._get_derivative_collections()
         return context
-
-    @staticmethod
-    def _get_derivative_stats() -> dict:
-        from lacos.storage.models import DerivativeStatus
-
-        qs = DerivativeStatus.objects.all()
-        total = qs.count()
-        if total == 0:
-            return {
-                "total": 0,
-                "with_peaks": 0,
-                "with_spectrogram": 0,
-                "with_pitch": 0,
-                "complete": 0,
-                "missing_all": 0,
-                "last_audit": None,
-            }
-        return {
-            "total": total,
-            "with_peaks": qs.filter(peaks_exists=True).count(),
-            "with_spectrogram": qs.filter(spectrogram_exists=True).count(),
-            "with_pitch": qs.filter(pitch_exists=True).count(),
-            "complete": qs.filter(
-                peaks_exists=True, spectrogram_exists=True, pitch_exists=True
-            ).count(),
-            "missing_all": qs.filter(
-                peaks_exists=False, spectrogram_exists=False, pitch_exists=False
-            ).count(),
-            "last_audit": qs.order_by("-last_checked_at").values_list(
-                "last_checked_at", flat=True
-            ).first(),
-        }
-
-    @staticmethod
-    def _get_derivative_collections() -> list:
-        from django.db.models import Count, Q, Value, CharField
-        from django.db.models.functions import Substr, StrIndex
-
-        from lacos.blam.models.collection.collection_repository import Collection
-        from lacos.storage.models import DerivativeStatus
-
-        if not DerivativeStatus.objects.exists():
-            return []
-
-        # Extract collection identifier = first path segment of source_s3_key
-        rows = (
-            DerivativeStatus.objects
-            .annotate(
-                collection_id=Substr(
-                    "source_s3_key", 1,
-                    StrIndex("source_s3_key", Value("/")) - 1,
-                    output_field=CharField(),
-                )
-            )
-            .values("collection_id")
-            .annotate(
-                total=Count("id"),
-                with_peaks=Count("id", filter=Q(peaks_exists=True)),
-                with_spectrogram=Count("id", filter=Q(spectrogram_exists=True)),
-                with_pitch=Count("id", filter=Q(pitch_exists=True)),
-                complete=Count("id", filter=Q(
-                    peaks_exists=True, spectrogram_exists=True, pitch_exists=True,
-                )),
-                missing_all=Count("id", filter=Q(
-                    peaks_exists=False, spectrogram_exists=False, pitch_exists=False,
-                )),
-            )
-            .order_by("collection_id")
-        )
-
-        # Build display name lookup
-        display_names = {}
-        for col in Collection.objects.prefetch_related("header").all():
-            header = col.header.first()
-            if header and header.md_collection_display_name:
-                display_names[col.identifier] = header.md_collection_display_name
-
-        result = []
-        for row in rows:
-            cid = row["collection_id"]
-            row["display_name"] = display_names.get(cid, "")
-            row["pct_complete"] = round(100 * row["complete"] / row["total"]) if row["total"] else 0
-            result.append(row)
-
-        return result
-
-
-class DerivativeBundlesView(SuperuserRequiredMixin, View):
-    """HTMX partial: per-bundle derivative breakdown for a collection."""
-
-    def get(self, request, collection_id: str):
-        from django.db.models import Count, Q, Value, CharField
-        from django.db.models.functions import Substr, StrIndex
-
-        from lacos.storage.models import DerivativeStatus
-
-        prefix = f"{collection_id}/"
-        qs = DerivativeStatus.objects.filter(source_s3_key__startswith=prefix)
-
-        # Extract bundle id = second path segment
-        # source_s3_key minus the collection prefix, then take up to the next "/"
-        rows = (
-            qs.annotate(
-                _remainder=Substr(
-                    "source_s3_key",
-                    len(prefix) + 1,
-                    output_field=CharField(),
-                ),
-            )
-            .annotate(
-                bundle_id=Substr(
-                    "_remainder", 1,
-                    StrIndex("_remainder", Value("/")) - 1,
-                    output_field=CharField(),
-                ),
-            )
-            .values("bundle_id")
-            .annotate(
-                total=Count("id"),
-                with_peaks=Count("id", filter=Q(peaks_exists=True)),
-                with_spectrogram=Count("id", filter=Q(spectrogram_exists=True)),
-                with_pitch=Count("id", filter=Q(pitch_exists=True)),
-                complete=Count("id", filter=Q(
-                    peaks_exists=True, spectrogram_exists=True, pitch_exists=True,
-                )),
-                missing_all=Count("id", filter=Q(
-                    peaks_exists=False, spectrogram_exists=False, pitch_exists=False,
-                )),
-            )
-            .order_by("bundle_id")
-        )
-
-        bundles = []
-        for row in rows:
-            row["pct_complete"] = round(100 * row["complete"] / row["total"]) if row["total"] else 0
-            bundles.append(row)
-
-        html = render_to_string(
-            "dbadmin/partials/derivative_bundles.html",
-            {"bundles": bundles, "collection_id": collection_id},
-            request=request,
-        )
-        return HttpResponse(html)
 
 
 # ---------------------------------------------------------------------------
@@ -251,12 +105,6 @@ TASK_ACTIONS = {
         start_message="eduGAIN IdP indexing queued.",
         callable_name="index_edugain_idps",
     ),
-    "audit-derivatives": TaskAction(
-        task_name="audit_derivatives",
-        description="Audit derivative status for audio files in lacos-production",
-        start_message="Derivative audit queued.",
-        callable_name="audit_derivatives_task",
-    ),
 }
 
 _TASK_CALLABLES = {
@@ -266,7 +114,6 @@ _TASK_CALLABLES = {
     "generate_all_peaks_task": generate_all_peaks_task,
     "decompress_spectrograms_task": decompress_spectrograms_task,
     "index_edugain_idps": index_edugain_idps,
-    "audit_derivatives_task": audit_derivatives_task,
 }
 
 

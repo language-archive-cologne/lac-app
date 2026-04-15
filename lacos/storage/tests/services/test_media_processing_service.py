@@ -138,7 +138,7 @@ def test_derivatives_current_uses_artifact_is_current_for_both():
 
 def test_spectrogram_data_key_suffix():
     service = MediaProcessingService(bucket_service=MagicMock())
-    assert service._spectrogram_data_key("col/bundle/v1/content/audio.wav") == "col/bundle/v1/derivatives/audio.wav.spectrogram.bin"
+    assert service._spectrogram_data_key("folder/audio.wav") == "folder/audio.wav.spectrogram.bin"
 
 
 def test_generate_peaks_returns_clean_error_when_tmp_dir_has_no_space():
@@ -171,25 +171,6 @@ def test_generate_peaks_preflight_stops_when_tmp_space_is_too_low():
     assert result["success"] is False
     assert result["error_code"] == "no_space"
     bucket_service.s3_client.download_file.assert_not_called()
-
-
-def test_generate_peaks_skipped_returns_full_status_metadata():
-    service = MediaProcessingService(bucket_service=MagicMock())
-
-    with (
-        patch.object(service, "_get_source_etag", return_value="etag-1"),
-        patch.object(service, "_artifact_is_current", return_value=True),
-    ):
-        result = service.generate_peaks("bucket", "folder/audio.wav")
-
-    assert result == {
-        "success": True,
-        "source_etag": "etag-1",
-        "peaks_key": "folder/audio.wav.peaks.json",
-        "spectrogram_data_key": "folder/audio.wav.spectrogram.bin",
-        "pitch_key": "folder/audio.wav.pitch.bin",
-        "skipped": True,
-    }
 
 
 # ------------------------------------------------------------------
@@ -251,16 +232,4 @@ def test_compute_pitch_short_audio_returns_empty():
 
 def test_pitch_key_suffix():
     service = MediaProcessingService(bucket_service=MagicMock())
-    assert service._pitch_key("col/bundle/v1/content/audio.wav") == "col/bundle/v1/derivatives/audio.wav.pitch.bin"
-
-
-def test_derivative_s3_key_fallback_no_content_segment():
-    """Non-OCFL paths without /content/ fall back to appending suffix directly."""
-    assert MediaProcessingService._derivative_s3_key("folder/audio.wav", ".peaks.json") == "folder/audio.wav.peaks.json"
-
-
-def test_derivative_s3_key_ocfl_path():
-    """OCFL paths replace /content/ with /derivatives/."""
-    assert MediaProcessingService._derivative_s3_key(
-        "col/bundle/v1/content/file.wav", ".peaks.json",
-    ) == "col/bundle/v1/derivatives/file.wav.peaks.json"
+    assert service._pitch_key("folder/audio.wav") == "folder/audio.wav.pitch.bin"

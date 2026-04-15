@@ -212,10 +212,8 @@ class MediaProcessingService:
             logger.info("Audio derivatives already current for %s/%s", bucket, s3_key)
             return {
                 "success": True,
-                "source_etag": source_etag,
                 "peaks_key": peaks_key,
                 "spectrogram_data_key": spectrogram_data_key,
-                "pitch_key": pitch_key,
                 "skipped": True,
             }
 
@@ -357,7 +355,6 @@ class MediaProcessingService:
         )
         return {
             "success": True,
-            "source_etag": source_etag,
             "peaks_key": peaks_key,
             "spectrogram_data_key": spectrogram_data_key,
             "pitch_key": pitch_key,
@@ -570,27 +567,14 @@ class MediaProcessingService:
     # S3 key helpers
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _derivative_s3_key(content_key: str, suffix: str) -> str:
-        """Convert a content S3 key to its derivative counterpart.
-
-        Replaces the last ``/content/`` segment with ``/derivatives/`` and
-        appends *suffix*.  Falls back to appending *suffix* directly when the
-        key does not contain ``/content/`` (non-OCFL paths).
-        """
-        parts = content_key.rsplit("/content/", 1)
-        if len(parts) == 2:
-            return f"{parts[0]}/derivatives/{parts[1]}{suffix}"
-        return f"{content_key}{suffix}"
-
     def _peaks_key(self, s3_key: str) -> str:
-        return self._derivative_s3_key(s3_key, ".peaks.json")
+        return f"{s3_key}.peaks.json"
 
     def _spectrogram_data_key(self, s3_key: str) -> str:
-        return self._derivative_s3_key(s3_key, ".spectrogram.bin")
+        return f"{s3_key}.spectrogram.bin"
 
     def _pitch_key(self, s3_key: str) -> str:
-        return self._derivative_s3_key(s3_key, ".pitch.bin")
+        return f"{s3_key}.pitch.bin"
 
     # ------------------------------------------------------------------
     # Freshness checks

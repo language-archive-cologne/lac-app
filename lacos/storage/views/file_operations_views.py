@@ -13,7 +13,6 @@ from django.middleware.csrf import get_token
 from django.urls import reverse
 
 from lacos.storage.services.bucket_service import BucketService
-from lacos.storage.services.media_processing_service import MediaProcessingService
 from lacos.common.mixins.htmx_template_helpers import HtmxTemplateHelperMixin
 
 logger = logging.getLogger(__name__)
@@ -134,14 +133,14 @@ def file_viewer_htmx(request, bucket_type, object_path):
         or lowered_type in {"audio/wav", "audio/x-wav", "audio/wave"}
     )
     if is_wav_audio:
-        peaks_key = MediaProcessingService._derivative_s3_key(object_path, ".peaks.json")
+        peaks_key = f"{object_path}.peaks.json"
         peaks_info = bucket_service.get_file_info(bucket_name, peaks_key)
         if peaks_info.get("success"):
             peaks_presigned = bucket_service.generate_presigned_download_url(bucket_name, peaks_key)
             if peaks_presigned.get("success"):
                 peaks_url = peaks_presigned["url"]
 
-        spectrogram_data_key = MediaProcessingService._derivative_s3_key(object_path, ".spectrogram.bin")
+        spectrogram_data_key = f"{object_path}.spectrogram.bin"
         spectrogram_data_info = bucket_service.get_file_info(bucket_name, spectrogram_data_key)
         spectrogram_available = bool(spectrogram_data_info.get("success"))
 
@@ -154,7 +153,7 @@ def file_viewer_htmx(request, bucket_type, object_path):
                 if spectrogram_data_presigned.get("success"):
                     spectrogram_data_url = spectrogram_data_presigned["url"]
 
-        pitch_data_key = MediaProcessingService._derivative_s3_key(object_path, ".pitch.bin")
+        pitch_data_key = f"{object_path}.pitch.bin"
         pitch_data_info = bucket_service.get_file_info(bucket_name, pitch_data_key)
         pitch_available = bool(pitch_data_info.get("success"))
 

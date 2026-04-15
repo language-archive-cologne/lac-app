@@ -12,7 +12,6 @@ urlpatterns = [
     path("tasks/<uuid:task_id>/cancel/", views.TaskCancelView.as_view(), name="task_cancel"),
     path("tasks/history/", views.TaskHistoryView.as_view(), name="task_history"),
     path("tasks/scheduled/", views.ScheduledTasksView.as_view(), name="scheduled_tasks"),
-    path("derivatives/bundles/<str:collection_id>/", views.DerivativeBundlesView.as_view(), name="derivative_bundles"),
     # Database management
     path("cleanup/", views.DatabaseCleanupView.as_view(), name="cleanup"),
     path("delete/all/", views.DatabaseDeleteAllView.as_view(), name="delete_all"),

@@ -83,9 +83,9 @@ class UploadVerificationService:
         if bucket_name and total_verified > 0:
             self._invalidate_affected_folders(bucket_name, s3_keys)
 
-        # TODO: re-enable once peak generation is triggered explicitly
-        # if upload_session and total_verified > 0:
-        #     self._enqueue_media_processing(upload_session)
+        # Enqueue media processing for verified audio files
+        if upload_session and total_verified > 0:
+            self._enqueue_media_processing(upload_session)
 
         return {
             "success": success,

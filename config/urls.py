@@ -4,6 +4,7 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.contrib.sitemaps.views import sitemap
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
+from django.shortcuts import redirect
 from django.urls import include
 from django.urls import path
 from django.views import defaults as default_views
@@ -21,8 +22,6 @@ from lacos.explorer.views import (
     FacetedSearchView,
     FieldSearchView,
     ResourceByHandleView,
-    legacy_bundle_by_handle,
-    legacy_collection_by_handle,
 )
 
 urlpatterns = [
@@ -107,12 +106,12 @@ urlpatterns = [
     # Legacy flat handle resolution (e.g. /collection/11341/..., /bundle/11341/..., /resource/11341/...)
     path(
         "collection/<path:handle_id>/",
-        legacy_collection_by_handle,
+        lambda request, handle_id: redirect("explorer:collection_detail_by_handle", handle=handle_id),
         name="collection_by_handle",
     ),
     path(
         "bundle/<path:handle_id>/",
-        legacy_bundle_by_handle,
+        lambda request, handle_id: redirect("explorer:bundle_detail_by_handle", handle=handle_id),
         name="bundle_by_handle",
     ),
     path(

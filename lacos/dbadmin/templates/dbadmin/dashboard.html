@@ -111,13 +111,6 @@
                                     class="btn btn-sm btn-info w-full">
                                     Index eduGAIN IdPs
                                 </button>
-                                <button
-                                    hx-post="{% url 'dbadmin:task_enqueue' 'audit-derivatives' %}"
-                                    hx-target="#active-task-list"
-                                    hx-swap="afterbegin"
-                                    class="btn btn-sm btn-accent w-full">
-                                    Audit derivative status
-                                </button>
                             </div>
                         </div>
                     </div>
@@ -153,103 +146,6 @@
                     </div>
                 </div>
             </div>
-        </div>
-
-        <input type="radio" name="dbadmin_tabs" class="tab" aria-label="Derivatives" />
-        <div class="tab-content bg-base-100 border-base-300 p-6">
-            <div class="flex items-center justify-between mb-6">
-                <div>
-                    <h3 class="text-lg font-semibold">Audio Derivative Status</h3>
-                    <p class="text-sm text-base-content/60">
-                        Overview of peaks, spectrogram, and pitch sidecars for WAV files in lacos-production.
-                        {% if derivative_stats.last_audit %}
-                        Last audited {{ derivative_stats.last_audit|timesince }} ago.
-                        {% else %}
-                        No audit has been run yet.
-                        {% endif %}
-                    </p>
-                </div>
-                <button
-                    hx-post="{% url 'dbadmin:task_enqueue' 'audit-derivatives' %}"
-                    hx-target="#active-task-list"
-                    hx-swap="afterbegin"
-                    class="btn btn-sm btn-accent active:scale-[0.97] transition-transform duration-150">
-                    Run Audit Now
-                </button>
-            </div>
-
-            {% if derivative_stats.total > 0 %}
-            {% widthratio derivative_stats.complete derivative_stats.total 100 as pct_complete %}
-            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-base-content/60 mb-4">
-                <span><span class="font-semibold text-base-content">{{ derivative_stats.total }}</span> WAV files</span>
-                <span class="text-base-content/30">|</span>
-                <span><span class="font-semibold text-success">{{ derivative_stats.complete }}</span> complete ({{ pct_complete }}%)</span>
-                <span class="text-base-content/30">|</span>
-                <span><span class="font-semibold {% if derivative_stats.missing_all > 0 %}text-error{% else %}text-base-content{% endif %}">{{ derivative_stats.missing_all }}</span> missing all</span>
-            </div>
-
-            {% if derivative_collections %}
-            <div>
-                <div class="overflow-x-auto">
-                    <table class="table table-sm">
-                        <thead>
-                            <tr class="text-xs uppercase tracking-wide">
-                                <th>Collection</th>
-                                <th class="text-right">WAVs</th>
-                                <th class="text-right">Peaks</th>
-                                <th class="text-right">Spectrogram</th>
-                                <th class="text-right">Pitch</th>
-                                <th class="text-right">Complete</th>
-                                <th class="text-right">Missing</th>
-                                <th>Coverage</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for col in derivative_collections %}
-                            <tr class="hover cursor-pointer derivative-collection-row"
-                                data-bundles-target="col-bundles-{{ forloop.counter }}"
-                                hx-get="{% url 'dbadmin:derivative_bundles' col.collection_id %}"
-                                hx-target="#col-bundles-{{ forloop.counter }}"
-                                hx-swap="innerHTML"
-                                hx-trigger="click once">
-                                <td>
-                                    <div class="flex items-center gap-1.5">
-                                        <svg class="w-3.5 h-3.5 text-base-content/40 shrink-0 transition-transform duration-150 derivative-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                                        <div>
-                                            <div class="font-medium">{{ col.collection_id }}</div>
-                                            {% if col.display_name %}<div class="text-xs text-base-content/50">{{ col.display_name }}</div>{% endif %}
-                                        </div>
-                                    </div>
-                                </td>
-                                <td class="text-right tabular-nums">{{ col.total }}</td>
-                                <td class="text-right tabular-nums {% if col.with_peaks == col.total %}text-success{% elif col.with_peaks == 0 %}text-error{% else %}text-warning{% endif %}">{{ col.with_peaks }}</td>
-                                <td class="text-right tabular-nums {% if col.with_spectrogram == col.total %}text-success{% elif col.with_spectrogram == 0 %}text-error{% else %}text-warning{% endif %}">{{ col.with_spectrogram }}</td>
-                                <td class="text-right tabular-nums {% if col.with_pitch == col.total %}text-success{% elif col.with_pitch == 0 %}text-error{% else %}text-warning{% endif %}">{{ col.with_pitch }}</td>
-                                <td class="text-right tabular-nums text-info">{{ col.complete }}</td>
-                                <td class="text-right tabular-nums {% if col.missing_all > 0 %}text-error font-semibold{% endif %}">{{ col.missing_all }}</td>
-                                <td class="w-32">
-                                    <div class="flex items-center gap-2">
-                                        <div class="w-full bg-base-300 rounded-full h-2 overflow-hidden">
-                                            <div class="h-full rounded-full {% if col.pct_complete == 100 %}bg-success{% elif col.pct_complete > 0 %}bg-warning{% else %}bg-error{% endif %}" style="width:{{ col.pct_complete }}%"></div>
-                                        </div>
-                                        <span class="text-xs tabular-nums text-base-content/60 w-8 text-right">{{ col.pct_complete }}%</span>
-                                    </div>
-                                </td>
-                            </tr>
-                            <tbody id="col-bundles-{{ forloop.counter }}" class="hidden"></tbody>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            {% endif %}
-
-            {% else %}
-            <div class="text-center py-10 text-base-content/50">
-                <p class="text-lg mb-2">No derivative data yet</p>
-                <p class="text-sm">Run the audit to scan lacos-production for WAV files and check their derivatives.</p>
-            </div>
-            {% endif %}
         </div>
 
         <input type="radio" name="dbadmin_tabs" class="tab" aria-label="Scheduled" />
@@ -433,21 +329,6 @@
             if (event.target === this) {
                 this.classList.add('hidden');
             }
-        });
-
-        // Derivative collection row expand/collapse
-        document.querySelectorAll('.derivative-collection-row').forEach(function(row) {
-            row.addEventListener('click', function() {
-                var targetId = this.dataset.bundlesTarget;
-                var tbody = document.getElementById(targetId);
-                var chevron = this.querySelector('.derivative-chevron');
-                if (tbody) {
-                    tbody.classList.toggle('hidden');
-                }
-                if (chevron) {
-                    chevron.classList.toggle('rotate-90');
-                }
-            });
         });
     </script>
 {% endblock %}

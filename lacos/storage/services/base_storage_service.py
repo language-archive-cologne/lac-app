@@ -5,6 +5,7 @@ import boto3
 from botocore.exceptions import ClientError
 from django.conf import settings
 from django.core.cache import cache
+from django.core.exceptions import ImproperlyConfigured
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,7 @@ class BaseStorageService:
         # Initialize settings
         self.is_minio = self._is_minio_environment()
         self.endpoint_url = self._get_endpoint_url()
+        self.browser_endpoint_url = self._get_browser_endpoint_url()
         self.access_key = self._get_access_key()
         self.secret_key = self._get_secret_key()
         self.region = self._get_region()
@@ -64,6 +66,10 @@ class BaseStorageService:
 
         logger.info("BaseStorageService initialized", extra={"backend": "MinIO" if self.is_minio else "S3"})
         logger.info("Using endpoint", extra={"endpoint_url": self.endpoint_url or "default S3 endpoint"})
+        logger.info(
+            "Using browser endpoint for presigned URLs",
+            extra={"browser_endpoint_url": self.browser_endpoint_url or self.endpoint_url or "default S3 endpoint"},
+        )
         logger.info("Using region", extra={"region": self.region})
         logger.info("S3 max pool connections", extra={"max_pool_connections": self.max_pool_connections})
         logger.info("Workspace buckets", extra={"workspace_buckets": self.workspace_buckets})
@@ -148,6 +154,18 @@ class BaseStorageService:
             return 'http://minio:9000'
         
         # For production S3, return None to use the default AWS endpoint
+        return None
+
+    def _get_browser_endpoint_url(self) -> str | None:
+        """Get the browser-facing endpoint used for presigned URLs."""
+        browser_endpoint = getattr(settings, 'AWS_S3_BROWSER_ENDPOINT_URL', None)
+        if browser_endpoint:
+            return browser_endpoint.rstrip('/')
+
+        browser_endpoint_env = os.environ.get('AWS_S3_BROWSER_ENDPOINT_URL', '')
+        if browser_endpoint_env:
+            return browser_endpoint_env.rstrip('/')
+
         return None
     
     def _get_access_key(self) -> str:
@@ -290,6 +308,19 @@ class BaseStorageService:
             logger.debug("Returning cached bucket list: %s", cached)
             return cached
 
+        configured_buckets = [
+            bucket for bucket in self.workspace_buckets
+            if bucket and bucket.strip() and bucket.strip() != "*"
+        ]
+        if configured_buckets:
+            bucket_names = sorted(dict.fromkeys(configured_buckets))
+            logger.info(
+                "Using configured workspace buckets",
+                extra={"workspace_buckets": bucket_names},
+            )
+            cache.set(cache_key, bucket_names, timeout=300)
+            return bucket_names
+
         try:
             response = self.s3_client.list_buckets()
             bucket_names = sorted(bucket['Name'] for bucket in response['Buckets'])
@@ -321,9 +352,8 @@ class BaseStorageService:
         if self.region:
             client_kwargs['region_name'] = self.region
         
-        # Add endpoint URL for MinIO or custom S3 endpoints
+        # Add endpoint URL for server-side S3 access.
         if self.endpoint_url:
-            # For server-side operations, use the original endpoint URL
             server_endpoint = self.endpoint_url
             client_kwargs['endpoint_url'] = server_endpoint
             
@@ -334,44 +364,35 @@ class BaseStorageService:
             config_kwargs['request_checksum_calculation'] = 'when_required'
             config_kwargs['response_checksum_validation'] = 'when_required'
 
-            # For MinIO in local development, we need special handling for presigned URLs
-            if self.is_minio:
-                
-                # For presigned URLs that will be used by the browser,
-                # we need to use a browser-accessible URL
-                browser_endpoint = os.environ.get('AWS_S3_BROWSER_ENDPOINT_URL', None)
-                
-                if browser_endpoint:
-                    logger.info("Using browser endpoint URL from environment", extra={"browser_endpoint": browser_endpoint})
-                elif 'minio:9000' in self.endpoint_url:
-                    # Default fallback for local development
-                    browser_endpoint = self.endpoint_url.replace('minio:9000', 'localhost:9000')
-                    logger.info("MinIO detected, will use browser endpoint for presigned URLs", extra={"endpoint_url": self.endpoint_url, "browser_endpoint": browser_endpoint})
-                else:
-                    # If no specific browser endpoint is provided, use the same as server
-                    browser_endpoint = self.endpoint_url
-                    logger.info("Using server endpoint for presigned URLs", extra={"browser_endpoint": browser_endpoint})
-                
-                # Create a separate client for generating presigned URLs
-                self.presigned_client = boto3.client(
-                    's3',
-                    aws_access_key_id=self.access_key,
-                    aws_secret_access_key=self.secret_key,
-                    region_name=self.region if self.region else None,
-                    endpoint_url=browser_endpoint,
-                    config=boto3.session.Config(**config_kwargs)
-                )
-                logger.info("Created separate client for presigned URLs", extra={"browser_endpoint": browser_endpoint})
-
         client_kwargs['config'] = boto3.session.Config(**config_kwargs)
         
         # Create the primary client
         client = boto3.client(**client_kwargs)
 
-        # Ensure a presigned client always exists; fall back to the primary client
-        if not hasattr(self, "presigned_client"):
-            self.presigned_client = client
+        browser_endpoint = self.browser_endpoint_url
+        if browser_endpoint:
+            self.presigned_client = boto3.client(
+                's3',
+                aws_access_key_id=self.access_key,
+                aws_secret_access_key=self.secret_key,
+                region_name=self.region if self.region else None,
+                endpoint_url=browser_endpoint,
+                config=boto3.session.Config(**config_kwargs)
+            )
+            logger.info(
+                "Created separate client for presigned URLs",
+                extra={"browser_endpoint": browser_endpoint, "server_endpoint": self.endpoint_url},
+            )
 
+        return client
+
+    def get_presigned_client(self):
+        """Return the browser-facing S3 client used for presigned URLs."""
+        client = getattr(self, "presigned_client", None)
+        if client is None:
+            raise ImproperlyConfigured(
+                "AWS_S3_BROWSER_ENDPOINT_URL must be configured for presigned URLs."
+            )
         return client
     
     def _format_size(self, size_bytes: int) -> str:

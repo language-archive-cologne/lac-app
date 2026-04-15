@@ -13,20 +13,14 @@ from django.views import View
 from django.views.decorators.http import require_http_methods
 
 from lacos.common.mixins import BucketCoordinatorMixin, HtmxTemplateHelperMixin
-from lacos.storage.permissions import (
-    archivist_required,
-    can_manage_collection,
-    manager_or_archivist_required,
-    resolve_collection_from_path,
-)
 from lacos.storage.services.bucket_service import BucketService
 from lacos.storage.observability import profiling_scope
-from django.core.exceptions import PermissionDenied
+from lacos.storage.permissions import archivist_required
 
 logger = logging.getLogger(__name__)
 
 
-@method_decorator(manager_or_archivist_required, name="dispatch")
+@method_decorator(archivist_required, name="dispatch")
 class BucketContentHTMXView(HtmxTemplateHelperMixin, View):
     """
     Handle HTMX requests for bucket content display.
@@ -48,9 +42,10 @@ class BucketContentHTMXView(HtmxTemplateHelperMixin, View):
                 except ValueError:
                     requested_max_keys = 0
 
-                # Determine prefetch behavior - default True for initial loads
-                # Only defer loading when explicitly paginating or requested
-                prefetch_root = True
+                # Defer the expensive root listing by default so bucket switching
+                # updates the UI immediately. If the caller is explicitly paginating,
+                # prefetch the first page in the same request.
+                prefetch_root = bool(continuation_token or requested_max_keys > 0)
                 prefetch_param = request.GET.get("prefetch_root")
                 if prefetch_param is not None:
                     prefetch_root = prefetch_param.lower() == "true"
@@ -188,17 +183,13 @@ class RenameBucketModalHTMXView(HtmxTemplateHelperMixin, View):
         )
 
 
-@method_decorator(manager_or_archivist_required, name="dispatch")
+@method_decorator(archivist_required, name="dispatch")
 class RenameObjectModalHTMXView(HtmxTemplateHelperMixin, View):
     """Display rename object (folder/file) modal."""
 
     def get(self, request, bucket_name, object_type, object_path):
         """Render the rename object modal."""
         from django.urls import reverse
-
-        collection = resolve_collection_from_path(object_path)
-        if not can_manage_collection(request.user, collection):
-            raise PermissionDenied("Collection manager access required.")
 
         # Extract the current name from the object path
         current_name = object_path.rstrip('/').rsplit('/', 1)[-1]
@@ -265,7 +256,7 @@ class RenameBucketHTMXView(HtmxTemplateHelperMixin, View):
             return self.htmx_error_response(str(e))
 
 
-@method_decorator(manager_or_archivist_required, name="dispatch")
+@method_decorator(archivist_required, name="dispatch")
 class BucketSelectHTMXView(HtmxTemplateHelperMixin, View):
     """Return updated bucket select dropdown for upload modal."""
 
@@ -277,13 +268,9 @@ class BucketSelectHTMXView(HtmxTemplateHelperMixin, View):
         return HttpResponse(bucket_select_html)
 
 
-@manager_or_archivist_required
+@archivist_required
 def file_info_htmx(request, bucket_type, object_path):
     """Provide file metadata details via HTMX."""
-    collection = resolve_collection_from_path(object_path)
-    if not can_manage_collection(request.user, collection):
-        raise PermissionDenied("Collection manager access required.")
-
     bucket_service = BucketService(skip_bucket_check=True)
     target_id = request.GET.get("target_id") or request.GET.get("targetId")
 
