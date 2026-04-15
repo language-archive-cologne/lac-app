@@ -55,7 +55,7 @@
         size="4"
       >
         {% for user in available_users %}
-        <option value="{{ user.id }}" {% if user.id in selected_user_ids %}selected{% endif %} title="{{ user.acl_agent_uri }}">
+        <option value="{{ user.id }}" {% if user.id in selected_user_ids %}selected{% endif %} title="{{ user.effective_acl_agent_uri|default:user.acl_agent_uri }}">
           {{ user.username }}{% if user.name %} ({{ user.name }}){% endif %}
         </option>
         {% empty %}

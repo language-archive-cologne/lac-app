@@ -27,7 +27,7 @@ from lacos.storage.models.acl_config import ACLConfig
 from lacos.storage.models.acl_permissions import ACLPermissions
 from lacos.storage.constants import ACL_LEVEL_PUBLIC, ACL_LEVEL_ACADEMIC, ACL_LEVEL_RESTRICTED
 from lacos.storage.utils.acl import normalize_agent_uri
-from lacos.users.utils import ensure_acl_agent_uri
+from lacos.users.utils import ensure_acl_agent_uri, generate_acl_agent_uri
 
 logger = logging.getLogger(__name__)
 
@@ -852,6 +852,15 @@ def acl_edit_permission_form(request, object_type, object_id):
     ct = ContentType.objects.get_for_model(model)
     perm = ACLPermissions.objects.filter(content_type=ct, object_id=object_id).first()
 
+    available_users = list(User.objects.order_by("username"))
+    for user in available_users:
+        user.effective_acl_agent_uri = user.acl_agent_uri or generate_acl_agent_uri(user)
+    user_by_effective_agent = {
+        user.effective_acl_agent_uri: user
+        for user in available_users
+        if getattr(user, "effective_acl_agent_uri", None)
+    }
+
     # Get current read agents from permissions_data
     selected_user_ids = set()
     selected_group_ids = set()
@@ -876,7 +885,7 @@ def acl_edit_permission_form(request, object_type, object_id):
             agent = rule.get("agent", "")
             agent_class = rule.get("agentClass", "")
             if agent_class == "foaf:Person" and agent:
-                user = User.objects.filter(acl_agent_uri=agent).first()
+                user = user_by_effective_agent.get(normalize_agent_uri(agent))
                 if user:
                     selected_user_ids.add(user.id)
                 else:
@@ -892,7 +901,7 @@ def acl_edit_permission_form(request, object_type, object_id):
         for agent in perm.read_agents:
             if not agent or agent in skip_agents:
                 continue
-            if User.objects.filter(acl_agent_uri=agent).exists():
+            if normalize_agent_uri(agent) in user_by_effective_agent:
                 continue
             if GroupACL.objects.filter(acl_agent_uri=agent).exists():
                 continue
@@ -916,7 +925,7 @@ def acl_edit_permission_form(request, object_type, object_id):
         "name": _resolve_acl_display_name(obj),
         "current_access_level": current_access_level,
         "access_level_choices": ACLPermissions.ACCESS_LEVEL_CHOICES,
-        "available_users": User.objects.exclude(acl_agent_uri__isnull=True).exclude(acl_agent_uri="").order_by("username"),
+        "available_users": available_users,
         "available_groups": GroupACL.objects.exclude(acl_agent_uri__isnull=True).exclude(acl_agent_uri="").select_related("group").order_by("group__name"),
         "selected_user_ids": selected_user_ids,
         "selected_group_ids": selected_group_ids,

@@ -636,3 +636,45 @@ def test_acl_update_permission_generates_missing_selected_user_acl_uri(
         entry["agent"] for entry in record.permissions_data if "agent" in entry
     ]
     assert "urn:lacos:eppn:fmondac1@uni-koeln.de" in stored_agents
+
+
+@pytest.mark.django_db
+def test_acl_edit_form_lists_and_selects_saml_user_with_generated_acl_uri(
+    client, django_user_model
+):
+    archivist = django_user_model.objects.create_user("norm4", "norm4@example.com", "pass")
+    _make_archivist(archivist)
+    client.force_login(archivist)
+
+    selected_user = django_user_model.objects.create_user(
+        "fmondac1@uni-koeln.de",
+        password="pass",
+        saml_persistent_id="persistent-id-4",
+        acl_agent_uri=None,
+    )
+    collection = Collection.objects.create(identifier="norm-col-4")
+    ct = ContentType.objects.get_for_model(Collection)
+    ACLPermissions.objects.create(
+        content_type=ct,
+        object_id=str(collection.pk),
+        access_level=ACL_LEVEL_RESTRICTED,
+        permissions_data=[
+            {
+                "agentClass": "foaf:Person",
+                "agent": "fmondac1@uni-koeln.de",
+                "mode": ["acl:Read"],
+            }
+        ],
+        read_agents=["urn:lacos:eppn:fmondac1@uni-koeln.de"],
+    )
+
+    response = client.get(
+        reverse("storage:acl_edit_permission_form", args=["collection", str(collection.pk)])
+    )
+
+    assert response.status_code == 200
+    html = response.content.decode()
+    assert 'value="%s"' % selected_user.pk in html
+    assert "fmondac1@uni-koeln.de" in html
+    assert "urn:lacos:eppn:fmondac1@uni-koeln.de" in html
+    assert f'value="{selected_user.pk}" selected' in html
