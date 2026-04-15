@@ -57,7 +57,7 @@ def test_bundle_imdi_resource_renders_imdi_modal_for_htmx_view(client, monkeypat
 
     monkeypatch.setattr(
         "lacos.explorer.views.bundles.ResourceMappingService",
-        lambda *args, **kwargs: DummyService(),
+        lambda: DummyService(),
     )
     monkeypatch.setattr(
         "lacos.explorer.views.bundles.resolve_resource_to_presigned",
@@ -99,7 +99,10 @@ def test_collection_imdi_resource_renders_imdi_modal_for_htmx_view(client, monke
         s3_client = _FakeS3Client(b"<METATRANSCRIPT/>")
 
         def resolve_pid_to_s3(self, _pid):
-            return None
+            return SimpleNamespace(
+                s3_bucket="bucket-a",
+                s3_key="path/collection_metadata.imdi",
+            )
 
         def generate_presigned_url(self, _bucket, _key, response_headers=None):
             if response_headers:
@@ -108,15 +111,7 @@ def test_collection_imdi_resource_renders_imdi_modal_for_htmx_view(client, monke
 
     monkeypatch.setattr(
         "lacos.explorer.views.collections.ResourceMappingService",
-        lambda *args, **kwargs: DummyService(),
-    )
-    monkeypatch.setattr(
-        "lacos.explorer.views.collections.resolve_collection_metadata_to_presigned",
-        lambda *_args, **_kwargs: {
-            "bucket": "bucket-a",
-            "key": "path/collection_metadata.imdi",
-            "url": "https://example.test/preview",
-        },
+        lambda: DummyService(),
     )
 
     response = client.get(
@@ -135,60 +130,3 @@ def test_collection_imdi_resource_renders_imdi_modal_for_htmx_view(client, monke
     page = response.content.decode("utf-8")
     assert 'data-viewer-type="imdi"' in page
     assert "data-imdi-viewer" in page
-
-
-@pytest.mark.django_db
-def test_collection_imdi_resource_uses_metadata_fallback_when_pid_mapping_missing(client, monkeypatch):
-    collection = Collection.objects.create(identifier="hdl:test/collection-imdi-fallback")
-    structural_info = CollectionStructuralInfo.objects.create(collection=collection)
-    metadata_file = CollectionAdditionalMetadataFile.objects.create(
-        file_pid="hdl:test/collection-imdi-fallback-file",
-        file_name="collection_fallback.imdi",
-        mime_type="application/octet-stream",
-        file_description="Collection IMDI metadata",
-    )
-    structural_info.additional_metadata_files.add(metadata_file)
-
-    class DummyService:
-        s3_client = _FakeS3Client(b"<METATRANSCRIPT/>")
-
-        def resolve_pid_to_s3(self, _pid):
-            return None
-
-        def generate_presigned_url(self, _bucket, _key, response_headers=None):
-            if response_headers:
-                return "https://example.test/download"
-            return "https://example.test/preview"
-
-    def build_service(*, skip_bucket_check=False):
-        assert skip_bucket_check is True
-        return DummyService()
-
-    monkeypatch.setattr(
-        "lacos.explorer.views.collections.ResourceMappingService",
-        build_service,
-    )
-    monkeypatch.setattr(
-        "lacos.explorer.views.collections.resolve_collection_metadata_to_presigned",
-        lambda *_args, **_kwargs: {
-            "bucket": "bucket-a",
-            "key": "path/collection_fallback.imdi",
-            "url": "https://example.test/preview",
-        },
-    )
-
-    response = client.get(
-        reverse(
-            "explorer:collection_resource_by_handle",
-            kwargs={
-                "handle": collection.identifier,
-                "resource_id": metadata_file.file_pid,
-            },
-        ),
-        {"action": "view"},
-        HTTP_HX_REQUEST="true",
-    )
-
-    assert response.status_code == 200
-    page = response.content.decode("utf-8")
-    assert 'data-viewer-type="imdi"' in page

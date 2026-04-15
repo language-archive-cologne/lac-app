@@ -32,7 +32,6 @@ from .storage import (
     build_content_disposition,
     load_markdown_preview,
     load_xml_preview,
-    resolve_collection_metadata_to_presigned,
     resolve_existing_object,
     resolve_resource_to_presigned,
 )
@@ -73,7 +72,6 @@ __all__ = [
     "build_content_disposition",
     "load_markdown_preview",
     "load_xml_preview",
-    "resolve_collection_metadata_to_presigned",
     "resolve_existing_object",
     "resolve_resource_to_presigned",
     # Subtitle utilities
