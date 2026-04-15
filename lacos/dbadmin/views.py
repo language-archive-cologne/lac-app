@@ -4,7 +4,6 @@ from dataclasses import dataclass
 
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.core.paginator import Paginator
-from django.conf import settings
 from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
@@ -30,18 +29,6 @@ from lacos.storage.services.background_task_service import BackgroundTaskService
 logger = logging.getLogger(__name__)
 
 
-def _configured_production_bucket_name() -> str:
-    bucket_name = getattr(settings, "AWS_PRODUCTION_BUCKET_NAME", None)
-    if bucket_name:
-        return str(bucket_name)
-
-    legacy_bucket = getattr(settings, "S3_PRODUCTION_BUCKET", None)
-    if legacy_bucket:
-        return str(legacy_bucket)
-
-    return "lacos-production"
-
-
 class SuperuserRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
     def test_func(self):
         return self.request.user.is_superuser
@@ -64,7 +51,6 @@ class DashboardView(SuperuserRequiredMixin, TemplateView):
         context["collection_buckets"] = sorted(
             b for b in Collection.objects.values_list("import_bucket", flat=True).distinct() if b
         )
-        context["derivative_bucket_name"] = _configured_production_bucket_name()
         context["derivative_stats"] = self._get_derivative_stats()
         context["derivative_collections"] = self._get_derivative_collections()
         return context
@@ -267,7 +253,7 @@ TASK_ACTIONS = {
     ),
     "audit-derivatives": TaskAction(
         task_name="audit_derivatives",
-        description=f"Audit derivative status for audio files in {_configured_production_bucket_name()}",
+        description="Audit derivative status for audio files in lacos-production",
         start_message="Derivative audit queued.",
         callable_name="audit_derivatives_task",
     ),

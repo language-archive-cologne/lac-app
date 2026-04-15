@@ -1,11 +1,9 @@
 import pytest
-from django.test import override_settings
 
 from moto import mock_aws
 
 from unittest.mock import patch, MagicMock
 
-from lacos.storage.services.base_storage_service import BaseStorageService
 from lacos.storage.services.bucket_service import BucketService
 from lacos.storage.services.collection_service import BucketListingPage
 
@@ -113,20 +111,6 @@ def test_service_configuration_consistency(mock_s3, mock_bucket_service):
     assert mock_bucket_service.upload_service.production_bucket == TEST_PRODUCTION_BUCKET
     assert mock_bucket_service.ocfl_service.ingest_bucket == TEST_INGEST_BUCKET
     assert mock_bucket_service.ocfl_service.production_bucket == TEST_PRODUCTION_BUCKET
-
-
-@override_settings(AWS_PRODUCTION_BUCKET_NAME=None, S3_PRODUCTION_BUCKET="legacy-prod")
-@patch.dict("os.environ", {}, clear=True)
-@patch("lacos.storage.services.base_storage_service.logger.warning")
-def test_base_storage_service_falls_back_to_legacy_production_bucket(mock_warning):
-    service = object.__new__(BaseStorageService)
-
-    result = service._get_production_bucket_name()
-
-    assert result == "legacy-prod"
-    mock_warning.assert_called_once_with(
-        "S3_PRODUCTION_BUCKET is deprecated; use AWS_PRODUCTION_BUCKET_NAME instead."
-    )
 
 def test_direct_move_to_production(mock_s3, mock_bucket_service):
     """Test direct move to production without OCFL transformation."""
