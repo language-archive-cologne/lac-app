@@ -140,6 +140,26 @@ class DerivativeAuditService:
 
         return "lacos-production"
 
+    def _log_audit_start(self, bucket_name: str, prefix: str) -> None:
+        bucket_service = getattr(self.media_service, "bucket_service", None)
+        logger.info(
+            "Starting derivative audit",
+            extra={
+                "bucket_name": bucket_name,
+                "prefix": prefix,
+                "bucket_service_production_bucket": getattr(
+                    bucket_service, "production_bucket", None
+                ),
+                "endpoint_url": getattr(bucket_service, "endpoint_url", None),
+                "aws_production_bucket_name": getattr(
+                    settings, "AWS_PRODUCTION_BUCKET_NAME", None
+                ),
+                "legacy_production_bucket": getattr(
+                    settings, "S3_PRODUCTION_BUCKET", None
+                ),
+            },
+        )
+
     def audit_bucket(
         self,
         bucket_name: Optional[str] = None,
@@ -150,6 +170,7 @@ class DerivativeAuditService:
         Returns a summary dict with counts.
         """
         bucket_name = bucket_name or self._default_bucket_name()
+        self._log_audit_start(bucket_name, prefix)
 
         s3_client = self.media_service.bucket_service.s3_client
         paginator = s3_client.get_paginator("list_objects_v2")
