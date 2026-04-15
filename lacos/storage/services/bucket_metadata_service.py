@@ -6,10 +6,7 @@ detection. It provides stateless utilities that can be imported by listing
 services or views to add metadata to folder listings.
 """
 import logging
-from pathlib import PurePosixPath
-from typing import Dict, List, Any
-
-from django.db.models import Q
+from typing import Dict, List, Any, Set
 
 from .service_context import StorageServiceContext
 from .collection_service import CollectionService
@@ -40,40 +37,6 @@ class BucketMetadataService:
         self.context = context
         self.collection_service = collection_service
 
-    @staticmethod
-    def _object_root_from_import_key(import_object_key: str | None) -> str | None:
-        """Resolve an OCFL object root path from an import key.
-
-        Current imports store collection and bundle metadata keys inside either:
-        - ``<root>/vN/metadata/<file>``
-        - ``<root>/vN/content/<file>``
-        - legacy non-OCFL paths such as ``<root>/<file>``
-        """
-        if not import_object_key:
-            return None
-
-        normalized = import_object_key.strip().strip("/")
-        if not normalized:
-            return None
-
-        parts = PurePosixPath(normalized).parts
-        for idx, part in enumerate(parts):
-            if part.startswith("v") and part[1:].isdigit():
-                return "/".join(parts[:idx]) or None
-
-        if len(parts) >= 2:
-            return "/".join(parts[:-1]) or None
-        return parts[0]
-
-    def _bucket_scope(self) -> Q:
-        """Limit metadata lookups to the current production bucket when available."""
-        production_bucket = self.context.production_bucket
-        return (
-            Q(import_bucket=production_bucket)
-            | Q(import_bucket__isnull=True)
-            | Q(import_bucket="")
-        )
-
     def build_blam_metadata_index(
         self,
         bucket_name: str,
@@ -96,7 +59,9 @@ class BucketMetadataService:
         if bucket_name != self.context.production_bucket or not folder_items:
             return {}
 
+        collection_dir_names: Set[str] = set()
         collection_paths: Dict[str, str] = {}
+        bundle_dir_names: Set[str] = set()
         parsed_folder_items: List[Dict[str, Any]] = []
 
         # First pass: parse paths once and identify collection/bundle candidates
@@ -129,54 +94,41 @@ class BucketMetadataService:
             try:
                 # Check if this looks like a collection path
                 if self.collection_service.is_collection_path(path):
+                    collection_dir_names.add(dir_name)
                     collection_paths[normalized_path] = dir_name
             except Exception as exc:
                 logger.debug("Failed to evaluate collection path %s: %s", path, exc)
+
+            # Any nested folder could be a bundle
+            if len(parts) >= 2:
+                bundle_dir_names.add(dir_name)
 
         metadata: Dict[str, Dict[str, Any]] = {}
         if not parsed_folder_items:
             return metadata
 
         # Bulk load collection metadata
-        collections_by_path: Dict[str, str] = {}
-        collection_candidate_paths = set(collection_paths.keys())
-        if collection_candidate_paths:
+        collections_by_name: Dict[str, str] = {}
+        if collection_dir_names:
             try:
-                collection_query = Q()
-                for path in collection_candidate_paths:
-                    collection_query |= Q(import_object_key__startswith=f"{path}/")
-
                 collection_rows = Collection.objects.filter(
-                    self._bucket_scope() & collection_query
-                ).values_list("import_object_key", "pk")
-                collections_by_path = {
-                    root_path: str(pk)
-                    for import_key, pk in collection_rows
-                    if (root_path := self._object_root_from_import_key(import_key))
+                    general_info__directory_name__in=collection_dir_names
+                ).values_list("general_info__directory_name", "pk")
+                collections_by_name = {
+                    dir_name: str(pk) for dir_name, pk in collection_rows if dir_name
                 }
             except Exception as exc:
                 logger.warning("Failed to bulk load collection metadata: %s", exc)
 
         # Bulk load bundle metadata
-        bundles_by_path: Dict[str, str] = {}
-        bundle_candidate_paths = {
-            item_data["normalized_path"]
-            for item_data in parsed_folder_items
-            if item_data["depth"] >= 2
-        }
-        if bundle_candidate_paths:
+        bundles_by_name: Dict[str, str] = {}
+        if bundle_dir_names:
             try:
-                bundle_query = Q()
-                for path in bundle_candidate_paths:
-                    bundle_query |= Q(import_object_key__startswith=f"{path}/")
-
                 bundle_rows = Bundle.objects.filter(
-                    self._bucket_scope() & bundle_query
-                ).values_list("import_object_key", "pk")
-                bundles_by_path = {
-                    root_path: str(pk)
-                    for import_key, pk in bundle_rows
-                    if (root_path := self._object_root_from_import_key(import_key))
+                    general_info__directory_name__in=bundle_dir_names
+                ).values_list("general_info__directory_name", "pk")
+                bundles_by_name = {
+                    dir_name: str(pk) for dir_name, pk in bundle_rows if dir_name
                 }
             except Exception as exc:
                 logger.warning("Failed to bulk load bundle metadata: %s", exc)
@@ -190,7 +142,7 @@ class BucketMetadataService:
             # Check if this is a collection
             collection_name = collection_paths.get(normalized_path)
             if collection_name:
-                collection_id = collections_by_path.get(normalized_path)
+                collection_id = collections_by_name.get(collection_name)
                 if collection_id:
                     metadata[path] = {
                         "is_blam_object": True,
@@ -201,7 +153,7 @@ class BucketMetadataService:
 
             # Check if this is a bundle
             if item_data["depth"] >= 2:
-                bundle_id = bundles_by_path.get(normalized_path)
+                bundle_id = bundles_by_name.get(dir_name)
                 if bundle_id:
                     metadata[path] = {
                         "is_blam_object": True,
@@ -232,20 +184,14 @@ class BucketMetadataService:
             return result
 
         try:
-            normalized_path = path.rstrip("/")
-            if not normalized_path:
-                return result
-
             # Check for collection
             if self.collection_service.is_collection_path(path):
+                collection_name = path.rstrip("/").split("/")[-1]
+
                 try:
-                    collection = None
-                    for candidate in Collection.objects.filter(
-                        self._bucket_scope() & Q(import_object_key__startswith=f"{normalized_path}/")
-                    ).only("pk", "import_object_key"):
-                        if self._object_root_from_import_key(candidate.import_object_key) == normalized_path:
-                            collection = candidate
-                            break
+                    collection = Collection.objects.filter(
+                        general_info__directory_name=collection_name
+                    ).first()
 
                     if collection:
                         result["is_blam_object"] = True
@@ -263,16 +209,14 @@ class BucketMetadataService:
                     )
 
             # Check for bundle
-            parts = normalized_path.split("/")
+            parts = path.rstrip("/").split("/")
             if len(parts) >= 2:
+                bundle_name = parts[-1]
+
                 try:
-                    bundle = None
-                    for candidate in Bundle.objects.filter(
-                        self._bucket_scope() & Q(import_object_key__startswith=f"{normalized_path}/")
-                    ).only("pk", "import_object_key"):
-                        if self._object_root_from_import_key(candidate.import_object_key) == normalized_path:
-                            bundle = candidate
-                            break
+                    bundle = Bundle.objects.filter(
+                        general_info__directory_name=bundle_name
+                    ).first()
 
                     if bundle:
                         result["is_blam_object"] = True
