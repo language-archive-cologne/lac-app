@@ -151,7 +151,13 @@ def normalize_permissions_data(
         new_entry = dict(entry)
         agent = entry.get("agent")
         if isinstance(agent, str):
-            new_entry["agent"] = normalize_agent_uri(agent)
+            normalized_agent = normalize_agent_uri(agent)
+            new_entry["agent"] = normalized_agent
+            if normalized_agent and not new_entry.get("agentClass"):
+                if normalized_agent.startswith("urn:lacos:group:"):
+                    new_entry["agentClass"] = "foaf:Group"
+                else:
+                    new_entry["agentClass"] = "foaf:Person"
 
         normalized.append(new_entry)
 

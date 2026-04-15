@@ -27,6 +27,7 @@ from lacos.storage.models.acl_config import ACLConfig
 from lacos.storage.models.acl_permissions import ACLPermissions
 from lacos.storage.constants import ACL_LEVEL_PUBLIC, ACL_LEVEL_ACADEMIC, ACL_LEVEL_RESTRICTED
 from lacos.storage.utils.acl import normalize_agent_uri
+from lacos.users.utils import ensure_acl_agent_uri, generate_acl_agent_uri
 
 logger = logging.getLogger(__name__)
 
@@ -551,9 +552,9 @@ def acl_load_single(request, object_type, object_id):
 
     try:
         if object_type == "collection":
-            result = service.load_collection(obj)
+            result = service.load_collection(obj, force_refresh=True)
         else:
-            result = service.load_bundle(obj)
+            result = service.load_bundle(obj, force_refresh=True)
 
         if result.success:
             message = f"Loaded ACL for {object_type}"
@@ -764,6 +765,7 @@ def acl_update_permission(request):
         for user_id in user_ids:
             try:
                 user = User.objects.get(pk=user_id)
+                ensure_acl_agent_uri(user, save=True)
                 if user.acl_agent_uri:
                     person_agents.add(user.acl_agent_uri)
             except User.DoesNotExist:
@@ -850,6 +852,15 @@ def acl_edit_permission_form(request, object_type, object_id):
     ct = ContentType.objects.get_for_model(model)
     perm = ACLPermissions.objects.filter(content_type=ct, object_id=object_id).first()
 
+    available_users = list(User.objects.order_by("username"))
+    for user in available_users:
+        user.effective_acl_agent_uri = user.acl_agent_uri or generate_acl_agent_uri(user)
+    user_by_effective_agent = {
+        user.effective_acl_agent_uri: user
+        for user in available_users
+        if getattr(user, "effective_acl_agent_uri", None)
+    }
+
     # Get current read agents from permissions_data
     selected_user_ids = set()
     selected_group_ids = set()
@@ -873,8 +884,9 @@ def acl_edit_permission_form(request, object_type, object_id):
         for rule in perm.permissions_data:
             agent = rule.get("agent", "")
             agent_class = rule.get("agentClass", "")
+            normalized_agent = normalize_agent_uri(agent)
             if agent_class == "foaf:Person" and agent:
-                user = User.objects.filter(acl_agent_uri=agent).first()
+                user = user_by_effective_agent.get(normalized_agent)
                 if user:
                     selected_user_ids.add(user.id)
                 else:
@@ -885,12 +897,22 @@ def acl_edit_permission_form(request, object_type, object_id):
                     selected_group_ids.add(group_acl.id)
                 else:
                     external_group_agents.add(agent)
+            elif agent:
+                user = user_by_effective_agent.get(normalized_agent)
+                if user:
+                    selected_user_ids.add(user.id)
+                    continue
+                group_acl = GroupACL.objects.filter(acl_agent_uri=normalized_agent).first()
+                if group_acl:
+                    selected_group_ids.add(group_acl.id)
+                else:
+                    external_user_agents.add(agent)
     if perm and perm.read_agents:
         skip_agents = {"foaf:Agent", "acl:AuthenticatedAgent", "foaf:Person", "foaf:Group"}
         for agent in perm.read_agents:
             if not agent or agent in skip_agents:
                 continue
-            if User.objects.filter(acl_agent_uri=agent).exists():
+            if normalize_agent_uri(agent) in user_by_effective_agent:
                 continue
             if GroupACL.objects.filter(acl_agent_uri=agent).exists():
                 continue
@@ -914,7 +936,7 @@ def acl_edit_permission_form(request, object_type, object_id):
         "name": _resolve_acl_display_name(obj),
         "current_access_level": current_access_level,
         "access_level_choices": ACLPermissions.ACCESS_LEVEL_CHOICES,
-        "available_users": User.objects.exclude(acl_agent_uri__isnull=True).exclude(acl_agent_uri="").order_by("username"),
+        "available_users": available_users,
         "available_groups": GroupACL.objects.exclude(acl_agent_uri__isnull=True).exclude(acl_agent_uri="").select_related("group").order_by("group__name"),
         "selected_user_ids": selected_user_ids,
         "selected_group_ids": selected_group_ids,

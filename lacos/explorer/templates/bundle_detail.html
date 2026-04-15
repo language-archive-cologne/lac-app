@@ -387,8 +387,8 @@
                     </button>
 
                     {% if resource|is_media_type:"audio" or resource|is_media_type:"video" or resource|is_annotation %}
-                    <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play"
-                       hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play"
+                    <a href="{% url 'resource_by_handle' handle_id=resource.file_pid|strip_hdl %}?action=play"
+                       hx-get="{% url 'resource_by_handle' handle_id=resource.file_pid|strip_hdl %}?action=play"
                        hx-target="#resource-modal-content"
                        hx-swap="innerHTML"
                        hx-push-url="false"
@@ -399,8 +399,8 @@
                       </svg>
                     </a>
                     {% elif resource|is_media_type:"image" or resource|is_media_type:"pdf" or resource|is_media_type:"xml" or resource|is_media_type:"markdown" %}
-                    <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view"
-                       hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view"
+                    <a href="{% url 'resource_by_handle' handle_id=resource.file_pid|strip_hdl %}?action=view"
+                       hx-get="{% url 'resource_by_handle' handle_id=resource.file_pid|strip_hdl %}?action=view"
                        hx-target="#resource-modal-content"
                        hx-swap="innerHTML"
                        hx-push-url="false"
@@ -491,8 +491,8 @@
                     </button>
 
                     {% if resource|is_media_type:"audio" or resource|is_media_type:"video" or resource|is_annotation %}
-                    <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play"
-                       hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play"
+                    <a href="{% url 'resource_by_handle' handle_id=resource.file_pid|strip_hdl %}?action=play"
+                       hx-get="{% url 'resource_by_handle' handle_id=resource.file_pid|strip_hdl %}?action=play"
                        hx-target="#resource-modal-content"
                        hx-swap="innerHTML"
                        hx-push-url="false"
@@ -503,8 +503,8 @@
                       </svg>
                     </a>
                     {% elif resource|is_media_type:"image" or resource|is_media_type:"pdf" or resource|is_media_type:"xml" or resource|is_media_type:"markdown" %}
-                    <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view"
-                       hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view"
+                    <a href="{% url 'resource_by_handle' handle_id=resource.file_pid|strip_hdl %}?action=view"
+                       hx-get="{% url 'resource_by_handle' handle_id=resource.file_pid|strip_hdl %}?action=view"
                        hx-target="#resource-modal-content"
                        hx-swap="innerHTML"
                        hx-push-url="false"
@@ -599,8 +599,8 @@
                     </button>
 
                     {% if resource|is_media_type:"audio" or resource|is_media_type:"video" %}
-                    <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play"
-                       hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=play"
+                    <a href="{% url 'resource_by_handle' handle_id=resource.file_pid|strip_hdl %}?action=play"
+                       hx-get="{% url 'resource_by_handle' handle_id=resource.file_pid|strip_hdl %}?action=play"
                        hx-target="#resource-modal-content"
                        hx-swap="innerHTML"
                        hx-push-url="false"
@@ -611,8 +611,8 @@
                       </svg>
                     </a>
                     {% elif resource|is_media_type:"image" or resource|is_media_type:"pdf" or resource|is_media_type:"xml" or resource|is_media_type:"markdown" %}
-                    <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view"
-                       hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=resource.id %}?action=view"
+                    <a href="{% url 'resource_by_handle' handle_id=resource.file_pid|strip_hdl %}?action=view"
+                       hx-get="{% url 'resource_by_handle' handle_id=resource.file_pid|strip_hdl %}?action=view"
                        hx-target="#resource-modal-content"
                        hx-swap="innerHTML"
                        hx-push-url="false"
@@ -705,15 +705,15 @@
                        data-bucket="{{ metadata_file.s3_location.s3_bucket|default:'' }}"
                        data-key="{{ metadata_file.s3_location.s3_key|default:'' }}"
                        data-filename="{{ metadata_file.file_name }}"
-                       data-resource-url="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=metadata_file.id %}">
+                       data-resource-url="{% url 'resource_by_handle' handle_id=metadata_file.file_pid|strip_hdl %}">
                       <svg xmlns="http://www.w3.org/2000/svg" class="size-[1.2em]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                       </svg>
                     </button>
 
                     {% if metadata_file|is_media_type:"audio" or metadata_file|is_media_type:"video" or metadata_file|is_annotation %}
-                    <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=metadata_file.id %}?action=play"
-                       hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=metadata_file.id %}?action=play"
+                    <a href="{% url 'resource_by_handle' handle_id=metadata_file.file_pid|strip_hdl %}?action=play"
+                       hx-get="{% url 'resource_by_handle' handle_id=metadata_file.file_pid|strip_hdl %}?action=play"
                        hx-target="#resource-modal-content"
                        hx-swap="innerHTML"
                        hx-push-url="false"
@@ -724,8 +724,8 @@
                       </svg>
                     </a>
                     {% elif metadata_file|is_media_type:"image" or metadata_file|is_media_type:"pdf" or metadata_file|is_media_type:"xml" or metadata_file|is_media_type:"markdown" %}
-                    <a href="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=metadata_file.id %}?action=view"
-                       hx-get="{% url 'explorer:resource_access' bundle_id=bundle.pk resource_id=metadata_file.id %}?action=view"
+                    <a href="{% url 'resource_by_handle' handle_id=metadata_file.file_pid|strip_hdl %}?action=view"
+                       hx-get="{% url 'resource_by_handle' handle_id=metadata_file.file_pid|strip_hdl %}?action=view"
                        hx-target="#resource-modal-content"
                        hx-swap="innerHTML"
                        hx-push-url="false"

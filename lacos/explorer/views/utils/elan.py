@@ -28,7 +28,14 @@ def parse_elan_document(resource_service, bucket_name: str, object_key: str) -> 
             bucket_name,
             exc,
         )
-        return {"annotations": [], "media_files": []}
+        return {"annotations": [], "media_files": [], "tier_headers": []}
+    except Exception:
+        logger.exception(
+            "Unexpected error fetching ELAN document %s from bucket %s",
+            object_key,
+            bucket_name,
+        )
+        return {"annotations": [], "media_files": [], "tier_headers": []}
 
     raw_bytes = response.get("Body").read()
     try:

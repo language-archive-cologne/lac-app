@@ -26,6 +26,7 @@ from lacos.explorer.media_utils import determine_media_type, guess_source_mime_t
 from lacos.explorer.permissions import ACLPermissionMixin
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
 from lacos.storage.services.file_discovery_service import FileDiscoveryService
+from lacos.storage.services.media_processing_service import MediaProcessingService
 from lacos.storage.services.resource_mapping_service import ResourceMappingService
 
 from .utils import (
@@ -167,7 +168,7 @@ class BundleResourcesView(View):
             if decoded_resource_id.startswith('ID_'):
                 decoded_resource_id = decoded_resource_id[3:]
 
-            resource_service = ResourceMappingService()
+            resource_service = ResourceMappingService(skip_bucket_check=True)
             location = resource_service.resolve_pid_to_s3(decoded_resource_id)
             if not location:
                 raise ValueError(f"No S3 location found for PID: {decoded_resource_id}")
@@ -335,7 +336,7 @@ class ResourceAccessView(View):
             )
             is_elan = extension in {'eaf', 'elan'} or normalized_mime_type == 'text/x-eaf+xml'
 
-            resource_service = ResourceMappingService()
+            resource_service = ResourceMappingService(skip_bucket_check=True)
 
             storage_resolution = resolve_resource_to_presigned(
                 resource_service,
@@ -428,7 +429,7 @@ class ResourceAccessView(View):
                     if spectrogram_available:
                         spectrogram_data_url = resource_service.generate_presigned_url(
                             sidecar_bucket,
-                            f"{sidecar_key}.spectrogram.bin",
+                            MediaProcessingService._derivative_s3_key(sidecar_key, ".spectrogram.bin"),
                         )
                 pitch_available = self._pitch_data_exists(
                     resource_service, sidecar_bucket, sidecar_key,
@@ -436,7 +437,8 @@ class ResourceAccessView(View):
                 pitch_data_url = None
                 if action == 'pitch' and pitch_available:
                     pitch_data_url = resource_service.generate_presigned_url(
-                        sidecar_bucket, f"{sidecar_key}.pitch.bin",
+                        sidecar_bucket,
+                        MediaProcessingService._derivative_s3_key(sidecar_key, ".pitch.bin"),
                     )
             player_mode = 'simple'
             if sidecar_bucket and sidecar_key:
@@ -646,7 +648,7 @@ class ResourceAccessView(View):
 
     def _resolve_peaks_url(self, resource_service, bucket_name, object_key):
         """Check if pre-computed peaks exist and return a presigned URL."""
-        peaks_key = f"{object_key}.peaks.json"
+        peaks_key = MediaProcessingService._derivative_s3_key(object_key, ".peaks.json")
         try:
             resource_service.s3_client.head_object(Bucket=bucket_name, Key=peaks_key)
             return resource_service.generate_presigned_url(bucket_name, peaks_key)
@@ -655,7 +657,7 @@ class ResourceAccessView(View):
 
     def _resolve_spectrogram_data_url(self, resource_service, bucket_name, object_key):
         """Check if pre-computed spectrogram frequencies exist and return a presigned URL."""
-        spectrogram_data_key = f"{object_key}.spectrogram.bin"
+        spectrogram_data_key = MediaProcessingService._derivative_s3_key(object_key, ".spectrogram.bin")
         try:
             resource_service.s3_client.head_object(Bucket=bucket_name, Key=spectrogram_data_key)
             return resource_service.generate_presigned_url(bucket_name, spectrogram_data_key)
@@ -664,7 +666,7 @@ class ResourceAccessView(View):
 
     def _spectrogram_data_exists(self, resource_service, bucket_name, object_key):
         """Check if pre-computed spectrogram sidecar exists."""
-        spectrogram_data_key = f"{object_key}.spectrogram.bin"
+        spectrogram_data_key = MediaProcessingService._derivative_s3_key(object_key, ".spectrogram.bin")
         try:
             resource_service.s3_client.head_object(Bucket=bucket_name, Key=spectrogram_data_key)
             return True
@@ -673,7 +675,7 @@ class ResourceAccessView(View):
 
     def _pitch_data_exists(self, resource_service, bucket_name, object_key):
         """Check if pre-computed pitch sidecar exists."""
-        pitch_key = f"{object_key}.pitch.bin"
+        pitch_key = MediaProcessingService._derivative_s3_key(object_key, ".pitch.bin")
         try:
             resource_service.s3_client.head_object(Bucket=bucket_name, Key=pitch_key)
             return True
@@ -692,14 +694,19 @@ class ResourceByHandleView(View):
     def get(self, request, handle_id):
         file_pid = f"hdl:{handle_id}"
 
-        # Search across all resource types; reverse path goes through
-        # BundleResources (M2M container) → Bundle.resources
-        for model in (MediaResource, WrittenResource, OtherResource):
+        # Search across all bundle resource types.
+        for model in (MediaResource, WrittenResource, OtherResource, BundleAdditionalMetadataFile):
             resource = model.objects.filter(file_pid=file_pid).first()
             if resource:
-                bundle = Bundle.objects.filter(
-                    resources__in=resource.bundleresources_set.all()
-                ).first()
+                if isinstance(resource, BundleAdditionalMetadataFile):
+                    bundle = Bundle.objects.filter(
+                        structural_info__additional_metadata_files=resource
+                    ).first()
+                else:
+                    # Reverse path goes through BundleResources (M2M container) → Bundle.resources
+                    bundle = Bundle.objects.filter(
+                        resources__in=resource.bundleresources_set.all()
+                    ).first()
                 if bundle:
                     # Render directly via ResourceAccessView
                     view = ResourceAccessView()

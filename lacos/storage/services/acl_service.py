@@ -85,43 +85,43 @@ class ACLService(BaseStorageService):
 
         return results
 
-    def load_collection(self, collection: Collection) -> ACLResult:
+    def load_collection(self, collection: Collection, *, force_refresh: bool = False) -> ACLResult:
         """Load ACL from S3 for a single collection."""
         bucket = collection.import_bucket or self.production_bucket
         key = self._build_acl_key(collection)
-        result = self._load_object(collection, bucket, key)
+        result = self._load_object(collection, bucket, key, use_cache=not force_refresh)
 
         # Fallback to legacy path if OCFL 1.1 path not found
         if not result.success and result.error is None:
             legacy_key = self._build_legacy_acl_key(collection)
             if legacy_key and legacy_key != key:
                 self.logger.info("Trying legacy ACL path for collection", extra={"collection_pk": collection.pk, "legacy_key": legacy_key})
-                result = self._load_object(collection, bucket, legacy_key)
+                result = self._load_object(collection, bucket, legacy_key, use_cache=not force_refresh)
 
         return result
 
-    def load_bundle(self, bundle: Bundle) -> ACLResult:
+    def load_bundle(self, bundle: Bundle, *, force_refresh: bool = False) -> ACLResult:
         """Load ACL from S3 for a single bundle."""
         bucket = bundle.import_bucket or self.production_bucket
         key = self._build_acl_key(bundle)
-        result = self._load_object(bundle, bucket, key)
+        result = self._load_object(bundle, bucket, key, use_cache=not force_refresh)
 
         # Fallback to legacy path if OCFL 1.1 path not found
         if not result.success and result.error is None:
             legacy_key = self._build_legacy_acl_key(bundle)
             if legacy_key and legacy_key != key:
                 self.logger.info("Trying legacy ACL path for bundle", extra={"bundle_pk": bundle.pk, "legacy_key": legacy_key})
-                result = self._load_object(bundle, bucket, legacy_key)
+                result = self._load_object(bundle, bucket, legacy_key, use_cache=not force_refresh)
 
         return result
 
-    def _load_object(self, obj: Any, bucket: Optional[str], key: Optional[str]) -> ACLResult:
+    def _load_object(self, obj: Any, bucket: Optional[str], key: Optional[str], *, use_cache: bool = True) -> ACLResult:
         if not bucket or not key:
             message = "Unable to determine ACL location"
             self.logger.warning("%s for %s (%s)", message, type(obj).__name__, getattr(obj, "pk", "unknown"))
             return ACLResult(obj=obj, bucket=bucket, key=key, success=False, error=message)
 
-        permissions_data, found, error, source_info = self._fetch_acl(bucket, key)
+        permissions_data, found, error, source_info = self._fetch_acl(bucket, key, use_cache=use_cache)
 
         try:
             return self._persist_loaded_permissions(obj, bucket, key, permissions_data, found, error, source_info)
@@ -283,9 +283,9 @@ class ACLService(BaseStorageService):
     # Helpers
     # =========================================================================
 
-    def _fetch_acl(self, bucket: str, key: str) -> tuple[Optional[Sequence[dict[str, Any]]], bool, Optional[str], dict]:
+    def _fetch_acl(self, bucket: str, key: str, *, use_cache: bool = True) -> tuple[Optional[Sequence[dict[str, Any]]], bool, Optional[str], dict]:
         """Retrieve and parse an ACL JSON file from S3."""
-        cached_entry = get_acl_entry(bucket, key)
+        cached_entry = get_acl_entry(bucket, key) if use_cache else None
         if cached_entry is not None:
             return (
                 deepcopy(cached_entry.data),
