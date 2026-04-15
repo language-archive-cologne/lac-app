@@ -212,10 +212,8 @@ class MediaProcessingService:
             logger.info("Audio derivatives already current for %s/%s", bucket, s3_key)
             return {
                 "success": True,
-                "source_etag": source_etag,
                 "peaks_key": peaks_key,
                 "spectrogram_data_key": spectrogram_data_key,
-                "pitch_key": pitch_key,
                 "skipped": True,
             }
 
@@ -357,7 +355,6 @@ class MediaProcessingService:
         )
         return {
             "success": True,
-            "source_etag": source_etag,
             "peaks_key": peaks_key,
             "spectrogram_data_key": spectrogram_data_key,
             "pitch_key": pitch_key,

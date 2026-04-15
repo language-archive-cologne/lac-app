@@ -20,10 +20,4 @@ PERIODIC_TASKS = [
         "schedule": "5 3 * * *",
         "schedule_human": "Daily at 3:05 AM UTC",
     },
-    {
-        "task_name": "periodic_derivative_audit",
-        "label": "Derivative Audit",
-        "schedule": "0 3 * * *",
-        "schedule_human": "Daily at 3:00 AM UTC",
-    },
 ]

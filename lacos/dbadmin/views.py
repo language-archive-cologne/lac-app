@@ -21,7 +21,6 @@ from lacos.blam.tasks import (
     reindex_collections_task,
     reindex_search_vectors_task,
 )
-from lacos.storage.derivative_audit_tasks import audit_derivatives_task
 from lacos.users.tasks import index_edugain_idps
 from lacos.storage.models import BackgroundTask
 from lacos.storage.services.background_task_service import BackgroundTaskService
@@ -51,40 +50,7 @@ class DashboardView(SuperuserRequiredMixin, TemplateView):
         context["collection_buckets"] = sorted(
             b for b in Collection.objects.values_list("import_bucket", flat=True).distinct() if b
         )
-        context["derivative_stats"] = self._get_derivative_stats()
         return context
-
-    @staticmethod
-    def _get_derivative_stats() -> dict:
-        from lacos.storage.models import DerivativeStatus
-
-        qs = DerivativeStatus.objects.all()
-        total = qs.count()
-        if total == 0:
-            return {
-                "total": 0,
-                "with_peaks": 0,
-                "with_spectrogram": 0,
-                "with_pitch": 0,
-                "complete": 0,
-                "missing_all": 0,
-                "last_audit": None,
-            }
-        return {
-            "total": total,
-            "with_peaks": qs.filter(peaks_exists=True).count(),
-            "with_spectrogram": qs.filter(spectrogram_exists=True).count(),
-            "with_pitch": qs.filter(pitch_exists=True).count(),
-            "complete": qs.filter(
-                peaks_exists=True, spectrogram_exists=True, pitch_exists=True
-            ).count(),
-            "missing_all": qs.filter(
-                peaks_exists=False, spectrogram_exists=False, pitch_exists=False
-            ).count(),
-            "last_audit": qs.order_by("-last_checked_at").values_list(
-                "last_checked_at", flat=True
-            ).first(),
-        }
 
 
 # ---------------------------------------------------------------------------
@@ -139,12 +105,6 @@ TASK_ACTIONS = {
         start_message="eduGAIN IdP indexing queued.",
         callable_name="index_edugain_idps",
     ),
-    "audit-derivatives": TaskAction(
-        task_name="audit_derivatives",
-        description="Audit derivative status for audio files in lacos-production",
-        start_message="Derivative audit queued.",
-        callable_name="audit_derivatives_task",
-    ),
 }
 
 _TASK_CALLABLES = {
@@ -154,7 +114,6 @@ _TASK_CALLABLES = {
     "generate_all_peaks_task": generate_all_peaks_task,
     "decompress_spectrograms_task": decompress_spectrograms_task,
     "index_edugain_idps": index_edugain_idps,
-    "audit_derivatives_task": audit_derivatives_task,
 }
 
 
