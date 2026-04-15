@@ -318,19 +318,6 @@ class BaseStorageService:
             logger.debug("Returning cached bucket list: %s", cached)
             return cached
 
-        configured_buckets = [
-            bucket for bucket in self.workspace_buckets
-            if bucket and bucket.strip() and bucket.strip() != "*"
-        ]
-        if configured_buckets:
-            bucket_names = sorted(dict.fromkeys(configured_buckets))
-            logger.info(
-                "Using configured workspace buckets",
-                extra={"workspace_buckets": bucket_names},
-            )
-            cache.set(cache_key, bucket_names, timeout=300)
-            return bucket_names
-
         try:
             response = self.s3_client.list_buckets()
             bucket_names = sorted(bucket['Name'] for bucket in response['Buckets'])
