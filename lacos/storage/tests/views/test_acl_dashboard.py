@@ -406,6 +406,7 @@ def test_acl_load_single_htmx_returns_oob_table_and_status(
     assert 'id="acl-records-table"' in html
     assert 'hx-swap-oob="outerHTML"' in html
     assert 'value="alpha"' in html
+    mock_load_collection.assert_called_once_with(collection, force_refresh=True)
 
 
 @pytest.mark.django_db
@@ -492,6 +493,7 @@ def test_acl_load_single_htmx_failure_keeps_oob_refresh_and_escapes_error(
     assert "text-error" in html
     assert "Failed to load: &lt;bad&gt;" in html
     assert "Failed to load: <bad>" not in html
+    mock_load_collection.assert_called_once_with(collection, force_refresh=True)
 
 
 # ---------------------------------------------------------------------------
@@ -677,4 +679,42 @@ def test_acl_edit_form_lists_and_selects_saml_user_with_generated_acl_uri(
     assert 'value="%s"' % selected_user.pk in html
     assert "fmondac1@uni-koeln.de" in html
     assert "urn:lacos:eppn:fmondac1@uni-koeln.de" in html
+    assert f'value="{selected_user.pk}" selected' in html
+
+
+@pytest.mark.django_db
+def test_acl_edit_form_maps_legacy_agent_only_entry_to_selected_user(
+    client, django_user_model
+):
+    archivist = django_user_model.objects.create_user("norm5", "norm5@example.com", "pass")
+    _make_archivist(archivist)
+    client.force_login(archivist)
+
+    selected_user = django_user_model.objects.create_user(
+        "fmondac1@uni-koeln.de",
+        password="pass",
+        saml_persistent_id="persistent-id-5",
+        acl_agent_uri=None,
+    )
+    collection = Collection.objects.create(identifier="norm-col-5")
+    ct = ContentType.objects.get_for_model(Collection)
+    ACLPermissions.objects.create(
+        content_type=ct,
+        object_id=str(collection.pk),
+        access_level=ACL_LEVEL_RESTRICTED,
+        permissions_data=[
+            {
+                "agent": "fmondac1@uni-koeln.de",
+                "mode": ["acl:Read"],
+            }
+        ],
+        read_agents=["urn:lacos:eppn:fmondac1@uni-koeln.de"],
+    )
+
+    response = client.get(
+        reverse("storage:acl_edit_permission_form", args=["collection", str(collection.pk)])
+    )
+
+    assert response.status_code == 200
+    html = response.content.decode()
     assert f'value="{selected_user.pk}" selected' in html

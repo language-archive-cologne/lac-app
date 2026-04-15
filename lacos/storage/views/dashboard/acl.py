@@ -552,9 +552,9 @@ def acl_load_single(request, object_type, object_id):
 
     try:
         if object_type == "collection":
-            result = service.load_collection(obj)
+            result = service.load_collection(obj, force_refresh=True)
         else:
-            result = service.load_bundle(obj)
+            result = service.load_bundle(obj, force_refresh=True)
 
         if result.success:
             message = f"Loaded ACL for {object_type}"
@@ -884,8 +884,9 @@ def acl_edit_permission_form(request, object_type, object_id):
         for rule in perm.permissions_data:
             agent = rule.get("agent", "")
             agent_class = rule.get("agentClass", "")
+            normalized_agent = normalize_agent_uri(agent)
             if agent_class == "foaf:Person" and agent:
-                user = user_by_effective_agent.get(normalize_agent_uri(agent))
+                user = user_by_effective_agent.get(normalized_agent)
                 if user:
                     selected_user_ids.add(user.id)
                 else:
@@ -896,6 +897,16 @@ def acl_edit_permission_form(request, object_type, object_id):
                     selected_group_ids.add(group_acl.id)
                 else:
                     external_group_agents.add(agent)
+            elif agent:
+                user = user_by_effective_agent.get(normalized_agent)
+                if user:
+                    selected_user_ids.add(user.id)
+                    continue
+                group_acl = GroupACL.objects.filter(acl_agent_uri=normalized_agent).first()
+                if group_acl:
+                    selected_group_ids.add(group_acl.id)
+                else:
+                    external_user_agents.add(agent)
     if perm and perm.read_agents:
         skip_agents = {"foaf:Agent", "acl:AuthenticatedAgent", "foaf:Person", "foaf:Group"}
         for agent in perm.read_agents:

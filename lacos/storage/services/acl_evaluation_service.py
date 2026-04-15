@@ -200,6 +200,7 @@ class ACLEvaluationService:
 
     def _rule_applies(self, user, rule: dict[str, Any]) -> bool:
         agent_class = rule.get("agentClass")
+        agent_uri = normalize_agent_uri(rule.get("agent"))
 
         if agent_class == WAC_AGENT:
             return True
@@ -208,12 +209,18 @@ class ACLEvaluationService:
             return getattr(user, "is_authenticated", False)
 
         if agent_class == "foaf:Person":
-            agent_uri = normalize_agent_uri(rule.get("agent"))
             return bool(agent_uri and agent_uri in self._get_user_agent_uris(user))
 
         if agent_class == "foaf:Group":
-            agent_uri = normalize_agent_uri(rule.get("agent"))
             return bool(agent_uri and agent_uri in self._get_user_group_uris(user))
+
+        # Backward compatibility for legacy ACL entries that stored only `agent`
+        # without an explicit `agentClass`.
+        if agent_uri:
+            if agent_uri in self._get_user_agent_uris(user):
+                return True
+            if agent_uri in self._get_user_group_uris(user):
+                return True
 
         return False
 
