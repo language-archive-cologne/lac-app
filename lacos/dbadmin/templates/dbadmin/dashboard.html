@@ -179,71 +179,49 @@
             </div>
 
             {% if derivative_stats.total > 0 %}
-            {% widthratio derivative_stats.complete derivative_stats.total 100 as pct_complete %}
-            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-base-content/60 mb-4">
-                <span><span class="font-semibold text-base-content">{{ derivative_stats.total }}</span> WAV files</span>
-                <span class="text-base-content/30">|</span>
-                <span><span class="font-semibold text-success">{{ derivative_stats.complete }}</span> complete ({{ pct_complete }}%)</span>
-                <span class="text-base-content/30">|</span>
-                <span><span class="font-semibold {% if derivative_stats.missing_all > 0 %}text-error{% else %}text-base-content{% endif %}">{{ derivative_stats.missing_all }}</span> missing all</span>
-            </div>
-
-            {% if derivative_collections %}
-            <div>
-                <div class="overflow-x-auto">
-                    <table class="table table-sm">
-                        <thead>
-                            <tr class="text-xs uppercase tracking-wide">
-                                <th>Collection</th>
-                                <th class="text-right">WAVs</th>
-                                <th class="text-right">Peaks</th>
-                                <th class="text-right">Spectrogram</th>
-                                <th class="text-right">Pitch</th>
-                                <th class="text-right">Complete</th>
-                                <th class="text-right">Missing</th>
-                                <th>Coverage</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for col in derivative_collections %}
-                            <tr class="hover cursor-pointer derivative-collection-row"
-                                data-bundles-target="col-bundles-{{ forloop.counter }}"
-                                hx-get="{% url 'dbadmin:derivative_bundles' col.collection_id %}"
-                                hx-target="#col-bundles-{{ forloop.counter }}"
-                                hx-swap="innerHTML"
-                                hx-trigger="click once">
-                                <td>
-                                    <div class="flex items-center gap-1.5">
-                                        <svg class="w-3.5 h-3.5 text-base-content/40 shrink-0 transition-transform duration-150 derivative-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                                        <div>
-                                            <div class="font-medium">{{ col.collection_id }}</div>
-                                            {% if col.display_name %}<div class="text-xs text-base-content/50">{{ col.display_name }}</div>{% endif %}
-                                        </div>
-                                    </div>
-                                </td>
-                                <td class="text-right tabular-nums">{{ col.total }}</td>
-                                <td class="text-right tabular-nums {% if col.with_peaks == col.total %}text-success{% elif col.with_peaks == 0 %}text-error{% else %}text-warning{% endif %}">{{ col.with_peaks }}</td>
-                                <td class="text-right tabular-nums {% if col.with_spectrogram == col.total %}text-success{% elif col.with_spectrogram == 0 %}text-error{% else %}text-warning{% endif %}">{{ col.with_spectrogram }}</td>
-                                <td class="text-right tabular-nums {% if col.with_pitch == col.total %}text-success{% elif col.with_pitch == 0 %}text-error{% else %}text-warning{% endif %}">{{ col.with_pitch }}</td>
-                                <td class="text-right tabular-nums text-info">{{ col.complete }}</td>
-                                <td class="text-right tabular-nums {% if col.missing_all > 0 %}text-error font-semibold{% endif %}">{{ col.missing_all }}</td>
-                                <td class="w-32">
-                                    <div class="flex items-center gap-2">
-                                        <div class="w-full bg-base-300 rounded-full h-2 overflow-hidden">
-                                            <div class="h-full rounded-full {% if col.pct_complete == 100 %}bg-success{% elif col.pct_complete > 0 %}bg-warning{% else %}bg-error{% endif %}" style="width:{{ col.pct_complete }}%"></div>
-                                        </div>
-                                        <span class="text-xs tabular-nums text-base-content/60 w-8 text-right">{{ col.pct_complete }}%</span>
-                                    </div>
-                                </td>
-                            </tr>
-                            <tbody id="col-bundles-{{ forloop.counter }}" class="hidden"></tbody>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+                <div class="stat bg-base-200 rounded-lg px-4 py-3">
+                    <div class="stat-title text-xs">Total WAVs</div>
+                    <div class="stat-value text-2xl">{{ derivative_stats.total }}</div>
+                </div>
+                <div class="stat bg-base-200 rounded-lg px-4 py-3">
+                    <div class="stat-title text-xs">With Peaks</div>
+                    <div class="stat-value text-2xl text-success">{{ derivative_stats.with_peaks }}</div>
+                </div>
+                <div class="stat bg-base-200 rounded-lg px-4 py-3">
+                    <div class="stat-title text-xs">With Spectrogram</div>
+                    <div class="stat-value text-2xl text-success">{{ derivative_stats.with_spectrogram }}</div>
+                </div>
+                <div class="stat bg-base-200 rounded-lg px-4 py-3">
+                    <div class="stat-title text-xs">With Pitch</div>
+                    <div class="stat-value text-2xl text-success">{{ derivative_stats.with_pitch }}</div>
+                </div>
+                <div class="stat bg-base-200 rounded-lg px-4 py-3">
+                    <div class="stat-title text-xs">All Complete</div>
+                    <div class="stat-value text-2xl text-info">{{ derivative_stats.complete }}</div>
+                </div>
+                <div class="stat bg-base-200 rounded-lg px-4 py-3">
+                    <div class="stat-title text-xs">Missing All</div>
+                    <div class="stat-value text-2xl {% if derivative_stats.missing_all > 0 %}text-error{% endif %}">{{ derivative_stats.missing_all }}</div>
                 </div>
             </div>
-            {% endif %}
 
+            <!-- Progress bar -->
+            {% widthratio derivative_stats.complete derivative_stats.total 100 as pct_complete %}
+            {% widthratio derivative_stats.missing_all derivative_stats.total 100 as pct_missing %}
+            <div class="mb-2 text-xs text-base-content/60">
+                Coverage: {{ pct_complete }}% complete, {{ pct_missing }}% missing all derivatives
+            </div>
+            <div class="w-full bg-base-300 rounded-full h-3 overflow-hidden flex">
+                <div class="bg-success h-full transition-[width] duration-300" style="width: {{ pct_complete }}%"></div>
+                <div class="bg-warning h-full transition-[width] duration-300" style="width: {% widthratio derivative_stats.with_peaks derivative_stats.total 100 %}%"></div>
+                <div class="bg-error h-full transition-[width] duration-300" style="width: {{ pct_missing }}%"></div>
+            </div>
+            <div class="flex gap-4 mt-1 text-xs text-base-content/50">
+                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-success inline-block"></span> Complete</span>
+                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-warning inline-block"></span> Partial</span>
+                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-error inline-block"></span> Missing</span>
+            </div>
             {% else %}
             <div class="text-center py-10 text-base-content/50">
                 <p class="text-lg mb-2">No derivative data yet</p>
@@ -433,21 +411,6 @@
             if (event.target === this) {
                 this.classList.add('hidden');
             }
-        });
-
-        // Derivative collection row expand/collapse
-        document.querySelectorAll('.derivative-collection-row').forEach(function(row) {
-            row.addEventListener('click', function() {
-                var targetId = this.dataset.bundlesTarget;
-                var tbody = document.getElementById(targetId);
-                var chevron = this.querySelector('.derivative-chevron');
-                if (tbody) {
-                    tbody.classList.toggle('hidden');
-                }
-                if (chevron) {
-                    chevron.classList.toggle('rotate-90');
-                }
-            });
         });
     </script>
 {% endblock %}
