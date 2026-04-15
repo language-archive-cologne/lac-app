@@ -124,6 +124,22 @@ class DerivativeAuditService:
         delay = self.connectivity_backoff_base * (2 ** exponent)
         return min(self.connectivity_backoff_max, delay)
 
+    def _default_bucket_name(self) -> str:
+        bucket_service = getattr(self.media_service, "bucket_service", None)
+        configured_bucket = getattr(bucket_service, "production_bucket", None)
+        if configured_bucket:
+            return str(configured_bucket)
+
+        aws_bucket = getattr(settings, "AWS_PRODUCTION_BUCKET_NAME", None)
+        if aws_bucket:
+            return str(aws_bucket)
+
+        legacy_bucket = getattr(settings, "S3_PRODUCTION_BUCKET", None)
+        if legacy_bucket:
+            return str(legacy_bucket)
+
+        return "lacos-production"
+
     def audit_bucket(
         self,
         bucket_name: Optional[str] = None,
@@ -133,9 +149,7 @@ class DerivativeAuditService:
 
         Returns a summary dict with counts.
         """
-        bucket_name = bucket_name or getattr(
-            settings, "S3_PRODUCTION_BUCKET", "lacos-production"
-        )
+        bucket_name = bucket_name or self._default_bucket_name()
 
         s3_client = self.media_service.bucket_service.s3_client
         paginator = s3_client.get_paginator("list_objects_v2")

@@ -1,6 +1,7 @@
 import pytest
 from django.core.exceptions import PermissionDenied
 from django.test import RequestFactory
+from django.test import override_settings
 
 from lacos.dbadmin.views import (
     DashboardView,
@@ -45,6 +46,15 @@ class TestDashboardView:
         request.user = AnonymousUser()
         response = DashboardView.as_view()(request)
         assert response.status_code == 302
+
+    @override_settings(AWS_PRODUCTION_BUCKET_NAME="archive-production")
+    def test_dashboard_uses_configured_derivative_bucket_name(self, rf, superuser):
+        request = rf.get("/dbadmin/")
+        request.user = superuser
+        response = DashboardView.as_view()(request)
+
+        assert response.status_code == 200
+        assert "archive-production" in response.rendered_content
 
 
 @pytest.mark.django_db

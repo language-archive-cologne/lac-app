@@ -72,6 +72,25 @@ def test_audit_no_wav_files(MockMPS):
     assert DerivativeStatus.objects.count() == 0
 
 
+@patch("lacos.storage.services.derivative_audit_service.MediaProcessingService")
+@override_settings(
+    AWS_PRODUCTION_BUCKET_NAME="lacos-production",
+    S3_PRODUCTION_BUCKET="grails-dev",
+)
+def test_audit_defaults_to_bucket_service_production_bucket(MockMPS):
+    mock_service = MockMPS.return_value
+    mock_service.bucket_service.production_bucket = "lacos-production"
+    paginator = MagicMock()
+    paginator.paginate.return_value = []
+    mock_service.bucket_service.s3_client.get_paginator.return_value = paginator
+
+    service = DerivativeAuditService(media_service=mock_service)
+    result = service.audit_bucket()
+
+    assert result["bucket_name"] == "lacos-production"
+    paginator.paginate.assert_called_once_with(Bucket="lacos-production")
+
+
 @pytest.mark.django_db
 @patch("lacos.storage.services.derivative_audit_service.MediaProcessingService")
 def test_audit_partial_derivatives(MockMPS):

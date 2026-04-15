@@ -366,10 +366,16 @@ S3_WORKSPACE_BUCKETS = env.list("S3_WORKSPACE_BUCKETS", default=["lacos-ingest",
 # Buckets where OCFL operations are allowed (subset of workspace buckets)
 S3_OCFL_BUCKETS = env.list("S3_OCFL_BUCKETS", default=["lacos-ingest", "lacos-production"])
 
-# Legacy bucket names for backward compatibility
-# These map to the actual bucket names used by the legacy configuration
-S3_INGEST_BUCKET = env("S3_INGEST_BUCKET", default="lacos-ingest")
-S3_PRODUCTION_BUCKET = env("S3_PRODUCTION_BUCKET", default="lacos-production")
+# Legacy bucket names for backward compatibility.
+# Prefer AWS_STORAGE_BUCKET_NAME / AWS_PRODUCTION_BUCKET_NAME in all new code.
+S3_INGEST_BUCKET = env(
+    "S3_INGEST_BUCKET",
+    default=env("AWS_STORAGE_BUCKET_NAME", default="lacos-ingest"),
+)
+S3_PRODUCTION_BUCKET = env(
+    "S3_PRODUCTION_BUCKET",
+    default=env("AWS_PRODUCTION_BUCKET_NAME", default="lacos-production"),
+)
 # Increase botocore HTTP pool size to avoid connection pool saturation under Huey/media load.
 AWS_S3_MAX_POOL_CONNECTIONS = env.int("AWS_S3_MAX_POOL_CONNECTIONS", default=50)
 

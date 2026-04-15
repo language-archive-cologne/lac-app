@@ -161,7 +161,7 @@
                 <div>
                     <h3 class="text-lg font-semibold">Audio Derivative Status</h3>
                     <p class="text-sm text-base-content/60">
-                        Overview of peaks, spectrogram, and pitch sidecars for WAV files in lacos-production.
+                        Overview of peaks, spectrogram, and pitch sidecars for WAV files in {{ derivative_bucket_name }}.
                         {% if derivative_stats.last_audit %}
                         Last audited {{ derivative_stats.last_audit|timesince }} ago.
                         {% else %}
@@ -247,7 +247,7 @@
             {% else %}
             <div class="text-center py-10 text-base-content/50">
                 <p class="text-lg mb-2">No derivative data yet</p>
-                <p class="text-sm">Run the audit to scan lacos-production for WAV files and check their derivatives.</p>
+                <p class="text-sm">Run the audit to scan {{ derivative_bucket_name }} for WAV files and check their derivatives.</p>
             </div>
             {% endif %}
         </div>

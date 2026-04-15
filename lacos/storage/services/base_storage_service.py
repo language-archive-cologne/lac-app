@@ -238,6 +238,20 @@ class BaseStorageService:
         storage_bucket_env = os.environ.get('AWS_STORAGE_BUCKET_NAME', '')
         if storage_bucket_env:
             return storage_bucket_env
+
+        legacy_bucket = getattr(settings, 'S3_INGEST_BUCKET', None)
+        if legacy_bucket:
+            logger.warning(
+                "S3_INGEST_BUCKET is deprecated; use AWS_STORAGE_BUCKET_NAME instead."
+            )
+            return legacy_bucket
+
+        legacy_bucket_env = os.environ.get('S3_INGEST_BUCKET', '')
+        if legacy_bucket_env:
+            logger.warning(
+                "S3_INGEST_BUCKET is deprecated; use AWS_STORAGE_BUCKET_NAME instead."
+            )
+            return legacy_bucket_env
         
         # Default bucket name
         if self._is_minio_environment():
@@ -258,6 +272,20 @@ class BaseStorageService:
         bucket_name_env = os.environ.get('AWS_PRODUCTION_BUCKET_NAME', '')
         if bucket_name_env:
             return bucket_name_env
+
+        legacy_bucket = getattr(settings, 'S3_PRODUCTION_BUCKET', None)
+        if legacy_bucket:
+            logger.warning(
+                "S3_PRODUCTION_BUCKET is deprecated; use AWS_PRODUCTION_BUCKET_NAME instead."
+            )
+            return legacy_bucket
+
+        legacy_bucket_env = os.environ.get('S3_PRODUCTION_BUCKET', '')
+        if legacy_bucket_env:
+            logger.warning(
+                "S3_PRODUCTION_BUCKET is deprecated; use AWS_PRODUCTION_BUCKET_NAME instead."
+            )
+            return legacy_bucket_env
         
         # Default bucket name
         if self._is_minio_environment():
