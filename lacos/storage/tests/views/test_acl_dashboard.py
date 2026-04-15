@@ -592,3 +592,47 @@ def test_acl_update_permission_preserves_full_uri(
     assert "urn:lacos:eppn:bob@uni.org" in stored_agents
     # Ensure no double-prefixing occurred
     assert "urn:lacos:eppn:urn:lacos:eppn:bob@uni.org" not in stored_agents
+
+
+@pytest.mark.django_db
+@patch(
+    "lacos.storage.services.acl_service.ACLService.save_permission",
+    side_effect=_mock_save_permission,
+)
+def test_acl_update_permission_generates_missing_selected_user_acl_uri(
+    _mock_save, client, django_user_model
+):
+    archivist = django_user_model.objects.create_user("norm3", "norm3@example.com", "pass")
+    _make_archivist(archivist)
+    client.force_login(archivist)
+
+    selected_user = django_user_model.objects.create_user(
+        "fmondac1@uni-koeln.de",
+        password="pass",
+        saml_persistent_id="persistent-id-3",
+        acl_agent_uri=None,
+    )
+    collection = Collection.objects.create(identifier="norm-col-3")
+
+    response = client.post(
+        reverse("storage:acl_update_permission"),
+        data={
+            "object_type": "collection",
+            "object_id": str(collection.pk),
+            "access_level": ACL_LEVEL_RESTRICTED,
+            "user_ids": [str(selected_user.pk)],
+            "next": reverse("storage:acl_admin_dashboard"),
+        },
+    )
+
+    assert response.status_code == 302
+
+    selected_user.refresh_from_db()
+    assert selected_user.acl_agent_uri == "urn:lacos:eppn:fmondac1@uni-koeln.de"
+
+    ct = ContentType.objects.get_for_model(Collection)
+    record = ACLPermissions.objects.get(content_type=ct, object_id=str(collection.pk))
+    stored_agents = [
+        entry["agent"] for entry in record.permissions_data if "agent" in entry
+    ]
+    assert "urn:lacos:eppn:fmondac1@uni-koeln.de" in stored_agents

@@ -27,6 +27,7 @@ from lacos.storage.models.acl_config import ACLConfig
 from lacos.storage.models.acl_permissions import ACLPermissions
 from lacos.storage.constants import ACL_LEVEL_PUBLIC, ACL_LEVEL_ACADEMIC, ACL_LEVEL_RESTRICTED
 from lacos.storage.utils.acl import normalize_agent_uri
+from lacos.users.utils import ensure_acl_agent_uri
 
 logger = logging.getLogger(__name__)
 
@@ -764,6 +765,7 @@ def acl_update_permission(request):
         for user_id in user_ids:
             try:
                 user = User.objects.get(pk=user_id)
+                ensure_acl_agent_uri(user, save=True)
                 if user.acl_agent_uri:
                     person_agents.add(user.acl_agent_uri)
             except User.DoesNotExist:
