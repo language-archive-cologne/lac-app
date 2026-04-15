@@ -1,6 +1,8 @@
 import os
 import pytest
 from botocore.exceptions import ClientError
+from django.core.cache import cache
+from unittest.mock import MagicMock, patch
 
 # Import constants from test_constants.py
 from .test_constants import TEST_BUCKET_NAME, TEST_INGEST_BUCKET, TEST_PRODUCTION_BUCKET
@@ -97,3 +99,31 @@ def test_delete_directory(mock_s3, mock_base_service, temp_dir):
     # Verify the directory is deleted
     response = mock_s3.list_objects_v2(Bucket=TEST_BUCKET_NAME, Prefix=prefix)
     assert "Contents" not in response, "Directory was not deleted"
+
+
+def test_get_all_accessible_buckets_uses_configured_workspace_buckets(mock_base_service):
+    cache.clear()
+    mock_base_service.workspace_buckets = ["grails-dev", "lacos-production", "grails-dev"]
+    mock_base_service.s3_client = MagicMock()
+
+    result = mock_base_service.get_all_accessible_buckets()
+
+    assert result == ["grails-dev", "lacos-production"]
+    mock_base_service.s3_client.list_buckets.assert_not_called()
+
+
+def test_get_all_accessible_buckets_uses_dynamic_discovery_for_wildcard(mock_base_service):
+    cache.clear()
+    mock_base_service.workspace_buckets = ["*"]
+    mock_base_service.s3_client = MagicMock()
+    mock_base_service.s3_client.list_buckets.return_value = {
+        "Buckets": [
+            {"Name": "lacos-production"},
+            {"Name": "grails-dev"},
+        ]
+    }
+
+    result = mock_base_service.get_all_accessible_buckets()
+
+    assert result == ["grails-dev", "lacos-production"]
+    mock_base_service.s3_client.list_buckets.assert_called_once_with()
