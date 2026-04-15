@@ -694,14 +694,19 @@ class ResourceByHandleView(View):
     def get(self, request, handle_id):
         file_pid = f"hdl:{handle_id}"
 
-        # Search across all resource types; reverse path goes through
-        # BundleResources (M2M container) → Bundle.resources
-        for model in (MediaResource, WrittenResource, OtherResource):
+        # Search across all bundle resource types.
+        for model in (MediaResource, WrittenResource, OtherResource, BundleAdditionalMetadataFile):
             resource = model.objects.filter(file_pid=file_pid).first()
             if resource:
-                bundle = Bundle.objects.filter(
-                    resources__in=resource.bundleresources_set.all()
-                ).first()
+                if isinstance(resource, BundleAdditionalMetadataFile):
+                    bundle = Bundle.objects.filter(
+                        structural_info__additional_metadata_files=resource
+                    ).first()
+                else:
+                    # Reverse path goes through BundleResources (M2M container) → Bundle.resources
+                    bundle = Bundle.objects.filter(
+                        resources__in=resource.bundleresources_set.all()
+                    ).first()
                 if bundle:
                     # Render directly via ResourceAccessView
                     view = ResourceAccessView()

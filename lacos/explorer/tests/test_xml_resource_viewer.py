@@ -6,6 +6,8 @@ from django.urls import reverse
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import (
     BundleAdditionalMetadataFile,
+    BundleResources,
+    WrittenResource,
     BundleStructuralInfo,
 )
 from lacos.blam.models.collection.collection_repository import Collection
@@ -192,3 +194,72 @@ def test_collection_imdi_resource_uses_metadata_fallback_when_pid_mapping_missin
     assert response.status_code == 200
     page = response.content.decode("utf-8")
     assert 'data-viewer-type="imdi"' in page
+
+
+@pytest.mark.django_db
+def test_bundle_elan_resource_handles_storage_fetch_failure(client, monkeypatch):
+    collection = Collection.objects.create(identifier="hdl:test/collection-elan-bundle")
+    bundle = Bundle.objects.create(identifier="hdl:test/bundle-elan-resource")
+    BundleStructuralInfo.objects.create(
+        bundle=bundle,
+        is_member_of_collection=collection,
+    )
+    bundle_resources = BundleResources.objects.create(bundle=bundle)
+    elan_resource = WrittenResource.objects.create(
+        file_pid="hdl:test/bundle-elan-file",
+        file_name="zag_mam_20160720_3.eaf",
+        mime_type="text/x-eaf+xml",
+        file_description="ELAN annotation",
+    )
+    bundle_resources.bundle_written_resources.add(elan_resource)
+
+    class ExplodingS3Client:
+        def get_object(self, **_kwargs):
+            raise RuntimeError("Could not connect to the endpoint URL")
+
+    class DummyService:
+        s3_client = ExplodingS3Client()
+
+        def generate_presigned_url(self, _bucket, _key, response_headers=None):
+            if response_headers:
+                return "https://example.test/download"
+            return "https://example.test/preview"
+
+        def resolve_pid_to_s3(self, _pid):
+            return None
+
+    monkeypatch.setattr(
+        "lacos.explorer.views.bundles.ResourceMappingService",
+        lambda *args, **kwargs: DummyService(),
+    )
+    monkeypatch.setattr(
+        "lacos.explorer.views.bundles.resolve_resource_to_presigned",
+        lambda *_args, **_kwargs: {
+            "bucket": "lacos-production",
+            "key": "beria/adjectives_10/v1/content/zag_mam_20160720_3.eaf",
+            "url": "https://example.test/preview",
+        },
+    )
+    monkeypatch.setattr(
+        "lacos.explorer.views.bundles.ACLEvaluationService.evaluate",
+        lambda *_args, **_kwargs: SimpleNamespace(allowed=True),
+    )
+    monkeypatch.setattr(
+        "lacos.explorer.views.bundles.ACLEvaluationService.enforcement_enabled",
+        True,
+        raising=False,
+    )
+
+    response = client.get(
+        reverse(
+            "explorer:resource_access",
+            kwargs={"bundle_id": bundle.pk, "resource_id": elan_resource.pk},
+        ),
+        {"action": "play"},
+        HTTP_HX_REQUEST="true",
+    )
+
+    assert response.status_code == 200
+    page = response.content.decode("utf-8")
+    assert 'data-viewer-type="elan"' in page
+    assert "No linked audio track found for this ELAN file." in page
