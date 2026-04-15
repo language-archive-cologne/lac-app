@@ -9,11 +9,6 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 
 from .bucket_coordinator import BucketCoordinatorMixin
-from lacos.storage.services.dashboard_access_service import (
-    filter_storage_dashboard_listing,
-    get_storage_dashboard_access,
-    get_storage_dashboard_workspace_buckets,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +37,8 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
         from lacos.storage.services.bucket_service import BucketService
 
         bucket_service = BucketService(skip_bucket_check=True)
-        workspace_buckets = get_storage_dashboard_workspace_buckets(request.user, bucket_service)
+        workspace_buckets = bucket_service.get_all_accessible_buckets()
         ocfl_buckets = bucket_service.ocfl_buckets
-        storage_dashboard_access = get_storage_dashboard_access(request.user)
 
         if active_bucket is not None:
             active_bucket = self.set_active_bucket(request, active_bucket, workspace_buckets)
@@ -60,7 +54,6 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
             'active_bucket': active_bucket,
             'success_message': success_message,
             'csrf_token': get_token(request),
-            'storage_dashboard_access': storage_dashboard_access,
         }
 
         return render_to_string(
@@ -87,8 +80,7 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
         from lacos.storage.services.bucket_service import BucketService
 
         bucket_service = BucketService(skip_bucket_check=True)
-        workspace_buckets = get_storage_dashboard_workspace_buckets(request.user, bucket_service)
-        storage_dashboard_access = get_storage_dashboard_access(request.user)
+        workspace_buckets = bucket_service.get_all_accessible_buckets()
 
         # Verify bucket access
         if bucket_name not in workspace_buckets:
@@ -113,7 +105,6 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
                     continuation_token=continuation_token,
                     force_fresh=force_fresh,
                 )
-                listing_page = filter_storage_dashboard_listing(request.user, listing_page)
 
                 logger.info("Render bucket content template", extra={"bucket_name": bucket_name})
                 logger.info(
@@ -136,7 +127,6 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
                 'root_autoload': not prefetch_root,
                 'force_fresh': force_fresh,
                 'root_folder_sentinel': ROOT_FOLDER_SENTINEL,
-                'storage_dashboard_access': storage_dashboard_access,
             }
 
             try:
@@ -247,7 +237,7 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
         from lacos.storage.services.bucket_service import BucketService
 
         bucket_service = BucketService(skip_bucket_check=True)
-        workspace_buckets = get_storage_dashboard_workspace_buckets(request.user, bucket_service)
+        workspace_buckets = bucket_service.get_all_accessible_buckets()
 
         context = {
             'workspace_buckets': workspace_buckets,
