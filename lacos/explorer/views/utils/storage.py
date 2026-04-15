@@ -1,6 +1,7 @@
 """S3 and storage utility functions."""
 
 import logging
+import os
 import unicodedata
 from pathlib import PurePosixPath
 from typing import Optional, Sequence, Tuple
@@ -9,6 +10,10 @@ import xml.dom.minidom
 
 from botocore.exceptions import ClientError
 
+from lacos.blam.models.bundle.bundle_structural_info import BundleAdditionalMetadataFile
+from lacos.blam.models.collection.collection_structural_info import (
+    CollectionAdditionalMetadataFile,
+)
 from lacos.storage.services.file_discovery_service import FileDiscoveryService
 
 
@@ -38,7 +43,7 @@ def resolve_existing_object(
     resource_service,
     object_locations: Sequence[Tuple[Optional[str], Optional[str]]],
 ) -> Tuple[Optional[str], Optional[str]]:
-    """Return the first (bucket, key) pair that exists in storage."""
+    """Return the first viable (bucket, key) pair for a resource."""
     seen: set[Tuple[str, str]] = set()
 
     for bucket, key in object_locations:
@@ -57,7 +62,21 @@ def resolve_existing_object(
             error_code = error.response.get('Error', {}).get('Code')
             if error_code in {'404', 'NoSuchKey', 'NotFound'}:
                 continue
-            raise
+            logger.warning(
+                "Could not verify s3://%s/%s via head_object; trusting candidate",
+                bucket,
+                key,
+                exc_info=True,
+            )
+            return bucket, key
+        except Exception:
+            logger.warning(
+                "Unexpected error verifying s3://%s/%s; trusting candidate",
+                bucket,
+                key,
+                exc_info=True,
+            )
+            return bucket, key
 
     return None, None
 
@@ -169,6 +188,19 @@ def resolve_resource_to_presigned(
 
     Returns dict with 'bucket', 'key', and 'url' or None if not found.
     """
+    location = resource_service.resolve_pid_to_s3(getattr(resource, "file_pid", None))
+    if location and getattr(location, "s3_bucket", None) and getattr(location, "s3_key", None):
+        presigned_url = resource_service.generate_presigned_url(
+            location.s3_bucket,
+            location.s3_key,
+            response_headers=response_headers,
+        )
+        return {
+            "bucket": location.s3_bucket,
+            "key": location.s3_key,
+            "url": presigned_url,
+        }
+
     fallback_bucket = (
         getattr(bundle, "import_bucket", None)
         or (
@@ -180,18 +212,17 @@ def resolve_resource_to_presigned(
 
     candidate_locations: list[tuple[Optional[str], Optional[str]]] = []
 
-    location = resource_service.resolve_pid_to_s3(getattr(resource, "file_pid", None))
-    if location:
-        candidate_locations.append((location.s3_bucket, location.s3_key))
-        candidate_locations.append((fallback_bucket, location.s3_key))
-
     def add_import_location(import_bucket: Optional[str], import_key: Optional[str]):
         if not import_bucket or not import_key:
             return
+        if isinstance(resource, BundleAdditionalMetadataFile):
+            base_path = resource_service._get_ocfl_additional_metadata_base_path(import_key)
+            if base_path:
+                candidate_locations.append((import_bucket, f"{base_path}{resource.file_name}"))
+            return
+
         base_path = PurePosixPath(import_key).parent
-        candidate_locations.append(
-            (import_bucket, str(base_path / "Resources" / resource.file_name))
-        )
+        candidate_locations.append((import_bucket, str(base_path / "Resources" / resource.file_name)))
 
     add_import_location(
         getattr(bundle, "import_bucket", None),
@@ -254,6 +285,73 @@ def resolve_resource_to_presigned(
         response_headers=response_headers,
     )
 
+    return {
+        "bucket": bucket_name,
+        "key": object_key,
+        "url": presigned_url,
+    }
+
+
+def resolve_collection_metadata_to_presigned(
+    resource_service,
+    metadata_file,
+    collection,
+    *,
+    response_headers: Optional[dict] = None,
+):
+    """Resolve a collection additional metadata file to bucket/key/url."""
+    location = resource_service.resolve_pid_to_s3(getattr(metadata_file, "file_pid", None))
+    if location and getattr(location, "s3_bucket", None) and getattr(location, "s3_key", None):
+        presigned_url = resource_service.generate_presigned_url(
+            location.s3_bucket,
+            location.s3_key,
+            response_headers=response_headers,
+        )
+        return {
+            "bucket": location.s3_bucket,
+            "key": location.s3_key,
+            "url": presigned_url,
+        }
+
+    candidate_locations: list[tuple[Optional[str], Optional[str]]] = []
+    import_bucket = getattr(collection, "import_bucket", None) or resource_service.production_bucket
+    import_object_key = getattr(collection, "import_object_key", None)
+
+    if isinstance(metadata_file, CollectionAdditionalMetadataFile):
+        base_path = resource_service._get_ocfl_additional_metadata_base_path(import_object_key)
+        if base_path:
+            candidate_locations.append((import_bucket, f"{base_path}{metadata_file.file_name}"))
+
+    file_name = getattr(metadata_file, "file_name", None)
+    if import_bucket and file_name and import_object_key:
+        parent = os.path.dirname(import_object_key.rstrip("/"))
+        candidate_locations.append((import_bucket, f"{parent}/additional_metadata/{file_name}"))
+
+    bucket_name, object_key = resolve_existing_object(resource_service, candidate_locations)
+    if not bucket_name or not object_key:
+        return None
+
+    try:
+        if hasattr(resource_service, "register_s3_location"):
+            resource_service.register_s3_location(
+                metadata_file,
+                bucket_name,
+                object_key,
+                pid_url=getattr(metadata_file, "file_pid", None),
+                fetch_metadata=False,
+            )
+    except Exception as exc:
+        logger.debug(
+            "Could not sync resolved collection metadata S3 location for %s: %s",
+            getattr(metadata_file, "id", "unknown"),
+            exc,
+        )
+
+    presigned_url = resource_service.generate_presigned_url(
+        bucket_name,
+        object_key,
+        response_headers=response_headers,
+    )
     return {
         "bucket": bucket_name,
         "key": object_key,
