@@ -4,14 +4,6 @@ import logging
 import time
 from typing import Optional
 
-from botocore.exceptions import (
-    ConnectionClosedError,
-    ConnectionError as BotoConnectionError,
-    ConnectTimeoutError,
-    EndpointConnectionError,
-    HTTPClientError,
-    ReadTimeoutError,
-)
 from django.conf import settings
 from django.utils import timezone
 
@@ -21,30 +13,18 @@ from lacos.storage.services.media_processing_service import MediaProcessingServi
 logger = logging.getLogger(__name__)
 
 
-class DerivativeAuditConnectivityError(RuntimeError):
-    """Raised when the audit cannot reach the S3 endpoint reliably."""
-
-
 class DerivativeAuditService:
     """Scans S3 for WAV files and checks whether their derivatives exist."""
 
-    DEFAULT_ARTIFACT_DELAY = 0.25
     DEFAULT_THROTTLE_DELAY = 0.1
     DEFAULT_THROTTLE_PAGE_DELAY = 1.0
-    DEFAULT_CONNECTIVITY_BACKOFF_BASE = 1.0
-    DEFAULT_CONNECTIVITY_BACKOFF_MAX = 30.0
-    DEFAULT_MAX_CONSECUTIVE_CONNECTIVITY_FAILURES = 5
 
     def __init__(
         self,
         media_service: Optional[MediaProcessingService] = None,
     ) -> None:
         self.media_service = media_service or MediaProcessingService()
-        # Pause between existence checks/files/pages to avoid overwhelming the S3 endpoint.
-        self.artifact_delay = self._resolve_delay(
-            "DERIVATIVE_AUDIT_ARTIFACT_DELAY_SECONDS",
-            self.DEFAULT_ARTIFACT_DELAY,
-        )
+        # Pause between files/pages to avoid overwhelming the S3 endpoint.
         self.throttle_delay = self._resolve_delay(
             "DERIVATIVE_AUDIT_FILE_DELAY_SECONDS",
             self.DEFAULT_THROTTLE_DELAY,
@@ -52,18 +32,6 @@ class DerivativeAuditService:
         self.throttle_page_delay = self._resolve_delay(
             "DERIVATIVE_AUDIT_PAGE_DELAY_SECONDS",
             self.DEFAULT_THROTTLE_PAGE_DELAY,
-        )
-        self.connectivity_backoff_base = self._resolve_delay(
-            "DERIVATIVE_AUDIT_CONNECTIVITY_BACKOFF_BASE_SECONDS",
-            self.DEFAULT_CONNECTIVITY_BACKOFF_BASE,
-        )
-        self.connectivity_backoff_max = self._resolve_delay(
-            "DERIVATIVE_AUDIT_CONNECTIVITY_BACKOFF_MAX_SECONDS",
-            self.DEFAULT_CONNECTIVITY_BACKOFF_MAX,
-        )
-        self.max_consecutive_connectivity_failures = self._resolve_int(
-            "DERIVATIVE_AUDIT_MAX_CONSECUTIVE_CONNECTIVITY_FAILURES",
-            self.DEFAULT_MAX_CONSECUTIVE_CONNECTIVITY_FAILURES,
         )
 
     def _resolve_delay(self, setting_name: str, default: float) -> float:
@@ -78,51 +46,6 @@ class DerivativeAuditService:
                 default,
             )
             return default
-
-    def _resolve_int(self, setting_name: str, default: int) -> int:
-        raw_value = getattr(settings, setting_name, default)
-        try:
-            return max(1, int(raw_value))
-        except (TypeError, ValueError):
-            logger.warning(
-                "Invalid %s value %r. Falling back to %d.",
-                setting_name,
-                raw_value,
-                default,
-            )
-            return default
-
-    def _sleep(self, delay: float) -> None:
-        if delay > 0:
-            time.sleep(delay)
-
-    def _is_connectivity_error(self, exc: Exception) -> bool:
-        return isinstance(
-            exc,
-            (
-                OSError,
-                BotoConnectionError,
-                ConnectTimeoutError,
-                ConnectionClosedError,
-                EndpointConnectionError,
-                HTTPClientError,
-                ReadTimeoutError,
-                TimeoutError,
-            ),
-        )
-
-    def _artifact_exists(self, bucket_name: str, key: str) -> bool:
-        try:
-            return self.media_service._artifact_exists(bucket_name, key)
-        except Exception as exc:
-            if self._is_connectivity_error(exc):
-                raise DerivativeAuditConnectivityError(str(exc)) from exc
-            raise
-
-    def _connectivity_backoff_delay(self, consecutive_failures: int) -> float:
-        exponent = max(0, consecutive_failures - 1)
-        delay = self.connectivity_backoff_base * (2 ** exponent)
-        return min(self.connectivity_backoff_max, delay)
 
     def audit_bucket(
         self,
@@ -151,9 +74,6 @@ class DerivativeAuditService:
         with_pitch = 0
         missing_all = 0
         errors = 0
-        consecutive_connectivity_failures = 0
-        aborted = False
-        aborted_reason = None
 
         now = timezone.now()
 
@@ -174,52 +94,16 @@ class DerivativeAuditService:
                         with_pitch += 1
                     if not status.has_any_derivative:
                         missing_all += 1
-                    consecutive_connectivity_failures = 0
-                except DerivativeAuditConnectivityError as exc:
-                    errors += 1
-                    consecutive_connectivity_failures += 1
-                    backoff_delay = self._connectivity_backoff_delay(
-                        consecutive_connectivity_failures,
-                    )
-                    logger.warning(
-                        "Connectivity failure auditing %s/%s (consecutive=%d): %s. Backing off for %.2fs.",
-                        bucket_name,
-                        key,
-                        consecutive_connectivity_failures,
-                        exc,
-                        backoff_delay,
-                    )
-                    self._sleep(backoff_delay)
-                    if (
-                        consecutive_connectivity_failures
-                        >= self.max_consecutive_connectivity_failures
-                    ):
-                        aborted = True
-                        aborted_reason = (
-                            "Aborted derivative audit after repeated S3 connectivity failures."
-                        )
-                        logger.error(
-                            "%s bucket=%s prefix=%s consecutive_failures=%d",
-                            aborted_reason,
-                            bucket_name,
-                            prefix or "/",
-                            consecutive_connectivity_failures,
-                        )
-                        break
                 except Exception:
                     logger.exception("Error auditing %s/%s", bucket_name, key)
                     errors += 1
-                    consecutive_connectivity_failures = 0
 
-                self._sleep(self.throttle_delay)
+                time.sleep(self.throttle_delay)
 
-            if aborted:
-                break
-
-            self._sleep(self.throttle_page_delay)
+            time.sleep(self.throttle_page_delay)
 
         return {
-            "success": errors == 0 and not aborted,
+            "success": errors == 0,
             "bucket_name": bucket_name,
             "prefix": prefix,
             "total_wav_files": scanned,
@@ -228,8 +112,6 @@ class DerivativeAuditService:
             "with_pitch": with_pitch,
             "missing_all_derivatives": missing_all,
             "errors": errors,
-            "aborted": aborted,
-            "error": aborted_reason,
         }
 
     def _check_and_upsert(
@@ -247,30 +129,24 @@ class DerivativeAuditService:
         """
         source_etag = s3_obj.get("ETag", "").strip('"')
 
-        derivative_keys = (
-            ("peaks_exists", self.media_service._peaks_key(s3_key)),
-            (
-                "spectrogram_exists",
-                self.media_service._spectrogram_data_key(s3_key),
-            ),
-            ("pitch_exists", self.media_service._pitch_key(s3_key)),
+        peaks = self.media_service._artifact_exists(
+            bucket_name, self.media_service._peaks_key(s3_key)
         )
-        derivative_flags: dict[str, bool] = {}
-
-        for index, (field_name, derivative_key) in enumerate(derivative_keys):
-            derivative_flags[field_name] = self._artifact_exists(
-                bucket_name,
-                derivative_key,
-            )
-            if index < len(derivative_keys) - 1:
-                self._sleep(self.artifact_delay)
+        spectrogram = self.media_service._artifact_exists(
+            bucket_name, self.media_service._spectrogram_data_key(s3_key)
+        )
+        pitch = self.media_service._artifact_exists(
+            bucket_name, self.media_service._pitch_key(s3_key)
+        )
 
         status, _ = DerivativeStatus.objects.update_or_create(
             bucket_name=bucket_name,
             source_s3_key=s3_key,
             defaults={
                 "source_etag": source_etag,
-                **derivative_flags,
+                "peaks_exists": peaks,
+                "spectrogram_exists": spectrogram,
+                "pitch_exists": pitch,
                 "last_checked_at": now,
             },
         )

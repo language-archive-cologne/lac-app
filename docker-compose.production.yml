@@ -40,10 +40,6 @@ services:
       EDUGAIN_METADATA_URL: "https://www.aai.dfn.de/fileadmin/metadata/dfn-aai-edugain+idp-metadata.xml"
       GUIDELINES_REPO_URL: /app/lac-guidelines
       LAC_MEDIA_TMP_DIR: "/app/.tmp/media-processing"
-      DERIVATIVE_AUDIT_ARTIFACT_DELAY_SECONDS: "0.5"
-      DERIVATIVE_AUDIT_FILE_DELAY_SECONDS: "0.25"
-      DERIVATIVE_AUDIT_PAGE_DELAY_SECONDS: "3.0"
-      DERIVATIVE_AUDIT_MAX_CONSECUTIVE_CONNECTIVITY_FAILURES: "3"
     ports:
       - '127.0.0.1:8103:8000'
     command: /start-production
@@ -137,10 +133,6 @@ services:
       HUEY_IMMEDIATE: "false"
       HUEY_WORKERS: "4"
       LAC_MEDIA_TMP_DIR: "/app/.tmp/media-processing"
-      DERIVATIVE_AUDIT_ARTIFACT_DELAY_SECONDS: "0.5"
-      DERIVATIVE_AUDIT_FILE_DELAY_SECONDS: "0.25"
-      DERIVATIVE_AUDIT_PAGE_DELAY_SECONDS: "3.0"
-      DERIVATIVE_AUDIT_MAX_CONSECUTIVE_CONNECTIVITY_FAILURES: "3"
     command: /bin/sh -c "python manage.py run_huey"
     networks:
       - lacos_production_network
