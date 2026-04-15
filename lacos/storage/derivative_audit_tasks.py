@@ -3,13 +3,19 @@
 import logging
 
 from huey.contrib.djhuey import db_task
+
+try:
+    from huey import crontab
+    from huey.contrib.djhuey import db_periodic_task
+
+    HUEY_PERIODIC_AVAILABLE = True
+except ImportError:  # pragma: no cover - optional dependency
+    HUEY_PERIODIC_AVAILABLE = False
+
+from lacos.common.periodic_task_tracker import tracked_periodic
 from lacos.storage.services.background_task_service import BackgroundTaskService
 
 logger = logging.getLogger(__name__)
-
-PERIODIC_DERIVATIVE_AUDIT_DISABLED_REASON = (
-    "Automatic scheduling disabled while S3 throttling is being validated."
-)
 
 
 def _run_audit(bucket_name: str | None = None, prefix: str = "") -> dict:
@@ -54,11 +60,20 @@ def audit_derivatives_task(
     return result
 
 
-def periodic_derivative_audit() -> dict:
-    """Compatibility stub kept importable while periodic scheduling is disabled."""
-    logger.info("Skipping periodic derivative audit: %s", PERIODIC_DERIVATIVE_AUDIT_DISABLED_REASON)
-    return {
-        "success": False,
-        "skipped": "periodic_derivative_audit_disabled",
-        "reason": PERIODIC_DERIVATIVE_AUDIT_DISABLED_REASON,
-    }
+if HUEY_PERIODIC_AVAILABLE:
+
+    @db_periodic_task(crontab(hour="3", minute="0"))
+    @tracked_periodic(
+        task_name="periodic_derivative_audit",
+        description="Derivative Audit (daily)",
+        schedule="0 3 * * *",
+    )
+    def periodic_derivative_audit() -> dict:
+        """Daily audit of derivative status for lacos-production."""
+        return _run_audit()
+
+else:
+
+    def periodic_derivative_audit() -> dict:  # pragma: no cover - fallback
+        """Fallback when periodic tasks are unavailable."""
+        return _run_audit()

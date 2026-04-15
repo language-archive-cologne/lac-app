@@ -452,16 +452,6 @@ UPLOAD_VERIFICATION_SCHEDULE_MINUTES = env.int(
     "UPLOAD_VERIFICATION_SCHEDULE_MINUTES",
     default=15,
 )
-# Delay between derivative-audit file checks to reduce S3 burstiness.
-DERIVATIVE_AUDIT_FILE_DELAY_SECONDS = env.float(
-    "DERIVATIVE_AUDIT_FILE_DELAY_SECONDS",
-    default=0.1,
-)
-# Delay between derivative-audit paginator pages to reduce S3 burstiness.
-DERIVATIVE_AUDIT_PAGE_DELAY_SECONDS = env.float(
-    "DERIVATIVE_AUDIT_PAGE_DELAY_SECONDS",
-    default=1.0,
-)
 
 # Database backup configuration
 # ------------------------------------------------------------------------------

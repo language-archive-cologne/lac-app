@@ -1,7 +1,6 @@
 """Service to audit derivative (sidecar) status for audio files in S3."""
 
 import logging
-import time
 from typing import Optional
 
 from django.conf import settings
@@ -16,36 +15,11 @@ logger = logging.getLogger(__name__)
 class DerivativeAuditService:
     """Scans S3 for WAV files and checks whether their derivatives exist."""
 
-    DEFAULT_THROTTLE_DELAY = 0.1
-    DEFAULT_THROTTLE_PAGE_DELAY = 1.0
-
     def __init__(
         self,
         media_service: Optional[MediaProcessingService] = None,
     ) -> None:
         self.media_service = media_service or MediaProcessingService()
-        # Pause between files/pages to avoid overwhelming the S3 endpoint.
-        self.throttle_delay = self._resolve_delay(
-            "DERIVATIVE_AUDIT_FILE_DELAY_SECONDS",
-            self.DEFAULT_THROTTLE_DELAY,
-        )
-        self.throttle_page_delay = self._resolve_delay(
-            "DERIVATIVE_AUDIT_PAGE_DELAY_SECONDS",
-            self.DEFAULT_THROTTLE_PAGE_DELAY,
-        )
-
-    def _resolve_delay(self, setting_name: str, default: float) -> float:
-        raw_value = getattr(settings, setting_name, default)
-        try:
-            return max(0.0, float(raw_value))
-        except (TypeError, ValueError):
-            logger.warning(
-                "Invalid %s value %r. Falling back to %.3fs.",
-                setting_name,
-                raw_value,
-                default,
-            )
-            return default
 
     def audit_bucket(
         self,
@@ -98,10 +72,6 @@ class DerivativeAuditService:
                     logger.exception("Error auditing %s/%s", bucket_name, key)
                     errors += 1
 
-                time.sleep(self.throttle_delay)
-
-            time.sleep(self.throttle_page_delay)
-
         return {
             "success": errors == 0,
             "bucket_name": bucket_name,
@@ -121,22 +91,17 @@ class DerivativeAuditService:
         s3_obj: dict,
         now,
     ) -> DerivativeStatus:
-        """Check derivative presence for a single WAV and upsert the row.
-
-        The dashboard/status model tracks whether sidecar files exist in S3.
-        Freshness is handled separately by generation paths that compare the
-        stored source ETag metadata.
-        """
+        """Check derivative existence for a single WAV and upsert the row."""
         source_etag = s3_obj.get("ETag", "").strip('"')
 
-        peaks = self.media_service._artifact_exists(
-            bucket_name, self.media_service._peaks_key(s3_key)
+        peaks = self.media_service._artifact_is_current(
+            bucket_name, self.media_service._peaks_key(s3_key), source_etag
         )
-        spectrogram = self.media_service._artifact_exists(
-            bucket_name, self.media_service._spectrogram_data_key(s3_key)
+        spectrogram = self.media_service._artifact_is_current(
+            bucket_name, self.media_service._spectrogram_data_key(s3_key), source_etag
         )
-        pitch = self.media_service._artifact_exists(
-            bucket_name, self.media_service._pitch_key(s3_key)
+        pitch = self.media_service._artifact_is_current(
+            bucket_name, self.media_service._pitch_key(s3_key), source_etag
         )
 
         status, _ = DerivativeStatus.objects.update_or_create(

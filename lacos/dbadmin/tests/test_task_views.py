@@ -129,20 +129,6 @@ def test_task_enqueue_creates_tracked_derivative_audit_task(
 
 
 @pytest.mark.django_db
-def test_scheduled_tasks_view_shows_disabled_derivative_audit(superuser_client):
-    response = superuser_client.get(
-        reverse("dbadmin:scheduled_tasks"),
-        HTTP_HX_REQUEST="true",
-    )
-
-    content = response.content.decode()
-    assert response.status_code == 200
-    assert "Derivative Audit" in content
-    assert "disabled" in content.lower()
-    assert "Automatic scheduling disabled while S3 throttling is being validated." in content
-
-
-@pytest.mark.django_db
 @patch("lacos.dbadmin.views.transaction.on_commit")
 def test_task_enqueue_marks_failed_when_on_commit_enqueue_crashes(
     mock_on_commit,
