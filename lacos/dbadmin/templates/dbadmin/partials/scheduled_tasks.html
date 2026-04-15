@@ -7,7 +7,9 @@
         <div class="card-body p-4">
             <div class="flex items-center justify-between">
                 <h4 class="font-semibold text-sm">{{ task.label }}</h4>
-                {% if task.last_status == 'success' %}
+                {% if task.disabled %}
+                    <span class="badge badge-warning badge-sm">disabled</span>
+                {% elif task.last_status == 'success' %}
                     <span class="badge badge-success badge-sm">OK</span>
                 {% elif task.last_status == 'failed' %}
                     <span class="badge badge-error badge-sm">FAIL</span>
@@ -15,7 +17,16 @@
                     <span class="badge badge-ghost badge-sm">never</span>
                 {% endif %}
             </div>
-            <div class="text-xs text-base-content/60 mt-1">{{ task.schedule_human }}</div>
+            <div class="text-xs text-base-content/60 mt-1">
+                {% if task.disabled %}
+                    Disabled. Was {{ task.schedule_human|lower }}.
+                {% else %}
+                    {{ task.schedule_human }}
+                {% endif %}
+            </div>
+            {% if task.disabled_reason %}
+                <div class="text-[11px] text-warning mt-1">{{ task.disabled_reason }}</div>
+            {% endif %}
             <div class="text-xs mt-2">
                 {% if task.last_run_time %}
                     Last run: {{ task.last_run_time|naturaltime }}

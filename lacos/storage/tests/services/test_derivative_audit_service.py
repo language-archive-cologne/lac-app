@@ -1,7 +1,9 @@
 """Tests for DerivativeAuditService."""
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
+from django.test import override_settings
 from django.utils import timezone
 
 from lacos.storage.models import DerivativeStatus
@@ -36,7 +38,7 @@ def test_audit_creates_status_rows(MockMPS):
     ]
     mock_service.bucket_service.s3_client.get_paginator.return_value = paginator
 
-    mock_service._artifact_is_current.return_value = True
+    mock_service._artifact_exists.return_value = True
     mock_service._peaks_key.side_effect = lambda k: f"{k}.peaks.json"
     mock_service._spectrogram_data_key.side_effect = lambda k: f"{k}.spectrogram.bin"
     mock_service._pitch_key.side_effect = lambda k: f"{k}.pitch.bin"
@@ -80,10 +82,10 @@ def test_audit_partial_derivatives(MockMPS):
     mock_service.bucket_service.s3_client.get_paginator.return_value = paginator
 
     # peaks exists, spectrogram+pitch missing
-    def artifact_is_current(bucket, key, source_etag):
+    def artifact_exists(bucket, key):
         return key.endswith(".peaks.json")
 
-    mock_service._artifact_is_current.side_effect = artifact_is_current
+    mock_service._artifact_exists.side_effect = artifact_exists
     mock_service._peaks_key.side_effect = lambda k: f"{k}.peaks.json"
     mock_service._spectrogram_data_key.side_effect = lambda k: f"{k}.spectrogram.bin"
     mock_service._pitch_key.side_effect = lambda k: f"{k}.pitch.bin"
@@ -112,7 +114,7 @@ def test_audit_updates_existing_row(MockMPS):
         _make_s3_page([("audio.wav", "etag1")]),
     ]
     mock_service.bucket_service.s3_client.get_paginator.return_value = paginator
-    mock_service._artifact_is_current.return_value = False
+    mock_service._artifact_exists.return_value = False
     mock_service._peaks_key.side_effect = lambda k: f"{k}.peaks.json"
     mock_service._spectrogram_data_key.side_effect = lambda k: f"{k}.spectrogram.bin"
     mock_service._pitch_key.side_effect = lambda k: f"{k}.pitch.bin"
@@ -125,7 +127,7 @@ def test_audit_updates_existing_row(MockMPS):
     assert DerivativeStatus.objects.get().peaks_exists is False
 
     # Second audit: derivatives now exist
-    mock_service._artifact_is_current.return_value = True
+    mock_service._artifact_exists.return_value = True
     service.audit_bucket(bucket_name="lacos-production")
     assert DerivativeStatus.objects.count() == 1
     assert DerivativeStatus.objects.get().peaks_exists is True
@@ -140,7 +142,7 @@ def test_audit_error_is_counted(MockMPS):
         _make_s3_page([("audio.wav", "etag1")]),
     ]
     mock_service.bucket_service.s3_client.get_paginator.return_value = paginator
-    mock_service._artifact_is_current.side_effect = Exception("S3 timeout")
+    mock_service._artifact_exists.side_effect = Exception("S3 timeout")
     mock_service._peaks_key.side_effect = lambda k: f"{k}.peaks.json"
     mock_service._spectrogram_data_key.side_effect = lambda k: f"{k}.spectrogram.bin"
     mock_service._pitch_key.side_effect = lambda k: f"{k}.pitch.bin"
@@ -155,7 +157,7 @@ def test_audit_error_is_counted(MockMPS):
 
 @pytest.mark.django_db
 @patch("lacos.storage.services.derivative_audit_service.MediaProcessingService")
-def test_audit_treats_stale_derivatives_as_missing(MockMPS):
+def test_audit_counts_existing_derivatives_even_when_not_current(MockMPS):
     mock_service = MockMPS.return_value
     paginator = MagicMock()
     paginator.paginate.return_value = [
@@ -163,11 +165,10 @@ def test_audit_treats_stale_derivatives_as_missing(MockMPS):
     ]
     mock_service.bucket_service.s3_client.get_paginator.return_value = paginator
 
-    def artifact_is_current(bucket, key, source_etag):
-        assert source_etag == "fresh-etag"
+    def artifact_exists(bucket, key):
         return key.endswith(".pitch.bin")
 
-    mock_service._artifact_is_current.side_effect = artifact_is_current
+    mock_service._artifact_exists.side_effect = artifact_exists
     mock_service._peaks_key.side_effect = lambda k: f"{k}.peaks.json"
     mock_service._spectrogram_data_key.side_effect = lambda k: f"{k}.spectrogram.bin"
     mock_service._pitch_key.side_effect = lambda k: f"{k}.pitch.bin"
@@ -183,3 +184,47 @@ def test_audit_treats_stale_derivatives_as_missing(MockMPS):
     assert ds.peaks_exists is False
     assert ds.spectrogram_exists is False
     assert ds.pitch_exists is True
+
+
+@pytest.mark.django_db
+@override_settings(
+    DERIVATIVE_AUDIT_FILE_DELAY_SECONDS=0.25,
+    DERIVATIVE_AUDIT_PAGE_DELAY_SECONDS=2.5,
+)
+@patch("lacos.storage.services.derivative_audit_service.MediaProcessingService")
+def test_audit_uses_configured_throttle_delays(MockMPS):
+    mock_service = MockMPS.return_value
+    paginator = MagicMock()
+    paginator.paginate.return_value = [
+        _make_s3_page([("audio.wav", "etag1")]),
+    ]
+    mock_service.bucket_service.s3_client.get_paginator.return_value = paginator
+    mock_service._artifact_exists.return_value = True
+    mock_service._peaks_key.side_effect = lambda k: f"{k}.peaks.json"
+    mock_service._spectrogram_data_key.side_effect = lambda k: f"{k}.spectrogram.bin"
+    mock_service._pitch_key.side_effect = lambda k: f"{k}.pitch.bin"
+
+    service = DerivativeAuditService(media_service=mock_service)
+
+    with patch("lacos.storage.services.derivative_audit_service.time.sleep") as mock_sleep:
+        result = service.audit_bucket(bucket_name="lacos-production")
+
+    assert result["success"] is True
+    assert service.throttle_delay == 0.25
+    assert service.throttle_page_delay == 2.5
+    assert mock_sleep.call_args_list == [
+        ((0.25,), {}),
+        ((2.5,), {}),
+    ]
+
+
+@override_settings(
+    DERIVATIVE_AUDIT_FILE_DELAY_SECONDS="invalid",
+    DERIVATIVE_AUDIT_PAGE_DELAY_SECONDS=-3,
+)
+@patch("lacos.storage.services.derivative_audit_service.MediaProcessingService")
+def test_audit_throttle_settings_fall_back_or_clamp(MockMPS):
+    service = DerivativeAuditService(media_service=MockMPS.return_value)
+
+    assert service.throttle_delay == service.DEFAULT_THROTTLE_DELAY
+    assert service.throttle_page_delay == 0.0

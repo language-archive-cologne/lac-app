@@ -9,6 +9,20 @@ def test_storage_tasks_imports_derivative_audit_tasks_for_huey_registration():
     assert storage_tasks.periodic_derivative_audit is derivative_audit_tasks.periodic_derivative_audit
 
 
+@patch("lacos.storage.derivative_audit_tasks._run_audit")
+def test_periodic_derivative_audit_returns_skipped_when_disabled(mock_run_audit):
+    result = derivative_audit_tasks.periodic_derivative_audit()
+
+    assert result == {
+        "success": False,
+        "skipped": "periodic_derivative_audit_disabled",
+        "reason": (
+            "Automatic scheduling disabled while S3 throttling is being validated."
+        ),
+    }
+    mock_run_audit.assert_not_called()
+
+
 @patch("lacos.storage.derivative_audit_tasks.BackgroundTaskService")
 @patch("lacos.storage.derivative_audit_tasks._run_audit")
 def test_audit_derivatives_task_marks_tracking_failed_when_audit_reports_errors(

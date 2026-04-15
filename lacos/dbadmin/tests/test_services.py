@@ -57,5 +57,7 @@ class TestDatabaseStatsService:
 
         assert derivative_audit["label"] == "Derivative Audit"
         assert derivative_audit["schedule"] == "0 3 * * *"
+        assert derivative_audit["disabled"] is True
+        assert "disabled" in derivative_audit["disabled_reason"].lower()
         assert derivative_audit["last_status"] == BackgroundTask.Status.SUCCESS
         assert derivative_audit["total_success"] == 1
