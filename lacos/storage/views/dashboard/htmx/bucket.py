@@ -13,14 +13,20 @@ from django.views import View
 from django.views.decorators.http import require_http_methods
 
 from lacos.common.mixins import BucketCoordinatorMixin, HtmxTemplateHelperMixin
+from lacos.storage.permissions import (
+    archivist_required,
+    can_manage_collection,
+    manager_or_archivist_required,
+    resolve_collection_from_path,
+)
 from lacos.storage.services.bucket_service import BucketService
 from lacos.storage.observability import profiling_scope
-from lacos.storage.permissions import archivist_required
+from django.core.exceptions import PermissionDenied
 
 logger = logging.getLogger(__name__)
 
 
-@method_decorator(archivist_required, name="dispatch")
+@method_decorator(manager_or_archivist_required, name="dispatch")
 class BucketContentHTMXView(HtmxTemplateHelperMixin, View):
     """
     Handle HTMX requests for bucket content display.
@@ -183,13 +189,17 @@ class RenameBucketModalHTMXView(HtmxTemplateHelperMixin, View):
         )
 
 
-@method_decorator(archivist_required, name="dispatch")
+@method_decorator(manager_or_archivist_required, name="dispatch")
 class RenameObjectModalHTMXView(HtmxTemplateHelperMixin, View):
     """Display rename object (folder/file) modal."""
 
     def get(self, request, bucket_name, object_type, object_path):
         """Render the rename object modal."""
         from django.urls import reverse
+
+        collection = resolve_collection_from_path(object_path)
+        if not can_manage_collection(request.user, collection):
+            raise PermissionDenied("Collection manager access required.")
 
         # Extract the current name from the object path
         current_name = object_path.rstrip('/').rsplit('/', 1)[-1]
@@ -256,7 +266,7 @@ class RenameBucketHTMXView(HtmxTemplateHelperMixin, View):
             return self.htmx_error_response(str(e))
 
 
-@method_decorator(archivist_required, name="dispatch")
+@method_decorator(manager_or_archivist_required, name="dispatch")
 class BucketSelectHTMXView(HtmxTemplateHelperMixin, View):
     """Return updated bucket select dropdown for upload modal."""
 
@@ -268,9 +278,13 @@ class BucketSelectHTMXView(HtmxTemplateHelperMixin, View):
         return HttpResponse(bucket_select_html)
 
 
-@archivist_required
+@manager_or_archivist_required
 def file_info_htmx(request, bucket_type, object_path):
     """Provide file metadata details via HTMX."""
+    collection = resolve_collection_from_path(object_path)
+    if not can_manage_collection(request.user, collection):
+        raise PermissionDenied("Collection manager access required.")
+
     bucket_service = BucketService(skip_bucket_check=True)
     target_id = request.GET.get("target_id") or request.GET.get("targetId")
 

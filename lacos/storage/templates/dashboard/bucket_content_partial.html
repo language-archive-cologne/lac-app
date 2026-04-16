@@ -16,6 +16,7 @@
                     Loading items…
                 {% endif %}
             </span>
+            {% if storage_dashboard_access.can_view_bucket_metrics %}
             <div id="bucket-size-container-{{ bucket_name|slugify }}"
                  class="btn btn-ghost btn-xs gap-2"
                  hx-get="{% url 'storage:bucket_size_info' bucket_name %}"
@@ -25,6 +26,8 @@
                 <span class="loading loading-spinner loading-xs"></span>
                 <span>Size</span>
             </div>
+            {% endif %}
+            {% if storage_dashboard_access.can_use_archivist_tools %}
             <label class="btn btn-ghost btn-xs gap-2 text-purple-600"
                    for="generate-peaks-modal"
                    title="Generate audio peaks and spectrograms for all audio in this bucket"
@@ -37,6 +40,7 @@
                 </svg>
                 <span>Peaks</span>
             </label>
+            {% endif %}
         </div>
     </div>
 </div>
