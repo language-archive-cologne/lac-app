@@ -19,6 +19,7 @@ from lacos.rest.v2.access import (
     can_read_bundle,
     get_parent_bundle_or_404,
 )
+from lacos.explorer.media_utils import determine_media_type, guess_source_mime_type
 from lacos.storage.models.s3_resource_location import S3ResourceLocation
 from lacos.storage.services.bucket_service import BucketService
 from lacos.storage.services.presigned_url_cache_service import PresignedUrlCacheService
@@ -45,6 +46,7 @@ def _find_resource(identifier):
 
     raise Http404(f"Resource not found: {identifier}")
 
+
 def _get_s3_location(resource):
     """Find S3 location for a resource."""
     ct = ContentType.objects.get_for_model(resource)
@@ -68,6 +70,39 @@ def _build_auth_context(request):
     return f"anon:{request.META.get('REMOTE_ADDR')}"
 
 
+def _resource_download_path(resource) -> str:
+    return f"/api/v2/resources/{resource.id}/content/"
+
+
+def _resource_stream_path(resource) -> str:
+    return f"/api/v2/resources/{resource.id}/stream/"
+
+
+def _resource_media_type(resource) -> str | None:
+    return determine_media_type(resource.mime_type, resource.file_name)
+
+
+def _stream_response_headers(resource) -> dict:
+    media_type = _resource_media_type(resource)
+    source_mime_type = guess_source_mime_type(
+        resource.mime_type,
+        resource.file_name,
+        media_type,
+    )
+    return {"ResponseContentType": source_mime_type} if source_mime_type else {}
+
+
+def _stream_supported(resource) -> bool:
+    return _resource_media_type(resource) in {"audio", "video"}
+
+
+def _require_bundle_read_access(request, resource):
+    bundle = get_parent_bundle_or_404(resource)
+    if not can_read_bundle(request.user, bundle):
+        return None, build_access_denied_response(request.user)
+    return bundle, None
+
+
 @extend_schema(
     summary="Get resource metadata",
     description="Returns metadata for a resource (media, written, or other). Accepts UUID or file PID as identifier.",
@@ -88,8 +123,11 @@ def resource_detail(request, identifier):
         "file_name": resource.file_name,
         "file_pid": resource.file_pid,
         "mime_type": resource.mime_type,
-        "content_url": f"/api/v2/resources/{resource.id}/content/",
+        "content_url": _resource_download_path(resource),
+        "download_url": _resource_download_path(resource),
     }
+    if _stream_supported(resource):
+        data["stream_url"] = _resource_stream_path(resource)
     if hasattr(resource, "file_length") and resource.file_length:
         data["file_length"] = resource.file_length
     if hasattr(resource, "file_description") and resource.file_description:
@@ -123,9 +161,9 @@ def resource_detail(request, identifier):
 @permission_classes([AllowAny])
 def resource_content(request, identifier):
     resource = _find_resource(identifier)
-    bundle = get_parent_bundle_or_404(resource)
-    if not can_read_bundle(request.user, bundle):
-        return build_access_denied_response(request.user)
+    _, denied_response = _require_bundle_read_access(request, resource)
+    if denied_response:
+        return denied_response
 
     location = _get_s3_location(resource)
 
@@ -137,3 +175,35 @@ def resource_content(request, identifier):
         auth_context=_build_auth_context(request),
     )
     return HttpResponseRedirect(url_data["url"])
+
+
+@extend_schema(
+    summary="Get streamable resource content",
+    description="Redirects (302) to a presigned inline URL for audio or video playback. Requires read access to the parent bundle.",
+    tags=["resources"],
+    parameters=[
+        OpenApiParameter("identifier", OpenApiTypes.STR, location=OpenApiParameter.PATH, description="Resource UUID or file PID (handle)"),
+    ],
+    responses={302: None, 401: None, 403: None, 404: None},
+)
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def resource_stream(request, identifier):
+    resource = _find_resource(identifier)
+    if not _stream_supported(resource):
+        raise Http404(f"Streaming not supported for resource: {identifier}")
+
+    _, denied_response = _require_bundle_read_access(request, resource)
+    if denied_response:
+        return denied_response
+
+    location = _get_s3_location(resource)
+
+    cache_service = PresignedUrlCacheService()
+    url = cache_service.get_presigned_url(
+        bucket=location.s3_bucket,
+        key=location.s3_key,
+        response_headers=_stream_response_headers(resource),
+        auth_context=_build_auth_context(request),
+    )
+    return HttpResponseRedirect(url)

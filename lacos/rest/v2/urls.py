@@ -23,6 +23,11 @@ urlpatterns = [
         name="resource-content",
     ),
     path(
+        "resources/<path:identifier>/stream/",
+        resources.resource_stream,
+        name="resource-stream",
+    ),
+    path(
         "resources/<path:identifier>/",
         resources.resource_detail,
         name="resource-detail",
