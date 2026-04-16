@@ -11,12 +11,60 @@ from lacos.blam.models.bundle.bundle_structural_info import (
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.storage.models.acl_permissions import ACLPermissions
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
+from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 
 
 def build_access_denied_response(user, detail: str = "access denied") -> Response:
     if getattr(user, "is_anonymous", True):
         return Response({"detail": "Authentication required"}, status=401)
     return Response({"detail": detail}, status=403)
+
+
+def get_exposure_policy_service(*, acl_service: ACLEvaluationService | None = None) -> ExposurePolicyService:
+    return ExposurePolicyService(acl_service=acl_service)
+
+
+def ensure_metadata_exposed(user, obj, *, policy: ExposurePolicyService | None = None) -> Response | None:
+    policy = policy or get_exposure_policy_service()
+    if policy.can_view_metadata(user, obj):
+        return None
+    return build_access_denied_response(user)
+
+
+def filter_exposed_collections(
+    user,
+    queryset,
+    *,
+    channel: str = "api",
+    policy: ExposurePolicyService | None = None,
+):
+    policy = policy or get_exposure_policy_service()
+    return policy.filter_collection_queryset(user, queryset, channel=channel)
+
+
+def filter_exposed_bundles(
+    user,
+    queryset,
+    *,
+    channel: str = "api",
+    policy: ExposurePolicyService | None = None,
+):
+    policy = policy or get_exposure_policy_service()
+    return policy.filter_bundle_queryset(user, queryset, channel=channel)
+
+
+def ensure_resource_binary_exposed(
+    request,
+    resource,
+    *,
+    detail: str = "access denied",
+    policy: ExposurePolicyService | None = None,
+):
+    get_parent_bundle_or_404(resource)
+    policy = policy or get_exposure_policy_service()
+    if policy.can_download_binary(request.user, resource):
+        return None
+    return build_access_denied_response(request.user, detail=detail)
 
 
 def can_read_bundle(user, bundle) -> bool:

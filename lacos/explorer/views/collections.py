@@ -8,7 +8,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Count, Min, Prefetch, Q
-from django.http import Http404, HttpResponse, HttpResponseForbidden
+from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -31,7 +31,11 @@ from lacos.blam.models.collection.collection_structural_info import (
 from lacos.explorer.glottolog import lookup_glottolog_entry
 from lacos.explorer.map_utils import get_collection_map_markers
 from lacos.explorer.media_utils import determine_media_type, guess_source_mime_type
-from lacos.explorer.permissions import ACLPermissionMixin
+from lacos.explorer.permissions import (
+    ACLPermissionMixin,
+    MetadataExposureMixin,
+    enforce_binary_exposure,
+)
 from lacos.explorer.search import search_archives
 from lacos.explorer.views.utils import build_content_disposition
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
@@ -477,15 +481,13 @@ class CollectionListView(ListView):
         return super().render_to_response(context, **response_kwargs)
 
 
-class CollectionDetailView(HandleLookupMixin, CollectionACLPermissionMixin, DetailView):
+class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionACLPermissionMixin, DetailView):
     """Detail view for a collection, accessible by UUID or handle."""
 
     model = Collection
     template_name = "collection_detail.html"
     context_object_name = "collection"
     permission_denied_message = COLLECTION_PERMISSION_DENIED_MESSAGE
-    allow_restricted_metadata = True
-
     def get_queryset(self):
         return Collection.objects.prefetch_related(
             "general_info",
@@ -758,8 +760,15 @@ class CollectionResourcesView(View):
                     file_pid=decoded_resource_id
                 ).first()
 
-            if metadata_file is not None and not policy.can_download_binary(request.user, metadata_file):
-                return HttpResponseForbidden(COLLECTION_PERMISSION_DENIED_MESSAGE)
+            if metadata_file is not None:
+                denied_response = enforce_binary_exposure(
+                    request,
+                    metadata_file,
+                    denial_message=COLLECTION_PERMISSION_DENIED_MESSAGE,
+                    policy=policy,
+                )
+                if denied_response is not None:
+                    return denied_response
 
             if metadata_file is None:
                 raise Http404(f"Collection metadata resource {decoded_resource_id} not found")
@@ -995,10 +1004,8 @@ class CollectionResourcesView(View):
             return False
 
 
-class CollectionJsonLdView(CollectionLookupPermissionMixin, CollectionACLPermissionMixin, View):
+class CollectionJsonLdView(MetadataExposureMixin, CollectionLookupPermissionMixin, CollectionACLPermissionMixin, View):
     """Export collection metadata as JSON-LD."""
-
-    allow_restricted_metadata = True
 
     def get_collection_queryset(self):
         return Collection.objects.prefetch_related(
@@ -1055,10 +1062,8 @@ class CollectionJsonLdView(CollectionLookupPermissionMixin, CollectionACLPermiss
         return response
 
 
-class CollectionXmlView(CollectionLookupPermissionMixin, CollectionACLPermissionMixin, View):
+class CollectionXmlView(MetadataExposureMixin, CollectionLookupPermissionMixin, CollectionACLPermissionMixin, View):
     """Export collection metadata as BLAM XML."""
-
-    allow_restricted_metadata = True
 
     def get_collection_queryset(self):
         return Collection.objects.prefetch_related(

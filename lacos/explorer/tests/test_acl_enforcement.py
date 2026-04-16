@@ -24,6 +24,7 @@ from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
 from lacos.storage.permissions import COLLECTION_MANAGER_GROUP_NAME
 from lacos.storage.constants import WAC_AUTHENTICATED_AGENT
 from lacos.storage.models.acl_permissions import ACLPermissions
+from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 from lacos.users.models import CollectionManagerAssignment
 
 
@@ -129,6 +130,22 @@ def test_collection_detail_shows_metadata_when_acl_restricts(client):
 
 @pytest.mark.django_db
 @override_settings(ACL_ENFORCEMENT_ENABLED=True)
+def test_collection_detail_obeys_metadata_exposure_policy(client, monkeypatch):
+    collection = _create_collection("policy-denied-collection-detail")
+
+    monkeypatch.setattr(
+        ExposurePolicyService,
+        "can_view_metadata",
+        lambda self, user, obj: False,
+    )
+
+    response = client.get(reverse("explorer:collection_detail", kwargs={"pk": collection.pk}))
+
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+@override_settings(ACL_ENFORCEMENT_ENABLED=True)
 def test_collection_metadata_jsonld_allows_when_acl_restricts(client):
     collection = _create_collection("restricted-collection-jsonld")
     _store_acl(
@@ -189,6 +206,25 @@ def test_bundle_metadata_jsonld_allows_when_acl_restricts(client):
 
     assert response.status_code == 200
     assert "application/ld+json" in response["Content-Type"]
+
+
+@pytest.mark.django_db
+@override_settings(ACL_ENFORCEMENT_ENABLED=True)
+def test_bundle_metadata_jsonld_obeys_metadata_exposure_policy(client, monkeypatch):
+    collection = _create_collection("policy-denied-bundle-jsonld-collection")
+    bundle = _create_bundle(collection, "policy-denied-bundle-jsonld")
+
+    monkeypatch.setattr(
+        ExposurePolicyService,
+        "can_view_metadata",
+        lambda self, user, obj: False,
+    )
+
+    response = client.get(
+        reverse("explorer:bundle_jsonld_by_handle", kwargs={"handle": bundle.handle_path})
+    )
+
+    assert response.status_code == 403
 
 
 @pytest.mark.django_db
@@ -427,3 +463,31 @@ def test_collection_metadata_route_rejects_metadata_from_other_collection(client
     )
 
     assert response.status_code == 404
+
+
+@pytest.mark.django_db
+@override_settings(ACL_ENFORCEMENT_ENABLED=True)
+def test_collection_metadata_route_obeys_binary_exposure_policy(client, monkeypatch):
+    collection = _create_collection("policy-denied-collection-metadata")
+    metadata_file = CollectionAdditionalMetadataFile.objects.create(
+        file_pid="hdl:test/policy-denied-collection-metadata",
+        file_name="policy.xml",
+        file_description="Policy denied metadata",
+        mime_type="application/xml",
+    )
+    collection.structural_info.first().additional_metadata_files.add(metadata_file)
+
+    monkeypatch.setattr(
+        ExposurePolicyService,
+        "can_download_binary",
+        lambda self, user, obj: False,
+    )
+
+    response = client.get(
+        reverse(
+            "explorer:collection_resource_by_handle",
+            kwargs={"handle": collection.handle_path, "resource_id": metadata_file.file_pid[4:]},
+        )
+    )
+
+    assert response.status_code == 403

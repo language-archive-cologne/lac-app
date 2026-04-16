@@ -4,6 +4,7 @@ from django.contrib.auth.models import Group
 from lacos.blam.models.bundle.bundle_structural_info import BundleResources, WrittenResource
 
 from lacos.storage.permissions import COLLECTION_MANAGER_GROUP_NAME
+from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 from lacos.users.models import CollectionManagerAssignment
 
 
@@ -40,6 +41,22 @@ class TestResourceDetail:
     def test_restricted_resource_metadata_is_public(self, api_client, media_resource):
         response = api_client.get(f"/api/v2/resources/{media_resource.id}/")
         assert response.status_code == 200
+
+    def test_resource_metadata_obeys_exposure_policy(
+        self,
+        api_client,
+        media_resource,
+        monkeypatch,
+    ):
+        monkeypatch.setattr(
+            ExposurePolicyService,
+            "can_view_metadata",
+            lambda self, user, obj: False,
+        )
+
+        response = api_client.get(f"/api/v2/resources/{media_resource.id}/")
+
+        assert response.status_code == 401
 
     def test_non_streamable_resource_omits_stream_url(
         self,
@@ -109,6 +126,25 @@ class TestResourceContent:
         )
         assert response.status_code == 401
 
+    def test_resource_content_obeys_exposure_policy(
+        self,
+        api_client,
+        media_resource,
+        bundle_with_metadata,
+        store_acl,
+        monkeypatch,
+    ):
+        store_acl(bundle_with_metadata, [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}])
+        monkeypatch.setattr(
+            ExposurePolicyService,
+            "can_download_binary",
+            lambda self, user, obj: False,
+        )
+
+        response = api_client.get(f"/api/v2/resources/{media_resource.id}/content/")
+
+        assert response.status_code == 401
+
     def test_restricted_resource_content_requires_access(self, api_client, media_resource, bundle_with_metadata, store_acl):
         store_acl(
             bundle_with_metadata,
@@ -118,6 +154,24 @@ class TestResourceContent:
         response = api_client.get(
             f"/api/v2/resources/{media_resource.id}/content/"
         )
+
+        assert response.status_code == 401
+
+    def test_bundle_acl_overrides_public_collection_for_binary_access(
+        self,
+        api_client,
+        media_resource,
+        bundle_with_metadata,
+        store_acl,
+    ):
+        collection = bundle_with_metadata.structural_info.first().is_member_of_collection
+        store_acl(collection, [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}])
+        store_acl(
+            bundle_with_metadata,
+            [{"agentClass": "foaf:Person", "agent": "urn:test:someone-else", "mode": ["acl:Read"]}],
+        )
+
+        response = api_client.get(f"/api/v2/resources/{media_resource.id}/content/")
 
         assert response.status_code == 401
 
@@ -148,6 +202,28 @@ class TestResourceContent:
         response = api_client.get(f"/api/v2/resources/{media_resource_with_s3.id}/content/")
 
         assert response.status_code == 302
+
+    def test_restricted_resource_content_denies_manager_assigned_to_other_collection(
+        self,
+        api_client,
+        media_resource,
+        bundle_with_metadata,
+        store_acl,
+        user,
+    ):
+        store_acl(
+            bundle_with_metadata,
+            [{"agentClass": "foaf:Person", "agent": "urn:test:someone-else", "mode": ["acl:Read"]}],
+        )
+        other_collection = type(
+            bundle_with_metadata.structural_info.first().is_member_of_collection
+        ).objects.create(identifier="hdl:11341/0000-0000-0000-OTHER-COL")
+        _assign_collection_manager(user, other_collection)
+
+        api_client.force_authenticate(user=user)
+        response = api_client.get(f"/api/v2/resources/{media_resource.id}/content/")
+
+        assert response.status_code == 403
 
     def test_orphan_resource_content_not_found(self, api_client, orphan_media_resource_with_s3):
         response = api_client.get(
@@ -181,6 +257,25 @@ class TestResourceStream:
         response = api_client.get(
             f"/api/v2/resources/{media_resource.id}/stream/"
         )
+        assert response.status_code == 401
+
+    def test_resource_stream_obeys_exposure_policy(
+        self,
+        api_client,
+        media_resource,
+        bundle_with_metadata,
+        store_acl,
+        monkeypatch,
+    ):
+        store_acl(bundle_with_metadata, [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}])
+        monkeypatch.setattr(
+            ExposurePolicyService,
+            "can_download_binary",
+            lambda self, user, obj: False,
+        )
+
+        response = api_client.get(f"/api/v2/resources/{media_resource.id}/stream/")
+
         assert response.status_code == 401
 
     def test_restricted_resource_stream_requires_access(self, api_client, media_resource, bundle_with_metadata, store_acl):
@@ -217,6 +312,28 @@ class TestResourceStream:
         response = api_client.get(f"/api/v2/resources/{media_resource_with_s3.id}/stream/")
 
         assert response.status_code == 302
+
+    def test_restricted_resource_stream_denies_manager_assigned_to_other_collection(
+        self,
+        api_client,
+        media_resource,
+        bundle_with_metadata,
+        store_acl,
+        user,
+    ):
+        store_acl(
+            bundle_with_metadata,
+            [{"agentClass": "foaf:Person", "agent": "urn:test:someone-else", "mode": ["acl:Read"]}],
+        )
+        other_collection = type(
+            bundle_with_metadata.structural_info.first().is_member_of_collection
+        ).objects.create(identifier="hdl:11341/0000-0000-0000-OTHER-COL-STREAM")
+        _assign_collection_manager(user, other_collection)
+
+        api_client.force_authenticate(user=user)
+        response = api_client.get(f"/api/v2/resources/{media_resource.id}/stream/")
+
+        assert response.status_code == 403
 
     def test_orphan_resource_stream_not_found(self, api_client, orphan_media_resource_with_s3):
         response = api_client.get(

@@ -12,6 +12,20 @@ from lacos.storage.services.acl_evaluation_service import ACLEvaluationService, 
 from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 
 
+def build_forbidden_response(message: str, request=None):
+    html = render_to_string("403.html", {"exception": message}, request=request)
+    return HttpResponseForbidden(html)
+
+
+class MetadataExposureMixin:
+    """
+    Semantic marker for Explorer metadata views that remain visible even when
+    the underlying object is ACL-restricted.
+    """
+
+    allow_restricted_metadata: bool = True
+
+
 class ACLPermissionMixin:
     """
     Mixin that evaluates ACL permissions before dispatching a class-based view.
@@ -78,8 +92,28 @@ class ACLPermissionMixin:
         return obj
 
     def handle_no_permission(self, result: ACLCheckResult):
-        html = render_to_string("403.html", {"exception": self.permission_denied_message}, request=getattr(self, "request", None))
-        return HttpResponseForbidden(html)
+        return build_forbidden_response(
+            self.permission_denied_message,
+            request=getattr(self, "request", None),
+        )
+
+
+def enforce_binary_exposure(
+    request,
+    target,
+    *,
+    denial_message: str,
+    policy: Optional[ExposurePolicyService] = None,
+):
+    """
+    Enforce public-surface binary access policy for Explorer file/resource
+    routes. Returns an HttpResponseForbidden when access is denied, otherwise
+    None.
+    """
+    policy = policy or ExposurePolicyService()
+    if policy.can_download_binary(request.user, target):
+        return None
+    return build_forbidden_response(denial_message, request=request)
 
 
 def require_acl_permission(
