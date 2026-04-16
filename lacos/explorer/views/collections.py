@@ -622,25 +622,11 @@ class CollectionDetailView(HandleLookupMixin, CollectionACLPermissionMixin, Deta
             bundle_info['access_level'] = bundle_acl.access_level
             bundle_info['can_read_bundle'] = bundle_acl.allowed or not acl_service.enforcement_enabled
 
-        # Content license from administrative info (license_name).
-        context["metadata_license"] = None
-        context["metadata_license_uri"] = None
+        # Display only administrative content licenses in the collection header.
         context["content_licenses"] = []
-
-        # Prefer md_license from CollectionHeader when available
-        header = self.object.header.first() if hasattr(self.object, "header") else None
-        if header and header.md_license:
-            context["metadata_license"] = header.md_license
-            context["metadata_license_uri"] = header.md_license_uri or ""
 
         if hasattr(self.object, "administrative_info") and self.object.administrative_info.first():
             context["content_licenses"] = self.object.administrative_info.first().licenses.all()
-            # Fall back to administrative license if no md_license
-            if not context["metadata_license"] and context["content_licenses"]:
-                first_license = context["content_licenses"].first()
-                if first_license:
-                    context["metadata_license"] = first_license.license_name
-                    context["metadata_license_uri"] = first_license.license_identifier
 
         # Citation
         context['citation'] = self._format_citation()
