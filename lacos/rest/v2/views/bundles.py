@@ -5,11 +5,6 @@ from rest_framework.response import Response
 
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.serializers.jsonld import BLAM_CONTEXT
-from lacos.rest.v2.access import (
-    build_access_denied_response,
-    can_read_bundle,
-    filter_readable_bundles,
-)
 from lacos.rest.v2.query_params import build_next_url, parse_list_params
 from lacos.rest.v2.resolvers import resolve_identifier
 from lacos.rest.v2.serializers.bundles import (
@@ -54,9 +49,9 @@ def bundle_list(request):
     )
     qs = qs.order_by(params.ordering)
 
-    readable_bundles = filter_readable_bundles(request.user, list(qs))
-    total = len(readable_bundles)
-    page = readable_bundles[params.offset : params.offset + params.limit]
+    bundles = list(qs)
+    total = len(bundles)
+    page = bundles[params.offset : params.offset + params.limit]
 
     results = [serialize_bundle_list_item(b) for b in page]
 
@@ -90,7 +85,5 @@ def bundle_list(request):
 @permission_classes([AllowAny])
 def bundle_detail(request, identifier):
     bundle = resolve_identifier(Bundle, identifier)
-    if not can_read_bundle(request.user, bundle):
-        return build_access_denied_response(request.user)
     data = serialize_bundle_detail(bundle)
     return Response(data, content_type="application/ld+json")

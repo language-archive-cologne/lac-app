@@ -44,7 +44,7 @@ class TestCollectionList:
         response = api_client.get("/api/v2/collections/?ordering=does_not_exist")
         assert response.status_code == 400
 
-    def test_list_excludes_restricted_collections_for_anonymous(
+    def test_list_includes_restricted_collections_for_anonymous(
         self,
         api_client,
         collection_with_metadata,
@@ -64,7 +64,7 @@ class TestCollectionList:
         result_ids = {item["uuid"] for item in data["results"]}
 
         assert str(public_collection.id) in result_ids
-        assert str(restricted_collection.id) not in result_ids
+        assert str(restricted_collection.id) in result_ids
 
     def test_list_allows_authenticated_agent_collections(
         self,
@@ -129,14 +129,14 @@ class TestCollectionDetail:
         response = api_client.get("/api/v2/collections/nonexistent/")
         assert response.status_code == 404
 
-    def test_detail_requires_acl_access(self, api_client, collection_with_metadata, store_acl):
+    def test_detail_exposes_restricted_metadata_anonymously(self, api_client, collection_with_metadata, store_acl):
         store_acl(
             collection_with_metadata,
             [{"agentClass": "foaf:Person", "agent": "urn:test:allowed", "mode": ["acl:Read"]}],
         )
 
         response = api_client.get(f"/api/v2/collections/{collection_with_metadata.id}/")
-        assert response.status_code == 401
+        assert response.status_code == 200
 
     def test_detail_allows_authenticated_agent(self, api_client, collection_with_metadata, store_acl, user):
         store_acl(collection_with_metadata, [{"agentClass": WAC_AUTHENTICATED_AGENT, "mode": ["acl:Read"]}])

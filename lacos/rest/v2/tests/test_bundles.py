@@ -37,7 +37,7 @@ class TestBundleList:
         response = api_client.get("/api/v2/bundles/?ordering=does_not_exist")
         assert response.status_code == 400
 
-    def test_list_excludes_restricted_bundles_for_anonymous(
+    def test_list_includes_restricted_bundles_for_anonymous(
         self,
         api_client,
         bundle_with_metadata,
@@ -63,7 +63,7 @@ class TestBundleList:
         result_ids = {item["uuid"] for item in data["results"]}
 
         assert str(public_bundle.id) in result_ids
-        assert str(restricted_bundle.id) not in result_ids
+        assert str(restricted_bundle.id) in result_ids
 
     def test_list_includes_restricted_bundle_for_assigned_manager(
         self,
@@ -102,13 +102,13 @@ class TestBundleDetail:
         response = api_client.get("/api/v2/bundles/nonexistent/")
         assert response.status_code == 404
 
-    def test_detail_requires_acl_access(self, api_client, bundle_with_metadata, store_acl):
+    def test_detail_exposes_restricted_metadata_anonymously(self, api_client, bundle_with_metadata, store_acl):
         store_acl(
             bundle_with_metadata,
             [{"agentClass": "foaf:Person", "agent": "urn:test:someone-else", "mode": ["acl:Read"]}],
         )
         response = api_client.get(f"/api/v2/bundles/{bundle_with_metadata.id}/")
-        assert response.status_code == 401
+        assert response.status_code == 200
 
     def test_detail_allows_authenticated_agent(self, api_client, bundle_with_metadata, store_acl, user):
         store_acl(bundle_with_metadata, [{"agentClass": WAC_AUTHENTICATED_AGENT, "mode": ["acl:Read"]}])

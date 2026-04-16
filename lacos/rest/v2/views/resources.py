@@ -80,9 +80,7 @@ def _build_auth_context(request):
 @permission_classes([AllowAny])
 def resource_detail(request, identifier):
     resource = _find_resource(identifier)
-    bundle = get_parent_bundle_or_404(resource)
-    if not can_read_bundle(request.user, bundle):
-        return build_access_denied_response(request.user)
+    get_parent_bundle_or_404(resource)
 
     data = {
         "@type": type(resource).__name__,

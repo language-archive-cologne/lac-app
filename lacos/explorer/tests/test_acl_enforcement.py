@@ -8,7 +8,12 @@ from django.urls import reverse
 
 from lacos.blam.models.bundle.bundle_general_info import BundleGeneralInfo, BundleLocation
 from lacos.blam.models.bundle.bundle_repository import Bundle
-from lacos.blam.models.bundle.bundle_structural_info import BundleAdditionalMetadataFile, BundleStructuralInfo
+from lacos.blam.models.bundle.bundle_structural_info import (
+    BundleAdditionalMetadataFile,
+    BundleResources,
+    BundleStructuralInfo,
+    MediaResource,
+)
 from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo, CollectionLocation
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
@@ -79,6 +84,18 @@ def _assign_collection_manager(user, *collections: Collection) -> None:
         CollectionManagerAssignment.objects.create(user=user, collection=collection)
 
 
+def _add_bundle_media_resource(bundle: Bundle, file_name: str = "restricted-audio.wav") -> MediaResource:
+    resource = MediaResource.objects.create(
+        file_name=file_name,
+        file_pid=f"hdl:test/{file_name}",
+        mime_type="audio/x-wav",
+        file_description="Restricted resource",
+    )
+    bundle_resources = BundleResources.objects.create(bundle=bundle)
+    bundle_resources.bundle_media_resources.add(resource)
+    return resource
+
+
 @pytest.mark.django_db
 @override_settings(ACL_ENFORCEMENT_ENABLED=True)
 def test_bundle_detail_allows_public_access(client):
@@ -92,7 +109,7 @@ def test_bundle_detail_allows_public_access(client):
 
 @pytest.mark.django_db
 @override_settings(ACL_ENFORCEMENT_ENABLED=True)
-def test_collection_detail_denies_when_acl_restricts(client):
+def test_collection_detail_shows_metadata_when_acl_restricts(client):
     collection = _create_collection("restricted-collection-detail")
     _store_acl(
         collection,
@@ -101,13 +118,13 @@ def test_collection_detail_denies_when_acl_restricts(client):
 
     response = client.get(reverse("explorer:collection_detail", kwargs={"pk": collection.pk}))
 
-    assert response.status_code == 403
-    assert "This collection is restricted" in response.content.decode("utf-8")
+    assert response.status_code == 200
+    assert "Collection description" in response.content.decode("utf-8")
 
 
 @pytest.mark.django_db
 @override_settings(ACL_ENFORCEMENT_ENABLED=True)
-def test_collection_metadata_jsonld_denies_when_acl_restricts(client):
+def test_collection_metadata_jsonld_allows_when_acl_restricts(client):
     collection = _create_collection("restricted-collection-jsonld")
     _store_acl(
         collection,
@@ -118,13 +135,13 @@ def test_collection_metadata_jsonld_denies_when_acl_restricts(client):
         reverse("explorer:collection_jsonld_by_handle", kwargs={"handle": collection.handle_path})
     )
 
-    assert response.status_code == 403
-    assert "This collection is restricted" in response.content.decode("utf-8")
+    assert response.status_code == 200
+    assert "application/ld+json" in response["Content-Type"]
 
 
 @pytest.mark.django_db
 @override_settings(ACL_ENFORCEMENT_ENABLED=True)
-def test_collection_metadata_xml_denies_when_acl_restricts(client):
+def test_collection_metadata_xml_allows_when_acl_restricts(client):
     collection = _create_collection("restricted-collection-xml")
     _store_acl(
         collection,
@@ -135,19 +152,49 @@ def test_collection_metadata_xml_denies_when_acl_restricts(client):
         reverse("explorer:collection_xml_by_handle", kwargs={"handle": collection.handle_path})
     )
 
-    assert response.status_code == 403
-    assert "This collection is restricted" in response.content.decode("utf-8")
+    assert response.status_code == 200
+    assert "application/xml" in response["Content-Type"]
 
 
 @pytest.mark.django_db
 @override_settings(ACL_ENFORCEMENT_ENABLED=True)
-def test_bundle_detail_denies_when_acl_restricts(client):
+def test_bundle_detail_shows_metadata_when_acl_restricts(client):
     collection = _create_collection("restricted-collection")
     bundle = _create_bundle(collection, "restricted-bundle")
     _store_acl(bundle, [{"agentClass": "foaf:Person", "agent": "http://example.org/users/allowed", "mode": ["acl:Read"]}])
 
     response = client.get(reverse("explorer:bundle_detail", kwargs={"pk": bundle.pk}))
-    assert response.status_code == 403
+    assert response.status_code == 200
+    assert "Bundle description" in response.content.decode("utf-8")
+
+
+@pytest.mark.django_db
+@override_settings(ACL_ENFORCEMENT_ENABLED=True)
+def test_bundle_detail_hides_restricted_content_but_keeps_metadata_files(client):
+    collection = _create_collection("restricted-bundle-files")
+    bundle = _create_bundle(collection, "restricted-bundle-files")
+    _store_acl(
+        bundle,
+        [{"agentClass": "foaf:Person", "agent": "http://example.org/users/allowed", "mode": ["acl:Read"]}],
+    )
+    _add_bundle_media_resource(bundle, "secret.wav")
+
+    metadata_file = BundleAdditionalMetadataFile.objects.create(
+        file_pid="hdl:test/public-metadata",
+        file_name="public-metadata.xml",
+        file_description="Public metadata",
+        mime_type="application/xml",
+    )
+    bundle.structural_info.first().additional_metadata_files.add(metadata_file)
+
+    response = client.get(reverse("explorer:bundle_detail", kwargs={"pk": bundle.pk}))
+
+    html = response.content.decode("utf-8")
+    assert response.status_code == 200
+    assert "You do not have permission to download files from this bundle." in html
+    assert "public-metadata.xml" in html
+    assert "secret.wav" not in html
+    assert f"/resource/{metadata_file.file_pid[4:]}/?action=view" in html
 
 
 @pytest.mark.django_db

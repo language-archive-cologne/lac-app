@@ -5,11 +5,6 @@ from rest_framework.response import Response
 
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.serializers.jsonld import BLAM_CONTEXT
-from lacos.rest.v2.access import (
-    build_access_denied_response,
-    can_read_collection,
-    filter_readable_collections,
-)
 from lacos.rest.v2.query_params import build_next_url, parse_list_params
 from lacos.rest.v2.resolvers import resolve_identifier
 from lacos.rest.v2.serializers.collections import (
@@ -48,9 +43,9 @@ def collection_list(request):
     )
     qs = qs.order_by(params.ordering)
 
-    readable_collections = filter_readable_collections(request.user, list(qs))
-    total = len(readable_collections)
-    page = readable_collections[params.offset : params.offset + params.limit]
+    collections = list(qs)
+    total = len(collections)
+    page = collections[params.offset : params.offset + params.limit]
 
     results = [serialize_collection_list_item(c) for c in page]
 
@@ -84,7 +79,5 @@ def collection_list(request):
 @permission_classes([AllowAny])
 def collection_detail(request, identifier):
     collection = resolve_identifier(Collection, identifier)
-    if not can_read_collection(request.user, collection):
-        return build_access_denied_response(request.user)
     data = serialize_collection_detail(collection)
     return Response(data, content_type="application/ld+json")

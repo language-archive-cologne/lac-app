@@ -34,9 +34,9 @@ class TestResourceDetail:
         response = api_client.get("/api/v2/resources/nonexistent/")
         assert response.status_code == 404
 
-    def test_restricted_resource_metadata_requires_access(self, api_client, media_resource):
+    def test_restricted_resource_metadata_is_public(self, api_client, media_resource):
         response = api_client.get(f"/api/v2/resources/{media_resource.id}/")
-        assert response.status_code == 401
+        assert response.status_code == 200
 
     def test_orphan_resource_metadata_not_found(self, api_client, orphan_media_resource_with_s3):
         response = api_client.get(f"/api/v2/resources/{orphan_media_resource_with_s3.id}/")
@@ -85,6 +85,18 @@ class TestResourceContent:
         response = api_client.get(
             f"/api/v2/resources/{media_resource.id}/content/"
         )
+        assert response.status_code == 401
+
+    def test_restricted_resource_content_requires_access(self, api_client, media_resource, bundle_with_metadata, store_acl):
+        store_acl(
+            bundle_with_metadata,
+            [{"agentClass": "foaf:Person", "agent": "urn:test:someone-else", "mode": ["acl:Read"]}],
+        )
+
+        response = api_client.get(
+            f"/api/v2/resources/{media_resource.id}/content/"
+        )
+
         assert response.status_code == 401
 
     @patch("lacos.rest.v2.views.resources.PresignedUrlCacheService")
