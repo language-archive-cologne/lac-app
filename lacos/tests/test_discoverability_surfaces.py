@@ -10,6 +10,7 @@ from lacos.blam.models.collection.collection_general_info import CollectionGener
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.collection.collection_structural_info import CollectionStructuralInfo
 from lacos.storage.models.acl_permissions import ACLPermissions
+from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 
 
 def _create_collection(identifier: str = "discoverability-collection") -> Collection:
@@ -87,6 +88,30 @@ def test_sitemap_includes_restricted_metadata_pages(client):
 
 
 @pytest.mark.django_db
+def test_sitemap_excludes_items_when_policy_disallows_them(client, monkeypatch):
+    collection = _create_collection("discoverability-sitemap-filtered-collection")
+    bundle = _create_bundle(collection, "discoverability-sitemap-filtered-bundle")
+
+    def _can_appear_in_sitemap(self, user, obj):
+        if getattr(obj, "identifier", None) in {collection.identifier, bundle.identifier}:
+            return False
+        return True
+
+    monkeypatch.setattr(
+        ExposurePolicyService,
+        "can_appear_in_sitemap",
+        _can_appear_in_sitemap,
+    )
+
+    response = client.get(reverse("django.contrib.sitemaps.views.sitemap"))
+
+    assert response.status_code == 200
+    body = response.content.decode("utf-8")
+    assert collection.handle_path not in body
+    assert bundle.handle_path not in body
+
+
+@pytest.mark.django_db
 def test_oai_list_identifiers_includes_restricted_collection_metadata(client):
     collection = _create_collection("discoverability-oai-collection")
     _store_acl(
@@ -101,3 +126,27 @@ def test_oai_list_identifiers_includes_restricted_collection_metadata(client):
 
     assert response.status_code == 200
     assert f"oai:lacos:{collection.identifier}" in response.content.decode("utf-8")
+
+
+@pytest.mark.django_db
+def test_oai_excludes_collection_when_policy_disallows_harvest(client, monkeypatch):
+    collection = _create_collection("discoverability-oai-filtered-collection")
+
+    def _can_harvest_via_oai(self, user, obj):
+        if getattr(obj, "identifier", None) == collection.identifier:
+            return False
+        return True
+
+    monkeypatch.setattr(
+        ExposurePolicyService,
+        "can_harvest_via_oai",
+        _can_harvest_via_oai,
+    )
+
+    response = client.get(
+        reverse("oaipmh:endpoint"),
+        {"verb": "ListIdentifiers", "metadataPrefix": "oai_dc", "set": "collections"},
+    )
+
+    assert response.status_code == 200
+    assert f"oai:lacos:{collection.identifier}" not in response.content.decode("utf-8")

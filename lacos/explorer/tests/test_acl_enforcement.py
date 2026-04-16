@@ -381,6 +381,33 @@ def test_bundle_resource_route_rejects_resource_from_other_bundle(client):
 
 @pytest.mark.django_db
 @override_settings(ACL_ENFORCEMENT_ENABLED=True)
+def test_bundle_resource_route_rejects_metadata_from_other_bundle(client):
+    collection = _create_collection("bundle-metadata-membership-collection")
+    bundle = _create_bundle(collection, "bundle-metadata-membership-bundle")
+    other_bundle = _create_bundle(collection, "bundle-metadata-membership-other")
+    _store_acl(bundle, [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}])
+    _store_acl(other_bundle, [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}])
+
+    metadata_file = BundleAdditionalMetadataFile.objects.create(
+        file_pid="hdl:test/foreign-bundle-metadata",
+        file_name="foreign.xml",
+        file_description="Foreign bundle metadata",
+        mime_type="application/xml",
+    )
+    other_bundle.structural_info.first().additional_metadata_files.add(metadata_file)
+
+    response = client.get(
+        reverse(
+            "explorer:resource_access_by_handle",
+            kwargs={"handle": bundle.handle_path, "resource_pid": metadata_file.file_pid},
+        )
+    )
+
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+@override_settings(ACL_ENFORCEMENT_ENABLED=True)
 def test_collection_metadata_route_rejects_metadata_from_other_collection(client):
     collection = _create_collection("collection-membership-collection")
     other_collection = _create_collection("collection-membership-other")
