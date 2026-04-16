@@ -1,5 +1,5 @@
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from lacos.users.tasks import refresh_shibboleth_metadata
 
@@ -9,7 +9,7 @@ def _mock_response(payload: bytes, status: int = 200) -> Mock:
     response.status = status
     response.read.return_value = payload
 
-    context = Mock()
+    context = MagicMock()
     context.__enter__.return_value = response
     context.__exit__.return_value = False
     return context

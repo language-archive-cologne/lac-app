@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 from types import SimpleNamespace
 
 import pytest
@@ -7,6 +8,7 @@ from django.urls import reverse
 
 from lacos.users.adapters import TRUSTED_SAML_SESSION_KEY
 from lacos.users.backends import LacosSaml2Backend
+from lacos.users.models import SamlCountry, SamlIdp
 from lacos.users.models import User
 from lacos.users.saml import sync_user_from_saml
 from lacos.users.tests.factories import UserFactory
@@ -168,6 +170,23 @@ def test_saml_login_view_sets_session_marker(client, settings):
 
 
 @pytest.mark.django_db
+def test_saml_login_view_preserves_selected_idp(client, settings):
+    settings.SAML_LOGIN_ENABLED = True
+
+    response = client.get(
+        reverse("users:saml_login"),
+        {"idp": "https://idp.example.org/idp/shibboleth"},
+    )
+
+    assert response.status_code == 302
+    assert response.headers["Location"] == (
+        "/saml2/login/?idp=https%3A%2F%2Fidp.example.org%2Fidp%2Fshibboleth"
+    )
+    session = client.session
+    assert session.get(TRUSTED_SAML_SESSION_KEY) is True
+
+
+@pytest.mark.django_db
 def test_saml2_login_redirects_to_discovery_service(client, settings):
     disco_url = "https://wayf.aai.dfn.de/DFN-AAI/wayf"
     settings.SAML2_DISCO_URL = disco_url
@@ -177,3 +196,27 @@ def test_saml2_login_redirects_to_discovery_service(client, settings):
     assert response.status_code == 302
     location = response.headers["Location"]
     assert location.startswith(disco_url)
+
+
+@pytest.mark.django_db
+def test_saml_discovery_idp_list_routes_via_trusted_login_view(client, settings):
+    settings.SAML_LOGIN_ENABLED = True
+    country = SamlCountry.objects.create(code="DE", name="Germany")
+    SamlIdp.objects.create(
+        entity_id="https://idp.example.org/idp/shibboleth",
+        display_name="Example University",
+        country=country,
+    )
+
+    response = client.get(
+        reverse("users:saml_discovery_idp_list"),
+        {"search": "Example", "next": "/target/"},
+    )
+
+    assert response.status_code == 200
+    rendered = html.unescape(response.content.decode())
+    assert reverse("users:saml_login") in rendered
+    assert 'href="/users/login/saml/?idp=' in rendered
+    assert "idp.example.org" in rendered
+    assert "next=" in rendered
+    assert reverse("saml2_login") not in rendered

@@ -61,12 +61,24 @@ def saml_login_view(request: HttpRequest) -> HttpResponse:
     request.session[TRUSTED_SAML_SESSION_KEY] = True
     request.session.modified = True
 
-    next_url = request.GET.get("next")
-    saml_login_url = reverse("saml2_login")
-    if next_url:
-        saml_login_url = f"{saml_login_url}?{urlencode({'next': next_url})}"
+    saml_login_url = _build_saml_login_url(
+        next_url=request.GET.get("next"),
+        idp=request.GET.get("idp"),
+    )
 
     return redirect(saml_login_url)
+
+
+def _build_saml_login_url(*, next_url: str | None = None, idp: str | None = None) -> str:
+    saml_login_url = reverse("saml2_login")
+    params = {}
+    if next_url:
+        params["next"] = next_url
+    if idp:
+        params["idp"] = idp
+    if params:
+        saml_login_url = f"{saml_login_url}?{urlencode(params)}"
+    return saml_login_url
 
 
 @require_http_methods(["GET"])
@@ -99,4 +111,5 @@ def saml_discovery_idp_list(request: HttpRequest) -> HttpResponse:
     return render(request, "users/partials/saml_idp_list.html", {
         "idps": qs,
         "next": request.GET.get("next", ""),
+        "trusted_login_url": reverse("users:saml_login"),
     })
