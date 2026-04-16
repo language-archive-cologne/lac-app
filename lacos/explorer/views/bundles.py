@@ -6,8 +6,7 @@ from pathlib import Path, PurePosixPath
 from typing import Optional
 from urllib.parse import unquote
 
-from django.http import Http404, HttpResponse, HttpResponseForbidden, JsonResponse
-from django.template.loader import render_to_string
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -23,7 +22,12 @@ from lacos.blam.models.bundle.bundle_structural_info import (
 from lacos.blam.mappers.bundle.write.bundle_exporter import BundleExporter
 from lacos.blam.serializers import BundleJsonLdSerializer
 from lacos.explorer.media_utils import determine_media_type, guess_source_mime_type
-from lacos.explorer.permissions import ACLPermissionMixin
+from lacos.explorer.permissions import (
+    ACLPermissionMixin,
+    MetadataExposureMixin,
+    build_forbidden_response,
+    enforce_binary_exposure,
+)
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
 from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 from lacos.storage.services.file_discovery_service import FileDiscoveryService
@@ -86,14 +90,12 @@ class BundleLookupPermissionMixin(ACLPermissionMixin):
         )
 
 
-class BundleDetailView(HandleLookupMixin, ACLPermissionMixin, DetailView):
+class BundleDetailView(MetadataExposureMixin, HandleLookupMixin, ACLPermissionMixin, DetailView):
     """Detail view for a bundle, accessible by UUID or handle."""
 
     model = Bundle
     template_name = "bundle_detail.html"
     context_object_name = "bundle"
-    allow_restricted_metadata = True
-
     def get_queryset(self):
         return Bundle.objects.prefetch_related(
             "general_info",
@@ -188,7 +190,7 @@ class BundleResourcesView(View):
         policy = ExposurePolicyService(acl_service=acl_service)
         acl_result = acl_service.evaluate(request.user, bundle, mode="acl:Read")
         if acl_service.enforcement_enabled and not acl_result.allowed:
-            return HttpResponseForbidden(self.permission_denied_message)
+            return build_forbidden_response(self.permission_denied_message, request=request)
 
         collection_for_path = None
         if hasattr(bundle, 'structural_info') and bundle.structural_info.first():
@@ -215,8 +217,14 @@ class BundleResourcesView(View):
             resource_obj = find_resource_in_bundle(bundle, file_pid=decoded_resource_id)
             if resource_obj is None:
                 raise Http404(f"Resource {resource_id} not found in bundle")
-            if not policy.can_download_binary(request.user, resource_obj):
-                return HttpResponseForbidden(self.permission_denied_message)
+            denied_response = enforce_binary_exposure(
+                request,
+                resource_obj,
+                denial_message=self.permission_denied_message,
+                policy=policy,
+            )
+            if denied_response is not None:
+                return denied_response
 
             fallback_bucket = (
                 getattr(bundle, 'import_bucket', None)
@@ -354,15 +362,19 @@ class ResourceAccessView(View):
         # Additional metadata files are always public, skip ACL check for them
         is_additional_metadata = isinstance(resource, BundleAdditionalMetadataFile)
         if is_additional_metadata:
-            if not policy.can_download_binary(request.user, resource):
-                html = render_to_string("403.html", {"exception": self.permission_denied_message}, request=request)
-                return HttpResponseForbidden(html)
+            denied_response = enforce_binary_exposure(
+                request,
+                resource,
+                denial_message=self.permission_denied_message,
+                policy=policy,
+            )
+            if denied_response is not None:
+                return denied_response
         else:
             acl_service = ACLEvaluationService()
             acl_result = acl_service.evaluate(request.user, bundle, mode="acl:Read")
             if acl_service.enforcement_enabled and not acl_result.allowed:
-                html = render_to_string("403.html", {"exception": self.permission_denied_message}, request=request)
-                return HttpResponseForbidden(html)
+                return build_forbidden_response(self.permission_denied_message, request=request)
 
         if not resource:
             res_ref = resource_id or resource_pid
@@ -767,10 +779,8 @@ class ResourceByHandleView(View):
         raise Http404(f"Resource with handle '{file_pid}' not found")
 
 
-class BundleJsonLdView(BundleLookupPermissionMixin, View):
+class BundleJsonLdView(MetadataExposureMixin, BundleLookupPermissionMixin, View):
     """Export bundle metadata as JSON-LD."""
-
-    allow_restricted_metadata = True
 
     def get_bundle_queryset(self):
         return Bundle.objects.prefetch_related(
@@ -823,10 +833,8 @@ class BundleJsonLdView(BundleLookupPermissionMixin, View):
         return response
 
 
-class BundleXmlView(BundleLookupPermissionMixin, View):
+class BundleXmlView(MetadataExposureMixin, BundleLookupPermissionMixin, View):
     """Export bundle metadata as BLAM XML."""
-
-    allow_restricted_metadata = True
 
     def get_bundle_queryset(self):
         return Bundle.objects.prefetch_related(

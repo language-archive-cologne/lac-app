@@ -15,14 +15,13 @@ from lacos.blam.models.bundle.bundle_structural_info import (
     WrittenResource,
 )
 from lacos.rest.v2.access import (
-    build_access_denied_response,
-    can_read_bundle,
+    ensure_metadata_exposed,
+    ensure_resource_binary_exposed,
     get_parent_bundle_or_404,
 )
 from lacos.explorer.media_utils import determine_media_type, guess_source_mime_type
 from lacos.storage.models.s3_resource_location import S3ResourceLocation
 from lacos.storage.services.bucket_service import BucketService
-from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 from lacos.storage.services.presigned_url_cache_service import PresignedUrlCacheService
 
 logger = logging.getLogger(__name__)
@@ -96,14 +95,6 @@ def _stream_response_headers(resource) -> dict:
 def _stream_supported(resource) -> bool:
     return _resource_media_type(resource) in {"audio", "video"}
 
-
-def _require_bundle_read_access(request, resource):
-    bundle = get_parent_bundle_or_404(resource)
-    if not can_read_bundle(request.user, bundle):
-        return None, build_access_denied_response(request.user)
-    return bundle, None
-
-
 @extend_schema(
     summary="Get resource metadata",
     description="Returns metadata for a resource (media, written, or other). Accepts UUID or file PID as identifier.",
@@ -115,11 +106,11 @@ def _require_bundle_read_access(request, resource):
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def resource_detail(request, identifier):
-    policy = ExposurePolicyService()
     resource = _find_resource(identifier)
     get_parent_bundle_or_404(resource)
-    if not policy.can_view_metadata(request.user, resource):
-        return build_access_denied_response(request.user)
+    denied_response = ensure_metadata_exposed(request.user, resource)
+    if denied_response is not None:
+        return denied_response
 
     data = {
         "@type": type(resource).__name__,
@@ -164,13 +155,10 @@ def resource_detail(request, identifier):
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def resource_content(request, identifier):
-    policy = ExposurePolicyService()
     resource = _find_resource(identifier)
-    _, denied_response = _require_bundle_read_access(request, resource)
-    if denied_response:
+    denied_response = ensure_resource_binary_exposed(request, resource)
+    if denied_response is not None:
         return denied_response
-    if not policy.can_download_binary(request.user, resource):
-        return build_access_denied_response(request.user)
 
     location = _get_s3_location(resource)
 
@@ -196,16 +184,13 @@ def resource_content(request, identifier):
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def resource_stream(request, identifier):
-    policy = ExposurePolicyService()
     resource = _find_resource(identifier)
     if not _stream_supported(resource):
         raise Http404(f"Streaming not supported for resource: {identifier}")
 
-    _, denied_response = _require_bundle_read_access(request, resource)
-    if denied_response:
+    denied_response = ensure_resource_binary_exposed(request, resource)
+    if denied_response is not None:
         return denied_response
-    if not policy.can_download_binary(request.user, resource):
-        return build_access_denied_response(request.user)
 
     location = _get_s3_location(resource)
 

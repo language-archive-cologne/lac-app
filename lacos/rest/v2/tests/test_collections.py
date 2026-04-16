@@ -160,6 +160,22 @@ class TestCollectionDetail:
         response = api_client.get(f"/api/v2/collections/{collection_with_metadata.id}/")
         assert response.status_code == 200
 
+    def test_detail_obeys_metadata_exposure_policy(
+        self,
+        api_client,
+        collection_with_metadata,
+        monkeypatch,
+    ):
+        monkeypatch.setattr(
+            ExposurePolicyService,
+            "can_view_metadata",
+            lambda self, user, obj: False,
+        )
+
+        response = api_client.get(f"/api/v2/collections/{collection_with_metadata.id}/")
+
+        assert response.status_code == 401
+
     def test_detail_allows_authenticated_agent(self, api_client, collection_with_metadata, store_acl, user):
         store_acl(collection_with_metadata, [{"agentClass": WAC_AUTHENTICATED_AGENT, "mode": ["acl:Read"]}])
 

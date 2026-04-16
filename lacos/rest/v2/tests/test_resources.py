@@ -4,6 +4,7 @@ from django.contrib.auth.models import Group
 from lacos.blam.models.bundle.bundle_structural_info import BundleResources, WrittenResource
 
 from lacos.storage.permissions import COLLECTION_MANAGER_GROUP_NAME
+from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 from lacos.users.models import CollectionManagerAssignment
 
 
@@ -40,6 +41,22 @@ class TestResourceDetail:
     def test_restricted_resource_metadata_is_public(self, api_client, media_resource):
         response = api_client.get(f"/api/v2/resources/{media_resource.id}/")
         assert response.status_code == 200
+
+    def test_resource_metadata_obeys_exposure_policy(
+        self,
+        api_client,
+        media_resource,
+        monkeypatch,
+    ):
+        monkeypatch.setattr(
+            ExposurePolicyService,
+            "can_view_metadata",
+            lambda self, user, obj: False,
+        )
+
+        response = api_client.get(f"/api/v2/resources/{media_resource.id}/")
+
+        assert response.status_code == 401
 
     def test_non_streamable_resource_omits_stream_url(
         self,
@@ -107,6 +124,25 @@ class TestResourceContent:
         response = api_client.get(
             f"/api/v2/resources/{media_resource.id}/content/"
         )
+        assert response.status_code == 401
+
+    def test_resource_content_obeys_exposure_policy(
+        self,
+        api_client,
+        media_resource,
+        bundle_with_metadata,
+        store_acl,
+        monkeypatch,
+    ):
+        store_acl(bundle_with_metadata, [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}])
+        monkeypatch.setattr(
+            ExposurePolicyService,
+            "can_download_binary",
+            lambda self, user, obj: False,
+        )
+
+        response = api_client.get(f"/api/v2/resources/{media_resource.id}/content/")
+
         assert response.status_code == 401
 
     def test_restricted_resource_content_requires_access(self, api_client, media_resource, bundle_with_metadata, store_acl):
@@ -221,6 +257,25 @@ class TestResourceStream:
         response = api_client.get(
             f"/api/v2/resources/{media_resource.id}/stream/"
         )
+        assert response.status_code == 401
+
+    def test_resource_stream_obeys_exposure_policy(
+        self,
+        api_client,
+        media_resource,
+        bundle_with_metadata,
+        store_acl,
+        monkeypatch,
+    ):
+        store_acl(bundle_with_metadata, [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}])
+        monkeypatch.setattr(
+            ExposurePolicyService,
+            "can_download_binary",
+            lambda self, user, obj: False,
+        )
+
+        response = api_client.get(f"/api/v2/resources/{media_resource.id}/stream/")
+
         assert response.status_code == 401
 
     def test_restricted_resource_stream_requires_access(self, api_client, media_resource, bundle_with_metadata, store_acl):
