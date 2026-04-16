@@ -24,6 +24,7 @@ from lacos.blam.models.collection.collection_publication_info import CollectionC
 from lacos.blam.models.collection.collection_publication_info import CollectionPublicationInfo
 from lacos.explorer.search import search_archives
 from lacos.explorer.search_indexing import rebuild_all_search_vectors
+from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 
 
 @pytest.mark.django_db
@@ -219,6 +220,43 @@ def test_search_ignores_blank_terms():
 
 
 @pytest.mark.django_db
+def test_search_excludes_collection_when_policy_disallows_it(monkeypatch):
+    collection = Collection.objects.create(identifier="COL-SEARCH-FILTER-001")
+    location = CollectionLocation.objects.create(
+        location_name="Bamako",
+        country_name="Mali",
+        country_code="ML",
+    )
+    CollectionGeneralInfo.objects.create(
+        collection=collection,
+        id_value="CID-SEARCH-FILTER-001",
+        id_type=IdentifierTypeChoices.DOI,
+        display_title="Filtered Search Collection",
+        description="Collection hidden by exposure policy.",
+        location=location,
+        version="1.0",
+    )
+
+    def _can_list_in_search(self, user, obj):
+        if isinstance(obj, Collection) and obj.pk == collection.pk:
+            return False
+        return True
+
+    monkeypatch.setattr(
+        ExposurePolicyService,
+        "can_list_in_search",
+        _can_list_in_search,
+    )
+
+    results = search_archives("Filtered", use_stored_vectors=False)
+
+    assert not any(
+        result.kind == "collection" and result.object_id == str(collection.pk)
+        for result in results
+    )
+
+
+@pytest.mark.django_db
 def test_collection_search_matches_object_language_alternative_name():
     """Test that collections can be found by searching for language alternative names."""
     collection = Collection.objects.create(identifier="COL-ALTNAME-001")
@@ -301,6 +339,59 @@ def test_bundle_search_matches_object_language_alternative_name():
     # Search by alternative name should find the bundle
     results = search_archives("Didei", use_stored_vectors=False)
     assert any(result.kind == "bundle" and result.object_id == str(bundle.pk) for result in results)
+
+
+@pytest.mark.django_db
+def test_search_excludes_bundle_when_policy_disallows_it(monkeypatch):
+    collection = Collection.objects.create(identifier="COL-SEARCH-PARENT-001")
+    collection_location = CollectionLocation.objects.create(
+        location_name="Accra",
+        country_name="Ghana",
+        country_code="GH",
+    )
+    CollectionGeneralInfo.objects.create(
+        collection=collection,
+        id_value="CID-SEARCH-PARENT-001",
+        id_type=IdentifierTypeChoices.DOI,
+        display_title="Parent Search Collection",
+        description="Parent collection for bundle search filtering.",
+        location=collection_location,
+        version="1.0",
+    )
+
+    bundle = Bundle.objects.create(identifier="BND-SEARCH-FILTER-001")
+    bundle_location = BundleLocation.objects.create(location_name="Accra")
+    BundleGeneralInfo.objects.create(
+        bundle=bundle,
+        id_value="BID-SEARCH-FILTER-001",
+        id_type=IdentifierTypeChoices.DOI,
+        display_title="Filtered Search Bundle",
+        description="Bundle hidden by exposure policy.",
+        location=bundle_location,
+        version="1.0",
+    )
+    BundleStructuralInfo.objects.create(
+        bundle=bundle,
+        is_member_of_collection=collection,
+    )
+
+    def _can_list_in_search(self, user, obj):
+        if isinstance(obj, Bundle) and obj.pk == bundle.pk:
+            return False
+        return True
+
+    monkeypatch.setattr(
+        ExposurePolicyService,
+        "can_list_in_search",
+        _can_list_in_search,
+    )
+
+    results = search_archives("Filtered", use_stored_vectors=False)
+
+    assert not any(
+        result.kind == "bundle" and result.object_id == str(bundle.pk)
+        for result in results
+    )
 
 
 @pytest.mark.django_db

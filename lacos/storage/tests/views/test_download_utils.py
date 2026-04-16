@@ -199,3 +199,63 @@ def test_check_resource_authorization_allows_assigned_manager_for_restricted_bun
     )
 
     assert error is None
+
+
+@pytest.mark.django_db
+def test_check_resource_authorization_denies_manager_assigned_to_other_collection():
+    collection = _create_collection("download-utils-primary-collection")
+    other_collection = _create_collection("download-utils-other-collection")
+    bundle = _create_bundle(collection, "download-utils-other-manager-bundle")
+    resource = _create_media_resource(bundle, "other-manager-download.wav")
+    _store_acl(
+        bundle,
+        [{"agentClass": "foaf:Person", "agent": "urn:test:someone-else", "mode": ["acl:Read"]}],
+    )
+    content_type = ContentType.objects.get_for_model(resource)
+    S3ResourceLocation.objects.create(
+        resource_pid=resource.file_pid,
+        s3_bucket="lacos-production",
+        s3_key="restricted/other-manager-download.wav",
+        mime_type=resource.mime_type,
+        content_type=content_type,
+        object_id=str(resource.pk),
+    )
+    user = get_user_model().objects.create_user(username="other-download-manager", password="pass")
+    _assign_collection_manager(user, other_collection)
+
+    error = check_resource_authorization(
+        _request(user),
+        "lacos-production",
+        "restricted/other-manager-download.wav",
+    )
+
+    assert error == "Access denied"
+
+
+@pytest.mark.django_db
+def test_check_resource_authorization_bundle_acl_overrides_public_collection():
+    collection = _create_collection("download-utils-public-parent-collection")
+    bundle = _create_bundle(collection, "download-utils-restricted-child-bundle")
+    resource = _create_media_resource(bundle, "bundle-overrides-collection.wav")
+    _store_acl(collection, [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}])
+    _store_acl(
+        bundle,
+        [{"agentClass": "foaf:Person", "agent": "urn:test:someone-else", "mode": ["acl:Read"]}],
+    )
+    content_type = ContentType.objects.get_for_model(resource)
+    S3ResourceLocation.objects.create(
+        resource_pid=resource.file_pid,
+        s3_bucket="lacos-production",
+        s3_key="restricted/bundle-overrides-collection.wav",
+        mime_type=resource.mime_type,
+        content_type=content_type,
+        object_id=str(resource.pk),
+    )
+
+    error = check_resource_authorization(
+        _request(),
+        "lacos-production",
+        "restricted/bundle-overrides-collection.wav",
+    )
+
+    assert error == "Access denied"

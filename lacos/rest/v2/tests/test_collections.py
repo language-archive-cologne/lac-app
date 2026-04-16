@@ -3,6 +3,7 @@ from django.contrib.auth.models import Group
 
 from lacos.storage.permissions import COLLECTION_MANAGER_GROUP_NAME
 from lacos.storage.constants import WAC_AUTHENTICATED_AGENT
+from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 from lacos.users.models import CollectionManagerAssignment
 
 
@@ -99,6 +100,27 @@ class TestCollectionList:
         result_ids = {item["uuid"] for item in data["results"]}
 
         assert str(collection_with_metadata.id) in result_ids
+
+    def test_list_obeys_exposure_policy_collection_filter(
+        self,
+        api_client,
+        collection_with_metadata,
+        monkeypatch,
+    ):
+        def _filter_collection_queryset(self, user, queryset, *, channel):
+            assert channel == "api"
+            return queryset.exclude(pk=collection_with_metadata.pk)
+
+        monkeypatch.setattr(
+            ExposurePolicyService,
+            "filter_collection_queryset",
+            _filter_collection_queryset,
+        )
+
+        data = api_client.get("/api/v2/collections/").json()
+        result_ids = {item["uuid"] for item in data["results"]}
+
+        assert str(collection_with_metadata.id) not in result_ids
 
 
 @pytest.mark.django_db
