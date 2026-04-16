@@ -58,6 +58,7 @@ class BundleDetailView(HandleLookupMixin, ACLPermissionMixin, DetailView):
     model = Bundle
     template_name = "bundle_detail.html"
     context_object_name = "bundle"
+    allow_restricted_metadata = True
 
     def get_queryset(self):
         return Bundle.objects.prefetch_related(
@@ -116,13 +117,16 @@ class BundleDetailView(HandleLookupMixin, ACLPermissionMixin, DetailView):
         context['written_resources'] = []
         context['other_resources'] = []
         context['metadata_files'] = []
+        context['restricted_resources'] = False
 
-        if self.object.resources.first():
-            resources = self.object.resources.first()
+        resources = self.object.resources.first()
+        if allowed and resources:
             media_resources, written_resources, other_resources = prepare_resource_lists(resources)
             context['media_resources'] = media_resources
             context['written_resources'] = written_resources
             context['other_resources'] = other_resources
+        elif resources:
+            context['restricted_resources'] = True
 
         if hasattr(self.object, 'structural_info') and self.object.structural_info.first():
             metadata_files = [

@@ -1,12 +1,17 @@
 """
 Tests for user authentication and security audit signals.
 """
+from unittest.mock import Mock
+
 import pytest
-from unittest.mock import Mock, patch
 from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
 
 from lacos.users.models import User
 from lacos.users.tests.factories import UserFactory
+
+
+def _record_for(caplog, message: str):
+    return next(record for record in caplog.records if record.getMessage() == message)
 
 
 @pytest.mark.django_db
@@ -26,9 +31,10 @@ class TestAuthenticationLogging:
             user_logged_in.send(sender=User, request=request, user=user)
 
         assert "LOGIN_SUCCESS" in caplog.text
-        assert user.username in caplog.text
-        assert "192.168.1.100" in caplog.text
-        assert "regular" in caplog.text
+        record = _record_for(caplog, "LOGIN_SUCCESS")
+        assert record.user == user.username
+        assert record.ip == "192.168.1.100"
+        assert record.method == "regular"
 
     def test_login_success_detects_saml(self, caplog):
         """Test that SAML login method is detected."""
@@ -44,7 +50,8 @@ class TestAuthenticationLogging:
             user_logged_in.send(sender=User, request=request, user=user)
 
         assert "LOGIN_SUCCESS" in caplog.text
-        assert "method=saml" in caplog.text
+        record = _record_for(caplog, "LOGIN_SUCCESS")
+        assert record.method == "saml"
 
     def test_login_success_with_forwarded_ip(self, caplog):
         """Test that X-Forwarded-For IP is extracted correctly."""
@@ -59,7 +66,8 @@ class TestAuthenticationLogging:
         with caplog.at_level("INFO", logger="lacos.security"):
             user_logged_in.send(sender=User, request=request, user=user)
 
-        assert "ip=203.0.113.50" in caplog.text
+        record = _record_for(caplog, "LOGIN_SUCCESS")
+        assert record.ip == "203.0.113.50"
 
     def test_logout_logs_event(self, caplog):
         """Test that logout is logged."""
@@ -71,8 +79,9 @@ class TestAuthenticationLogging:
             user_logged_out.send(sender=User, request=request, user=user)
 
         assert "LOGOUT" in caplog.text
-        assert user.username in caplog.text
-        assert "192.168.1.100" in caplog.text
+        record = _record_for(caplog, "LOGOUT")
+        assert record.user == user.username
+        assert record.ip == "192.168.1.100"
 
     def test_logout_handles_anonymous_user(self, caplog):
         """Test that logout handles None user gracefully."""
@@ -83,7 +92,8 @@ class TestAuthenticationLogging:
             user_logged_out.send(sender=User, request=request, user=None)
 
         assert "LOGOUT" in caplog.text
-        assert "anonymous" in caplog.text
+        record = _record_for(caplog, "LOGOUT")
+        assert record.user == "anonymous"
 
     def test_login_failed_logs_warning(self, caplog):
         """Test that failed login attempts are logged as warnings."""
@@ -100,8 +110,9 @@ class TestAuthenticationLogging:
             )
 
         assert "LOGIN_FAILED" in caplog.text
-        assert "hacker_attempt" in caplog.text
-        assert "10.20.30.40" in caplog.text
+        record = _record_for(caplog, "LOGIN_FAILED")
+        assert record.attempted_user == "hacker_attempt"
+        assert record.ip == "10.20.30.40"
 
 
 @pytest.mark.django_db
@@ -114,8 +125,9 @@ class TestUserModelLogging:
             user = UserFactory(username="newuser", email="new@example.com")
 
         assert "USER_CREATED" in caplog.text
-        assert "newuser" in caplog.text
-        assert "new@example.com" in caplog.text
+        record = _record_for(caplog, "USER_CREATED")
+        assert record.username == "newuser"
+        assert record.email == "new@example.com"
 
     def test_user_deletion_logs_warning(self, caplog):
         """Test that user deletion is logged as warning."""
@@ -125,5 +137,6 @@ class TestUserModelLogging:
             user.delete()
 
         assert "USER_DELETED" in caplog.text
-        assert "deleteme" in caplog.text
-        assert "delete@example.com" in caplog.text
+        record = _record_for(caplog, "USER_DELETED")
+        assert record.username == "deleteme"
+        assert record.email == "delete@example.com"

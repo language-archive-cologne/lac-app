@@ -75,7 +75,11 @@ def test_ingest_metadata_uses_pipeline_when_requested(client, django_user_model,
     )
 
     assert response.status_code == 200
-    process_mock.assert_called_once_with(bucket='test-bucket', prefix='col1/')
+    process_mock.assert_called_once_with(
+        bucket='test-bucket',
+        prefix='col1/',
+        update_existing=False,
+    )
     import_collection_mock.assert_not_called()
     import_bundle_mock.assert_not_called()
     assert 'Collection ingest pipeline queued' in response.content.decode()

@@ -1,6 +1,16 @@
 import pytest
+from django.contrib.auth.models import Group
 
+from lacos.storage.permissions import COLLECTION_MANAGER_GROUP_NAME
 from lacos.storage.constants import WAC_AUTHENTICATED_AGENT
+from lacos.users.models import CollectionManagerAssignment
+
+
+def _assign_collection_manager(user, *collections) -> None:
+    group = Group.objects.get_or_create(name=COLLECTION_MANAGER_GROUP_NAME)[0]
+    user.groups.add(group)
+    for collection in collections:
+        CollectionManagerAssignment.objects.create(user=user, collection=collection)
 
 @pytest.mark.django_db
 class TestCollectionList:
@@ -34,7 +44,7 @@ class TestCollectionList:
         response = api_client.get("/api/v2/collections/?ordering=does_not_exist")
         assert response.status_code == 400
 
-    def test_list_excludes_restricted_collections_for_anonymous(
+    def test_list_includes_restricted_collections_for_anonymous(
         self,
         api_client,
         collection_with_metadata,
@@ -54,7 +64,7 @@ class TestCollectionList:
         result_ids = {item["uuid"] for item in data["results"]}
 
         assert str(public_collection.id) in result_ids
-        assert str(restricted_collection.id) not in result_ids
+        assert str(restricted_collection.id) in result_ids
 
     def test_list_allows_authenticated_agent_collections(
         self,
@@ -64,6 +74,25 @@ class TestCollectionList:
         user,
     ):
         store_acl(collection_with_metadata, [{"agentClass": WAC_AUTHENTICATED_AGENT, "mode": ["acl:Read"]}])
+
+        api_client.force_authenticate(user=user)
+        data = api_client.get("/api/v2/collections/").json()
+        result_ids = {item["uuid"] for item in data["results"]}
+
+        assert str(collection_with_metadata.id) in result_ids
+
+    def test_list_includes_restricted_collection_for_assigned_manager(
+        self,
+        api_client,
+        collection_with_metadata,
+        store_acl,
+        user,
+    ):
+        store_acl(
+            collection_with_metadata,
+            [{"agentClass": "foaf:Person", "agent": "urn:test:allowed", "mode": ["acl:Read"]}],
+        )
+        _assign_collection_manager(user, collection_with_metadata)
 
         api_client.force_authenticate(user=user)
         data = api_client.get("/api/v2/collections/").json()
@@ -100,18 +129,30 @@ class TestCollectionDetail:
         response = api_client.get("/api/v2/collections/nonexistent/")
         assert response.status_code == 404
 
-    def test_detail_requires_acl_access(self, api_client, collection_with_metadata, store_acl):
+    def test_detail_exposes_restricted_metadata_anonymously(self, api_client, collection_with_metadata, store_acl):
         store_acl(
             collection_with_metadata,
             [{"agentClass": "foaf:Person", "agent": "urn:test:allowed", "mode": ["acl:Read"]}],
         )
 
         response = api_client.get(f"/api/v2/collections/{collection_with_metadata.id}/")
-        assert response.status_code == 401
+        assert response.status_code == 200
 
     def test_detail_allows_authenticated_agent(self, api_client, collection_with_metadata, store_acl, user):
         store_acl(collection_with_metadata, [{"agentClass": WAC_AUTHENTICATED_AGENT, "mode": ["acl:Read"]}])
 
         api_client.force_authenticate(user=user)
         response = api_client.get(f"/api/v2/collections/{collection_with_metadata.id}/")
+        assert response.status_code == 200
+
+    def test_detail_allows_assigned_collection_manager(self, api_client, collection_with_metadata, store_acl, user):
+        store_acl(
+            collection_with_metadata,
+            [{"agentClass": "foaf:Person", "agent": "urn:test:allowed", "mode": ["acl:Read"]}],
+        )
+        _assign_collection_manager(user, collection_with_metadata)
+
+        api_client.force_authenticate(user=user)
+        response = api_client.get(f"/api/v2/collections/{collection_with_metadata.id}/")
+
         assert response.status_code == 200

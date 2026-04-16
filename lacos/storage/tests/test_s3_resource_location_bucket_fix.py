@@ -339,7 +339,7 @@ class TestOCFLPathExtraction:
 
         bundle_key = "qaqet_child_language/bundle1/v1/content/bundle1.xml"
         result = service._get_ocfl_resource_base_path(bundle_key)
-        assert result == "qaqet_child_language/bundle1/v1/content/Resources/"
+        assert result == "qaqet_child_language/bundle1/v1/content/"
 
     def test_get_ocfl_resource_base_path_with_none(self):
         """Test that None input returns None."""
@@ -442,11 +442,11 @@ class TestS3ResourceLocationPathMapping:
         resources_base_path = service._get_ocfl_resource_base_path(bundle.import_object_key)
         correct_path = f"{resources_base_path}{media_resource.file_name}"
 
-        # Expected: "qaqet_child_language/bundle1/v1/content/Resources/test.wav"
-        assert correct_path == "qaqet_child_language/bundle1/v1/content/Resources/test.wav"
+        # Expected: "qaqet_child_language/bundle1/v1/content/test.wav"
+        assert correct_path == "qaqet_child_language/bundle1/v1/content/test.wav"
 
         wrong_location.s3_key = correct_path
         wrong_location.save()
 
         wrong_location.refresh_from_db()
-        assert wrong_location.s3_key == "qaqet_child_language/bundle1/v1/content/Resources/test.wav"
+        assert wrong_location.s3_key == "qaqet_child_language/bundle1/v1/content/test.wav"

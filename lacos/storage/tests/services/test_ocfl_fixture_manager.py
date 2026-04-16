@@ -28,6 +28,12 @@ class TestOCFLFixtureManager(TestCase):
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
 
+    @staticmethod
+    def _mock_s3_response(content: bytes):
+        body = Mock()
+        body.read.return_value = content
+        return {"Body": body}
+
     def test_extract_existing_metadata_complete(self):
         """Test extracting complete metadata from folder"""
         # Mock folder contents
@@ -42,16 +48,15 @@ class TestOCFLFixtureManager(TestCase):
 
         # Mock S3 responses for file content
         def mock_get_object(Bucket, Key):
-            mock_response = Mock()
             if Key.endswith("acl.json"):
-                mock_response['Body'].read.return_value = b'{"permissions": ["read"]}'
-            elif Key.endswith("metadata.xml"):
-                mock_response['Body'].read.return_value = b'<metadata>test</metadata>'
-            elif Key.endswith("description.xml"):
-                mock_response['Body'].read.return_value = b'<description>test desc</description>'
-            elif Key.endswith("manifest.json"):
-                mock_response['Body'].read.return_value = b'{"files": []}'
-            return mock_response
+                return self._mock_s3_response(b'{"permissions": ["read"]}')
+            if Key.endswith("metadata.xml"):
+                return self._mock_s3_response(b'<metadata>test</metadata>')
+            if Key.endswith("description.xml"):
+                return self._mock_s3_response(b'<description>test desc</description>')
+            if Key.endswith("manifest.json"):
+                return self._mock_s3_response(b'{"files": []}')
+            raise AssertionError(f"Unexpected S3 key requested: {Key}")
 
         self.mock_bucket_service.list_bucket_contents.return_value = contents
         self.mock_bucket_service.s3_client.get_object.side_effect = mock_get_object
@@ -154,12 +159,11 @@ class TestOCFLFixtureManager(TestCase):
 
         # Mock S3 get_object for metadata extraction
         def mock_get_object(Bucket, Key):
-            mock_response = Mock()
             if Key.endswith("acl.json"):
-                mock_response['Body'].read.return_value = b'{"permissions": ["read"]}'
-            elif Key.endswith("metadata.xml"):
-                mock_response['Body'].read.return_value = b'<metadata>test</metadata>'
-            return mock_response
+                return self._mock_s3_response(b'{"permissions": ["read"]}')
+            if Key.endswith("metadata.xml"):
+                return self._mock_s3_response(b'<metadata>test</metadata>')
+            raise AssertionError(f"Unexpected S3 key requested: {Key}")
 
         self.mock_bucket_service.list_bucket_contents.return_value = contents
         self.mock_bucket_service.s3_client.get_object.side_effect = mock_get_object

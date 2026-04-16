@@ -1,6 +1,6 @@
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import PermissionDenied
-from django.http import HttpResponse, HttpResponseBadRequest
+from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.views.decorators.http import require_POST
 from django.db import transaction
 import json
@@ -59,6 +59,8 @@ def delete_blam_model(request, model_type, object_id):
         response["HX-Trigger"] = json.dumps({"blam-metadata-refresh": True})
         return response
         
+    except (Http404, PermissionDenied):
+        raise
     except Exception as e:
         logger.error("Error deleting model", extra={"model_type": model_type, "object_id": object_id, "error": str(e)})
         return HttpResponseBadRequest(f"Error deleting {model_type}: {str(e)}")

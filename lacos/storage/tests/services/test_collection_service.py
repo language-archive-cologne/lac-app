@@ -12,13 +12,15 @@ from .test_constants import TEST_BUCKET_NAME, TEST_INGEST_BUCKET, TEST_PRODUCTIO
 @pytest.fixture
 def mock_collection_service(mock_s3):
     """Create a CollectionService instance with mock settings"""
+    CollectionService._instance = None
     service = CollectionService(skip_bucket_check=True)
     # Override the bucket names for testing
     service.ingest_bucket = TEST_INGEST_BUCKET
     service.production_bucket = TEST_PRODUCTION_BUCKET
     # Override the S3 client with our mock client
     service.s3_client = mock_s3
-    return service
+    yield service
+    CollectionService._instance = None
 
 
 def test_bucket_listing_page_behaves_like_sequence():

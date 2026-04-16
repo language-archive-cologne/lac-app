@@ -21,6 +21,7 @@ class ACLPermissionMixin:
 
     required_acl_mode: str = "acl:Read"
     permission_denied_message: str = _("You do not have permission to access this resource.")
+    allow_restricted_metadata: bool = False
 
     _acl_cached_object: Optional[Any] = None
     acl_result: Optional[ACLCheckResult] = None
@@ -34,7 +35,7 @@ class ACLPermissionMixin:
         result = service.evaluate(request.user, acl_object, mode=self.required_acl_mode)
         self.acl_result = result
 
-        if service.enforcement_enabled and not result.allowed:
+        if service.enforcement_enabled and not result.allowed and not self.allow_restricted_metadata:
             return self.handle_no_permission(result)
 
         return super().dispatch(request, *args, **kwargs)  # type: ignore[misc]

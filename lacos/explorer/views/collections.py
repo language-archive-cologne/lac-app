@@ -117,7 +117,12 @@ class CollectionACLPermissionMixin(ACLPermissionMixin):
 
         permissions = service._get_permissions(acl_object)
         has_explicit_acl_rules = bool(permissions and permissions.permissions_data)
-        if service.enforcement_enabled and has_explicit_acl_rules and not result.allowed:
+        if (
+            service.enforcement_enabled
+            and has_explicit_acl_rules
+            and not result.allowed
+            and not self.allow_restricted_metadata
+        ):
             return self.handle_no_permission(result)
 
         return super(ACLPermissionMixin, self).dispatch(request, *args, **kwargs)
@@ -469,6 +474,7 @@ class CollectionDetailView(HandleLookupMixin, CollectionACLPermissionMixin, Deta
     template_name = "collection_detail.html"
     context_object_name = "collection"
     permission_denied_message = COLLECTION_PERMISSION_DENIED_MESSAGE
+    allow_restricted_metadata = True
 
     def get_queryset(self):
         return Collection.objects.prefetch_related(
@@ -1004,6 +1010,8 @@ class CollectionResourcesView(View):
 class CollectionJsonLdView(CollectionLookupPermissionMixin, CollectionACLPermissionMixin, View):
     """Export collection metadata as JSON-LD."""
 
+    allow_restricted_metadata = True
+
     def get_collection_queryset(self):
         return Collection.objects.prefetch_related(
             "header",
@@ -1061,6 +1069,8 @@ class CollectionJsonLdView(CollectionLookupPermissionMixin, CollectionACLPermiss
 
 class CollectionXmlView(CollectionLookupPermissionMixin, CollectionACLPermissionMixin, View):
     """Export collection metadata as BLAM XML."""
+
+    allow_restricted_metadata = True
 
     def get_collection_queryset(self):
         return Collection.objects.prefetch_related(

@@ -106,8 +106,8 @@ def test_legacy_collection_route_redirects_to_acl_protected_canonical_view(clien
     response = client.get(f"/collection/{collection.handle_path}/", follow=True)
 
     assert response.redirect_chain == [(f"/collections/{collection.handle_path}/", 301)]
-    assert response.status_code == 403
-    assert "This collection is restricted" in response.content.decode("utf-8")
+    assert response.status_code == 200
+    assert "Collection for legacy URL tests" in response.content.decode("utf-8")
 
 
 @pytest.mark.django_db
@@ -123,7 +123,8 @@ def test_legacy_bundle_route_redirects_to_acl_protected_canonical_view(client):
     response = client.get(f"/bundle/{bundle.handle_path}/", follow=True)
 
     assert response.redirect_chain == [(f"/bundles/{bundle.handle_path}/", 301)]
-    assert response.status_code == 403
+    assert response.status_code == 200
+    assert "Bundle for legacy URL tests" in response.content.decode("utf-8")
 
 
 @pytest.mark.django_db
