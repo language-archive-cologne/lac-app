@@ -9,6 +9,7 @@ from django.template.loader import render_to_string
 from django.utils.translation import gettext_lazy as _
 
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService, ACLCheckResult
+from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 
 
 class ACLPermissionMixin:
@@ -34,6 +35,10 @@ class ACLPermissionMixin:
         service = self.get_acl_service()
         result = service.evaluate(request.user, acl_object, mode=self.required_acl_mode)
         self.acl_result = result
+        policy = self.get_exposure_policy_service()
+
+        if self.allow_restricted_metadata and not policy.can_view_metadata(request.user, acl_object):
+            return self.handle_no_permission(result)
 
         if service.enforcement_enabled and not result.allowed and not self.allow_restricted_metadata:
             return self.handle_no_permission(result)
@@ -55,6 +60,13 @@ class ACLPermissionMixin:
         if not hasattr(self, "_acl_service"):
             self._acl_service = ACLEvaluationService()
         return self._acl_service
+
+    def get_exposure_policy_service(self) -> ExposurePolicyService:
+        if not hasattr(self, "_exposure_policy_service"):
+            self._exposure_policy_service = ExposurePolicyService(
+                acl_service=self.get_acl_service()
+            )
+        return self._exposure_policy_service
 
     def get_object(self, *args, **kwargs):  # pragma: no cover - delegated to superclass
         if self._acl_cached_object is not None:

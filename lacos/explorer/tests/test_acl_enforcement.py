@@ -16,6 +16,10 @@ from lacos.blam.models.bundle.bundle_structural_info import (
 )
 from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo, CollectionLocation
 from lacos.blam.models.collection.collection_repository import Collection
+from lacos.blam.models.collection.collection_structural_info import (
+    CollectionAdditionalMetadataFile,
+    CollectionStructuralInfo,
+)
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
 from lacos.storage.permissions import COLLECTION_MANAGER_GROUP_NAME
 from lacos.storage.constants import WAC_AUTHENTICATED_AGENT
@@ -40,6 +44,7 @@ def _create_collection(identifier: str = "acl-collection") -> Collection:
         version="1.0",
         location=location,
     )
+    CollectionStructuralInfo.objects.create(collection=collection)
     return collection
 
 
@@ -166,6 +171,42 @@ def test_bundle_detail_shows_metadata_when_acl_restricts(client):
     response = client.get(reverse("explorer:bundle_detail", kwargs={"pk": bundle.pk}))
     assert response.status_code == 200
     assert "Bundle description" in response.content.decode("utf-8")
+
+
+@pytest.mark.django_db
+@override_settings(ACL_ENFORCEMENT_ENABLED=True)
+def test_bundle_metadata_jsonld_allows_when_acl_restricts(client):
+    collection = _create_collection("restricted-bundle-jsonld-collection")
+    bundle = _create_bundle(collection, "restricted-bundle-jsonld")
+    _store_acl(
+        bundle,
+        [{"agentClass": "foaf:Person", "agent": "http://example.org/users/allowed", "mode": ["acl:Read"]}],
+    )
+
+    response = client.get(
+        reverse("explorer:bundle_jsonld_by_handle", kwargs={"handle": bundle.handle_path})
+    )
+
+    assert response.status_code == 200
+    assert "application/ld+json" in response["Content-Type"]
+
+
+@pytest.mark.django_db
+@override_settings(ACL_ENFORCEMENT_ENABLED=True)
+def test_bundle_metadata_xml_allows_when_acl_restricts(client):
+    collection = _create_collection("restricted-bundle-xml-collection")
+    bundle = _create_bundle(collection, "restricted-bundle-xml")
+    _store_acl(
+        bundle,
+        [{"agentClass": "foaf:Person", "agent": "http://example.org/users/allowed", "mode": ["acl:Read"]}],
+    )
+
+    response = client.get(
+        reverse("explorer:bundle_xml_by_handle", kwargs={"handle": bundle.handle_path})
+    )
+
+    assert response.status_code == 200
+    assert "application/xml" in response["Content-Type"]
 
 
 @pytest.mark.django_db
@@ -315,3 +356,47 @@ def test_additional_metadata_file_access_allowed_despite_acl(client):
     # Should not be 403 Forbidden - the file is public
     # It may be 404 if the S3 storage is not configured, but not 403
     assert response.status_code != 403
+
+
+@pytest.mark.django_db
+@override_settings(ACL_ENFORCEMENT_ENABLED=True)
+def test_bundle_resource_route_rejects_resource_from_other_bundle(client):
+    collection = _create_collection("bundle-membership-collection")
+    bundle = _create_bundle(collection, "bundle-membership-bundle")
+    other_bundle = _create_bundle(collection, "bundle-membership-other")
+    _store_acl(bundle, [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}])
+    _store_acl(other_bundle, [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}])
+
+    foreign_resource = _add_bundle_media_resource(other_bundle, "foreign.wav")
+
+    response = client.get(
+        reverse(
+            "explorer:resource_access_by_handle",
+            kwargs={"handle": bundle.handle_path, "resource_pid": foreign_resource.file_pid},
+        )
+    )
+
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+@override_settings(ACL_ENFORCEMENT_ENABLED=True)
+def test_collection_metadata_route_rejects_metadata_from_other_collection(client):
+    collection = _create_collection("collection-membership-collection")
+    other_collection = _create_collection("collection-membership-other")
+    metadata_file = CollectionAdditionalMetadataFile.objects.create(
+        file_pid="hdl:test/other-collection-metadata",
+        file_name="other.xml",
+        file_description="Other collection metadata",
+        mime_type="application/xml",
+    )
+    other_collection.structural_info.first().additional_metadata_files.add(metadata_file)
+
+    response = client.get(
+        reverse(
+            "explorer:collection_resource_by_handle",
+            kwargs={"handle": collection.handle_path, "resource_id": metadata_file.file_pid[4:]},
+        )
+    )
+
+    assert response.status_code == 404

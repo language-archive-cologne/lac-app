@@ -11,6 +11,7 @@ from lacos.rest.v2.serializers.collections import (
     serialize_collection_detail,
     serialize_collection_list_item,
 )
+from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 
 
 @extend_schema(
@@ -27,11 +28,13 @@ from lacos.rest.v2.serializers.collections import (
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def collection_list(request):
+    policy = ExposurePolicyService()
     qs = Collection.objects.prefetch_related(
         "general_info__keywords",
         "general_info__object_languages",
         "administrative_info",
     ).all()
+    qs = policy.filter_collection_queryset(request.user, qs, channel="api")
 
     search = request.query_params.get("search")
     if search:
@@ -78,6 +81,9 @@ def collection_list(request):
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def collection_detail(request, identifier):
+    policy = ExposurePolicyService()
     collection = resolve_identifier(Collection, identifier)
+    if not policy.can_view_metadata(request.user, collection):
+        return Response({"detail": "access denied"}, status=403)
     data = serialize_collection_detail(collection)
     return Response(data, content_type="application/ld+json")

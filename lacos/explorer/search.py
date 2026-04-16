@@ -28,6 +28,7 @@ from lacos.blam.models.collection.collection_general_info import CollectionGener
 from lacos.blam.models.collection.collection_publication_info import CollectionPublicationInfo
 from lacos.explorer.text_search import build_fts_query
 from lacos.explorer.text_search import sanitize_search_term
+from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 
 
 SearchResultKind = Literal["collection", "bundle"]
@@ -211,7 +212,13 @@ def _bundle_people_text(bundle: Bundle) -> tuple[str, str]:
     return creators, contributors
 
 
-def search_archives(term: str, *, limit: int | None = None, use_stored_vectors: bool = True) -> list[SearchResult]:
+def search_archives(
+    term: str,
+    *,
+    limit: int | None = None,
+    use_stored_vectors: bool = True,
+    user=None,
+) -> list[SearchResult]:
     """Return ranked search results across collections and bundles.
 
     Args:
@@ -232,8 +239,22 @@ def search_archives(term: str, *, limit: int | None = None, use_stored_vectors: 
     if query is None:
         return []
 
-    collection_results = _search_collections(query, normalized, use_stored_vectors)
-    bundle_results = _search_bundles(query, normalized, use_stored_vectors)
+    if user is None:
+        collection_results = _search_collections(query, normalized, use_stored_vectors)
+        bundle_results = _search_bundles(query, normalized, use_stored_vectors)
+    else:
+        collection_results = _search_collections(
+            query,
+            normalized,
+            use_stored_vectors,
+            user=user,
+        )
+        bundle_results = _search_bundles(
+            query,
+            normalized,
+            use_stored_vectors,
+            user=user,
+        )
 
     combined: list[SearchResult] = [*collection_results, *bundle_results]
     combined.sort(key=lambda result: result.rank, reverse=True)
@@ -258,7 +279,14 @@ def search_archives(term: str, *, limit: int | None = None, use_stored_vectors: 
     return deduped[:limit]
 
 
-def _search_collections(query: SearchQuery, term: str, use_stored_vectors: bool = True) -> list[SearchResult]:
+def _search_collections(
+    query: SearchQuery,
+    term: str,
+    use_stored_vectors: bool = True,
+    *,
+    user=None,
+) -> list[SearchResult]:
+    policy = ExposurePolicyService()
     general_info = CollectionGeneralInfo.objects.filter(collection=OuterRef("pk"))
     publication_info = CollectionPublicationInfo.objects.filter(collection=OuterRef("pk"))
 
@@ -349,6 +377,8 @@ def _search_collections(query: SearchQuery, term: str, use_stored_vectors: bool 
 
     results: list[SearchResult] = []
     for collection in collection_rows:
+        if not policy.can_list_in_search(user, collection):
+            continue
         title = collection.collection_display_title or collection.identifier
         description = collection.collection_description or ""
         keywords = keywords_by_collection.get(str(collection.pk), ())
@@ -388,7 +418,14 @@ def _search_collections(query: SearchQuery, term: str, use_stored_vectors: bool 
     return results
 
 
-def _search_bundles(query: SearchQuery, term: str, use_stored_vectors: bool = True) -> list[SearchResult]:
+def _search_bundles(
+    query: SearchQuery,
+    term: str,
+    use_stored_vectors: bool = True,
+    *,
+    user=None,
+) -> list[SearchResult]:
+    policy = ExposurePolicyService()
     general_info = BundleGeneralInfo.objects.filter(bundle=OuterRef("pk"))
     structural_info = BundleStructuralInfo.objects.filter(bundle=OuterRef("pk"))
     publication_info = BundlePublicationInfo.objects.filter(bundle=OuterRef("pk"))
@@ -483,6 +520,8 @@ def _search_bundles(query: SearchQuery, term: str, use_stored_vectors: bool = Tr
 
     results: list[SearchResult] = []
     for bundle in bundle_rows:
+        if not policy.can_list_in_search(user, bundle):
+            continue
         title = bundle.bundle_display_title or bundle.identifier
         description = bundle.bundle_description or ""
         keywords = keywords_by_bundle.get(str(bundle.pk), ())

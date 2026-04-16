@@ -25,6 +25,7 @@ from lacos.blam.serializers import BundleJsonLdSerializer
 from lacos.explorer.media_utils import determine_media_type, guess_source_mime_type
 from lacos.explorer.permissions import ACLPermissionMixin
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
+from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 from lacos.storage.services.file_discovery_service import FileDiscoveryService
 from lacos.storage.services.media_processing_service import MediaProcessingService
 from lacos.storage.services.resource_mapping_service import ResourceMappingService
@@ -50,6 +51,39 @@ from .utils import (
 
 
 logger = logging.getLogger(__name__)
+
+
+class BundleLookupPermissionMixin(ACLPermissionMixin):
+    _resolved_bundle = None
+
+    def get_bundle_queryset(self):
+        raise NotImplementedError
+
+    def get_bundle(self, pk=None, handle=None):
+        if self._resolved_bundle is not None:
+            return self._resolved_bundle
+
+        queryset = self.get_bundle_queryset()
+        if pk is not None:
+            bundle = queryset.filter(pk=pk).first()
+        elif handle is not None:
+            bundle = queryset.filter(identifier=handle).first()
+            if bundle is None and not handle.startswith("hdl:"):
+                bundle = queryset.filter(identifier=f"hdl:{handle}").first()
+        else:
+            raise Http404("No bundle identifier provided")
+
+        if bundle is None:
+            raise Http404("Bundle not found")
+
+        self._resolved_bundle = bundle
+        return bundle
+
+    def get_acl_object(self, request, *args, **kwargs):
+        return self.get_bundle(
+            pk=kwargs.get("pk"),
+            handle=kwargs.get("handle"),
+        )
 
 
 class BundleDetailView(HandleLookupMixin, ACLPermissionMixin, DetailView):
@@ -151,6 +185,7 @@ class BundleResourcesView(View):
     def get(self, request, pk=None, handle=None, resource_id=None):
         bundle = get_object_by_pk_or_handle(Bundle, pk=pk, handle=handle)
         acl_service = ACLEvaluationService()
+        policy = ExposurePolicyService(acl_service=acl_service)
         acl_result = acl_service.evaluate(request.user, bundle, mode="acl:Read")
         if acl_service.enforcement_enabled and not acl_result.allowed:
             return HttpResponseForbidden(self.permission_denied_message)
@@ -178,6 +213,10 @@ class BundleResourcesView(View):
                 raise ValueError(f"No S3 location found for PID: {decoded_resource_id}")
 
             resource_obj = find_resource_in_bundle(bundle, file_pid=decoded_resource_id)
+            if resource_obj is None:
+                raise Http404(f"Resource {resource_id} not found in bundle")
+            if not policy.can_download_binary(request.user, resource_obj):
+                return HttpResponseForbidden(self.permission_denied_message)
 
             fallback_bucket = (
                 getattr(bundle, 'import_bucket', None)
@@ -289,6 +328,7 @@ class ResourceAccessView(View):
     permission_denied_message = _("You do not have permission to access this resource.")
 
     def get(self, request, bundle_id=None, resource_id=None, handle=None, resource_pid=None):
+        policy = ExposurePolicyService()
         # Resolve bundle by UUID or handle
         if bundle_id:
             bundle = get_object_or_404(Bundle, pk=bundle_id)
@@ -313,7 +353,11 @@ class ResourceAccessView(View):
 
         # Additional metadata files are always public, skip ACL check for them
         is_additional_metadata = isinstance(resource, BundleAdditionalMetadataFile)
-        if not is_additional_metadata:
+        if is_additional_metadata:
+            if not policy.can_download_binary(request.user, resource):
+                html = render_to_string("403.html", {"exception": self.permission_denied_message}, request=request)
+                return HttpResponseForbidden(html)
+        else:
             acl_service = ACLEvaluationService()
             acl_result = acl_service.evaluate(request.user, bundle, mode="acl:Read")
             if acl_service.enforcement_enabled and not acl_result.allowed:
@@ -723,10 +767,12 @@ class ResourceByHandleView(View):
         raise Http404(f"Resource with handle '{file_pid}' not found")
 
 
-class BundleJsonLdView(View):
+class BundleJsonLdView(BundleLookupPermissionMixin, View):
     """Export bundle metadata as JSON-LD."""
 
-    def get_queryset(self):
+    allow_restricted_metadata = True
+
+    def get_bundle_queryset(self):
         return Bundle.objects.prefetch_related(
             "header",
             "general_info",
@@ -751,18 +797,7 @@ class BundleJsonLdView(View):
         )
 
     def get(self, request, pk=None, handle=None):
-        queryset = self.get_queryset()
-        if pk is not None:
-            bundle = queryset.filter(pk=pk).first()
-        elif handle is not None:
-            bundle = queryset.filter(identifier=handle).first()
-            if bundle is None and not handle.startswith('hdl:'):
-                bundle = queryset.filter(identifier=f"hdl:{handle}").first()
-        else:
-            raise Http404("No bundle identifier provided")
-
-        if bundle is None:
-            raise Http404("Bundle not found")
+        bundle = self.get_bundle(pk=pk, handle=handle)
 
         serializer = BundleJsonLdSerializer(bundle)
         data = serializer.serialize()
@@ -788,11 +823,13 @@ class BundleJsonLdView(View):
         return response
 
 
-class BundleXmlView(View):
+class BundleXmlView(BundleLookupPermissionMixin, View):
     """Export bundle metadata as BLAM XML."""
 
-    def get(self, request, pk=None, handle=None):
-        queryset = Bundle.objects.prefetch_related(
+    allow_restricted_metadata = True
+
+    def get_bundle_queryset(self):
+        return Bundle.objects.prefetch_related(
             "header",
             "general_info",
             "general_info__keywords",
@@ -813,17 +850,8 @@ class BundleXmlView(View):
             "structural_info__additional_metadata_files",
         )
 
-        if pk is not None:
-            bundle = queryset.filter(pk=pk).first()
-        elif handle is not None:
-            bundle = queryset.filter(identifier=handle).first()
-            if bundle is None and not handle.startswith('hdl:'):
-                bundle = queryset.filter(identifier=f"hdl:{handle}").first()
-        else:
-            raise Http404("No bundle identifier provided")
-
-        if bundle is None:
-            raise Http404("Bundle not found")
+    def get(self, request, pk=None, handle=None):
+        bundle = self.get_bundle(pk=pk, handle=handle)
 
         exporter = BundleExporter()
         try:
