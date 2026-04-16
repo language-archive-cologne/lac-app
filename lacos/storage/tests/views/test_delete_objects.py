@@ -57,9 +57,7 @@ def test_bundle():
     )
 
 
-# BLAM Model Delete Tests - SKIPPED (missing 'blam' namespace)
 @pytest.mark.django_db
-@pytest.mark.skip(reason="'blam' namespace not registered in test environment")
 def test_delete_collection_success(authenticated_client, test_collection):
     """Test successful deletion of a Collection."""
     # Get the initial count
@@ -81,7 +79,6 @@ def test_delete_collection_success(authenticated_client, test_collection):
 
 
 @pytest.mark.django_db
-@pytest.mark.skip(reason="'blam' namespace not registered in test environment")
 def test_delete_bundle_success(authenticated_client, test_bundle):
     """Test successful deletion of a Bundle."""
     # Get the initial count
@@ -103,7 +100,6 @@ def test_delete_bundle_success(authenticated_client, test_bundle):
 
 
 @pytest.mark.django_db
-@pytest.mark.skip(reason="'blam' namespace not registered in test environment")
 def test_delete_invalid_model_type(authenticated_client):
     """Test deletion with an invalid model type."""
     url = reverse('blam:delete_model', kwargs={
@@ -117,7 +113,6 @@ def test_delete_invalid_model_type(authenticated_client):
 
 
 @pytest.mark.django_db
-@pytest.mark.skip(reason="'blam' namespace not registered in test environment")
 def test_delete_nonexistent_object(authenticated_client):
     """Test deletion of a non-existent object."""
     url = reverse('blam:delete_model', kwargs={
