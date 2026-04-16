@@ -9,6 +9,7 @@ from django.core.cache import cache
 
 from lacos.storage.models.s3_resource_location import S3ResourceLocation
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
+from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 from lacos.blam.models.bundle.bundle_repository import Bundle
 
 logger = logging.getLogger(__name__)
@@ -131,6 +132,7 @@ def check_resource_authorization(request, bucket: str, key: str) -> Optional[str
         return str(header_value).strip().lower() in {'1', 'true', 'yes'}
 
     try:
+        policy = ExposurePolicyService()
         # Look up resource location to find associated bundle
         location = S3ResourceLocation.objects.filter(
             s3_bucket=bucket,
@@ -158,32 +160,33 @@ def check_resource_authorization(request, bucket: str, key: str) -> Optional[str
             )
             return None
 
-        # Location exists - check if it has a content object for ACL evaluation
-        if location.content_object:
-            obj = location.content_object
+        if not policy.can_download_binary(request.user, location):
+            logger.warning(
+                "Exposure policy denied download",
+                extra={"user": str(request.user), "bucket": bucket, "key": key},
+            )
+            return "Access denied"
 
-            # Try to get the parent bundle for ACL check
+        # Preserve explicit ACL logging for protected bundle resources.
+        obj = location.content_object
+        if isinstance(obj, Bundle):
+            bundle = obj
+        elif hasattr(obj, 'bundleresources_set'):
+            bundle_resources = obj.bundleresources_set.first()
+            bundle = bundle_resources.bundle if bundle_resources else None
+        else:
             bundle = None
-            if isinstance(obj, Bundle):
-                bundle = obj
-            elif hasattr(obj, 'bundleresources_set'):
-                # It's a resource, find the bundle
-                bundle_resources = obj.bundleresources_set.first()
-                if bundle_resources:
-                    bundle = bundle_resources.bundle
 
-            if bundle:
-                acl_service = ACLEvaluationService()
-                acl_result = acl_service.evaluate(request.user, bundle, mode="acl:Read")
+        if bundle:
+            acl_service = ACLEvaluationService()
+            acl_result = acl_service.evaluate(request.user, bundle, mode="acl:Read")
+            if not acl_result.allowed and acl_service.enforcement_enabled:
+                logger.warning(
+                    "ACL denied download",
+                    extra={"user": str(request.user), "bucket": bucket, "key": key, "reason": acl_result.reason},
+                )
+                return "Access denied"
 
-                if not acl_result.allowed and acl_service.enforcement_enabled:
-                    logger.warning(
-                        "ACL denied download",
-                        extra={"user": str(request.user), "bucket": bucket, "key": key, "reason": acl_result.reason},
-                    )
-                    return "Access denied"
-
-        # Location exists but no bundle association - resource is public
         return None
 
     except Exception as e:

@@ -11,6 +11,7 @@ from lacos.rest.v2.serializers.bundles import (
     serialize_bundle_detail,
     serialize_bundle_list_item,
 )
+from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 
 
 @extend_schema(
@@ -28,12 +29,14 @@ from lacos.rest.v2.serializers.bundles import (
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def bundle_list(request):
+    policy = ExposurePolicyService()
     qs = Bundle.objects.prefetch_related(
         "general_info__keywords",
         "general_info__object_languages",
         "administrative_info",
         "structural_info__is_member_of_collection__general_info",
     ).all()
+    qs = policy.filter_bundle_queryset(request.user, qs, channel="api")
 
     collection = request.query_params.get("collection")
     if collection:
@@ -84,6 +87,9 @@ def bundle_list(request):
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def bundle_detail(request, identifier):
+    policy = ExposurePolicyService()
     bundle = resolve_identifier(Bundle, identifier)
+    if not policy.can_view_metadata(request.user, bundle):
+        return Response({"detail": "access denied"}, status=403)
     data = serialize_bundle_detail(bundle)
     return Response(data, content_type="application/ld+json")

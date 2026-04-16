@@ -120,6 +120,7 @@ def _handle_list_verbs(request: HttpRequest, verb: str, oai_request) -> HttpResp
         from_date=from_date,
         until_date=until_date,
         limit=page_size,
+        user=getattr(request, "user", None),
     )
 
     if not records:

@@ -35,6 +35,7 @@ from lacos.explorer.permissions import ACLPermissionMixin
 from lacos.explorer.search import search_archives
 from lacos.explorer.views.utils import build_content_disposition
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
+from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 from lacos.storage.models.acl_permissions import ACLPermissions
 from lacos.storage.services.media_processing_service import MediaProcessingService
 from lacos.storage.services.resource_mapping_service import ResourceMappingService
@@ -114,6 +115,10 @@ class CollectionACLPermissionMixin(ACLPermissionMixin):
         service = self.get_acl_service()
         result = service.evaluate(request.user, acl_object, mode=self.required_acl_mode)
         self.acl_result = result
+        policy = self.get_exposure_policy_service()
+
+        if self.allow_restricted_metadata and not policy.can_view_metadata(request.user, acl_object):
+            return self.handle_no_permission(result)
 
         permissions = service._get_permissions(acl_object)
         has_explicit_acl_rules = bool(permissions and permissions.permissions_data)
@@ -175,6 +180,11 @@ class CollectionListView(ListView):
         else:
             queryset = queryset.order_by(f'{prefix}general_info__display_title')
 
+        queryset = ExposurePolicyService().filter_collection_queryset(
+            self.request.user,
+            queryset,
+            channel="browse",
+        )
         return queryset
 
     def get_context_data(self, **kwargs):
@@ -188,7 +198,7 @@ class CollectionListView(ListView):
         language_filter = self.request.GET.get("language", "").strip()
         context["language_filter"] = language_filter
         if search_query:
-            search_results = search_archives(search_query)
+            search_results = search_archives(search_query, user=self.request.user)
             context["search_results"] = search_results
             context["collection_search_results"] = [
                 result for result in search_results if result.kind == "collection"
@@ -622,25 +632,11 @@ class CollectionDetailView(HandleLookupMixin, CollectionACLPermissionMixin, Deta
             bundle_info['access_level'] = bundle_acl.access_level
             bundle_info['can_read_bundle'] = bundle_acl.allowed or not acl_service.enforcement_enabled
 
-        # Content license from administrative info (license_name).
-        context["metadata_license"] = None
-        context["metadata_license_uri"] = None
+        # Display only administrative content licenses in the collection header.
         context["content_licenses"] = []
-
-        # Prefer md_license from CollectionHeader when available
-        header = self.object.header.first() if hasattr(self.object, "header") else None
-        if header and header.md_license:
-            context["metadata_license"] = header.md_license
-            context["metadata_license_uri"] = header.md_license_uri or ""
 
         if hasattr(self.object, "administrative_info") and self.object.administrative_info.first():
             context["content_licenses"] = self.object.administrative_info.first().licenses.all()
-            # Fall back to administrative license if no md_license
-            if not context["metadata_license"] and context["content_licenses"]:
-                first_license = context["content_licenses"].first()
-                if first_license:
-                    context["metadata_license"] = first_license.license_name
-                    context["metadata_license_uri"] = first_license.license_identifier
 
         # Citation
         context['citation'] = self._format_citation()
@@ -738,6 +734,7 @@ class CollectionResourcesView(View):
 
     def get(self, request, pk=None, handle=None, resource_id=None):
         collection = get_object_by_pk_or_handle(Collection, pk=pk, handle=handle)
+        policy = ExposurePolicyService()
 
         if not resource_id:
             raise Http404("Resource ID required")
@@ -761,27 +758,18 @@ class CollectionResourcesView(View):
                     file_pid=decoded_resource_id
                 ).first()
 
+            if metadata_file is not None and not policy.can_download_binary(request.user, metadata_file):
+                return HttpResponseForbidden(COLLECTION_PERMISSION_DENIED_MESSAGE)
+
+            if metadata_file is None:
+                raise Http404(f"Collection metadata resource {decoded_resource_id} not found")
+
             resource_service = ResourceMappingService(skip_bucket_check=True)
-            storage_resolution = None
-            if metadata_file:
-                storage_resolution = resolve_collection_metadata_to_presigned(
-                    resource_service,
-                    metadata_file,
-                    collection,
-                )
-
-            if not storage_resolution:
-                location = resource_service.resolve_pid_to_s3(decoded_resource_id)
-                if location:
-                    storage_resolution = {
-                        "bucket": location.s3_bucket,
-                        "key": location.s3_key,
-                        "url": resource_service.generate_presigned_url(
-                            location.s3_bucket,
-                            location.s3_key,
-                        ),
-                    }
-
+            storage_resolution = resolve_collection_metadata_to_presigned(
+                resource_service,
+                metadata_file,
+                collection,
+            )
             if not storage_resolution:
                 raise ValueError(f"No S3 location found for PID: {decoded_resource_id}")
 

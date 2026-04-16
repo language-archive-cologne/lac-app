@@ -12,6 +12,7 @@ from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo
 from lacos.blam.models.collection.collection_publication_info import CollectionPublicationInfo
 from lacos.blam.models.collection.collection_administrative_info import CollectionAdministrativeInfo
+from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 
 from ..constants import REPO_IDENTIFIER, DEFAULT_PAGE_SIZE
 
@@ -65,6 +66,7 @@ def fetch_collection_records(
     from_date: Optional[date] = None,
     until_date: Optional[date] = None,
     limit: int = DEFAULT_PAGE_SIZE,
+    user=None,
 ) -> tuple[List[OAIPMHCollectionResult], bool]:
     """Return a page of collection records along with a flag indicating more results."""
 
@@ -77,6 +79,12 @@ def fetch_collection_records(
     qs = qs.distinct().order_by("identifier")
 
     page = list(qs[offset : offset + limit + 1])
+    policy = ExposurePolicyService()
+    harvest_user = user or policy.anonymous_user()
+    page = [
+        collection for collection in page
+        if policy.can_harvest_via_oai(harvest_user, collection)
+    ]
     has_more = len(page) > limit
     if has_more:
         page = page[:limit]
