@@ -14,7 +14,11 @@ from lacos.storage.constants import (
     WAC_AGENT,
     WAC_AUTHENTICATED_AGENT,
 )
-from lacos.storage.permissions import is_archivist
+from lacos.storage.permissions import (
+    can_manage_bundle,
+    can_manage_collection,
+    is_archivist,
+)
 from lacos.storage.utils.acl import determine_access_level, normalize_agent_uri
 from lacos.storage.models.acl_config import ACLConfig
 
@@ -74,9 +78,8 @@ class ACLEvaluationService:
         """
         result = self._evaluate_internal(user, obj, mode)
 
-        if is_archivist(user) and not result.allowed:
-            result.allowed = True
-            result.reason = "Archivist override"
+        self._apply_management_override(user, obj, mode, result)
+        self._apply_archivist_override(user, result)
 
         if self.log_attempts:
             self._log_attempt(user, obj, mode, result)
@@ -274,6 +277,26 @@ class ACLEvaluationService:
                 if group.name:
                     uris.add(group.name.strip())
         return {uri for uri in uris if uri}
+
+    @staticmethod
+    def _apply_management_override(user, obj: Any, mode: str, result: ACLCheckResult) -> None:
+        if result.allowed or mode != "acl:Read":
+            return
+
+        if isinstance(obj, Collection) and can_manage_collection(user, obj):
+            result.allowed = True
+            result.reason = "Collection manager override"
+            return
+
+        if isinstance(obj, Bundle) and can_manage_bundle(user, obj):
+            result.allowed = True
+            result.reason = "Collection manager override"
+
+    @staticmethod
+    def _apply_archivist_override(user, result: ACLCheckResult) -> None:
+        if is_archivist(user) and not result.allowed:
+            result.allowed = True
+            result.reason = "Archivist override"
 
     def _log_attempt(self, user, obj: Any, mode: str, result: ACLCheckResult) -> None:
         user_repr = "anonymous" if isinstance(user, AnonymousUser) else getattr(user, "pk", getattr(user, "username", "unknown"))

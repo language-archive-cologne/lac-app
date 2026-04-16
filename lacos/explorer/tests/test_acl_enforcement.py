@@ -1,6 +1,7 @@
 import pytest
 from uuid import uuid4
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.contrib.contenttypes.models import ContentType
 from django.test import override_settings
 from django.urls import reverse
@@ -11,8 +12,10 @@ from lacos.blam.models.bundle.bundle_structural_info import BundleAdditionalMeta
 from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo, CollectionLocation
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
+from lacos.storage.permissions import COLLECTION_MANAGER_GROUP_NAME
 from lacos.storage.constants import WAC_AUTHENTICATED_AGENT
 from lacos.storage.models.acl_permissions import ACLPermissions
+from lacos.users.models import CollectionManagerAssignment
 
 
 def _create_collection(identifier: str = "acl-collection") -> Collection:
@@ -67,6 +70,13 @@ def _store_acl(obj, rules):
             "permissions_data": rules,
         },
     )[0]
+
+
+def _assign_collection_manager(user, *collections: Collection) -> None:
+    group = Group.objects.get_or_create(name=COLLECTION_MANAGER_GROUP_NAME)[0]
+    user.groups.add(group)
+    for collection in collections:
+        CollectionManagerAssignment.objects.create(user=user, collection=collection)
 
 
 @pytest.mark.django_db
@@ -142,6 +152,43 @@ def test_bundle_detail_denies_when_acl_restricts(client):
 
 @pytest.mark.django_db
 @override_settings(ACL_ENFORCEMENT_ENABLED=True)
+def test_collection_detail_allows_assigned_collection_manager(client):
+    collection = _create_collection("manager-collection-detail")
+    _store_acl(
+        collection,
+        [{"agentClass": "foaf:Person", "agent": "http://example.org/users/allowed", "mode": ["acl:Read"]}],
+    )
+
+    user = get_user_model().objects.create_user(username="manager-collection-viewer", password="pass")
+    _assign_collection_manager(user, collection)
+    client.force_login(user)
+
+    response = client.get(reverse("explorer:collection_detail", kwargs={"pk": collection.pk}))
+
+    assert response.status_code == 200
+
+
+@pytest.mark.django_db
+@override_settings(ACL_ENFORCEMENT_ENABLED=True)
+def test_bundle_detail_allows_assigned_collection_manager(client):
+    collection = _create_collection("manager-bundle-collection")
+    bundle = _create_bundle(collection, "manager-bundle-detail")
+    _store_acl(
+        bundle,
+        [{"agentClass": "foaf:Person", "agent": "http://example.org/users/allowed", "mode": ["acl:Read"]}],
+    )
+
+    user = get_user_model().objects.create_user(username="manager-bundle-viewer", password="pass")
+    _assign_collection_manager(user, collection)
+    client.force_login(user)
+
+    response = client.get(reverse("explorer:bundle_detail", kwargs={"pk": bundle.pk}))
+
+    assert response.status_code == 200
+
+
+@pytest.mark.django_db
+@override_settings(ACL_ENFORCEMENT_ENABLED=True)
 def test_bundle_detail_allows_authenticated_agent(client):
     collection = _create_collection("auth-collection")
     bundle = _create_bundle(collection, "auth-bundle")
@@ -168,6 +215,27 @@ def test_resource_access_denied_without_permission(client):
         )
     )
     assert response.status_code == 403
+
+
+@pytest.mark.django_db
+@override_settings(ACL_ENFORCEMENT_ENABLED=True)
+def test_resource_access_allows_assigned_collection_manager(client):
+    collection = _create_collection("manager-resource-collection")
+    bundle = _create_bundle(collection, "manager-resource-bundle")
+    _store_acl(bundle, [{"agentClass": "foaf:Person", "agent": "http://example.org/users/other", "mode": ["acl:Read"]}])
+
+    user = get_user_model().objects.create_user(username="manager-resource-viewer", password="pass")
+    _assign_collection_manager(user, collection)
+    client.force_login(user)
+
+    response = client.get(
+        reverse(
+            "explorer:resource_access",
+            kwargs={"bundle_id": bundle.pk, "resource_id": uuid4()},
+        )
+    )
+
+    assert response.status_code == 404
 
 
 @pytest.mark.django_db

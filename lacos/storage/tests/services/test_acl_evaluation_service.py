@@ -13,9 +13,9 @@ from lacos.storage.constants import (
     WAC_AUTHENTICATED_AGENT,
 )
 from lacos.storage.models.acl_permissions import ACLPermissions
+from lacos.storage.permissions import ARCHIVIST_GROUP_NAME, COLLECTION_MANAGER_GROUP_NAME
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
-from lacos.users.models import GroupACL
-from lacos.storage.permissions import ARCHIVIST_GROUP_NAME
+from lacos.users.models import CollectionManagerAssignment, GroupACL
 
 
 def _create_collection(identifier: str = "collection-eval") -> Collection:
@@ -37,6 +37,13 @@ def _store_acl(obj, rules):
         ACL_file_key="test/key",
         permissions_data=rules,
     )
+
+
+def _assign_collection_manager(user, *collections: Collection) -> None:
+    group = Group.objects.get_or_create(name=COLLECTION_MANAGER_GROUP_NAME)[0]
+    user.groups.add(group)
+    for collection in collections:
+        CollectionManagerAssignment.objects.create(user=user, collection=collection)
 
 
 @pytest.mark.django_db
@@ -308,6 +315,39 @@ def test_archivist_override_allows_access():
     service = ACLEvaluationService()
     result = service.evaluate(user, bundle)
     assert result.allowed is True
+    assert result.access_level == ACL_LEVEL_RESTRICTED
+
+
+@pytest.mark.django_db
+def test_collection_manager_assignment_allows_restricted_collection():
+    collection = _create_collection("manager-collection")
+    _store_acl(collection, [{"agentClass": "foaf:Person", "agent": "urn:test:allowed", "mode": ["acl:Read"]}])
+
+    user = get_user_model().objects.create_user(username="manager-collection", password="pass")
+    _assign_collection_manager(user, collection)
+
+    service = ACLEvaluationService()
+    result = service.evaluate(user, collection)
+
+    assert result.allowed is True
+    assert result.reason == "Collection manager override"
+    assert result.access_level == ACL_LEVEL_RESTRICTED
+
+
+@pytest.mark.django_db
+def test_collection_manager_assignment_allows_restricted_bundle():
+    collection = _create_collection("manager-bundle-collection")
+    bundle = _create_bundle(collection, "manager-bundle")
+    _store_acl(bundle, [{"agentClass": "foaf:Person", "agent": "urn:test:allowed", "mode": ["acl:Read"]}])
+
+    user = get_user_model().objects.create_user(username="manager-bundle", password="pass")
+    _assign_collection_manager(user, collection)
+
+    service = ACLEvaluationService()
+    result = service.evaluate(user, bundle)
+
+    assert result.allowed is True
+    assert result.reason == "Collection manager override"
     assert result.access_level == ACL_LEVEL_RESTRICTED
 
 
