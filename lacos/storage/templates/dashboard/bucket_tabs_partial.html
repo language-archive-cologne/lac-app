@@ -47,7 +47,7 @@
             <!-- Divider -->
             <div class="divider my-1"></div>
 
-            {% if active_bucket %}
+            {% if active_bucket and storage_dashboard_access.can_manage_buckets %}
             <li>
                 <button
                     class="flex items-center gap-3 p-3 hover:bg-base-200"
@@ -73,6 +73,7 @@
             {% endif %}
 
             <!-- Create New Bucket -->
+            {% if storage_dashboard_access.can_manage_buckets %}
             <li>
                 <label for="create-bucket-modal" class="flex items-center gap-3 p-3 hover:bg-success hover:text-success-content cursor-pointer">
                     <div class="avatar placeholder">
@@ -88,6 +89,7 @@
                     </div>
                 </label>
             </li>
+            {% endif %}
         </ul>
     </div>
 </div>

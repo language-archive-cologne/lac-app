@@ -84,7 +84,9 @@
                         </div>
                         <h3 class="text-lg font-medium text-base-content/70 mb-2">No buckets configured</h3>
                         <p class="text-base-content/50 mb-4">Create your first bucket to get started</p>
+                        {% if storage_dashboard_access.can_manage_buckets %}
                         <label for="create-bucket-modal" class="btn btn-primary">Create Bucket</label>
+                        {% endif %}
                     </div>
                 </div>
             {% endif %}

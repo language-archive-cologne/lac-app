@@ -1,12 +1,35 @@
 import pytest
 import json
-from unittest.mock import patch, MagicMock, Mock
+from unittest.mock import patch
+from django.contrib.auth.models import Group
 from django.test import RequestFactory
-from django.http import HttpResponse, JsonResponse
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.sessions.middleware import SessionMiddleware
 
+from lacos.blam.models.collection.collection_repository import Collection
+from lacos.users.models import CollectionManagerAssignment
+from lacos.users.tests.factories import UserFactory
 from lacos.storage.views.file_operations_views import delete_object, RenameObjectHTMXView
+
+pytestmark = pytest.mark.django_db
+
+
+def _ensure_group(name: str) -> Group:
+    return Group.objects.get_or_create(name=name)[0]
+
+
+def _grant_collection_access(request, object_path: str):
+    user = UserFactory()
+    user.groups.add(_ensure_group("collection_manager"))
+
+    stripped_path = (object_path or "").strip("/")
+    identifier = stripped_path.split("/", 1)[0] if stripped_path else None
+    if identifier:
+        collection, _ = Collection.objects.get_or_create(identifier=identifier)
+        CollectionManagerAssignment.objects.get_or_create(user=user, collection=collection)
+
+    request.user = user
+    return user
 
 
 @pytest.fixture
@@ -34,15 +57,8 @@ def prepared_request():
             request.headers = {'HX-Request': 'true'}
         else:
             request.headers = {}
-        
-        # Add a mock authenticated user
-        mock_user = MagicMock()
-        mock_user.is_authenticated = True
-        mock_user.is_superuser = False
-        groups_qs = MagicMock()
-        groups_qs.exists.return_value = True
-        mock_user.groups.filter.return_value = groups_qs
-        request.user = mock_user
+
+        request.user = UserFactory()
         
         return request
     
@@ -77,19 +93,21 @@ def mock_bucket_service():
 @patch('lacos.storage.views.file_operations_views.BucketService')
 @patch.object(RenameObjectHTMXView, 'render_bucket_content_template', return_value='rendered-html')
 def test_rename_object_folder_success(mock_render_content, MockBucketService, mock_get_token, prepared_request):
+    object_path = 'old/old/'
     request = prepared_request(
         '/storage/rename-object/bucket/folder/old/path/',
         method='post',
         htmx=True,
         data={'newName': 'Renamed'}
     )
+    _grant_collection_access(request, object_path)
 
     mock_service = MockBucketService.return_value
     mock_service.rename_folder.return_value = {'success': True}
 
-    response = RenameObjectHTMXView.as_view()(request, bucket_name='bucket', object_type='folder', object_path='old/path/')
+    response = RenameObjectHTMXView.as_view()(request, bucket_name='bucket', object_type='folder', object_path=object_path)
 
-    mock_service.rename_folder.assert_called_once_with('bucket', 'old/path/', 'Renamed')
+    mock_service.rename_folder.assert_called_once_with('bucket', object_path, 'Renamed')
     assert response.status_code == 200
     content = response.content.decode()
     assert content.startswith('rendered-html')
@@ -100,19 +118,21 @@ def test_rename_object_folder_success(mock_render_content, MockBucketService, mo
 @patch('lacos.storage.views.file_operations_views.BucketService')
 @patch.object(RenameObjectHTMXView, 'render_bucket_content_template', return_value='rendered-html')
 def test_rename_object_file_failure(mock_render_content, MockBucketService, mock_get_token, prepared_request):
+    object_path = 'folder/file.txt'
     request = prepared_request(
         '/storage/rename-object/bucket/file/folder/file.txt',
         method='post',
         htmx=True,
         data={'newName': 'file.txt'}
     )
+    _grant_collection_access(request, object_path)
 
     mock_service = MockBucketService.return_value
     mock_service.rename_file.return_value = {'success': False, 'error': 'exists'}
 
-    response = RenameObjectHTMXView.as_view()(request, bucket_name='bucket', object_type='file', object_path='folder/file.txt')
+    response = RenameObjectHTMXView.as_view()(request, bucket_name='bucket', object_type='file', object_path=object_path)
 
-    mock_service.rename_file.assert_called_once_with('bucket', 'folder/file.txt', 'file.txt')
+    mock_service.rename_file.assert_called_once_with('bucket', object_path, 'file.txt')
     assert response.status_code == 400
     content = response.content.decode()
     assert 'exists' in content
@@ -135,8 +155,9 @@ def test_delete_object_folder_success(mock_bucket_service, prepared_request):
     # Create a POST request
     bucket_type = 'ingest'
     object_type = 'folder'
-    object_path = 'test-folder/'
+    object_path = 'test-folder/test-folder/'
     request = prepared_request(f'/storage/delete/{bucket_type}/{object_type}/{object_path}', method='post')
+    _grant_collection_access(request, object_path)
 
     # Call the view
     response = delete_object(request, bucket_type, object_type, object_path)
@@ -166,6 +187,7 @@ def test_delete_object_file_success(mock_bucket_service, prepared_request):
     object_type = 'file'
     object_path = 'test-folder/test.txt'
     request = prepared_request(f'/storage/delete/{bucket_type}/{object_type}/{object_path}', method='post')
+    _grant_collection_access(request, object_path)
 
     # Call the view
     response = delete_object(request, bucket_type, object_type, object_path)
@@ -198,6 +220,7 @@ def test_delete_object_failure(mock_bucket_service, prepared_request):
     object_type = 'file'
     object_path = 'non-existent.txt'
     request = prepared_request(f'/storage/delete/{bucket_type}/{object_type}/{object_path}', method='post')
+    _grant_collection_access(request, object_path)
 
     # Call the view
     response = delete_object(request, bucket_type, object_type, object_path)
@@ -230,6 +253,7 @@ def test_delete_object_exception(mock_bucket_service, prepared_request):
         method='post', 
         htmx=True
     )
+    _grant_collection_access(request, object_path)
     
     # Call the view
     response = delete_object(request, bucket_type, object_type, object_path)

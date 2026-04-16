@@ -6,6 +6,7 @@ and folder navigation for storage management.
 """
 import logging
 from urllib.parse import unquote
+from django.core.exceptions import PermissionDenied
 from django.shortcuts import render
 from django.urls import reverse
 
@@ -14,6 +15,12 @@ from lacos.common.mixins.htmx_template_helpers import ROOT_FOLDER_SENTINEL
 from lacos.storage.services.bucket_service import BucketService
 from lacos.storage.observability import profiling_scope
 from lacos.storage.permissions import manager_or_archivist_required
+from lacos.storage.services.dashboard_access_service import (
+    ensure_storage_dashboard_path_access,
+    filter_storage_dashboard_listing,
+    get_storage_dashboard_access,
+    get_storage_dashboard_workspace_buckets,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +42,9 @@ def archivist_dashboard(request):
     ) as session:
         bucket_service = BucketService(skip_bucket_check=True)
         bucket_state = BucketCoordinatorMixin()
+        storage_dashboard_access = get_storage_dashboard_access(request.user)
 
-        workspace_buckets = bucket_service.get_all_accessible_buckets()
+        workspace_buckets = get_storage_dashboard_workspace_buckets(request.user, bucket_service)
         session.metadata["workspace_bucket_count"] = len(workspace_buckets)
 
         active_bucket = bucket_state.ensure_active_bucket(request, workspace_buckets)
@@ -59,6 +67,7 @@ def archivist_dashboard(request):
                 "ocfl_buckets": bucket_service.ocfl_buckets,
                 "message": message,
                 "auto_load_url": auto_load_url,
+                "storage_dashboard_access": storage_dashboard_access,
             },
         )
 
@@ -82,8 +91,9 @@ def load_folder_contents(request, bucket_type, folder_path):
         },
     ) as session:
         bucket_service = BucketService(skip_bucket_check=True)
+        storage_dashboard_access = get_storage_dashboard_access(request.user)
 
-        workspace_buckets = set(bucket_service.get_all_accessible_buckets())
+        workspace_buckets = set(get_storage_dashboard_workspace_buckets(request.user, bucket_service))
         if bucket_type in workspace_buckets:
             bucket_name = bucket_type
         elif bucket_type == "ingest":
@@ -93,6 +103,13 @@ def load_folder_contents(request, bucket_type, folder_path):
         else:
             bucket_name = bucket_type
 
+        if bucket_name not in workspace_buckets:
+            return render(
+                request,
+                "dashboard/partials/folder_contents_error.html",
+                {"error": f"Bucket '{bucket_type}' not found"},
+            )
+
         session.metadata["bucket_name"] = bucket_name
         session.metadata["resolved_bucket"] = bucket_name
 
@@ -101,6 +118,7 @@ def load_folder_contents(request, bucket_type, folder_path):
             if sanitized_path == ROOT_FOLDER_SENTINEL:
                 sanitized_path = ""
             sanitized_path = sanitized_path.replace("//", "/")
+            ensure_storage_dashboard_path_access(request.user, sanitized_path)
 
             force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
             session.metadata["force_fresh"] = force_fresh
@@ -146,6 +164,8 @@ def load_folder_contents(request, bucket_type, folder_path):
                     )
                 else:
                     raise
+            if not sanitized_path:
+                contents = filter_storage_dashboard_listing(request.user, contents)
             session.metadata["items_loaded"] = len(contents)
             session.metadata["has_more"] = contents.has_more
             session.metadata["next_token"] = contents.next_token
@@ -163,8 +183,11 @@ def load_folder_contents(request, bucket_type, folder_path):
                     "max_keys": requested_max_keys,
                     "is_root": sanitized_path in ("", None),
                     "root_folder_sentinel": ROOT_FOLDER_SENTINEL,
+                    "storage_dashboard_access": storage_dashboard_access,
                 },
             )
+        except PermissionDenied:
+            raise
         except Exception as e:
             logger.error("Error loading folder contents", extra={"folder_path": folder_path, "error": str(e)})
             session.metadata["error"] = str(e)
@@ -200,8 +223,9 @@ def dashboard_content(request, bucket_type):
     ) as session:
         bucket_service = BucketService(skip_bucket_check=True)
         bucket_state = BucketCoordinatorMixin()
+        storage_dashboard_access = get_storage_dashboard_access(request.user)
 
-        workspace_buckets = bucket_service.get_all_accessible_buckets()
+        workspace_buckets = get_storage_dashboard_workspace_buckets(request.user, bucket_service)
         pagination_enabled = getattr(bucket_service, "dashboard_pagination_enabled", True)
         page_size = bucket_service.dashboard_page_size if pagination_enabled else None
 
@@ -240,6 +264,7 @@ def dashboard_content(request, bucket_type):
                 max_keys=page_size if pagination_enabled else None,
                 force_fresh=force_fresh,
             )
+            listing = filter_storage_dashboard_listing(request.user, listing)
 
             session.metadata["items_loaded"] = len(listing)
             session.metadata["has_more"] = listing.has_more
@@ -254,6 +279,7 @@ def dashboard_content(request, bucket_type):
                     "force_fresh": force_fresh,
                     "page_size": page_size,
                     "root_folder_sentinel": ROOT_FOLDER_SENTINEL,
+                    "storage_dashboard_access": storage_dashboard_access,
                 },
             )
         except Exception as e:
@@ -280,6 +306,10 @@ def bucket_size_info(request, bucket_name):
         metadata={"bucket_name": bucket_name},
     ) as session:
         bucket_service = BucketService(skip_bucket_check=True)
+        storage_dashboard_access = get_storage_dashboard_access(request.user)
+
+        if not storage_dashboard_access.can_view_bucket_metrics:
+            raise PermissionDenied("Archivist access required.")
 
         force_fresh = request.GET.get("force_fresh", "false").lower() == "true"
 

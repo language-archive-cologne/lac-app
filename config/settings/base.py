@@ -570,6 +570,8 @@ SAML_METADATA_REFRESH_EXPECTED_ENTITY_ID = env(
 if SAML_LOGIN_ENABLED:
     from saml2 import BINDING_HTTP_POST, BINDING_HTTP_REDIRECT  # type: ignore[import-not-found]
 
+    from lacos.users.saml_config import DEFAULT_MDQ_URL, build_saml_metadata_sources
+
     SAML_SP_BASE_URL = env("SAML_SP_BASE_URL", default="http://localhost:8000")
     _saml_base = SAML_SP_BASE_URL.rstrip("/")
     SAML_ENTITY_ID = env("SAML_ENTITY_ID", default=f"{_saml_base}/saml2/metadata/")
@@ -598,10 +600,11 @@ if SAML_LOGIN_ENABLED:
         default=[str(BASE_DIR / "shibboleth.xml")],
     )
     SAML_METADATA_REMOTE = [
-        {"url": url}
+        url
         for url in env.list("SAML_IDP_METADATA_REMOTE", default=[])
     ]
-    _saml_metadata_mdq_url = env("SAML_METADATA_MDQ_URL", default="")
+    _saml_metadata_mdq_url = env("SAML_METADATA_MDQ_URL", default=DEFAULT_MDQ_URL)
+    SAML_METADATA_MDQ_CERT_FILE = env("SAML_METADATA_MDQ_CERT_FILE", default="")
     SAML2_DISCO_URL = env("SAML2_DISCO_URL", default="")
     EDUGAIN_METADATA_URL = env(
         "EDUGAIN_METADATA_URL",
@@ -611,15 +614,13 @@ if SAML_LOGIN_ENABLED:
         "eduPersonPrincipalName": ("username",),
         "urn:oid:1.3.6.1.4.1.5923.1.1.1.6": ("username",),
     }
-    _saml_metadata: dict[str, list] = {}
-    if SAML_METADATA_LOCAL:
-        _saml_metadata["local"] = SAML_METADATA_LOCAL
-    if SAML_METADATA_REMOTE:
-        _saml_metadata["remote"] = SAML_METADATA_REMOTE
-    if _saml_metadata_mdq_url:
-        _saml_metadata["mdq"] = [{"url": _saml_metadata_mdq_url}]
-    if not _saml_metadata:
-        _saml_metadata["local"] = [str(BASE_DIR / "shibboleth.xml")]
+    _saml_metadata = build_saml_metadata_sources(
+        local_paths=SAML_METADATA_LOCAL,
+        remote_urls=SAML_METADATA_REMOTE,
+        mdq_url=_saml_metadata_mdq_url,
+        mdq_cert_file=SAML_METADATA_MDQ_CERT_FILE,
+        fallback_local_path=str(BASE_DIR / "shibboleth.xml"),
+    )
     SAML_CONFIG = {
         "debug": DEBUG,
         "entityid": SAML_ENTITY_ID,
