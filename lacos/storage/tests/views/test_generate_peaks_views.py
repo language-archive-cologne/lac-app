@@ -1,6 +1,7 @@
 """Tests for generate peaks dashboard views."""
 
 import pytest
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth.models import Group
@@ -75,15 +76,16 @@ class TestGeneratePeaksView:
         self, MockBucketService, MockBGService, mock_scan_task, prepared_request
     ):
         MockBucketService.return_value.ensure_bucket_exists.return_value = True
-        task_record = MagicMock()
-        task_record.id = "fake-task-id"
-        task_record.status = "queued"
-        task_record.task_name = "generate_peaks"
-        task_record.message = "Queued"
-        task_record.metadata = {"bucket_name": "test-bucket", "folder_path": ""}
-        task_record.created_at = None
-        task_record.result = None
-        task_record.error = None
+        task_record = SimpleNamespace(
+            id="12345678-1234-1234-1234-123456789abc",
+            status="queued",
+            task_name="generate_peaks",
+            message="Queued",
+            metadata={"bucket_name": "test-bucket", "folder_path": ""},
+            created_at=None,
+            result=None,
+            error=None,
+        )
         MockBGService.create.return_value = task_record
         mock_scan_task.return_value = MagicMock(id="huey-123")
 
@@ -96,6 +98,7 @@ class TestGeneratePeaksView:
             bucket_name="test-bucket",
             folder_path="",
             tracking_id=str(task_record.id),
+            force=False,
         )
 
     @patch("lacos.storage.views.generate_peaks_views.scan_and_generate_peaks_task")
@@ -105,15 +108,16 @@ class TestGeneratePeaksView:
         self, MockBucketService, MockBGService, mock_scan_task, prepared_request
     ):
         MockBucketService.return_value.ensure_bucket_exists.return_value = True
-        task_record = MagicMock()
-        task_record.id = "fake-task-id"
-        task_record.status = "queued"
-        task_record.task_name = "generate_peaks"
-        task_record.message = "Queued"
-        task_record.metadata = {"bucket_name": "b", "folder_path": "audio/wav"}
-        task_record.created_at = None
-        task_record.result = None
-        task_record.error = None
+        task_record = SimpleNamespace(
+            id="12345678-1234-1234-1234-123456789abd",
+            status="queued",
+            task_name="generate_peaks",
+            message="Queued",
+            metadata={"bucket_name": "b", "folder_path": "audio/wav"},
+            created_at=None,
+            result=None,
+            error=None,
+        )
         MockBGService.create.return_value = task_record
         mock_scan_task.return_value = MagicMock(id="huey-456")
 
@@ -127,6 +131,7 @@ class TestGeneratePeaksView:
             bucket_name="b",
             folder_path="audio/wav",
             tracking_id=str(task_record.id),
+            force=False,
         )
 
     @patch("lacos.storage.views.generate_peaks_views.BucketService")
@@ -164,15 +169,16 @@ class TestGeneratePeaksView:
         self, MockBucketService, MockBGService, mock_scan_task, prepared_request
     ):
         MockBucketService.return_value.ensure_bucket_exists.return_value = True
-        task_record = MagicMock()
-        task_record.id = "tid"
-        task_record.status = "queued"
-        task_record.task_name = "generate_peaks"
-        task_record.message = "Queued"
-        task_record.metadata = {"bucket_name": "b", "folder_path": ""}
-        task_record.created_at = None
-        task_record.result = None
-        task_record.error = None
+        task_record = SimpleNamespace(
+            id="12345678-1234-1234-1234-123456789abe",
+            status="queued",
+            task_name="generate_peaks",
+            message="Queued",
+            metadata={"bucket_name": "b", "folder_path": ""},
+            created_at=None,
+            result=None,
+            error=None,
+        )
         MockBGService.create.return_value = task_record
         mock_scan_task.return_value = MagicMock(id=None)
 
