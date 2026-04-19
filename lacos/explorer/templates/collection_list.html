@@ -5,16 +5,7 @@
 
 {% block title %}{% translate "Collections" %} - {{ block.super }}{% endblock title %}
 
-{% block page_title %}
-  <div class="flex items-baseline gap-3 mb-6 flex-wrap">
-    <h1 class="text-3xl font-light text-base-content tracking-tight">{% translate "Archive Explorer" %}</h1>
-    {% if stats.collections_count %}
-      <span class="text-sm text-base-content/60">
-        {% blocktranslate count counter=stats.collections_count %}{{ counter }} collection{% plural %}{{ counter }} collections{% endblocktranslate %}
-      </span>
-    {% endif %}
-  </div>
-{% endblock page_title %}
+{% block page_title %}{% endblock page_title %}
 
 {% block explorer_content %}
   {% include "explorer/partials/search_bar.html" %}
@@ -43,33 +34,21 @@
           }
         }
 
-        /* SVG map surface */
-        .lac-map-wrap { position: relative; height: 100%; min-height: 300px; border-radius: 0.75rem; overflow: hidden; }
+        /* SVG map surface — single Positron-clone style */
+        .lac-map-wrap { position: relative; height: 100%; min-height: 300px; border-radius: 0.75rem; overflow: hidden; background: #e8ecef; }
         .lac-map-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
         .lac-map-svg.dragging { cursor: grabbing; }
 
-        /* Style-specific backgrounds */
-        .lac-map-wrap[data-map-style="A"] { background: #d8e4ea; }
-        .lac-map-wrap[data-map-style="B"] { background: #001828; }
-        .lac-map-wrap[data-map-style="C"] { background: #e8ecef; }
-
-        /* Country base fill per style (overridden by inline fill for choropleth) */
-        [data-map-style="A"] .lac-country { fill: #ede5d1; stroke: #b69a6a; stroke-width: 0.4; stroke-opacity: 0.55; }
-        [data-map-style="B"] .lac-country { fill: #f4ede0; stroke: #ea564f; stroke-width: 0.45; stroke-opacity: 0.7; }
-        [data-map-style="C"] .lac-country { fill: #fbfbfa; stroke: #b4bcc4; stroke-width: 0.4; stroke-opacity: 0.75; }
+        /* Country fill (overridden by inline fill for choropleth) */
+        .lac-country { fill: #fbfbfa; stroke: #b4bcc4; stroke-width: 0.4; stroke-opacity: 0.75; }
         .lac-country.country-data { stroke-opacity: 0.7; }
         .lac-country.country-match { fill: #ea564f !important; fill-opacity: 0.22 !important; stroke: #ea564f !important; stroke-opacity: 1 !important; stroke-width: 1 !important; }
 
-        /* Proportional bubbles — flat, brand-coloured (no radial "earthquake" glow) */
+        /* Proportional bubbles — flat brand navy (no radial "earthquake" glow) */
         .lac-bubble { pointer-events: none; }
-        [data-map-style="A"] .lac-bubble-fill { fill: #005176; fill-opacity: 0.28; stroke: #003b55; stroke-opacity: 0.55; stroke-width: 0.8; }
-        [data-map-style="B"] .lac-bubble-fill { fill: #fbbf24; fill-opacity: 0.32; stroke: #f4ede0; stroke-opacity: 0.8;  stroke-width: 0.8; }
-        [data-map-style="C"] .lac-bubble-fill { fill: #005176; fill-opacity: 0.22; stroke: #005176; stroke-opacity: 0.5;  stroke-width: 0.8; }
+        .lac-bubble-fill { fill: #005176; fill-opacity: 0.22; stroke: #005176; stroke-opacity: 0.5; stroke-width: 0.8; }
 
-        .lac-graticule { fill: none; stroke-width: 0.35; }
-        [data-map-style="A"] .lac-graticule { stroke: #b69a6a; stroke-opacity: 0.22; }
-        [data-map-style="B"] .lac-graticule { stroke: #3a6e88; stroke-opacity: 0.25; }
-        [data-map-style="C"] .lac-graticule { stroke: #cdd4da; stroke-opacity: 0.6; }
+        .lac-graticule { fill: none; stroke: #cdd4da; stroke-opacity: 0.6; stroke-width: 0.35; }
 
         /* Pins */
         .lac-pin { cursor: pointer; transition: transform 120ms; transform-origin: center; transform-box: fill-box; }
@@ -86,20 +65,6 @@
         }
         .lac-map-toolbar > * { pointer-events: auto; }
 
-        .lac-style-pill-row {
-          display: inline-flex; background: rgba(255,255,255,.96);
-          border: 1px solid rgba(0,0,0,.08); border-radius: 9999px; padding: 3px;
-          box-shadow: 0 2px 8px rgba(0,42,61,.08);
-        }
-        .lac-style-pill {
-          padding: 5px 12px; border-radius: 9999px; border: 0; background: transparent;
-          font-size: 11px; font-weight: 600; color: rgba(31,41,55,.7); letter-spacing: 0.01em;
-          display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-family: inherit;
-        }
-        .lac-style-pill .dot { width: 8px; height: 8px; border-radius: 50%; border: 1px solid rgba(0,0,0,.15); }
-        .lac-style-pill.active { background: #005176; color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
-        .lac-style-pill.active .dot { border-color: rgba(255,255,255,.3); }
-
         .lac-legend {
           background: rgba(255,255,255,.97); border: 1px solid rgba(0,0,0,.08);
           border-radius: 10px; padding: 10px 12px; font-size: 11px;
@@ -108,13 +73,9 @@
         .lac-legend-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(31,41,55,.55); margin-bottom: 6px; }
         .lac-legend-row { display: flex; align-items: center; gap: 8px; margin: 3px 0; color: rgba(31,41,55,.85); }
         .lac-legend-swatch { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.1); flex-shrink: 0; }
-        .lac-legend-ramp { height: 6px; border-radius: 3px; margin-top: 4px; }
-        [data-map-style="A"] .lac-legend-ramp { background: linear-gradient(90deg, #ede5d1, #7fb0c3, #005176); }
-        [data-map-style="B"] .lac-legend-ramp { background: linear-gradient(90deg, #f4ede0, #f8d57a, #fbbf24); }
-        [data-map-style="C"] .lac-legend-ramp { background: linear-gradient(90deg, #fbfbfa, #7fa4b8, #005176); }
+        .lac-legend-ramp { height: 6px; border-radius: 3px; margin-top: 4px; background: linear-gradient(90deg, #fbfbfa, #7fa4b8, #005176); }
         .lac-legend-bubble-row { display: flex; align-items: flex-end; gap: 10px; margin-top: 4px; height: 26px; }
         .lac-legend-bubble { border-radius: 50%; background: rgba(0,81,118,.25); border: 1px solid rgba(0,81,118,.55); }
-        [data-map-style="B"] .lac-legend-bubble { background: rgba(251,191,36,.35); border-color: rgba(244,237,224,.9); }
 
         .lac-zoom-hint {
           position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
@@ -150,7 +111,6 @@
           font-size: 9px; color: rgba(31,41,55,.5); background: rgba(255,255,255,.7);
           padding: 1px 6px; border-radius: 4px; pointer-events: none;
         }
-        [data-map-style="B"] .lac-attribution { color: rgba(255,255,255,.5); background: rgba(0,0,0,.3); }
 
         /* Popup */
         .lac-popup {
@@ -185,7 +145,7 @@
 
         <!-- Collections Map (outside shell - never re-renders on language filter) -->
         <div class="hidden lg:block rounded-xl shadow-sm border border-base-300 overflow-hidden relative">
-          <div id="collections-map" class="lac-map-wrap" data-map-style="C">
+          <div id="collections-map" class="lac-map-wrap">
             <svg class="lac-map-svg" id="lac-map-svg" viewBox="0 0 1440 720" preserveAspectRatio="xMidYMid meet">
               <g id="lac-map-transform">
                 <g id="lac-graticule-layer"></g>
@@ -196,13 +156,7 @@
             </svg>
 
             <div class="lac-map-toolbar">
-              <div class="lac-style-pill-row" id="lac-style-switcher" role="group" aria-label="{% translate 'Basemap style' %}">
-                <button type="button" class="lac-style-pill" data-map-style="A"><span class="dot" style="background:#ede5d1"></span>{% translate "Natural Earth" %}</button>
-                <button type="button" class="lac-style-pill" data-map-style="B"><span class="dot" style="background:#001828"></span>{% translate "Contrast" %}</button>
-                <button type="button" class="lac-style-pill active" data-map-style="C"><span class="dot" style="background:#fbfbfa;border-color:#ccc;"></span>{% translate "Neutral" %}</button>
-              </div>
-
-              <div class="lac-legend" id="lac-legend">
+              <div class="lac-legend" id="lac-legend" style="margin-left:auto;">
                 <div class="lac-legend-title" id="lac-legend-title">{% translate "Bundles per country" %}</div>
                 <div id="lac-legend-body"></div>
               </div>
@@ -220,7 +174,7 @@
               {% translate "Fit all" %}
             </button>
 
-            <div class="lac-attribution">{% translate "Natural Earth (public domain)" %}</div>
+            <div class="lac-attribution">Natural Earth · public domain</div>
           </div>
         </div>
       </div>
@@ -259,14 +213,9 @@
       const W = 1440, H = 720;
       const WORLD_PATHS_URL = '{% static "vendor/maps/world-paths.json" %}';
       const ACCESS_COLORS = { public: '#00a96e', academic: '#ffbe00', restricted: '#d97706' };
-      const CHORO_RAMPS = {
-        A: ['#ede5d1', '#d4cfb8', '#a8b7be', '#5f8a9e', '#005176'],
-        B: ['#f4ede0', '#f6dfb0', '#f6cf7a', '#f5b840', '#fbbf24'],
-        C: ['#fbfbfa', '#dbe4e9', '#a8c0cc', '#4d87a1', '#005176'],
-      };
+      const CHORO_RAMP = ['#fbfbfa', '#dbe4e9', '#a8c0cc', '#4d87a1', '#005176'];
 
       const state = {
-        style: 'C',
         activeLang: '',
         view: { x: 0, y: 0, k: 1 },
         markers: [],
@@ -343,7 +292,7 @@
       function applyChoropleth() {
         const sums = bundlesByCountry();
         const max = Math.max(1, ...Object.values(sums));
-        const ramp = CHORO_RAMPS[state.style];
+        const ramp = CHORO_RAMP;
         document.querySelectorAll('#lac-countries-layer .lac-country').forEach(p => {
           const v = sums[p.dataset.name] || 0;
           const b = choroBucket(v, max);
@@ -563,19 +512,6 @@
         `;
       }
 
-      function setStyle(key) {
-        if (!CHORO_RAMPS[key]) return;
-        state.style = key;
-        const wrap = $('collections-map');
-        if (wrap) wrap.dataset.mapStyle = key;
-        document.querySelectorAll('.lac-style-pill').forEach(el =>
-          el.classList.toggle('active', el.dataset.mapStyle === key)
-        );
-        applyChoropleth();
-        renderBubbles();
-        renderLegend();
-      }
-
       function applyFilter() {
         state.activeLang = currentActiveLang();
         applyCountryMatches();
@@ -630,14 +566,6 @@
         if (!state.markers.length) return;
 
         state.activeLang = currentActiveLang();
-
-        const styleSwitcher = $('lac-style-switcher');
-        if (styleSwitcher) {
-          styleSwitcher.addEventListener('click', e => {
-            const btn = e.target.closest('[data-map-style]');
-            if (btn) setStyle(btn.dataset.mapStyle);
-          });
-        }
 
         const zin = $('lac-zoom-in'); if (zin) zin.onclick = () => zoomBy(1.5);
         const zout = $('lac-zoom-out'); if (zout) zout.onclick = () => zoomBy(1 / 1.5);
