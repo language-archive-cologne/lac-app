@@ -352,11 +352,13 @@
         renderLegend();
 
         const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        // Default view rotates the globe toward Indonesia — a rich cluster
+        // of the archive's languages, good storytelling at first paint.
         const map = new maplibregl.Map({
           container: container,
           style: isDark ? DARK_STYLE_URL : STYLE_URL,
-          center: [12, 20],
-          zoom: 1.3,
+          center: [115, 5],
+          zoom: 1.6,
           attributionControl: { compact: true },
         });
 
@@ -367,7 +369,9 @@
           state.loaded = true;
           addCollectionsLayer();
           applyMatchStyling();
-          focusMatches();
+          // Only fly to matches if a filter is already active; otherwise keep the
+          // hand-chosen South Asia framing so users see the globe shape at landing.
+          if (state.activeLang) focusMatches();
         });
 
         state.map = map;
