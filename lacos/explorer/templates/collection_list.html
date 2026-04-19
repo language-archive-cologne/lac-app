@@ -204,7 +204,6 @@
     (function() {
       const W = 1440, H = 720;
       const WORLD_PATHS_URL = '{% static "vendor/maps/world-paths.json" %}';
-      const ACCESS_COLORS = { public: '#00a96e', academic: '#ffbe00', restricted: '#d97706' };
       const CHORO_RAMP = ['#fbfbfa', '#dbe4e9', '#a8c0cc', '#4d87a1', '#005176'];
 
       const state = {
@@ -328,7 +327,7 @@
           const match = isMatch(m);
           // Size by bundles (Flannery sqrt), shrink slightly with zoom so pins stay proportional.
           const r = (3.5 + Math.sqrt(bundles) * 0.9) * kInv * (match ? 1.4 : 1);
-          const color = match ? '#ea564f' : (ACCESS_COLORS[m.access] || '#005176');
+          const color = match ? '#ea564f' : '#005176';
           const opacity = (state.activeLang && !match) ? 0.3 : 1;
           const strokeW = (match ? 2 : 1.2) * kInv;
           return `
@@ -464,9 +463,7 @@
         const body = $('lac-legend-body');
         if (!body) return;
         const rows = [
-          `<span class="lac-legend-row"><span class="lac-legend-swatch" style="background:${ACCESS_COLORS.public}"></span>{% translate "Public" %}</span>`,
-          `<span class="lac-legend-row"><span class="lac-legend-swatch" style="background:${ACCESS_COLORS.academic}"></span>{% translate "Academic" %}</span>`,
-          `<span class="lac-legend-row"><span class="lac-legend-swatch" style="background:${ACCESS_COLORS.restricted}"></span>{% translate "Restricted" %}</span>`,
+          `<span class="lac-legend-row"><span class="lac-legend-swatch" style="background:#005176"></span>{% translate "Collection" %}</span>`,
         ];
         if (state.activeLang) {
           rows.push(`<span class="lac-legend-row"><span class="lac-legend-swatch" style="background:#ea564f"></span>{% translate "Match" %}</span>`);
