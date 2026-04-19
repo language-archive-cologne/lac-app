@@ -80,25 +80,20 @@
         .lac-collection-popup .maplibregl-popup-tip { border-top-color: rgba(0,0,0,.08); }
         .lac-collection-popup.maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: #fff; }
         .lac-popup-body { font-size: 13px; color: #1f2937; line-height: 1.45; }
-        .lac-popup-body .title { font-size: 14px; font-weight: 600; color: #1f2937; margin: 0 18px 4px 0; letter-spacing: -0.005em; }
-        .lac-popup-body .meta { font-size: 11px; color: rgba(31,41,55,.6); margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 4px 6px; }
+        .lac-popup-body a.title {
+          display: block; font-size: 14px; font-weight: 600; color: #1f2937;
+          margin: 0 18px 4px 0; letter-spacing: -0.005em; text-decoration: none;
+        }
+        .lac-popup-body a.title:hover { color: #005176; text-decoration: underline; }
+        .lac-popup-body .meta { font-size: 11px; color: rgba(31,41,55,.6); display: flex; flex-wrap: wrap; gap: 4px 6px; }
         .lac-popup-body .meta .dot { color: rgba(31,41,55,.3); }
-        .lac-popup-body .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+        .lac-popup-body .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
         .lac-popup-body .chip {
           display: inline-flex; align-items: center; gap: 3px;
           padding: 2px 7px; border-radius: 6px; font-size: 10.5px; font-weight: 500;
           background: #f2f2f2; color: #1f2937; border: 1px solid #e5e6e6;
         }
         .lac-popup-body .chip .iso { color: rgba(31,41,55,.55); font-size: 10px; }
-        .lac-popup-body a.cta {
-          display: inline-flex; align-items: center; gap: 4px;
-          font-size: 12px; font-weight: 600; color: #005176;
-          text-decoration: none; border-top: 1px solid #f0f0f0;
-          padding-top: 8px; margin-top: 2px; width: 100%;
-        }
-        .lac-popup-body a.cta:hover { color: #003a54; }
-        .lac-popup-body a.cta svg { transition: transform 160ms; }
-        .lac-popup-body a.cta:hover svg { transform: translateX(2px); }
       </style>
 
       <script id="collections-markers" type="application/json">{{ map_markers_json|safe }}</script>
@@ -248,6 +243,7 @@
 
       function openPopup(marker, lngLat) {
         const title = escHtml(marker.title);
+        const url = escHtml(marker.url);
         const metaParts = [];
         if (marker.country) metaParts.push(escHtml(marker.country));
         if (marker.bundles) {
@@ -261,13 +257,11 @@
           `<span class="chip">${escHtml(l.display_name || l.name || '')}${l.iso ? `<span class="iso">[${escHtml(l.iso)}]</span>` : ''}</span>`
         ).join('');
         const chipsHtml = chips ? `<div class="chips">${chips}</div>` : '';
-        const arrow = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
         const html =
           '<div class="lac-popup-body">' +
-          `<div class="title">${title}</div>` +
+          `<a href="${url}" class="title">${title}</a>` +
           meta +
           chipsHtml +
-          `<a href="${escHtml(marker.url)}" class="cta">{% translate "Open collection" %} ${arrow}</a>` +
           '</div>';
         new maplibregl.Popup({
           offset: 14,
