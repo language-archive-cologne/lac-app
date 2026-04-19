@@ -5,16 +5,7 @@
 
 {% block title %}{% translate "Collections" %} - {{ block.super }}{% endblock title %}
 
-{% block page_title %}
-  <div class="flex items-baseline gap-3 mb-6 flex-wrap">
-    <h1 class="text-3xl font-light text-base-content tracking-tight">{% translate "Archive Explorer" %}</h1>
-    {% if stats.collections_count %}
-      <span class="text-sm text-base-content/60">
-        {% blocktranslate count counter=stats.collections_count %}{{ counter }} collection{% plural %}{{ counter }} collections{% endblocktranslate %}
-      </span>
-    {% endif %}
-  </div>
-{% endblock page_title %}
+{% block page_title %}{% endblock page_title %}
 
 {% block explorer_content %}
   {% include "explorer/partials/search_bar.html" %}
@@ -30,13 +21,19 @@
       <link rel="stylesheet" href="{% static 'vendor/js/maplibre-gl/maplibre-gl.css' %}" />
       <script src="{% static 'vendor/js/maplibre-gl/maplibre-gl.js' %}"></script>
       <style>
-        .collections-top-row { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+        .collections-top-row { display: grid; grid-template-columns: 1fr; gap: 1rem; align-items: stretch; }
         @media (min-width: 1024px) {
-          .collections-top-row { grid-template-columns: minmax(280px, 320px) 1fr; }
+          .collections-top-row {
+            grid-template-columns: minmax(320px, 360px) 1fr;
+            /* Fix the row height so language list and map always match. */
+            grid-auto-rows: 360px;
+          }
+          .collections-top-row > * { min-height: 0; overflow: hidden; }
         }
 
+        .lac-map-col { position: relative; min-height: 320px; }
         #collections-map {
-          position: relative; min-height: 380px; height: 480px;
+          position: absolute; inset: 0;
           border-radius: 0.75rem; overflow: hidden; background: #dfe7ec;
         }
         #collections-map .maplibregl-canvas { cursor: grab; }
@@ -112,7 +109,7 @@
           {% include "explorer/partials/language_focus.html" %}
         </div>
 
-        <div class="hidden lg:block rounded-xl shadow-sm border border-base-300 overflow-hidden relative">
+        <div class="lac-map-col hidden lg:block rounded-xl shadow-sm border border-base-300 overflow-hidden">
           <div id="collections-map"></div>
           <div class="lac-legend" id="lac-legend"><div id="lac-legend-body"></div></div>
           <button type="button" class="lac-recenter-btn" id="recenter-btn" title="{% translate 'Fit all markers' %}">

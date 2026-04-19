@@ -1,7 +1,7 @@
 {% load i18n %}
 <form id="homepage-search-form" method="get" class="mb-6">
   <label for="search-query" class="sr-only">{% translate "Search" %}</label>
-  <div class="flex w-full max-w-xl">
+  <div class="flex w-full">
     <input
       id="search-query"
       type="search"
@@ -18,7 +18,7 @@
       <a href="{% url 'explorer:collection_list' %}" class="ml-2 inline-flex items-center px-3 py-2.5 text-sm text-base-content/70 hover:text-primary">{% translate "Clear" %}</a>
     {% endif %}
   </div>
-  <div class="mt-2 max-w-xl text-right">
+  <div class="mt-2 text-right">
     <button type="submit" formaction="{% url 'faceted_search' %}" class="inline-flex items-center gap-1 text-xs text-base-content/60 hover:text-primary">
       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
       {% translate "Advanced Search" %}
