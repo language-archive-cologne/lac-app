@@ -25,10 +25,10 @@
                hx-swap="outerHTML"
                hx-push-url="true"
                {% if language.glottolog_macroarea %}title="{{ language.glottolog_macroarea }}"{% endif %}
-               class="inline-flex items-center gap-1 rounded-md border text-xs transition-colors px-2 py-1 {% if language_filter|lower == language.name|lower or language_filter|lower == language.iso_639_3_code|lower %}bg-primary text-primary-content border-primary{% else %}bg-base-200 text-base-content/80 border-base-300 hover:border-primary hover:text-primary{% endif %}">
+               class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium border transition-colors {% if language_filter|lower == language.name|lower or language_filter|lower == language.iso_639_3_code|lower %}bg-primary text-primary-content border-primary{% else %}bg-base-200 text-base-content border-base-300 hover:border-primary hover:text-primary{% endif %}">
               <span class="truncate max-w-[9rem]">{{ language.name }}</span>
               {% if language.iso_639_3_code %}
-                <span class="font-mono text-[10px] lowercase {% if language_filter|lower == language.name|lower or language_filter|lower == language.iso_639_3_code|lower %}opacity-70{% else %}text-base-content/45{% endif %}">[{{ language.iso_639_3_code }}]</span>
+                <span class="{% if language_filter|lower == language.name|lower or language_filter|lower == language.iso_639_3_code|lower %}text-primary-content/70{% else %}text-base-content/60{% endif %}">[{{ language.iso_639_3_code }}]</span>
               {% endif %}
             </a>
           {% endfor %}

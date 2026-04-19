@@ -52,9 +52,7 @@
               {% if summary.restricted %}<span class="badge badge-xs bg-amber-600 text-white border-amber-600">{% translate "Restricted" %} {{ summary.restricted }}</span>{% endif %}
               {% if collection.list_languages %}
                 {% for language in collection.list_languages %}
-                  <span class="inline-flex items-center gap-0.5 rounded-full border border-base-300 bg-base-200 px-1.5 py-0.5 text-xs text-base-content/70">
-                    {{ language.name }}{% if language.iso_639_3_code %} <span class="text-base-content/40">[{{ language.iso_639_3_code }}]</span>{% endif %}
-                  </span>
+                  {% include "explorer/partials/language_chip.html" with language=language size="sm" %}
                 {% endfor %}
               {% endif %}
             </div>
@@ -196,10 +194,7 @@
               {% if collection.list_languages %}
                 <div class="flex flex-wrap gap-1.5 max-w-[14rem] justify-center mx-auto">
                   {% for language in collection.list_languages %}
-                    <span class="inline-flex items-center gap-1 rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-xs font-medium text-base-content/70"{% if language.glottolog_macroarea %} title="{{ language.glottolog_macroarea }}"{% endif %}>
-                      {{ language.name }}
-                      {% if language.iso_639_3_code %}<span class="text-base-content/50 text-xs">[{{ language.iso_639_3_code }}]</span>{% endif %}
-                    </span>
+                    {% include "explorer/partials/language_chip.html" with language=language size="sm" %}
                   {% endfor %}
                 </div>
               {% endif %}
