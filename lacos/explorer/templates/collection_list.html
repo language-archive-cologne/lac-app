@@ -19,87 +19,28 @@
 {% block explorer_content %}
   {% include "explorer/partials/search_bar.html" %}
 
-  <!-- Search results (shown when searching, hidden otherwise) -->
   <div id="collection-search-results" class="{% if not search_query %}hidden{% endif %} space-y-8 mb-8">
     {% if search_query %}
       {% include "explorer/partials/collection_search_results_content.html" %}
     {% endif %}
   </div>
 
-  <!-- Main collections view (hidden when searching) -->
   <div id="collections-main-view" class="{% if search_query %}hidden{% endif %}">
     {% if collection_list %}
-      <!-- Map styles (outside shell so they persist) -->
+      <link rel="stylesheet" href="{% static 'vendor/js/maplibre-gl/maplibre-gl.css' %}" />
+      <script src="{% static 'vendor/js/maplibre-gl/maplibre-gl.js' %}"></script>
       <style>
-        /* Grid layout for language index + map */
-        .collections-top-row {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 1rem;
-        }
+        .collections-top-row { display: grid; grid-template-columns: 1fr; gap: 1rem; }
         @media (min-width: 1024px) {
-          .collections-top-row {
-            grid-template-columns: minmax(280px, 320px) 1fr;
-          }
+          .collections-top-row { grid-template-columns: minmax(280px, 320px) 1fr; }
         }
 
-        /* SVG map surface — single Positron-clone style */
-        .lac-map-wrap { position: relative; height: 100%; min-height: 300px; border-radius: 0.75rem; overflow: hidden; background: #e8ecef; }
-        .lac-map-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
-        .lac-map-svg.dragging { cursor: grabbing; }
-
-        /* Country fill (overridden by inline fill for choropleth) */
-        .lac-country { fill: #fbfbfa; stroke: #b4bcc4; stroke-width: 0.4; stroke-opacity: 0.75; cursor: pointer; transition: fill-opacity 120ms; }
-        .lac-country:hover { fill-opacity: 0.7; stroke-opacity: 1; }
-        .lac-country.country-data { stroke-opacity: 0.7; }
-        .lac-country.country-match { fill: #ea564f !important; fill-opacity: 0.22 !important; stroke: #ea564f !important; stroke-opacity: 1 !important; stroke-width: 1 !important; }
-
-        .lac-graticule { fill: none; stroke: #cdd4da; stroke-opacity: 0.6; stroke-width: 0.35; }
-
-        /* Pins — nested <g> so hover-scale does not replace the positional translate */
-        .lac-pin { cursor: pointer; }
-        .lac-pin-inner { transition: transform 120ms ease; transform-origin: 0 0; transform-box: fill-box; }
-        .lac-pin:hover .lac-pin-inner { transform: scale(1.25); }
-        .lac-pin-ring { fill: none; stroke: #ea564f; stroke-width: 1.5; opacity: 0; }
-        .lac-pin.pulse .lac-pin-ring { animation: lacPulseRing 1.2s ease-out; }
-        @keyframes lacPulseRing { 0% { r: 5; opacity: 0.9; } 100% { r: 22; opacity: 0; } }
-
-        /* Toolbar */
-        .lac-map-toolbar {
-          position: absolute; top: 10px; left: 10px; right: 10px;
-          display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;
-          pointer-events: none; z-index: 2;
+        #collections-map {
+          position: relative; min-height: 380px; height: 480px;
+          border-radius: 0.75rem; overflow: hidden; background: #dfe7ec;
         }
-        .lac-map-toolbar > * { pointer-events: auto; }
-
-        .lac-legend {
-          background: rgba(255,255,255,.97); border: 1px solid rgba(0,0,0,.08);
-          border-radius: 10px; padding: 6px 10px; font-size: 11px;
-          box-shadow: 0 2px 8px rgba(0,42,61,.08); color: #1f2937;
-          display: flex; align-items: center; gap: 12px;
-        }
-        .lac-legend-row { display: inline-flex; align-items: center; gap: 6px; color: rgba(31,41,55,.85); }
-        .lac-legend-swatch { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.1); flex-shrink: 0; }
-
-        .lac-zoom-hint {
-          position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
-          background: rgba(0,42,61,.85); color: #fff; padding: 6px 14px; border-radius: 9999px;
-          font-size: 11px; font-weight: 500; letter-spacing: 0.02em;
-          pointer-events: none; opacity: 0; transition: opacity 300ms; z-index: 2;
-        }
-        .lac-zoom-hint.visible { opacity: 1; }
-
-        .lac-zoom-controls {
-          position: absolute; bottom: 14px; left: 14px; display: flex; flex-direction: column;
-          background: #fff; border: 1px solid rgba(0,0,0,.08); border-radius: 8px; overflow: hidden;
-          box-shadow: 0 2px 6px rgba(0,42,61,.12); z-index: 2;
-        }
-        .lac-zoom-controls button {
-          width: 30px; height: 30px; background: #fff; border: 0; font-size: 18px; font-weight: 500;
-          color: rgba(31,41,55,.75); display: flex; align-items: center; justify-content: center; cursor: pointer;
-        }
-        .lac-zoom-controls button + button { border-top: 1px solid #eee; }
-        .lac-zoom-controls button:hover { background: #f6f6f6; color: #005176; }
+        #collections-map .maplibregl-canvas { cursor: grab; }
+        #collections-map .maplibregl-canvas:active { cursor: grabbing; }
 
         .lac-recenter-btn {
           position: absolute; bottom: 14px; right: 14px; z-index: 2;
@@ -110,74 +51,37 @@
         }
         .lac-recenter-btn:hover { border-color: #005176; color: #005176; }
 
-        .lac-attribution {
-          position: absolute; bottom: 4px; right: 4px; z-index: 2;
-          font-size: 9px; color: rgba(31,41,55,.5); background: rgba(255,255,255,.7);
-          padding: 1px 6px; border-radius: 4px; pointer-events: none;
+        .lac-legend {
+          position: absolute; top: 10px; right: 10px; z-index: 2;
+          background: rgba(255,255,255,.97); border: 1px solid rgba(0,0,0,.08);
+          border-radius: 10px; padding: 6px 10px; font-size: 11px;
+          box-shadow: 0 2px 8px rgba(0,42,61,.08); color: #1f2937;
+          display: flex; align-items: center; gap: 12px;
         }
+        .lac-legend-row { display: inline-flex; align-items: center; gap: 6px; color: rgba(31,41,55,.85); }
+        .lac-legend-swatch { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.1); flex-shrink: 0; }
 
-        /* Popup */
-        .lac-popup {
-          position: absolute; z-index: 10; background: #fff; border: 1px solid rgba(0,0,0,.08);
-          border-radius: 10px; padding: 14px; box-shadow: 0 6px 20px rgba(0,42,61,.18);
-          min-width: 240px; font-size: 13px; pointer-events: auto; color: #1f2937;
-          transform: translate(-50%, -100%); margin-top: -14px;
-        }
-        .lac-popup::after {
-          content: ''; position: absolute; left: 50%; bottom: -6px; width: 12px; height: 12px;
-          background: #fff; border-right: 1px solid rgba(0,0,0,.08); border-bottom: 1px solid rgba(0,0,0,.08);
-          transform: translateX(-50%) rotate(45deg);
-        }
-        .lac-pop-title { font-size: 14px; font-weight: 600; color: #1f2937; margin: 0 0 4px 0; }
-        .lac-pop-meta { font-size: 12px; color: rgba(31,41,55,.6); margin-bottom: 8px; }
-        .lac-pop-cta { display: inline-block; font-size: 12px; font-weight: 600; color: #005176; text-decoration: none; margin-top: 6px; }
-        .lac-pop-cta:hover { text-decoration: underline; }
-        .lac-pop-close { position: absolute; top: 6px; right: 8px; background: transparent; border: 0; font-size: 16px; line-height: 1; color: rgba(31,41,55,.4); cursor: pointer; }
-        .lac-pop-close:hover { color: #1f2937; }
+        .lac-popup-body .title { font-size: 13px; font-weight: 600; color: #1f2937; margin-bottom: 3px; }
+        .lac-popup-body .meta { font-size: 11px; color: rgba(31,41,55,.6); margin-bottom: 6px; }
+        .lac-popup-body a.cta { font-size: 12px; font-weight: 600; color: #005176; text-decoration: none; }
+        .lac-popup-body a.cta:hover { text-decoration: underline; }
       </style>
-      <script id="collections-markers" type="application/json">{{ map_markers_json|safe }}</script>
 
-      <!-- Filter state for map JS (updated via OOB on HTMX requests) -->
+      <script id="collections-markers" type="application/json">{{ map_markers_json|safe }}</script>
       <div id="language-filter-state" class="hidden" data-language-filter="{{ language_filter|default:'' }}"></div>
 
-      <!-- Top row: Language Index + Map -->
       <div class="collections-top-row mb-4">
-        <!-- Language Index (updated via OOB on HTMX requests) -->
         <div id="language-index-container">
           {% include "explorer/partials/language_focus.html" %}
         </div>
 
-        <!-- Collections Map (outside shell - never re-renders on language filter) -->
         <div class="hidden lg:block rounded-xl shadow-sm border border-base-300 overflow-hidden relative">
-          <div id="collections-map" class="lac-map-wrap">
-            <svg class="lac-map-svg" id="lac-map-svg" viewBox="0 0 1440 720" preserveAspectRatio="xMidYMid meet">
-              <g id="lac-map-transform">
-                <g id="lac-graticule-layer"></g>
-                <g id="lac-countries-layer"></g>
-                <g id="lac-pins-layer"></g>
-              </g>
-            </svg>
-
-            <div class="lac-map-toolbar">
-              <div class="lac-legend" id="lac-legend" style="margin-left:auto;">
-                <div id="lac-legend-body"></div>
-              </div>
-            </div>
-
-            <div class="lac-zoom-controls">
-              <button type="button" id="lac-zoom-in" aria-label="{% translate 'Zoom in' %}">+</button>
-              <button type="button" id="lac-zoom-out" aria-label="{% translate 'Zoom out' %}">−</button>
-            </div>
-
-            <div class="lac-zoom-hint" id="lac-zoom-hint">{% translate "Zoom in for precise locations" %}</div>
-
-            <button type="button" class="lac-recenter-btn" id="recenter-btn" title="{% translate 'Fit all markers' %}">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V3h4M21 7V3h-4M3 17v4h4M21 17v4h-4"/></svg>
-              {% translate "Fit all" %}
-            </button>
-
-            <div class="lac-attribution">Natural Earth · public domain</div>
-          </div>
+          <div id="collections-map"></div>
+          <div class="lac-legend" id="lac-legend"><div id="lac-legend-body"></div></div>
+          <button type="button" class="lac-recenter-btn" id="recenter-btn" title="{% translate 'Fit all markers' %}">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V3h4M21 7V3h-4M3 17v4h4M21 17v4h-4"/></svg>
+            {% translate "Fit all" %}
+          </button>
         </div>
       </div>
 
@@ -187,19 +91,11 @@
     {% endif %}
   </div>
 
-  <!-- MapLibre kept for modal pop-outs on individual collection maps -->
-  <link rel="stylesheet" href="{% static 'vendor/js/maplibre-gl/maplibre-gl.css' %}" />
-  <script src="{% static 'vendor/js/maplibre-gl/maplibre-gl.js' %}"></script>
-
-  <!-- Map Modal -->
+  <!-- Modal reused by the per-row "Show on map" button on detail/bundle pages -->
   <div id="map-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
-    <div
-      class="absolute inset-0 bg-neutral/60"
-      onclick="document.getElementById('map-modal').classList.add('hidden'); document.body.classList.remove('overflow-hidden');"
-    ></div>
-    <div id="map-modal-content" class="relative w-full max-w-lg bg-base-100 rounded-xl shadow-xl">
-      <!-- Content loaded via HTMX -->
-    </div>
+    <div class="absolute inset-0 bg-neutral/60"
+         onclick="document.getElementById('map-modal').classList.add('hidden'); document.body.classList.remove('overflow-hidden');"></div>
+    <div id="map-modal-content" class="relative w-full max-w-lg bg-base-100 rounded-xl shadow-xl"></div>
   </div>
 
   <script>
@@ -212,21 +108,15 @@
     });
 
     (function() {
-      const W = 1440, H = 720;
-      const WORLD_PATHS_URL = '{% static "vendor/maps/world-paths.json" %}';
-      const CHORO_RAMP = ['#fbfbfa', '#dbe4e9', '#a8c0cc', '#4d87a1', '#005176'];
+      const STYLE_URL = '{{ main_map_style_url|escapejs }}';
+      const DARK_STYLE_URL = '{{ main_map_dark_style_url|escapejs }}';
 
       const state = {
-        activeLang: '',
-        view: { x: 0, y: 0, k: 1 },
+        map: null,
         markers: [],
-        countries: [],
-        countryByName: {},
+        activeLang: '',
+        loaded: false,
       };
-
-      function project(lng, lat) {
-        return [(lng + 180) * (W / 360), (90 - lat) * (H / 180)];
-      }
 
       function $(id) { return document.getElementById(id); }
 
@@ -241,354 +131,143 @@
         return s ? (s.dataset.languageFilter || '').toLowerCase() : '';
       }
 
-      function isMatch(marker) {
+      function toGeoJSON(markers) {
+        return {
+          type: 'FeatureCollection',
+          features: markers.map((m, i) => ({
+            type: 'Feature',
+            id: i,
+            geometry: { type: 'Point', coordinates: [m.lng, m.lat] },
+            properties: {
+              idx: i,
+              title: m.title || '',
+              url: m.url || '',
+              country: m.country || '',
+              bundles: m.bundles || 0,
+              language_keys: (m.language_keys || []).join('|'),
+            },
+          })),
+        };
+      }
+
+      function isMatchMarker(m) {
         if (!state.activeLang) return false;
-        return (marker.language_keys || []).includes(state.activeLang);
-      }
-
-      function renderGraticule() {
-        const g = $('lac-graticule-layer');
-        if (!g) return;
-        const lines = [];
-        for (let lng = -180; lng <= 180; lng += 30) {
-          const [x] = project(lng, 0);
-          lines.push(`<line class="lac-graticule" x1="${x}" y1="0" x2="${x}" y2="${H}"/>`);
-        }
-        for (let lat = -80; lat <= 80; lat += 20) {
-          const [, y] = project(0, lat);
-          lines.push(`<line class="lac-graticule" x1="0" y1="${y}" x2="${W}" y2="${y}"/>`);
-        }
-        const [, eqY] = project(0, 0);
-        lines.push(`<line class="lac-graticule" x1="0" y1="${eqY}" x2="${W}" y2="${eqY}" stroke-opacity="0.6" stroke-width="0.5"/>`);
-        g.innerHTML = lines.join('');
-      }
-
-      function renderCountries() {
-        const g = $('lac-countries-layer');
-        if (!g) return;
-        g.innerHTML = state.countries.map(c =>
-          `<path class="lac-country" d="${c.d}" data-iso="${c.iso}" data-name="${c.name}"/>`
-        ).join('');
-      }
-
-      function bundlesByCountry() {
-        const sums = {};
-        state.markers.forEach(m => {
-          if (!m.country) return;
-          sums[m.country] = (sums[m.country] || 0) + (m.bundles || 0);
-        });
-        return sums;
-      }
-
-      function choroBucket(v, max) {
-        if (v <= 0) return -1;
-        const t = v / max;
-        if (t < 0.2) return 0;
-        if (t < 0.4) return 1;
-        if (t < 0.6) return 2;
-        if (t < 0.8) return 3;
-        return 4;
-      }
-
-      function applyChoropleth() {
-        const sums = bundlesByCountry();
-        const max = Math.max(1, ...Object.values(sums));
-        const ramp = CHORO_RAMP;
-        document.querySelectorAll('#lac-countries-layer .lac-country').forEach(p => {
-          const v = sums[p.dataset.name] || 0;
-          const b = choroBucket(v, max);
-          if (b < 0) {
-            p.style.fill = '';
-            p.classList.remove('country-data');
-          } else {
-            p.style.fill = ramp[b];
-            p.classList.add('country-data');
-          }
-        });
-        applyCountryMatches();
-      }
-
-      function applyCountryMatches() {
-        const matches = new Set();
-        if (state.activeLang) {
-          state.markers
-            .filter(isMatch)
-            .forEach(m => {
-              const iso = state.countryByName[m.country];
-              if (iso) matches.add(iso);
-            });
-        }
-        document.querySelectorAll('.lac-country').forEach(p => {
-          p.classList.toggle('country-match', matches.has(p.dataset.iso));
-        });
-      }
-
-      function visibleMarkers() {
-        return state.markers;
-      }
-
-      function renderPins() {
-        const g = $('lac-pins-layer');
-        if (!g) return;
-        const kInv = 1 / Math.sqrt(state.view.k);
-        g.innerHTML = visibleMarkers().map((m, idx) => {
-          const [x, y] = project(m.lng, m.lat);
-          const bundles = Math.max(1, m.bundles || 1);
-          const match = isMatch(m);
-          // Size by bundles (Flannery sqrt), shrink slightly with zoom so pins stay proportional.
-          const r = (3.5 + Math.sqrt(bundles) * 0.9) * kInv * (match ? 1.4 : 1);
-          const color = match ? '#ea564f' : '#005176';
-          const opacity = (state.activeLang && !match) ? 0.3 : 1;
-          const strokeW = (match ? 2 : 1.2) * kInv;
-          return `
-            <g class="lac-pin" data-idx="${idx}" opacity="${opacity}" transform="translate(${x},${y})">
-              <g class="lac-pin-inner">
-                <circle class="lac-pin-ring" r="${r}"/>
-                <circle r="${r}" fill="${color}" stroke="#fff" stroke-width="${strokeW}"/>
-              </g>
-            </g>
-          `;
-        }).join('');
-        g.querySelectorAll('.lac-pin').forEach(pin => {
-          pin.addEventListener('click', (e) => {
-            e.stopPropagation();
-            openPopup(Number(pin.dataset.idx));
-          });
-        });
-      }
-
-      function applyTransform() {
-        const g = $('lac-map-transform');
-        if (!g) return;
-        g.setAttribute('transform', `translate(${state.view.x},${state.view.y}) scale(${state.view.k})`);
-        renderPins();
-        updateZoomHint();
-      }
-
-      function fitAll() {
-        if (!state.markers.length) { state.view = { x: 0, y: 0, k: 1 }; applyTransform(); return; }
-        const xs = [], ys = [];
-        state.markers.forEach(m => { const [x, y] = project(m.lng, m.lat); xs.push(x); ys.push(y); });
-        const minX = Math.min(...xs), maxX = Math.max(...xs);
-        const minY = Math.min(...ys), maxY = Math.max(...ys);
-        const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-        const bboxW = Math.max(400, maxX - minX + 240);
-        const bboxH = Math.max(300, maxY - minY + 240);
-        const k = Math.max(1, Math.min(5, Math.min(W / bboxW, H / bboxH)));
-        state.view.k = k;
-        state.view.x = W / 2 - cx * k;
-        state.view.y = H / 2 - cy * k;
-        applyTransform();
-      }
-
-      function zoomBy(factor) {
-        const prevK = state.view.k;
-        const k = Math.max(1, Math.min(8, prevK * factor));
-        const cx = W / 2, cy = H / 2;
-        const worldCX = (cx - state.view.x) / prevK;
-        const worldCY = (cy - state.view.y) / prevK;
-        state.view.k = k;
-        state.view.x = cx - worldCX * k;
-        state.view.y = cy - worldCY * k;
-        applyTransform();
-      }
-
-      function zoomToBBox(bx, by, bw, bh, { maxK = 6, padding = 60 } = {}) {
-        if (!(bw > 0) || !(bh > 0)) return;
-        const availW = Math.max(1, W - padding * 2);
-        const availH = Math.max(1, H - padding * 2);
-        const k = Math.max(1, Math.min(maxK, Math.min(availW / bw, availH / bh)));
-        const cx = bx + bw / 2, cy = by + bh / 2;
-        state.view.k = k;
-        state.view.x = W / 2 - cx * k;
-        state.view.y = H / 2 - cy * k;
-        applyTransform();
-      }
-
-      function setupMapInteractions() {
-        const svg = $('lac-map-svg');
-        if (!svg) return;
-        let dragging = false, moved = false, startX, startY, startVX, startVY;
-        const DRAG_THRESHOLD = 4;
-
-        svg.addEventListener('mousedown', (e) => {
-          if (e.target.closest('.lac-pin')) return;
-          dragging = true;
-          moved = false;
-          svg.classList.add('dragging');
-          startX = e.clientX; startY = e.clientY;
-          startVX = state.view.x; startVY = state.view.y;
-          closePopup();
-        });
-        window.addEventListener('mousemove', (e) => {
-          if (!dragging) return;
-          if (!moved && Math.hypot(e.clientX - startX, e.clientY - startY) > DRAG_THRESHOLD) {
-            moved = true;
-          }
-          if (!moved) return;
-          const rect = svg.getBoundingClientRect();
-          const scale = rect.width / W;
-          state.view.x = startVX + (e.clientX - startX) / scale;
-          state.view.y = startVY + (e.clientY - startY) / scale;
-          applyTransform();
-        });
-        window.addEventListener('mouseup', () => { dragging = false; svg.classList.remove('dragging'); });
-
-        // Click on a country zooms into its bounding box (unless the gesture was a drag).
-        svg.addEventListener('click', (e) => {
-          if (moved) return;
-          const country = e.target.closest('.lac-country');
-          if (!country) return;
-          const bbox = country.getBBox();
-          zoomToBBox(bbox.x, bbox.y, bbox.width, bbox.height);
-        });
-
-        svg.addEventListener('wheel', (e) => {
-          e.preventDefault();
-          const rect = svg.getBoundingClientRect();
-          const sx = (e.clientX - rect.left) / rect.width * W;
-          const sy = (e.clientY - rect.top) / rect.height * H;
-          const worldX = (sx - state.view.x) / state.view.k;
-          const worldY = (sy - state.view.y) / state.view.k;
-          const factor = e.deltaY > 0 ? 0.88 : 1.14;
-          state.view.k = Math.max(1, Math.min(8, state.view.k * factor));
-          state.view.x = sx - worldX * state.view.k;
-          state.view.y = sy - worldY * state.view.k;
-          applyTransform();
-        }, { passive: false });
-      }
-
-      function openPopup(idx) {
-        closePopup();
-        const m = state.markers[idx];
-        if (!m) return;
-        const wrap = $('collections-map');
-        const svg = $('lac-map-svg');
-        if (!wrap || !svg) return;
-        const rect = svg.getBoundingClientRect();
-        const [px, py] = project(m.lng, m.lat);
-        const screenX = (px * state.view.k + state.view.x) / W * rect.width;
-        const screenY = (py * state.view.k + state.view.y) / H * rect.height;
-        const pop = document.createElement('div');
-        pop.className = 'lac-popup';
-        pop.style.left = screenX + 'px';
-        pop.style.top = screenY + 'px';
-        const safeTitle = String(m.title || '').replace(/[&<>"']/g, s =>
-          ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
-        const meta = [m.country, m.bundles ? (m.bundles + ' bundles') : ''].filter(Boolean).join(' · ');
-        pop.innerHTML = `
-          <button type="button" class="lac-pop-close" aria-label="Close">×</button>
-          <div class="lac-pop-title">${safeTitle}</div>
-          ${meta ? `<div class="lac-pop-meta">${meta}</div>` : ''}
-          <a href="${m.url}" class="lac-pop-cta">{% translate "Open collection" %} →</a>
-        `;
-        wrap.appendChild(pop);
-        pop.querySelector('.lac-pop-close').onclick = closePopup;
-      }
-
-      function closePopup() {
-        document.querySelectorAll('.lac-popup').forEach(p => p.remove());
-      }
-
-      function updateZoomHint() {
-        const hint = $('lac-zoom-hint');
-        if (!hint) return;
-        hint.classList.toggle('visible', state.view.k < 1.8 && state.markers.length > 0);
+        return (m.language_keys || []).includes(state.activeLang);
       }
 
       function renderLegend() {
         const body = $('lac-legend-body');
         if (!body) return;
-        const rows = [
-          `<span class="lac-legend-row"><span class="lac-legend-swatch" style="background:#005176"></span>{% translate "Collection" %}</span>`,
-        ];
+        let html = '<span class="lac-legend-row"><span class="lac-legend-swatch" style="background:#005176"></span>{% translate "Collection" %}</span>';
         if (state.activeLang) {
-          rows.push(`<span class="lac-legend-row"><span class="lac-legend-swatch" style="background:#ea564f"></span>{% translate "Match" %}</span>`);
+          html += '<span class="lac-legend-row"><span class="lac-legend-swatch" style="background:#ea564f"></span>{% translate "Match" %}</span>';
         }
-        body.innerHTML = rows.join('');
+        body.innerHTML = html;
+      }
+
+      function fitAll(map) {
+        if (!state.markers.length) return;
+        const bounds = new maplibregl.LngLatBounds();
+        state.markers.forEach(m => bounds.extend([m.lng, m.lat]));
+        if (!bounds.isEmpty()) {
+          map.fitBounds(bounds, { padding: 80, maxZoom: 3.2, duration: 900 });
+        }
+      }
+
+      function applyMatchStyling() {
+        const map = state.map;
+        if (!map || !state.loaded) return;
+        state.markers.forEach((m, i) => {
+          map.setFeatureState(
+            { source: 'collections', id: i },
+            { match: isMatchMarker(m), active: !!state.activeLang }
+          );
+        });
+      }
+
+      function focusMatches() {
+        const map = state.map;
+        if (!map || !state.markers.length) return;
+        if (!state.activeLang) { fitAll(map); return; }
+        const matches = state.markers.filter(isMatchMarker);
+        if (matches.length === 0) { fitAll(map); return; }
+        if (matches.length === 1) {
+          map.flyTo({ center: [matches[0].lng, matches[0].lat], zoom: 4, duration: 1100 });
+          return;
+        }
+        const bounds = new maplibregl.LngLatBounds();
+        matches.forEach(m => bounds.extend([m.lng, m.lat]));
+        map.fitBounds(bounds, { padding: 100, maxZoom: 4, duration: 1100 });
       }
 
       function applyFilter() {
         state.activeLang = currentActiveLang();
-        applyCountryMatches();
-        if (state.activeLang) {
-          const matches = state.markers.filter(isMatch);
-          if (matches.length === 1) {
-            // Gentle zoom so the choropleth tint and proportional bubble stay legible.
-            const [px, py] = project(matches[0].lng, matches[0].lat);
-            const k = 2.2;
-            state.view.k = k;
-            state.view.x = W / 2 - px * k;
-            state.view.y = H / 2 - py * k;
-            applyTransform();
-          } else if (matches.length > 1) {
-            const xs = [], ys = [];
-            matches.forEach(c => { const [x, y] = project(c.lng, c.lat); xs.push(x); ys.push(y); });
-            const minX = Math.min(...xs), maxX = Math.max(...xs);
-            const minY = Math.min(...ys), maxY = Math.max(...ys);
-            const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-            const bboxW = Math.max(320, maxX - minX + 320);
-            const bboxH = Math.max(240, maxY - minY + 320);
-            const k = Math.min(3, Math.min(W / bboxW, H / bboxH));
-            state.view.k = Math.max(1.3, k);
-            state.view.x = W / 2 - cx * state.view.k;
-            state.view.y = H / 2 - cy * state.view.k;
-            applyTransform();
-          } else {
-            fitAll();
-          }
-        } else {
-          fitAll();
-        }
+        applyMatchStyling();
         renderLegend();
+        focusMatches();
       }
 
-      async function loadCountries() {
-        try {
-          const res = await fetch(WORLD_PATHS_URL, { cache: 'force-cache' });
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-          return await res.json();
-        } catch (e) {
-          console.warn('[lac-map] could not load world paths', e);
-          return { w: W, h: H, countries: [] };
-        }
+      function openPopup(marker, lngLat) {
+        const safeTitle = String(marker.title || '').replace(/[&<>"']/g, s =>
+          ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
+        const meta = [marker.country, marker.bundles ? (marker.bundles + ' bundles') : '']
+          .filter(Boolean).join(' · ');
+        const html =
+          '<div class="lac-popup-body">' +
+          `<div class="title">${safeTitle}</div>` +
+          (meta ? `<div class="meta">${meta}</div>` : '') +
+          `<a href="${marker.url}" class="cta">{% translate "Open collection" %} →</a>` +
+          '</div>';
+        new maplibregl.Popup({ offset: 12, closeButton: true })
+          .setLngLat(lngLat)
+          .setHTML(html)
+          .addTo(state.map);
       }
 
-      async function initCollectionsMap() {
-        const container = $('collections-map');
-        if (!container || container.dataset.mapInitialized === 'true') return;
+      function addCollectionsLayer() {
+        const map = state.map;
+        if (!map || map.getSource('collections')) return;
+        map.addSource('collections', {
+          type: 'geojson',
+          data: toGeoJSON(state.markers),
+          promoteId: 'idx',
+        });
 
-        state.markers = loadMarkers();
-        if (!state.markers.length) return;
+        map.addLayer({
+          id: 'collections-pins',
+          type: 'circle',
+          source: 'collections',
+          paint: {
+            'circle-radius': [
+              'interpolate', ['linear'], ['zoom'],
+              1, ['case', ['boolean', ['feature-state', 'match'], false], 7, 4.5],
+              6, ['case', ['boolean', ['feature-state', 'match'], false], 11, 7],
+            ],
+            'circle-color': [
+              'case',
+              ['boolean', ['feature-state', 'match'], false], '#ea564f',
+              '#005176',
+            ],
+            'circle-stroke-color': '#ffffff',
+            'circle-stroke-width': 1.8,
+            'circle-opacity': [
+              'case',
+              ['boolean', ['feature-state', 'active'], false],
+              ['case', ['boolean', ['feature-state', 'match'], false], 1, 0.32],
+              1,
+            ],
+          },
+        });
 
-        state.activeLang = currentActiveLang();
-
-        const zin = $('lac-zoom-in'); if (zin) zin.onclick = () => zoomBy(1.5);
-        const zout = $('lac-zoom-out'); if (zout) zout.onclick = () => zoomBy(1 / 1.5);
-        const re = $('recenter-btn'); if (re) re.onclick = () => fitAll();
-
-        setupMapInteractions();
-        renderLegend();
-
-        const data = await loadCountries();
-        state.countries = data.countries || [];
-        state.countryByName = {};
-        state.countries.forEach(c => { state.countryByName[c.name] = c.iso; });
-
-        renderCountries();
-        renderGraticule();
-        applyChoropleth();
-        applyFilter();
-
-        container.dataset.mapInitialized = 'true';
-      }
-
-      window.updateCollectionsMap = function updateCollectionsMap() {
-        applyFilter();
-      };
-
-      function refreshCollectionsMap() {
-        if (typeof window.updateCollectionsMap === 'function') window.updateCollectionsMap();
+        map.on('click', 'collections-pins', (e) => {
+          if (!e.features || !e.features.length) return;
+          const idx = e.features[0].properties.idx;
+          const marker = state.markers[idx];
+          if (!marker) return;
+          openPopup(marker, e.lngLat);
+        });
+        map.on('mouseenter', 'collections-pins', () => { map.getCanvas().style.cursor = 'pointer'; });
+        map.on('mouseleave', 'collections-pins', () => { map.getCanvas().style.cursor = ''; });
       }
 
       function markerIndexForPk(pk) {
@@ -596,27 +275,75 @@
         return state.markers.findIndex(m => (m.url || '').includes(pk));
       }
 
-      function pulsePin(idx) {
-        const pin = document.querySelector(`.lac-pin[data-idx="${idx}"]`);
-        if (!pin) return;
-        pin.classList.remove('pulse');
-        void pin.getBoundingClientRect();
-        pin.classList.add('pulse');
-        setTimeout(() => pin.classList.remove('pulse'), 1300);
-      }
-
       function focusCollectionOnMap(pk) {
         const idx = markerIndexForPk(pk);
         if (idx < 0) return false;
         const m = state.markers[idx];
-        const [px, py] = project(m.lng, m.lat);
-        state.view.k = 4;
-        state.view.x = W / 2 - px * 4;
-        state.view.y = H / 2 - py * 4;
-        applyTransform();
-        setTimeout(() => openPopup(idx), 250);
+        state.map.flyTo({ center: [m.lng, m.lat], zoom: 4.5, duration: 900 });
+        state.map.once('moveend', () => openPopup(m, [m.lng, m.lat]));
         return true;
       }
+
+      function initCollectionsMap() {
+        const container = $('collections-map');
+        if (!container || container.dataset.mapInitialized === 'true') return;
+        state.markers = loadMarkers();
+        if (!state.markers.length) return;
+        state.activeLang = currentActiveLang();
+        renderLegend();
+
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        const map = new maplibregl.Map({
+          container: container,
+          style: isDark ? DARK_STYLE_URL : STYLE_URL,
+          center: [12, 20],
+          zoom: 1.3,
+          attributionControl: { compact: true },
+        });
+
+        map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-left');
+
+        map.on('load', () => {
+          try { map.setProjection({ type: 'globe' }); } catch (e) { console.warn('[lac-globe]', e); }
+          state.loaded = true;
+          addCollectionsLayer();
+          applyMatchStyling();
+          focusMatches();
+        });
+
+        state.map = map;
+        window.__lacMap = map;
+        container.dataset.mapInitialized = 'true';
+
+        const re = $('recenter-btn');
+        if (re) re.onclick = () => { focusMatches(); };
+
+        if (!window.__lacGlobeThemeObserver) {
+          window.__lacGlobeThemeObserver = new MutationObserver(() => {
+            const m = state.map;
+            if (!m) return;
+            const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+            const next = dark ? DARK_STYLE_URL : STYLE_URL;
+            m.setStyle(next);
+            m.once('style.load', () => {
+              state.loaded = true;
+              addCollectionsLayer();
+              applyMatchStyling();
+            });
+          });
+          window.__lacGlobeThemeObserver.observe(document.documentElement, {
+            attributes: true, attributeFilter: ['data-theme']
+          });
+        }
+      }
+
+      window.updateCollectionsMap = function updateCollectionsMap() { applyFilter(); };
+
+      function refreshCollectionsMap() {
+        if (typeof window.updateCollectionsMap === 'function') window.updateCollectionsMap();
+      }
+
+      function markerIdxFromRow(tr) { return markerIndexForPk(tr.dataset.collectionPk); }
 
       document.body.addEventListener('click', function(event) {
         const tr = event.target.closest('tr[data-collection-pk]');
@@ -626,18 +353,10 @@
         focusCollectionOnMap(tr.dataset.collectionPk);
       });
 
-      document.body.addEventListener('mouseover', function(event) {
-        const tr = event.target.closest('tr[data-collection-pk]');
-        if (!tr || !state.markers.length) return;
-        const idx = markerIndexForPk(tr.dataset.collectionPk);
-        if (idx >= 0) pulsePin(idx);
-      });
-
       document.body.addEventListener('htmx:afterSettle', function(event) {
         const target = event.detail && event.detail.target ? event.detail.target : event.target;
         if (target && target.id === 'collection-language-shell') refreshCollectionsMap();
       });
-
       document.body.addEventListener('htmx:historyRestore', refreshCollectionsMap);
 
       if (document.readyState === 'loading') {
