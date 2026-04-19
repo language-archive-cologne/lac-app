@@ -5,7 +5,16 @@
 
 {% block title %}{% translate "Collections" %} - {{ block.super }}{% endblock title %}
 
-{% block page_title %}{% endblock page_title %}
+{% block page_title %}
+  <div class="flex items-baseline gap-3 mb-6 flex-wrap">
+    <h1 class="text-3xl font-light text-base-content tracking-tight">{% translate "Archive Explorer" %}</h1>
+    {% if stats.collections_count %}
+      <span class="text-sm text-base-content/60">
+        {% blocktranslate count counter=stats.collections_count %}{{ counter }} collection{% plural %}{{ counter }} collections{% endblocktranslate %}
+      </span>
+    {% endif %}
+  </div>
+{% endblock page_title %}
 
 {% block explorer_content %}
   {% include "explorer/partials/search_bar.html" %}
