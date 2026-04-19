@@ -50,9 +50,10 @@
 
         .lac-graticule { fill: none; stroke: #cdd4da; stroke-opacity: 0.6; stroke-width: 0.35; }
 
-        /* Pins */
-        .lac-pin { cursor: pointer; transition: transform 120ms; transform-origin: center; transform-box: fill-box; }
-        .lac-pin:hover { transform: scale(1.25); }
+        /* Pins — nested <g> so hover-scale does not replace the positional translate */
+        .lac-pin { cursor: pointer; }
+        .lac-pin-inner { transition: transform 120ms ease; transform-origin: 0 0; transform-box: fill-box; }
+        .lac-pin:hover .lac-pin-inner { transform: scale(1.25); }
         .lac-pin-ring { fill: none; stroke: #ea564f; stroke-width: 1.5; opacity: 0; }
         .lac-pin.pulse .lac-pin-ring { animation: lacPulseRing 1.2s ease-out; }
         @keyframes lacPulseRing { 0% { r: 5; opacity: 0.9; } 100% { r: 22; opacity: 0; } }
@@ -366,8 +367,10 @@
           const strokeW = match ? 2.5 : 1.5;
           return `
             <g class="lac-pin" data-idx="${idx}" opacity="${opacity}" transform="translate(${x},${y})">
-              <circle class="lac-pin-ring" r="${r}"/>
-              <circle r="${r}" fill="${color}" stroke="#fff" stroke-width="${strokeW}"/>
+              <g class="lac-pin-inner">
+                <circle class="lac-pin-ring" r="${r}"/>
+                <circle r="${r}" fill="${color}" stroke="#fff" stroke-width="${strokeW}"/>
+              </g>
             </g>
           `;
         }).join('');
