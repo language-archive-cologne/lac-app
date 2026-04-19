@@ -1,33 +1,41 @@
 {% load i18n %}
+{% load explorer_extras %}
+{% regroup language_index by name|first|upper as language_letters %}
 <div class="rounded-2xl border border-base-300 bg-base-100 shadow-sm h-full flex flex-col">
   <div class="px-4 py-3 border-b border-base-200 flex items-center justify-between">
-    <span class="text-xs font-semibold uppercase tracking-widest text-base-content/60">{% translate "Languages" %}</span>
+    <span class="text-xs font-semibold uppercase tracking-widest text-base-content/60">{% translate "Language Index" %}</span>
     {% if language_filter %}
       <a href="{% url 'explorer:collection_list' %}?sort={{ current_sort }}&order={{ current_order }}"
          hx-get="{% url 'explorer:collection_list' %}?sort={{ current_sort }}&order={{ current_order }}"
          hx-target="#collection-language-shell"
          hx-swap="outerHTML"
          hx-push-url="true"
-         class="btn btn-ghost btn-xs">{% translate "Clear" %}</a>
+         class="text-xs font-semibold text-primary hover:underline">{% translate "Clear" %}</a>
     {% endif %}
   </div>
-  <div class="flex-1 overflow-y-auto max-h-64 divide-y divide-base-200">
-    {% for language in language_index %}
-      <a href="{% url 'explorer:collection_list' %}?language={{ language.name|urlencode }}&sort={{ current_sort }}&order={{ current_order }}"
-         hx-get="{% url 'explorer:collection_list' %}?language={{ language.name|urlencode }}&sort={{ current_sort }}&order={{ current_order }}"
-         hx-target="#collection-language-shell"
-         hx-swap="outerHTML"
-         hx-push-url="true"
-         class="flex items-center justify-between gap-2 px-4 py-2 text-sm hover:bg-base-200 transition-colors {% if language_filter|lower == language.name|lower or language_filter|lower == language.iso_639_3_code|lower %}bg-primary/10 text-primary font-medium{% else %}text-base-content/70{% endif %}"
-         {% if language.glottolog_macroarea %}title="{{ language.glottolog_macroarea }}"{% endif %}>
-        <span class="truncate">{{ language.name }}</span>
-        <span class="flex items-center gap-2 text-xs {% if language_filter|lower == language.name|lower or language_filter|lower == language.iso_639_3_code|lower %}text-primary/70{% else %}text-base-content/50{% endif %}">
-          <span class="font-mono uppercase">{{ language.iso_639_3_code }}</span>
-          <span class="rounded-full {% if language_filter|lower == language.name|lower or language_filter|lower == language.iso_639_3_code|lower %}bg-primary/20 text-primary{% else %}bg-base-200 text-base-content/70{% endif %} px-2 py-0.5 text-xs font-semibold">{{ language.collections_count }}</span>
-        </span>
-      </a>
+  <div class="flex-1 overflow-y-auto max-h-96 p-3 space-y-3">
+    {% for letter_group in language_letters %}
+      <div>
+        <div class="text-xs font-semibold text-primary mb-1.5 tracking-wide">{{ letter_group.grouper }}</div>
+        <div class="flex flex-wrap gap-1.5">
+          {% for language in letter_group.list %}
+            <a href="{% url 'explorer:collection_list' %}?language={{ language.name|urlencode }}&sort={{ current_sort }}&order={{ current_order }}"
+               hx-get="{% url 'explorer:collection_list' %}?language={{ language.name|urlencode }}&sort={{ current_sort }}&order={{ current_order }}"
+               hx-target="#collection-language-shell"
+               hx-swap="outerHTML"
+               hx-push-url="true"
+               {% if language.glottolog_macroarea %}title="{{ language.glottolog_macroarea }}"{% endif %}
+               class="inline-flex items-center gap-1 rounded-md border text-xs transition-colors px-2 py-1 {% if language_filter|lower == language.name|lower or language_filter|lower == language.iso_639_3_code|lower %}bg-primary text-primary-content border-primary{% else %}bg-base-200 text-base-content/80 border-base-300 hover:border-primary hover:text-primary{% endif %}">
+              <span class="truncate max-w-[9rem]">{{ language.name }}</span>
+              {% if language.iso_639_3_code %}
+                <span class="font-mono text-[10px] lowercase {% if language_filter|lower == language.name|lower or language_filter|lower == language.iso_639_3_code|lower %}opacity-70{% else %}text-base-content/45{% endif %}">[{{ language.iso_639_3_code }}]</span>
+              {% endif %}
+            </a>
+          {% endfor %}
+        </div>
+      </div>
     {% empty %}
-      <p class="px-4 py-3 text-sm text-base-content/60">{% translate "No languages available." %}</p>
+      <p class="px-1 py-2 text-sm text-base-content/60">{% translate "No languages available." %}</p>
     {% endfor %}
   </div>
 </div>
