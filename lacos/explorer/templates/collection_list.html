@@ -49,7 +49,8 @@
         .lac-map-svg.dragging { cursor: grabbing; }
 
         /* Country fill (overridden by inline fill for choropleth) */
-        .lac-country { fill: #fbfbfa; stroke: #b4bcc4; stroke-width: 0.4; stroke-opacity: 0.75; }
+        .lac-country { fill: #fbfbfa; stroke: #b4bcc4; stroke-width: 0.4; stroke-opacity: 0.75; cursor: pointer; transition: fill-opacity 120ms; }
+        .lac-country:hover { fill-opacity: 0.7; stroke-opacity: 1; }
         .lac-country.country-data { stroke-opacity: 0.7; }
         .lac-country.country-match { fill: #ea564f !important; fill-opacity: 0.22 !important; stroke: #ea564f !important; stroke-opacity: 1 !important; stroke-width: 1 !important; }
 
@@ -392,14 +393,28 @@
         applyTransform();
       }
 
+      function zoomToBBox(bx, by, bw, bh, { maxK = 6, padding = 60 } = {}) {
+        if (!(bw > 0) || !(bh > 0)) return;
+        const availW = Math.max(1, W - padding * 2);
+        const availH = Math.max(1, H - padding * 2);
+        const k = Math.max(1, Math.min(maxK, Math.min(availW / bw, availH / bh)));
+        const cx = bx + bw / 2, cy = by + bh / 2;
+        state.view.k = k;
+        state.view.x = W / 2 - cx * k;
+        state.view.y = H / 2 - cy * k;
+        applyTransform();
+      }
+
       function setupMapInteractions() {
         const svg = $('lac-map-svg');
         if (!svg) return;
-        let dragging = false, startX, startY, startVX, startVY;
+        let dragging = false, moved = false, startX, startY, startVX, startVY;
+        const DRAG_THRESHOLD = 4;
 
         svg.addEventListener('mousedown', (e) => {
           if (e.target.closest('.lac-pin')) return;
           dragging = true;
+          moved = false;
           svg.classList.add('dragging');
           startX = e.clientX; startY = e.clientY;
           startVX = state.view.x; startVY = state.view.y;
@@ -407,6 +422,10 @@
         });
         window.addEventListener('mousemove', (e) => {
           if (!dragging) return;
+          if (!moved && Math.hypot(e.clientX - startX, e.clientY - startY) > DRAG_THRESHOLD) {
+            moved = true;
+          }
+          if (!moved) return;
           const rect = svg.getBoundingClientRect();
           const scale = rect.width / W;
           state.view.x = startVX + (e.clientX - startX) / scale;
@@ -414,6 +433,15 @@
           applyTransform();
         });
         window.addEventListener('mouseup', () => { dragging = false; svg.classList.remove('dragging'); });
+
+        // Click on a country zooms into its bounding box (unless the gesture was a drag).
+        svg.addEventListener('click', (e) => {
+          if (moved) return;
+          const country = e.target.closest('.lac-country');
+          if (!country) return;
+          const bbox = country.getBBox();
+          zoomToBBox(bbox.x, bbox.y, bbox.width, bbox.height);
+        });
 
         svg.addEventListener('wheel', (e) => {
           e.preventDefault();
