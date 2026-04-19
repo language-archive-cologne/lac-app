@@ -350,7 +350,7 @@ RESOURCE_PATH_PATTERN = env("RESOURCE_PATH_PATTERN")
 # ------------------------------------------------------------------------------
 EXPLORER_MAIN_MAP_STYLE_URL = env(
     "EXPLORER_MAIN_MAP_STYLE_URL",
-    default="/static/vendor/maps/openfreemap/bright.json",
+    default="https://tiles.openfreemap.org/styles/positron",
 )
 EXPLORER_MAIN_MAP_DARK_STYLE_URL = env(
     "EXPLORER_MAIN_MAP_DARK_STYLE_URL",

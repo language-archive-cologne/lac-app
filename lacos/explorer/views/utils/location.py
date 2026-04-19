@@ -76,8 +76,15 @@ def map_popup_view(request):
     except ValueError:
         return HttpResponse('<p class="text-error">Invalid coordinates format</p>', status=400)
 
+    from django.conf import settings
+    is_dark = request.COOKIES.get('theme') == 'dark' or request.GET.get('theme') == 'dark'
+    style_url = (
+        settings.EXPLORER_MAIN_MAP_DARK_STYLE_URL
+        if is_dark else settings.EXPLORER_MAIN_MAP_STYLE_URL
+    )
     return render(request, 'explorer/partials/map_popup.html', {
         'lat': lat,
         'lng': lng,
         'title': title,
+        'map_style_url': style_url,
     })

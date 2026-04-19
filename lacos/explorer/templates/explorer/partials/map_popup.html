@@ -24,7 +24,7 @@
 
     const map = new maplibregl.Map({
       container: container,
-      style: 'https://tiles.openfreemap.org/styles/bright',
+      style: '{{ map_style_url|escapejs }}',
       center: [lng, lat],
       zoom: 12,
       pitch: 45,
