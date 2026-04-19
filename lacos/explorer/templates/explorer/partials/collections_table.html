@@ -133,7 +133,7 @@
       </thead>
       <tbody class="divide-y divide-base-200">
         {% for collection in collection_list %}
-          <tr class="hover:bg-base-200 transition-colors">
+          <tr class="hover:bg-base-200 transition-colors" data-collection-pk="{{ collection.pk }}">
             <td class="px-6 py-5 align-top">
               <div class="space-y-2">
                 <a

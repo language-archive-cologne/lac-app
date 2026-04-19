@@ -288,12 +288,7 @@ class CollectionListView(ListView):
         )
 
         if not context["is_htmx"] and not search_query:
-            map_collections = (
-                context["paginator"].object_list
-                if context.get("is_paginated") and context.get("paginator")
-                else collection_list
-            )
-            context['map_markers_json'] = get_collection_map_markers(map_collections)
+            context['map_markers_json'] = get_collection_map_markers()
             context['main_map_style_url'] = settings.EXPLORER_MAIN_MAP_STYLE_URL
             context['main_map_dark_style_url'] = settings.EXPLORER_MAIN_MAP_DARK_STYLE_URL
 
