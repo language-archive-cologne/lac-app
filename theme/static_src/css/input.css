@@ -129,6 +129,30 @@
   }
 }
 
+/* Language chip/pill dark mode overrides */
+[data-theme="dark"] .language-chip,
+[data-theme="dark"] .language-index-pill {
+  background: color-mix(in oklab, var(--color-base-100) 82%, var(--color-base-content) 18%);
+  border-color: color-mix(in oklab, var(--color-base-300) 40%, var(--color-base-content) 20%);
+  color: color-mix(in oklab, var(--color-base-content) 85%, var(--color-base-100));
+}
+
+[data-theme="dark"] .language-chip-iso,
+[data-theme="dark"] .language-index-pill-iso {
+  color: color-mix(in oklab, var(--color-base-content) 55%, var(--color-base-100));
+}
+
+[data-theme="dark"] .language-index-pill:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+[data-theme="dark"] .language-index-pill.is-active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-primary-content);
+}
+
 /* MapLibre dark mode overrides (#64) */
 [data-theme="dark"] .maplibregl-ctrl-group {
   background: var(--color-base-100);
