@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from django.core.cache import cache
 from django.db import connection
@@ -173,3 +175,31 @@ def test_collection_list_full_page_uses_globe_style_variant(client):
     assert "const GLOBE_DARK_STYLE_URL = DARK_STYLE_URL + (DARK_STYLE_URL.includes('?') ? '&' : '?') + 'projection=globe';" in page
     assert "style: isDark ? GLOBE_DARK_STYLE_URL : GLOBE_STYLE_URL," in page
     assert "setProjection({ type: 'globe' })" not in page
+
+
+@pytest.mark.django_db
+def test_collection_list_full_page_renders_refined_language_index_typography(client):
+    _build_collection_graph(1)
+
+    response = client.get(reverse("explorer:collection_list"))
+
+    assert response.status_code == 200
+    page = response.content.decode("utf-8")
+    assert 'language-index-card rounded-2xl border shadow-sm h-full flex flex-col' in page
+    assert 'language-index-pill inline-flex items-center gap-1 px-2 py-[3px] rounded-md text-xs border transition-colors' in page
+    assert 'language-index-pill-iso text-[10.5px] tabular-nums leading-none' in page
+
+
+def test_language_index_component_styles_define_lighter_neutral_palette():
+    css = Path("theme/static_src/css/input.css").read_text()
+
+    assert "--color-base-100: #ffffff;" in css
+    assert "--color-base-200: #f2f2f2;" in css
+    assert "--color-base-300: #e5e6e6;" in css
+    assert "--color-base-content: #1f2937;" in css
+    assert ".language-index-card" in css
+    assert "background: var(--color-base-100);" in css
+    assert "border-color: var(--color-base-300);" in css
+    assert ".language-index-pill" in css
+    assert "background: #f6f6f6;" in css
+    assert "color: var(--color-base-content);" in css
