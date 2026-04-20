@@ -5,10 +5,12 @@ glyphs that back the explorer maps.
 
 ## Artifacts
 
-- `ne.pmtiles` — Natural Earth 1:50m + 1:110m, zoom 0–6, ~40 MB.
-  Sourced from https://naciscdn.org/naturalearth (public domain).
+- `ne.pmtiles` — Natural Earth 1:50m + 1:110m, zoom 0–6, about 12 MB in the
+  current build. Sourced from https://naciscdn.org/naturalearth (public
+  domain).
 - `glyphs/Noto Sans Regular/<range>.pbf` — pre-built SDF glyphs from
-  `protomaps/basemaps-assets` (MIT licensed).
+  `protomaps/basemaps-assets` (MIT licensed), about 7 MB total in the current
+  build.
 
 ## Build
 
