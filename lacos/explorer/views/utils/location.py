@@ -34,9 +34,9 @@ def get_formatted_location(location):
 
 @lru_cache(maxsize=128)
 def get_location_from_coordinates(coordinates):
-    """Get location name from coordinates using Nominatim (OpenStreetMap).
+    """Return "lat, lng" formatted coordinates; no network call.
 
-    Coordinates should be in format "LATITUDE,LONGITUDE" like "50.926735,6.930392"
+    Input format: "LATITUDE,LONGITUDE" (e.g. "50.926735,6.930392").
     """
     try:
         safe_coordinates = re.sub(r'[^\w\-]', '_', coordinates)
