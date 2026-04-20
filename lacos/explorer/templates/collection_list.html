@@ -390,6 +390,9 @@
             const next = dark ? DARK_STYLE_URL : STYLE_URL;
             m.setStyle(next);
             m.once('style.load', () => {
+              // setStyle resets the projection to the style's default (Mercator).
+              // Re-apply the globe so theme toggles don't flatten the map.
+              try { m.setProjection({ type: 'globe' }); } catch (e) { console.warn('[lac-globe]', e); }
               state.loaded = true;
               addCollectionsLayer();
               applyMatchStyling();
