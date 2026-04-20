@@ -158,3 +158,18 @@ def test_collection_list_htmx_pagination_returns_table_partial(client, settings)
     page = response.content.decode("utf-8")
     assert 'id="collections-table"' in page
     assert 'id="collection-language-shell"' not in page
+    assert "projection=globe" not in page
+
+
+@pytest.mark.django_db
+def test_collection_list_full_page_uses_globe_style_variant(client):
+    _build_collection_graph(1)
+
+    response = client.get(reverse("explorer:collection_list"))
+
+    assert response.status_code == 200
+    page = response.content.decode("utf-8")
+    assert "const GLOBE_STYLE_URL = STYLE_URL + (STYLE_URL.includes('?') ? '&' : '?') + 'projection=globe';" in page
+    assert "const GLOBE_DARK_STYLE_URL = DARK_STYLE_URL + (DARK_STYLE_URL.includes('?') ? '&' : '?') + 'projection=globe';" in page
+    assert "style: isDark ? GLOBE_DARK_STYLE_URL : GLOBE_STYLE_URL," in page
+    assert "setProjection({ type: 'globe' })" not in page

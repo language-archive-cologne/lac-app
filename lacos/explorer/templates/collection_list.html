@@ -149,6 +149,8 @@
     (function() {
       const STYLE_URL = '{{ main_map_style_url|escapejs }}';
       const DARK_STYLE_URL = '{{ main_map_dark_style_url|escapejs }}';
+      const GLOBE_STYLE_URL = STYLE_URL + (STYLE_URL.includes('?') ? '&' : '?') + 'projection=globe';
+      const GLOBE_DARK_STYLE_URL = DARK_STYLE_URL + (DARK_STYLE_URL.includes('?') ? '&' : '?') + 'projection=globe';
 
       const state = {
         map: null,
@@ -357,16 +359,18 @@
         // of the archive's languages, good storytelling at first paint.
         const map = new maplibregl.Map({
           container: container,
-          style: isDark ? DARK_STYLE_URL : STYLE_URL,
+          style: isDark ? GLOBE_DARK_STYLE_URL : GLOBE_STYLE_URL,
           center: [115, 5],
           zoom: 1.6,
           attributionControl: false,
+          // Disable the default 300ms symbol crossfade — labels pop in/out
+          // cleanly at filter thresholds instead of dragging through a fade.
+          fadeDuration: 0,
         });
 
         map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-left');
 
         map.on('load', () => {
-          try { map.setProjection({ type: 'globe' }); } catch (e) { console.warn('[lac-globe]', e); }
           state.loaded = true;
           addCollectionsLayer();
           applyMatchStyling();
@@ -387,12 +391,9 @@
             const m = state.map;
             if (!m) return;
             const dark = document.documentElement.getAttribute('data-theme') === 'dark';
-            const next = dark ? DARK_STYLE_URL : STYLE_URL;
+            const next = dark ? GLOBE_DARK_STYLE_URL : GLOBE_STYLE_URL;
             m.setStyle(next);
             m.once('style.load', () => {
-              // setStyle resets the projection to the style's default (Mercator).
-              // Re-apply the globe so theme toggles don't flatten the map.
-              try { m.setProjection({ type: 'globe' }); } catch (e) { console.warn('[lac-globe]', e); }
               state.loaded = true;
               addCollectionsLayer();
               applyMatchStyling();

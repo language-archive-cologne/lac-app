@@ -67,6 +67,20 @@ def test_map_style_view_cache_header_present(client):
 
 
 @pytest.mark.django_db
+def test_map_style_view_projection_can_be_injected_via_query_param(client):
+    response = client.get(reverse("explorer:map_style_ne_c"), {"projection": "globe"})
+    style = json.loads(response.content)
+    assert style["projection"] == {"type": "globe"}
+
+
+@pytest.mark.django_db
+def test_map_style_view_has_no_projection_by_default(client):
+    response = client.get(reverse("explorer:map_style_ne_c"))
+    style = json.loads(response.content)
+    assert "projection" not in style
+
+
+@pytest.mark.django_db
 def test_map_style_view_returns_404_when_style_file_missing(client, tmp_path):
     """If the style file is removed from the static tree, the view must not crash."""
     from lacos.explorer.views.utils import location as loc

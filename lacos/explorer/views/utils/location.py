@@ -1,5 +1,6 @@
 """Location and geocoding utility functions."""
 
+import json
 import logging
 import re
 from functools import lru_cache
@@ -106,6 +107,11 @@ def map_style_view(request):
     body = _STYLE_PATH.read_text(encoding="utf-8")
     body = body.replace("__PMTILES_URL__", settings.EXPLORER_MAP_PMTILES_URL)
     body = body.replace("__GLYPHS_URL__", settings.EXPLORER_MAP_GLYPHS_URL)
+    projection = request.GET.get("projection")
+    if projection in {"globe", "mercator"}:
+        style = json.loads(body)
+        style["projection"] = {"type": projection}
+        body = json.dumps(style)
     resp = HttpResponse(body, content_type="application/json")
     resp["Cache-Control"] = "public, max-age=300"
     return resp
