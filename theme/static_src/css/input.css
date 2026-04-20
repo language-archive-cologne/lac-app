@@ -76,6 +76,16 @@
 }
 
 @layer components {
+  .language-chip {
+    background: #f6f6f6;
+    border-color: var(--color-base-300);
+    color: var(--color-base-content);
+  }
+
+  .language-chip-iso {
+    color: color-mix(in oklab, var(--color-base-content) 55%, transparent);
+  }
+
   .language-index-card {
     background: var(--color-base-100);
     border-color: var(--color-base-300);

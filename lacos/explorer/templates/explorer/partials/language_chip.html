@@ -1,23 +1,25 @@
 {% load static i18n %}
 {% with size=size|default:"md" %}
   {% if language.iso_639_3_code %}
-    <span class="inline-flex items-center gap-1.5 rounded-md font-medium bg-base-200 text-base-content border border-base-300 {% if size == 'sm' %}px-2 py-0.5 text-[11px]{% else %}px-2.5 py-1 text-xs{% endif %}">
-      <span>{{ language.name }}</span>
-      <span class="text-base-content/60">[{{ language.iso_639_3_code }}]</span>
-      <a href="https://glottolog.org/resource/languoid/iso/{{ language.iso_639_3_code }}"
-         target="_blank" rel="noopener"
-         title="{% translate 'Open in Glottolog' %}"
-         class="inline-flex items-center">
-        <span class="inline-flex items-center justify-center rounded-sm bg-black/80 p-0.5">
-          <img src="{% static 'images/glottolog_logo.png' %}"
-               alt="{% translate 'Glottolog' %}"
-               class="{% if size == 'sm' %}h-2.5 w-2.5{% else %}h-3 w-3{% endif %}" />
-        </span>
-      </a>
+    <span class="language-chip inline-flex items-center rounded-md border {% if size == 'sm' %}gap-1 px-2 py-[3px] text-xs{% else %}gap-1.5 px-2.5 py-1 text-xs{% endif %}">
+      <span class="leading-none">{{ language.name }}</span>
+      <span class="language-chip-iso text-[10.5px] tabular-nums leading-none">[{{ language.iso_639_3_code }}]</span>
+      {% if size != 'sm' %}
+        <a href="https://glottolog.org/resource/languoid/iso/{{ language.iso_639_3_code }}"
+           target="_blank" rel="noopener"
+           title="{% translate 'Open in Glottolog' %}"
+           class="inline-flex items-center leading-none">
+          <span class="inline-flex items-center justify-center rounded-sm bg-black/80 p-0.5">
+            <img src="{% static 'images/glottolog_logo.png' %}"
+                 alt="{% translate 'Glottolog' %}"
+                 class="h-3 w-3" />
+          </span>
+        </a>
+      {% endif %}
     </span>
   {% else %}
-    <span class="inline-flex items-center rounded-md font-medium bg-base-200 text-base-content border border-base-300 {% if size == 'sm' %}px-2 py-0.5 text-[11px]{% else %}px-2.5 py-1 text-xs{% endif %}">
-      {{ language.name }}
+    <span class="language-chip inline-flex items-center rounded-md border {% if size == 'sm' %}gap-1 px-2 py-[3px] text-xs{% else %}gap-1.5 px-2.5 py-1 text-xs{% endif %}">
+      <span class="leading-none">{{ language.name }}</span>
     </span>
   {% endif %}
 {% endwith %}
