@@ -1,4 +1,4 @@
-{% load i18n l10n %}
+{% load i18n l10n static %}
 
 <div class="flex items-center justify-between p-4 border-b border-base-300">
   <h3 class="text-lg font-semibold text-base-content">{{ title }}</h3>
@@ -14,10 +14,23 @@
 </div>
 <div class="p-4">
   <div id="map-container" style="height: 400px; border-radius: 0.5rem;"></div>
+  <p class="mt-2 text-xs text-base-content/60">
+    {{ lat }}, {{ lng }}
+  </p>
 </div>
+
+<link rel="stylesheet" href="{% static 'vendor/js/maplibre-gl/maplibre-gl.css' %}" />
+<script src="{% static 'vendor/js/maplibre-gl/maplibre-gl.js' %}"></script>
+<script src="{% static 'vendor/js/pmtiles/pmtiles.js' %}"></script>
 
 <script>
   (function() {
+    if (window.maplibregl && window.pmtiles && !window.__lacPmtilesRegistered) {
+      const protocol = new pmtiles.Protocol();
+      maplibregl.addProtocol('pmtiles', protocol.tile);
+      window.__lacPmtilesRegistered = true;
+    }
+
     const lat = {{ lat|unlocalize }};
     const lng = {{ lng|unlocalize }};
     const container = document.getElementById('map-container');
@@ -26,25 +39,14 @@
       container: container,
       style: '{{ map_style_url|escapejs }}',
       center: [lng, lat],
-      zoom: 12,
-      pitch: 45,
-      bearing: -17.6,
-      antialias: true
+      zoom: 5,
+      maxZoom: 6,
+      canvasContextAttributes: { antialias: true }
     });
 
-    map.addControl(new maplibregl.NavigationControl());
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }));
 
-    // Add terrain for 3D effect
-    map.on('load', function() {
-      map.addSource('terrain', {
-        type: 'raster-dem',
-        url: 'https://demotiles.maplibre.org/terrain-tiles/tiles.json',
-        tileSize: 256
-      });
-      map.setTerrain({ source: 'terrain', exaggeration: 1.5 });
-    });
-
-    new maplibregl.Marker()
+    new maplibregl.Marker({ color: '#005176' })
       .setLngLat([lng, lat])
       .addTo(map);
   })();
