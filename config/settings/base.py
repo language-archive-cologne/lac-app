@@ -361,7 +361,7 @@ EXPLORER_MAP_GLYPHS_URL = env(
 )
 EXPLORER_MAIN_MAP_STYLE_URL = env(
     "EXPLORER_MAIN_MAP_STYLE_URL",
-    default="/static/vendor/maps/lac/natural-earth-c.json",
+    default="/maps/style/natural-earth-c.json",
 )
 EXPLORER_MAIN_MAP_DARK_STYLE_URL = env(
     "EXPLORER_MAIN_MAP_DARK_STYLE_URL",

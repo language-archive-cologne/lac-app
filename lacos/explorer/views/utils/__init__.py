@@ -17,6 +17,7 @@ from .location import (
     get_formatted_location,
     get_location_from_coordinates,
     map_popup_view,
+    map_style_view,
 )
 from .imdi import (
     is_imdi_resource,
@@ -61,6 +62,7 @@ __all__ = [
     "get_formatted_location",
     "get_location_from_coordinates",
     "map_popup_view",
+    "map_style_view",
     # IMDI utilities
     "is_imdi_resource",
     "render_imdi_modal_response",

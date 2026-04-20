@@ -13,7 +13,13 @@ def test_glyphs_url_default_targets_local_minio():
 
 
 def test_main_style_url_default_points_to_lac_natural_earth():
-    assert settings.EXPLORER_MAIN_MAP_STYLE_URL == "/static/vendor/maps/lac/natural-earth-c.json"
+    assert settings.EXPLORER_MAIN_MAP_STYLE_URL == "/maps/style/natural-earth-c.json"
+
+
+def test_main_style_url_matches_explorer_route(settings):
+    """The settings default must match the actual URL exposed by explorer.urls."""
+    from django.urls import reverse
+    assert settings.EXPLORER_MAIN_MAP_STYLE_URL == reverse("explorer:map_style_ne_c")
 
 
 def test_glyphs_url_does_not_contain_trailing_slash():

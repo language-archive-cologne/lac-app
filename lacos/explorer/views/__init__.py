@@ -10,7 +10,7 @@ from .faceted_search import FacetedSearchView
 from .field_search import BundleFieldSearchView, FieldSearchView
 from .imdi import ImdiXmlView
 from .legacy import legacy_bundle_by_handle, legacy_collection_by_handle
-from .utils import map_popup_view
+from .utils import map_popup_view, map_style_view
 
 
 __all__ = [
@@ -39,4 +39,5 @@ __all__ = [
     "ImdiXmlView",
     # Utility views
     "map_popup_view",
+    "map_style_view",
 ]

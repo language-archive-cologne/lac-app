@@ -3,9 +3,11 @@
 import logging
 import re
 from functools import lru_cache
+from pathlib import Path
 
+from django.conf import settings
 from django.core.cache import cache
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseNotFound
 from django.shortcuts import render
 
 
@@ -76,7 +78,6 @@ def map_popup_view(request):
     except ValueError:
         return HttpResponse('<p class="text-error">Invalid coordinates format</p>', status=400)
 
-    from django.conf import settings
     is_dark = request.COOKIES.get('theme') == 'dark' or request.GET.get('theme') == 'dark'
     style_url = (
         settings.EXPLORER_MAIN_MAP_DARK_STYLE_URL
@@ -88,3 +89,23 @@ def map_popup_view(request):
         'title': title,
         'map_style_url': style_url,
     })
+
+
+_STYLE_PATH = Path(settings.APPS_DIR) / "static" / "vendor" / "maps" / "lac" / "natural-earth-c.json"
+
+
+def map_style_view(request):
+    """Serve the LAC Natural Earth style JSON with per-env URLs substituted.
+
+    Placeholders (`__PMTILES_URL__`, `__GLYPHS_URL__`) in the checked-in JSON
+    are replaced from Django settings. This keeps the static file clean while
+    still letting dev (MinIO) and prod (S3) differ only in env vars.
+    """
+    if not _STYLE_PATH.is_file():
+        return HttpResponseNotFound("style missing")
+    body = _STYLE_PATH.read_text(encoding="utf-8")
+    body = body.replace("__PMTILES_URL__", settings.EXPLORER_MAP_PMTILES_URL)
+    body = body.replace("__GLYPHS_URL__", settings.EXPLORER_MAP_GLYPHS_URL)
+    resp = HttpResponse(body, content_type="application/json")
+    resp["Cache-Control"] = "public, max-age=300"
+    return resp
