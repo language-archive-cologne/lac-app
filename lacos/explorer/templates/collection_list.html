@@ -288,12 +288,14 @@
 
       function addCollectionsLayer() {
         const map = state.map;
-        if (!map || map.getSource('collections')) return;
-        map.addSource('collections', {
-          type: 'geojson',
-          data: toGeoJSON(state.markers),
-          promoteId: 'idx',
-        });
+        if (!map || map.getLayer('collections-pins')) return;
+        if (!map.getSource('collections')) {
+          map.addSource('collections', {
+            type: 'geojson',
+            data: toGeoJSON(state.markers),
+            promoteId: 'idx',
+          });
+        }
 
         map.addLayer({
           id: 'collections-pins',
@@ -321,6 +323,8 @@
           },
         });
 
+        if (state.pinsHandlersBound) return;
+        state.pinsHandlersBound = true;
         map.on('click', 'collections-pins', (e) => {
           if (!e.features || !e.features.length) return;
           const idx = e.features[0].properties.idx;
@@ -392,8 +396,13 @@
             if (!m) return;
             const dark = document.documentElement.getAttribute('data-theme') === 'dark';
             const next = dark ? GLOBE_DARK_STYLE_URL : GLOBE_STYLE_URL;
-            m.setStyle(next);
+            // Force a full rebuild (diff:false) so the collections source/layer
+            // state is fully reset; re-add them cleanly on style.load.
+            state.loaded = false;
+            m.setStyle(next, { diff: false });
             m.once('style.load', () => {
+              if (m.getLayer('collections-pins')) m.removeLayer('collections-pins');
+              if (m.getSource('collections')) m.removeSource('collections');
               state.loaded = true;
               addCollectionsLayer();
               applyMatchStyling();
