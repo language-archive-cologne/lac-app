@@ -20,6 +20,16 @@
     {% if collection_list %}
       <link rel="stylesheet" href="{% static 'vendor/js/maplibre-gl/maplibre-gl.css' %}" />
       <script src="{% static 'vendor/js/maplibre-gl/maplibre-gl.js' %}"></script>
+      <script src="{% static 'vendor/js/pmtiles/pmtiles.js' %}"></script>
+      <script>
+        // Register pmtiles:// once. Re-registering is a no-op in pmtiles.js,
+        // but guarding still avoids noise on hot reloads.
+        if (window.maplibregl && window.pmtiles && !window.__lacPmtilesRegistered) {
+          const protocol = new pmtiles.Protocol();
+          maplibregl.addProtocol('pmtiles', protocol.tile);
+          window.__lacPmtilesRegistered = true;
+        }
+      </script>
       <style>
         .collections-top-row { display: grid; grid-template-columns: 1fr; gap: 1rem; align-items: stretch; }
         @media (min-width: 1024px) {
