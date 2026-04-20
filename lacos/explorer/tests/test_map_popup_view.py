@@ -41,3 +41,15 @@ def test_map_popup_view_passes_lac_style_url(client, settings):
     # escaped as \u002D.  Decode the body with unicode_escape to restore them.
     body = response.content.decode("unicode_escape", errors="replace")
     assert settings.EXPLORER_MAIN_MAP_STYLE_URL in body
+
+
+@pytest.mark.django_db
+def test_map_popup_view_bootstraps_local_map_dependencies(client):
+    url = reverse("explorer:map_popup")
+    response = client.get(url, {"geo": "50.9254927,6.9328194", "title": "x"})
+    body = response.content.decode()
+
+    assert "function ensureScript(src, isReady, key)" in body
+    assert "vendor/js/maplibre-gl/maplibre-gl.js" in body
+    assert "vendor/js/pmtiles/pmtiles.js" in body
+    assert "document.head.appendChild(script);" in body
