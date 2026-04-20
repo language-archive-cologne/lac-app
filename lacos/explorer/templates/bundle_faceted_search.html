@@ -62,18 +62,7 @@
     })();
   </script>
 
-  <!-- Navigation -->
-  <div class="flex flex-wrap items-center gap-x-4 gap-y-2 mb-6">
-    <div class="join">
-      <button type="submit" form="faceted-search-form" formaction="{% url 'faceted_search' %}" class="btn btn-sm join-item btn-outline btn-primary">{% translate "Collections" %}</button>
-      <span class="btn btn-sm join-item btn-primary">{% translate "Bundles" %}</span>
-    </div>
-    <span class="text-base-content/20 hidden sm:inline">|</span>
-    <div class="join">
-      <span class="btn btn-sm join-item btn-primary">{% translate "Faceted Search" %}</span>
-      <a href="{% url 'bundle_field_search' %}" class="btn btn-sm join-item btn-outline btn-primary">{% translate "Field Search" %}</a>
-    </div>
-  </div>
+  {% include "explorer/partials/search_mode_toggle.html" with active_scope="bundles" active_mode="faceted" form_id="faceted-search-form" %}
 
   <!-- Search bar -->
   <form id="faceted-search-form" method="get" action="{% url 'bundle_faceted_search' %}" class="mb-6">
