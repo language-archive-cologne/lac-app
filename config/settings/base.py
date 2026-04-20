@@ -348,9 +348,20 @@ RESOURCE_PATH_PATTERN = env("RESOURCE_PATH_PATTERN")
 
 # Explorer Map Configuration
 # ------------------------------------------------------------------------------
+# Maps use self-hosted Natural Earth pmtiles + Noto Sans PBF glyphs from the
+# `lacos-maps` bucket (MinIO locally, self-hosted S3 in prod). See
+# `scripts/maps/README.md` for the offline build + upload pipeline.
+EXPLORER_MAP_PMTILES_URL = env(
+    "EXPLORER_MAP_PMTILES_URL",
+    default="http://localhost:9100/lacos-maps/ne.pmtiles",
+)
+EXPLORER_MAP_GLYPHS_URL = env(
+    "EXPLORER_MAP_GLYPHS_URL",
+    default="http://localhost:9100/lacos-maps/glyphs",
+)
 EXPLORER_MAIN_MAP_STYLE_URL = env(
     "EXPLORER_MAIN_MAP_STYLE_URL",
-    default="/static/vendor/maps/openfreemap/bright.json",
+    default="/maps/style/natural-earth-c.json",
 )
 EXPLORER_MAIN_MAP_DARK_STYLE_URL = env(
     "EXPLORER_MAIN_MAP_DARK_STYLE_URL",

@@ -2,7 +2,7 @@
 <div id="collection-language-shell">
   {% if is_htmx %}
     <!-- OOB updates for filter state and language index -->
-    <div id="language-filter-state" class="hidden" data-language-filter="{{ language_filter|default:''|escapejs }}" hx-swap-oob="true"></div>
+    <div id="language-filter-state" class="hidden" data-language-filter="{{ language_filter|default:'' }}" hx-swap-oob="true"></div>
     <div id="language-index-container" hx-swap-oob="true">
       {% include "explorer/partials/language_focus.html" %}
     </div>

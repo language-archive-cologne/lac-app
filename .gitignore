@@ -313,3 +313,6 @@ docker-compose.dev.local.yml
 
 # Generated Tailwind CSS (rebuild with: npm run build)
 theme/static/css/output.css
+
+# Map build artifacts (uploaded to S3, not tracked in git)
+/build/maps/

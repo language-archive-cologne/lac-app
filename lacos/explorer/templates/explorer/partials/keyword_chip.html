@@ -1,0 +1,5 @@
+{% with size=size|default:"md" %}
+<span class="inline-flex items-center rounded-md font-medium bg-base-200 text-base-content/80 border border-base-300 {% if size == 'sm' %}px-2 py-0.5 text-[11px]{% else %}px-2.5 py-1 text-xs{% endif %}">
+  {{ value }}
+</span>
+{% endwith %}

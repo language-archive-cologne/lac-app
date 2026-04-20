@@ -64,9 +64,7 @@
           {% endif %}
           {% if gi and gi.object_languages.all %}
             {% for language in gi.object_languages.all %}
-              <span class="inline-flex items-center gap-0.5 rounded-full border border-base-300 bg-base-200 px-1.5 py-0.5 text-xs text-base-content/70">
-                {{ language.name }}{% if language.iso_639_3_code %} <span class="text-base-content/40">[{{ language.iso_639_3_code }}]</span>{% endif %}
-              </span>
+              {% include "explorer/partials/language_chip.html" with language=language size="sm" %}
             {% endfor %}
           {% endif %}
         </div>
@@ -252,10 +250,7 @@
               {% if gi and gi.object_languages.all %}
                 <div class="flex flex-wrap gap-1.5">
                   {% for language in gi.object_languages.all %}
-                    <span class="inline-flex items-center gap-1 rounded-full border border-base-300 bg-base-200 px-2.5 py-0.5 text-xs font-medium text-base-content/70">
-                      {{ language.name }}
-                      {% if language.iso_639_3_code %}<span class="text-base-content/50">[{{ language.iso_639_3_code }}]</span>{% endif %}
-                    </span>
+                    {% include "explorer/partials/language_chip.html" with language=language size="sm" %}
                   {% endfor %}
                 </div>
               {% endif %}

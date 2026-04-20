@@ -1,0 +1,104 @@
+{
+  "version": 8,
+  "name": "LAC Natural Earth C",
+  "sources": {
+    "ne": {
+      "type": "vector",
+      "url": "pmtiles://__PMTILES_URL__",
+      "attribution": "© Natural Earth"
+    }
+  },
+  "glyphs": "__GLYPHS_URL__/{fontstack}/{range}.pbf",
+  "sprite": "",
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": { "background-color": "#e8ecef" }
+    },
+    {
+      "id": "ocean",
+      "type": "fill",
+      "source": "ne",
+      "source-layer": "ocean",
+      "maxzoom": 4,
+      "paint": { "fill-color": "#e8ecef" }
+    },
+    {
+      "id": "ocean_hires",
+      "type": "fill",
+      "source": "ne",
+      "source-layer": "ocean",
+      "minzoom": 4,
+      "paint": { "fill-color": "#e8ecef" }
+    },
+    {
+      "id": "lakes",
+      "type": "fill",
+      "source": "ne",
+      "source-layer": "lakes",
+      "minzoom": 2,
+      "paint": { "fill-color": "#e8ecef", "fill-outline-color": "#cdd4da" }
+    },
+    {
+      "id": "countries",
+      "type": "fill",
+      "source": "ne",
+      "source-layer": "countries",
+      "paint": { "fill-color": "#fbfbfa" }
+    },
+    {
+      "id": "boundary_land",
+      "type": "line",
+      "source": "ne",
+      "source-layer": "boundary_land",
+      "paint": {
+        "line-color": "#b4bcc4",
+        "line-opacity": ["interpolate", ["linear"], ["zoom"], 0, 0.75, 6, 0.85],
+        "line-width": ["interpolate", ["linear"], ["zoom"], 0, 0.4, 4, 0.8, 6, 1.2]
+      }
+    },
+    {
+      "id": "coastline",
+      "type": "line",
+      "source": "ne",
+      "source-layer": "coastline",
+      "minzoom": 3,
+      "paint": {
+        "line-color": "#b4bcc4",
+        "line-opacity": 0.8,
+        "line-width": 0.5
+      }
+    },
+    {
+      "id": "country_label",
+      "type": "symbol",
+      "source": "ne",
+      "source-layer": "countries",
+      "minzoom": 2,
+      "filter": [
+        "step", ["zoom"],
+        [">", ["get", "POP_EST"], 50000000],
+        3, [">", ["get", "POP_EST"], 20000000],
+        4, [">", ["get", "POP_EST"], 5000000],
+        5, true
+      ],
+      "layout": {
+        "text-field": ["coalesce", ["get", "NAME_EN"], ["get", "NAME"]],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": 12,
+        "text-letter-spacing": 0.04,
+        "text-max-width": 8,
+        "text-anchor": "center",
+        "text-allow-overlap": false,
+        "text-ignore-placement": false,
+        "symbol-sort-key": ["-", 0, ["to-number", ["coalesce", ["get", "POP_EST"], 0]]]
+      },
+      "paint": {
+        "text-color": "#3f4853",
+        "text-halo-color": "#fbfbfa",
+        "text-halo-width": 1.2
+      }
+    }
+  ]
+}

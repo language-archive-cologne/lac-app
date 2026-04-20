@@ -5,74 +5,121 @@
 
 {% block title %}{% translate "Collections" %} - {{ block.super }}{% endblock title %}
 
+{% block page_title %}{% endblock page_title %}
+
 {% block explorer_content %}
   {% include "explorer/partials/search_bar.html" %}
 
-  <!-- Search results (shown when searching, hidden otherwise) -->
   <div id="collection-search-results" class="{% if not search_query %}hidden{% endif %} space-y-8 mb-8">
     {% if search_query %}
       {% include "explorer/partials/collection_search_results_content.html" %}
     {% endif %}
   </div>
 
-  <!-- Main collections view (hidden when searching) -->
   <div id="collections-main-view" class="{% if search_query %}hidden{% endif %}">
     {% if collection_list %}
-      <!-- Map styles (outside shell so they persist) -->
+      <link rel="stylesheet" href="{% static 'vendor/js/maplibre-gl/maplibre-gl.css' %}" />
+      <script src="{% static 'vendor/js/maplibre-gl/maplibre-gl.js' %}"></script>
+      <script src="{% static 'vendor/js/pmtiles/pmtiles.js' %}"></script>
+      <script>
+        // Register pmtiles:// once. Re-registering is a no-op in pmtiles.js,
+        // but guarding still avoids noise on hot reloads.
+        if (window.maplibregl && window.pmtiles && !window.__lacPmtilesRegistered) {
+          const protocol = new pmtiles.Protocol();
+          maplibregl.addProtocol('pmtiles', protocol.tile);
+          window.__lacPmtilesRegistered = true;
+        }
+      </script>
       <style>
-        #collections-map .collection-marker {
-          width: 24px;
-          height: 36px;
-          color: #1d4ed8;
-          filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
-          transition: color 150ms ease, opacity 150ms ease;
-        }
-        #collections-map .collection-marker--match {
-          color: #f97316;
-          opacity: 1;
-        }
-        #collections-map .collection-marker--dim {
-          color: #1d4ed8;
-          opacity: 0.35;
-        }
-        #collections-map .collection-marker svg {
-          display: block;
-          width: 100%;
-          height: 100%;
-        }
-        /* Grid layout for language index + map */
-        .collections-top-row {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 1rem;
-        }
+        .collections-top-row { display: grid; grid-template-columns: 1fr; gap: 1rem; align-items: stretch; }
         @media (min-width: 1024px) {
           .collections-top-row {
-            grid-template-columns: minmax(280px, 320px) 1fr;
+            grid-template-columns: minmax(320px, 360px) 1fr;
+            /* Fix the row height so language list and map always match. */
+            grid-auto-rows: 360px;
           }
+          .collections-top-row > * { min-height: 0; overflow: hidden; }
         }
+
+        .lac-map-col { position: relative; min-height: 320px; }
+        #collections-map {
+          position: absolute; inset: 0;
+          border-radius: 0.75rem; overflow: hidden; background: #dfe7ec;
+        }
+        #collections-map .maplibregl-canvas { cursor: grab; }
+        #collections-map .maplibregl-canvas:active { cursor: grabbing; }
+
+        .lac-recenter-btn {
+          position: absolute; bottom: 14px; right: 14px; z-index: 2;
+          background: #fff; border: 1px solid rgba(0,0,0,.08); border-radius: 8px;
+          padding: 7px 10px; display: inline-flex; align-items: center; gap: 6px;
+          font-size: 12px; font-weight: 600; color: rgba(31,41,55,.8); cursor: pointer; font-family: inherit;
+          box-shadow: 0 2px 6px rgba(0,42,61,.12);
+        }
+        .lac-recenter-btn:hover { border-color: #005176; color: #005176; }
+
+        .lac-legend {
+          position: absolute; top: 10px; right: 10px; z-index: 2;
+          background: rgba(255,255,255,.97); border: 1px solid rgba(0,0,0,.08);
+          border-radius: 10px; padding: 6px 10px; font-size: 11px;
+          box-shadow: 0 2px 8px rgba(0,42,61,.08); color: #1f2937;
+          display: flex; align-items: center; gap: 12px;
+        }
+        .lac-legend-row { display: inline-flex; align-items: center; gap: 6px; color: rgba(31,41,55,.85); }
+        .lac-legend-swatch { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.1); flex-shrink: 0; }
+
+        /* Collection popup — override MapLibre defaults to match design */
+        .lac-collection-popup .maplibregl-popup-content {
+          background: #fff;
+          border: 1px solid rgba(0,0,0,.08);
+          border-radius: 10px;
+          padding: 14px 16px 12px;
+          box-shadow: 0 6px 20px rgba(0,42,61,.18);
+          min-width: 240px;
+          max-width: 280px;
+          font-family: inherit;
+        }
+        .lac-collection-popup .maplibregl-popup-close-button {
+          right: 4px; top: 4px;
+          font-size: 18px; line-height: 1; color: rgba(31,41,55,.4);
+          padding: 4px 8px; background: transparent; border: 0;
+        }
+        .lac-collection-popup .maplibregl-popup-close-button:hover {
+          color: #1f2937; background: rgba(0,0,0,.04);
+        }
+        .lac-collection-popup .maplibregl-popup-tip { border-top-color: rgba(0,0,0,.08); }
+        .lac-collection-popup.maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: #fff; }
+        .lac-popup-body { font-size: 13px; color: #1f2937; line-height: 1.45; }
+        .lac-popup-body a.title {
+          display: block; font-size: 14px; font-weight: 600; color: #1f2937;
+          margin: 0 18px 4px 0; letter-spacing: -0.005em; text-decoration: none;
+        }
+        .lac-popup-body a.title:hover { color: #005176; text-decoration: underline; }
+        .lac-popup-body .meta { font-size: 11px; color: rgba(31,41,55,.6); display: flex; flex-wrap: wrap; gap: 4px 6px; }
+        .lac-popup-body .meta .dot { color: rgba(31,41,55,.3); }
+        .lac-popup-body .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+        .lac-popup-body .chip {
+          display: inline-flex; align-items: center; gap: 3px;
+          padding: 2px 7px; border-radius: 6px; font-size: 10.5px; font-weight: 500;
+          background: #f2f2f2; color: #1f2937; border: 1px solid #e5e6e6;
+        }
+        .lac-popup-body .chip .iso { color: rgba(31,41,55,.55); font-size: 10px; }
       </style>
+
       <script id="collections-markers" type="application/json">{{ map_markers_json|safe }}</script>
+      <div id="language-filter-state" class="hidden" data-language-filter="{{ language_filter|default:'' }}"></div>
 
-      <!-- Filter state for map JS (updated via OOB on HTMX requests) -->
-      <div id="language-filter-state" class="hidden" data-language-filter="{{ language_filter|default:''|escapejs }}"></div>
-
-      <!-- Top row: Language Index + Map -->
       <div class="collections-top-row mb-4">
-        <!-- Language Index (updated via OOB on HTMX requests) -->
         <div id="language-index-container">
           {% include "explorer/partials/language_focus.html" %}
         </div>
 
-        <!-- Collections Map (outside shell - never re-renders on language filter) -->
-        <div class="hidden lg:block rounded-xl shadow-sm border border-base-300 overflow-hidden relative min-h-[300px]">
-          <div id="collections-map" class="h-full w-full" style="min-height: 300px;"></div>
-          <button id="recenter-btn"
-                  class="absolute top-2 right-12 z-10 bg-base-100 hover:bg-base-200 border border-base-300 rounded-md p-1.5 shadow-sm transition-colors"
-                  title="{% translate 'Fit all markers' %}">
-            <svg class="w-5 h-5 text-base-content/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>
-            </svg>
+        <div class="lac-map-col hidden lg:block rounded-xl shadow-sm border border-base-300 overflow-hidden">
+          <div id="collections-map"></div>
+          <div class="lac-legend" id="lac-legend"><div id="lac-legend-body"></div></div>
+          <button type="button" class="lac-recenter-btn" id="recenter-btn" title="{% translate 'Fit all markers' %}">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V3h4M21 7V3h-4M3 17v4h4M21 17v4h-4"/></svg>
+            {% translate "Fit all" %}
           </button>
         </div>
       </div>
@@ -83,19 +130,11 @@
     {% endif %}
   </div>
 
-  <!-- Preload MapLibre for map popups -->
-  <link rel="stylesheet" href="{% static 'vendor/js/maplibre-gl/maplibre-gl.css' %}" />
-  <script src="{% static 'vendor/js/maplibre-gl/maplibre-gl.js' %}"></script>
-
-  <!-- Map Modal -->
+  <!-- Modal reused by the per-row "Show on map" button on detail/bundle pages -->
   <div id="map-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
-    <div
-      class="absolute inset-0 bg-neutral/60"
-      onclick="document.getElementById('map-modal').classList.add('hidden'); document.body.classList.remove('overflow-hidden');"
-    ></div>
-    <div id="map-modal-content" class="relative w-full max-w-lg bg-base-100 rounded-xl shadow-xl">
-      <!-- Content loaded via HTMX -->
-    </div>
+    <div class="absolute inset-0 bg-neutral/60"
+         onclick="document.getElementById('map-modal').classList.add('hidden'); document.body.classList.remove('overflow-hidden');"></div>
+    <div id="map-modal-content" class="relative w-full max-w-lg bg-base-100 rounded-xl shadow-xl"></div>
   </div>
 
   <script>
@@ -107,154 +146,292 @@
       }
     });
 
-    window.collectionsMap = null;
-    window.collectionMarkers = [];
-    window.currentMainMapStyle = null;
-    const mainMapStyleUrl = '{{ main_map_style_url|escapejs }}';
-    const mainMapDarkStyleUrl = '{{ main_map_dark_style_url|escapejs }}';
+    (function() {
+      const STYLE_URL = '{{ main_map_style_url|escapejs }}';
+      const DARK_STYLE_URL = '{{ main_map_dark_style_url|escapejs }}';
+      const GLOBE_STYLE_URL = STYLE_URL + (STYLE_URL.includes('?') ? '&' : '?') + 'projection=globe';
+      const GLOBE_DARK_STYLE_URL = DARK_STYLE_URL + (DARK_STYLE_URL.includes('?') ? '&' : '?') + 'projection=globe';
 
-    function getCurrentMainMapStyle() {
-      const isDarkTheme = document.documentElement.getAttribute('data-theme') === 'dark';
-      return isDarkTheme ? mainMapDarkStyleUrl : mainMapStyleUrl;
-    }
+      const state = {
+        map: null,
+        markers: [],
+        activeLang: '',
+        loaded: false,
+      };
 
-    if (!window.collectionsMapThemeObserver) {
-      window.collectionsMapThemeObserver = new MutationObserver(function() {
-        const map = window.collectionsMap;
-        if (!map) return;
+      function $(id) { return document.getElementById(id); }
 
-        const nextStyle = getCurrentMainMapStyle();
-        if (!nextStyle || nextStyle === window.currentMainMapStyle) return;
-
-        window.currentMainMapStyle = nextStyle;
-        map.setStyle(nextStyle);
-      });
-      window.collectionsMapThemeObserver.observe(document.documentElement, {
-        attributes: true,
-        attributeFilter: ['data-theme'],
-      });
-    }
-
-    window.fitCollectionsMapToAllMarkers = function fitCollectionsMapToAllMarkers() {
-      const map = window.collectionsMap;
-      if (!map || !window.collectionMarkers.length) return;
-
-      const bounds = new maplibregl.LngLatBounds();
-      window.collectionMarkers.forEach(function(entry) {
-        bounds.extend([entry.data.lng, entry.data.lat]);
-      });
-
-      if (!bounds.isEmpty()) {
-        map.fitBounds(bounds, { padding: 60, maxZoom: 4, duration: 500 });
+      function loadMarkers() {
+        const el = $('collections-markers');
+        if (!el) return [];
+        try { return JSON.parse(el.textContent.trim() || '[]'); } catch { return []; }
       }
-    };
 
-    window.initCollectionsMap = function initCollectionsMap() {
-      const container = document.getElementById('collections-map');
-      if (!container || container.dataset.mapInitialized === 'true') return;
+      function currentActiveLang() {
+        const s = $('language-filter-state');
+        return s ? (s.dataset.languageFilter || '').toLowerCase() : '';
+      }
 
-      const markersScript = document.getElementById('collections-markers');
-      const rawMarkers = markersScript ? markersScript.textContent.trim() : '[]';
-      const markers = rawMarkers ? JSON.parse(rawMarkers) : [];
-      if (!markers.length) return;
-
-      const initialStyle = getCurrentMainMapStyle();
-      window.currentMainMapStyle = initialStyle;
-
-      const map = new maplibregl.Map({
-        container: 'collections-map',
-        style: initialStyle,
-        center: [20, 20],
-        zoom: 0.7,
-        renderWorldCopies: false,
-        attributionControl: false
-      });
-
-      map.addControl(new maplibregl.NavigationControl());
-
-      window.collectionsMap = map;
-      window.collectionMarkers = markers.map(function(m) {
-        const popup = new maplibregl.Popup({ offset: 25 })
-          .setHTML('<a href="' + m.url + '" class="font-medium text-base-content hover:underline">' + m.title + '</a>');
-
-        const element = document.createElement('div');
-        element.className = 'collection-marker';
-        element.innerHTML = '<svg viewBox="0 0 24 36" aria-hidden="true" role="presentation" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C6.477 0 2 4.477 2 10c0 7.466 10 26 10 26s10-18.534 10-26C22 4.477 17.523 0 12 0zm0 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10z" fill="currentColor"/></svg>';
-
-        const marker = new maplibregl.Marker({ element: element, anchor: 'bottom' })
-          .setLngLat([m.lng, m.lat])
-          .setPopup(popup)
-          .addTo(map);
-
+      function toGeoJSON(markers) {
         return {
-          marker: marker,
-          data: m,
+          type: 'FeatureCollection',
+          features: markers.map((m, i) => ({
+            type: 'Feature',
+            id: i,
+            geometry: { type: 'Point', coordinates: [m.lng, m.lat] },
+            properties: {
+              idx: i,
+              title: m.title || '',
+              url: m.url || '',
+              country: m.country || '',
+              bundles: m.bundles || 0,
+              language_keys: (m.language_keys || []).join('|'),
+            },
+          })),
         };
-      });
+      }
 
-      container.dataset.mapInitialized = 'true';
-      window.updateCollectionsMap();
+      function isMatchMarker(m) {
+        if (!state.activeLang) return false;
+        return (m.language_keys || []).includes(state.activeLang);
+      }
 
-      document.getElementById('recenter-btn').addEventListener('click', function() {
-        window.fitCollectionsMapToAllMarkers();
-      });
-    };
-
-    window.updateCollectionsMap = function updateCollectionsMap() {
-      const map = window.collectionsMap;
-      if (!map || !window.collectionMarkers.length) return;
-
-      const state = document.getElementById('language-filter-state');
-      const activeLanguage = state ? state.dataset.languageFilter : '';
-      const activeKey = activeLanguage ? activeLanguage.toLowerCase() : '';
-      const bounds = new maplibregl.LngLatBounds();
-      const matchBounds = new maplibregl.LngLatBounds();
-      let hasMatch = false;
-
-      window.collectionMarkers.forEach(function(entry) {
-        const marker = entry.marker;
-        const data = entry.data;
-        const keys = data.language_keys || [];
-        const element = marker.getElement();
-        const isMatch = activeKey && keys.includes(activeKey);
-
-        element.classList.toggle('collection-marker--match', Boolean(activeKey && isMatch));
-        element.classList.toggle('collection-marker--dim', Boolean(activeKey && !isMatch));
-
-        bounds.extend([data.lng, data.lat]);
-        if (isMatch) {
-          matchBounds.extend([data.lng, data.lat]);
-          hasMatch = true;
+      function renderLegend() {
+        const body = $('lac-legend-body');
+        if (!body) return;
+        let html = '<span class="lac-legend-row"><span class="lac-legend-swatch" style="background:#005176"></span>{% translate "Collection" %}</span>';
+        if (state.activeLang) {
+          html += '<span class="lac-legend-row"><span class="lac-legend-swatch" style="background:#ea564f"></span>{% translate "Match" %}</span>';
         }
+        body.innerHTML = html;
+      }
+
+      function fitAll(map) {
+        if (!state.markers.length) return;
+        const bounds = new maplibregl.LngLatBounds();
+        state.markers.forEach(m => bounds.extend([m.lng, m.lat]));
+        if (!bounds.isEmpty()) {
+          map.fitBounds(bounds, { padding: 80, maxZoom: 3.2, duration: 900 });
+        }
+      }
+
+      function applyMatchStyling() {
+        const map = state.map;
+        if (!map || !state.loaded) return;
+        state.markers.forEach((m, i) => {
+          map.setFeatureState(
+            { source: 'collections', id: i },
+            { match: isMatchMarker(m), active: !!state.activeLang }
+          );
+        });
+      }
+
+      function focusMatches() {
+        const map = state.map;
+        if (!map || !state.markers.length) return;
+        if (!state.activeLang) { fitAll(map); return; }
+        const matches = state.markers.filter(isMatchMarker);
+        if (matches.length === 0) { fitAll(map); return; }
+        if (matches.length === 1) {
+          map.flyTo({ center: [matches[0].lng, matches[0].lat], zoom: 4, duration: 1100 });
+          return;
+        }
+        const bounds = new maplibregl.LngLatBounds();
+        matches.forEach(m => bounds.extend([m.lng, m.lat]));
+        map.fitBounds(bounds, { padding: 100, maxZoom: 4, duration: 1100 });
+      }
+
+      function applyFilter() {
+        state.activeLang = currentActiveLang();
+        applyMatchStyling();
+        renderLegend();
+        focusMatches();
+      }
+
+      function escHtml(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+          ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      }
+
+      function openPopup(marker, lngLat) {
+        const title = escHtml(marker.title);
+        const url = escHtml(marker.url);
+        const metaParts = [];
+        if (marker.country) metaParts.push(escHtml(marker.country));
+        if (marker.bundles) {
+          const n = marker.bundles;
+          metaParts.push(n === 1 ? `${n} bundle` : `${n} bundles`);
+        }
+        const meta = metaParts.length
+          ? `<div class="meta">${metaParts.map((p, i) => (i > 0 ? '<span class="dot">·</span>' : '') + p).join(' ')}</div>`
+          : '';
+        const chips = (marker.languages || []).slice(0, 5).map(l =>
+          `<span class="chip">${escHtml(l.display_name || l.name || '')}${l.iso ? `<span class="iso">[${escHtml(l.iso)}]</span>` : ''}</span>`
+        ).join('');
+        const chipsHtml = chips ? `<div class="chips">${chips}</div>` : '';
+        const html =
+          '<div class="lac-popup-body">' +
+          `<a href="${url}" class="title">${title}</a>` +
+          meta +
+          chipsHtml +
+          '</div>';
+        new maplibregl.Popup({
+          offset: 14,
+          closeButton: true,
+          className: 'lac-collection-popup',
+          maxWidth: '300px',
+        })
+          .setLngLat(lngLat)
+          .setHTML(html)
+          .addTo(state.map);
+      }
+
+      function addCollectionsLayer() {
+        const map = state.map;
+        if (!map || map.getSource('collections')) return;
+        map.addSource('collections', {
+          type: 'geojson',
+          data: toGeoJSON(state.markers),
+          promoteId: 'idx',
+        });
+
+        map.addLayer({
+          id: 'collections-pins',
+          type: 'circle',
+          source: 'collections',
+          paint: {
+            'circle-radius': [
+              'interpolate', ['linear'], ['zoom'],
+              1, ['case', ['boolean', ['feature-state', 'match'], false], 7, 4.5],
+              6, ['case', ['boolean', ['feature-state', 'match'], false], 11, 7],
+            ],
+            'circle-color': [
+              'case',
+              ['boolean', ['feature-state', 'match'], false], '#ea564f',
+              '#005176',
+            ],
+            'circle-stroke-color': '#ffffff',
+            'circle-stroke-width': 1.8,
+            'circle-opacity': [
+              'case',
+              ['boolean', ['feature-state', 'active'], false],
+              ['case', ['boolean', ['feature-state', 'match'], false], 1, 0.32],
+              1,
+            ],
+          },
+        });
+
+        map.on('click', 'collections-pins', (e) => {
+          if (!e.features || !e.features.length) return;
+          const idx = e.features[0].properties.idx;
+          const marker = state.markers[idx];
+          if (!marker) return;
+          openPopup(marker, e.lngLat);
+        });
+        map.on('mouseenter', 'collections-pins', () => { map.getCanvas().style.cursor = 'pointer'; });
+        map.on('mouseleave', 'collections-pins', () => { map.getCanvas().style.cursor = ''; });
+      }
+
+      function markerIndexForPk(pk) {
+        if (!pk) return -1;
+        return state.markers.findIndex(m => (m.url || '').includes(pk));
+      }
+
+      function focusCollectionOnMap(pk) {
+        const idx = markerIndexForPk(pk);
+        if (idx < 0) return false;
+        const m = state.markers[idx];
+        state.map.flyTo({ center: [m.lng, m.lat], zoom: 4.5, duration: 900 });
+        state.map.once('moveend', () => openPopup(m, [m.lng, m.lat]));
+        return true;
+      }
+
+      function initCollectionsMap() {
+        const container = $('collections-map');
+        if (!container || container.dataset.mapInitialized === 'true') return;
+        state.markers = loadMarkers();
+        if (!state.markers.length) return;
+        state.activeLang = currentActiveLang();
+        renderLegend();
+
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        // Default view rotates the globe toward Indonesia — a rich cluster
+        // of the archive's languages, good storytelling at first paint.
+        const map = new maplibregl.Map({
+          container: container,
+          style: isDark ? GLOBE_DARK_STYLE_URL : GLOBE_STYLE_URL,
+          center: [115, 5],
+          zoom: 1.6,
+          attributionControl: false,
+          // Disable the default 300ms symbol crossfade — labels pop in/out
+          // cleanly at filter thresholds instead of dragging through a fade.
+          fadeDuration: 0,
+        });
+
+        map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-left');
+
+        map.on('load', () => {
+          state.loaded = true;
+          addCollectionsLayer();
+          applyMatchStyling();
+          // Only fly to matches if a filter is already active; otherwise keep the
+          // hand-chosen South Asia framing so users see the globe shape at landing.
+          if (state.activeLang) focusMatches();
+        });
+
+        state.map = map;
+        window.__lacMap = map;
+        container.dataset.mapInitialized = 'true';
+
+        const re = $('recenter-btn');
+        if (re) re.onclick = () => { focusMatches(); };
+
+        if (!window.__lacGlobeThemeObserver) {
+          window.__lacGlobeThemeObserver = new MutationObserver(() => {
+            const m = state.map;
+            if (!m) return;
+            const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+            const next = dark ? GLOBE_DARK_STYLE_URL : GLOBE_STYLE_URL;
+            m.setStyle(next);
+            m.once('style.load', () => {
+              state.loaded = true;
+              addCollectionsLayer();
+              applyMatchStyling();
+            });
+          });
+          window.__lacGlobeThemeObserver.observe(document.documentElement, {
+            attributes: true, attributeFilter: ['data-theme']
+          });
+        }
+      }
+
+      window.updateCollectionsMap = function updateCollectionsMap() { applyFilter(); };
+
+      function refreshCollectionsMap() {
+        if (typeof window.updateCollectionsMap === 'function') window.updateCollectionsMap();
+      }
+
+      function markerIdxFromRow(tr) { return markerIndexForPk(tr.dataset.collectionPk); }
+
+      document.body.addEventListener('click', function(event) {
+        const tr = event.target.closest('tr[data-collection-pk]');
+        if (!tr) return;
+        if (event.target.closest('a, button, input, label')) return;
+        if (!state.markers.length) return;
+        focusCollectionOnMap(tr.dataset.collectionPk);
       });
 
-      if (activeKey && hasMatch) {
-        // Filter active with matches - zoom to matching markers
-        map.fitBounds(matchBounds, { padding: 60, maxZoom: 4 });
-      } else if (!activeKey) {
-        // No filter - always fit to all markers
-        window.fitCollectionsMapToAllMarkers();
+      document.body.addEventListener('htmx:afterSettle', function(event) {
+        const target = event.detail && event.detail.target ? event.detail.target : event.target;
+        if (target && target.id === 'collection-language-shell') refreshCollectionsMap();
+      });
+      document.body.addEventListener('htmx:historyRestore', refreshCollectionsMap);
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initCollectionsMap);
+      } else {
+        initCollectionsMap();
       }
-    };
-
-    window.initCollectionsMap();
-
-    function refreshCollectionsMap() {
-      // Map is outside shell, just update pin styles based on new filter state
-      if (typeof window.updateCollectionsMap === 'function') {
-        window.updateCollectionsMap();
-      }
-    }
-
-    document.body.addEventListener('htmx:afterSettle', function(event) {
-      const target = event.detail && event.detail.target ? event.detail.target : event.target;
-      if (target && target.id === 'collection-language-shell') {
-        refreshCollectionsMap();
-      }
-    });
-
-    document.body.addEventListener('htmx:historyRestore', function() {
-      refreshCollectionsMap();
-    });
+    })();
   </script>
 {% endblock explorer_content %}

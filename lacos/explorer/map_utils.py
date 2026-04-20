@@ -2,33 +2,54 @@
 import json
 
 from django.core.cache import cache
+from django.db.models import Count, Prefetch
 from django.urls import reverse
 
 
-MAP_MARKERS_CACHE_KEY = "explorer:map_markers:v2"
+MAP_MARKERS_CACHE_KEY = "explorer:map_markers:v4"
 MAP_MARKERS_CACHE_TIMEOUT = 86400  # 24 hours (invalidated on collection changes)
 
 
-def get_collection_map_markers(collections):
-    """Extract map markers from a list of collections.
+def _all_map_collections():
+    """Queryset of every collection with its map-relevant data prefetched.
 
-    Expects collections to have geo_location already set by the view.
-    Returns a JSON string of markers with lat, lng, title, and url.
-    Uses caching to avoid regenerating markers on every request.
+    The map always shows all collections regardless of the caller's language
+    or pagination filter, so the client can highlight/dim and zoom without
+    losing pins. Exposure policy is intentionally not applied here — the
+    map is a public overview and cache is shared across users.
     """
-    # Try to get cached markers
+    from lacos.blam.models import Collection
+    from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo
+
+    return Collection.objects.prefetch_related(
+        Prefetch(
+            'general_info',
+            queryset=CollectionGeneralInfo.objects.select_related('location').prefetch_related(
+                'object_languages',
+            ),
+            to_attr='prefetched_general_info',
+        ),
+    ).annotate(bundles_count=Count('bundle_collection', distinct=True))
+
+
+def get_collection_map_markers(collections=None):
+    """Return JSON markers for every collection with a geo_location.
+
+    `collections` is accepted for backwards compatibility but ignored; markers
+    are always built from the full queryset so the map can show all pins and
+    filter client-side. Result is cached under a single key.
+    """
     cached_markers = cache.get(MAP_MARKERS_CACHE_KEY)
     if cached_markers is not None:
         return cached_markers
 
     markers = []
-    for collection in collections:
+    for collection in _all_map_collections():
         try:
-            # Use prefetched data if available, fall back to get_general_info
             gi_list = getattr(collection, 'prefetched_general_info', None)
             gi = gi_list[0] if gi_list else collection.get_general_info
-            geo = getattr(collection, 'geo_location', None)
-            if not geo and gi and gi.location:
+            geo = None
+            if gi and gi.location:
                 geo = gi.location.geo_location
             if not geo or ',' not in geo:
                 continue
@@ -53,6 +74,8 @@ def get_collection_map_markers(collections):
                     for value in entry.values():
                         if value:
                             language_keys.add(str(value).lower())
+            country = gi.location.country_facet if gi and gi.location else None
+            bundles = getattr(collection, 'bundles_count', 0)
             markers.append({
                 'lat': float(lat.strip()),
                 'lng': float(lng.strip()),
@@ -60,6 +83,8 @@ def get_collection_map_markers(collections):
                 'url': reverse('explorer:collection_detail', kwargs={'pk': collection.pk}),
                 'languages': languages,
                 'language_keys': sorted(language_keys),
+                'country': country or '',
+                'bundles': int(bundles or 0),
             })
         except (ValueError, AttributeError):
             pass

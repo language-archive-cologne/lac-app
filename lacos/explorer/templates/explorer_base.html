@@ -4,7 +4,9 @@
 {% block title %}{% translate "Explorer" %} - {{ block.super }}{% endblock title %}
 
 {% block content %}
-  <h1 class="text-3xl font-light text-base-content mb-6 tracking-tight">{% translate "Archive Explorer" %}</h1>
+  {% block page_title %}
+    <h1 class="text-3xl font-light text-base-content mb-6 tracking-tight">{% translate "Archive Explorer" %}</h1>
+  {% endblock page_title %}
 
 {% block explorer_content %}
   {% comment %} Child templates will fill this block {% endcomment %}

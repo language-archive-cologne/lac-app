@@ -16,6 +16,11 @@ urlpatterns = [
         name="map_popup",
     ),
     path(
+        "maps/style/natural-earth-c.json",
+        view=views.map_style_view,
+        name="map_style_ne_c",
+    ),
+    path(
         "imdi/xml/",
         view=views.ImdiXmlView.as_view(),
         name="imdi_xml",

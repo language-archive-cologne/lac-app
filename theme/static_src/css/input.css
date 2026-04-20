@@ -25,6 +25,10 @@
   --color-accent: #ea564f;
   --color-accent-content: #ffffff;
   --color-neutral: #003a54;
+  --color-base-100: #ffffff;
+  --color-base-200: #f2f2f2;
+  --color-base-300: #e5e6e6;
+  --color-base-content: #1f2937;
 }
 
 /* Override dark theme with UzK branding (lighter for dark backgrounds) */
@@ -37,6 +41,10 @@
   --color-accent: #ef7e79;
   --color-accent-content: #ffffff;
   --color-neutral: #1a6a8f;
+  --color-base-100: #1d232a;
+  --color-base-200: #191e24;
+  --color-base-300: #15191e;
+  --color-base-content: #a6adba;
 }
 
 /* Albert Sans variable font */
@@ -61,6 +69,63 @@
       "Albert Sans",
       system-ui,
       sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+}
+
+@layer components {
+  .language-chip {
+    background: #f6f6f6;
+    border-color: var(--color-base-300);
+    color: var(--color-base-content);
+  }
+
+  .language-chip-iso {
+    color: color-mix(in oklab, var(--color-base-content) 55%, transparent);
+  }
+
+  .language-index-card {
+    background: var(--color-base-100);
+    border-color: var(--color-base-300);
+  }
+
+  .language-index-header {
+    border-bottom-color: color-mix(in oklab, var(--color-base-300) 75%, var(--color-base-100));
+  }
+
+  .language-index-label {
+    color: color-mix(in oklab, var(--color-base-content) 60%, transparent);
+  }
+
+  .language-index-letter {
+    color: var(--color-primary);
+  }
+
+  .language-index-pill {
+    background: #f6f6f6;
+    border-color: var(--color-base-300);
+    color: var(--color-base-content);
+  }
+
+  .language-index-pill:hover {
+    border-color: #005176;
+    color: #005176;
+  }
+
+  .language-index-pill.is-active {
+    background: #005176;
+    border-color: #005176;
+    color: #ffffff;
+  }
+
+  .language-index-pill-iso {
+    color: color-mix(in oklab, var(--color-base-content) 55%, transparent);
+  }
+
+  .language-index-pill.is-active .language-index-pill-iso {
+    color: color-mix(in oklab, var(--color-primary-content) 70%, transparent);
   }
 }
 
