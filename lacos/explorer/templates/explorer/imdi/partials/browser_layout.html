@@ -34,8 +34,8 @@
     </div>
   </div>
 
-  <div data-imdi-viewer
-       data-bucket="{{ bucket }}"
+<div data-imdi-viewer
+       data-access-token="{{ imdi_access_token }}"
        data-root-key="{{ root_key }}"
        data-xml-url="{% url 'explorer:imdi_xml' %}">
     <div class="flex items-center justify-center h-64">

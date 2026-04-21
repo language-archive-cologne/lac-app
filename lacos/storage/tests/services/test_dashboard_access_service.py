@@ -41,6 +41,28 @@ def test_collection_manager_workspace_buckets_resolve_aliases():
 
 
 @pytest.mark.django_db
+def test_resolve_storage_dashboard_bucket_rejects_unconfigured_bucket():
+    from lacos.storage.services.dashboard_access_service import resolve_storage_dashboard_bucket
+
+    user = UserFactory()
+    user.groups.add(_ensure_group("collection_manager"))
+
+    bucket_service = SimpleNamespace(
+        workspace_buckets=["ingest", "production"],
+        ingest_bucket="ingest-bucket",
+        production_bucket="production-bucket",
+        get_all_accessible_buckets=lambda: [
+            "ingest-bucket",
+            "production-bucket",
+            "private-bucket",
+        ],
+    )
+
+    with pytest.raises(PermissionDenied):
+        resolve_storage_dashboard_bucket(user, bucket_service, "private-bucket")
+
+
+@pytest.mark.django_db
 def test_filter_storage_dashboard_listing_keeps_assigned_collections_only():
     from lacos.storage.services.dashboard_access_service import filter_storage_dashboard_listing
 

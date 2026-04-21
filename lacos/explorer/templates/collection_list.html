@@ -106,7 +106,7 @@
         .lac-popup-body .chip .iso { color: rgba(31,41,55,.55); font-size: 10px; }
       </style>
 
-      <script id="collections-markers" type="application/json">{{ map_markers_json|safe }}</script>
+      {{ map_markers|json_script:"collections-markers" }}
       <div id="language-filter-state" class="hidden" data-language-filter="{{ language_filter|default:'' }}"></div>
 
       <div class="collections-top-row mb-4">

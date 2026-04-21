@@ -5,8 +5,9 @@ from django.db.models import Q, QuerySet
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
-from django.utils.translation import gettext_lazy as _
 from django.utils.http import urlencode
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 from django.views.generic import DetailView
 from django.views.generic import RedirectView
@@ -68,12 +69,25 @@ def saml_login_view(request: HttpRequest) -> HttpResponse:
     request.session[TRUSTED_SAML_SESSION_KEY] = True
     request.session.modified = True
 
+    next_url = _safe_next(request, request.GET.get("next"))
     saml_login_url = _build_saml_login_url(
-        next_url=request.GET.get("next"),
+        next_url=next_url,
         idp=request.GET.get("idp"),
     )
 
     return redirect(saml_login_url)
+
+
+def _safe_next(request: HttpRequest, value: str | None) -> str | None:
+    if not value:
+        return None
+    if url_has_allowed_host_and_scheme(
+        value,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return value
+    return None
 
 
 def _build_saml_login_url(*, next_url: str | None = None, idp: str | None = None) -> str:
@@ -95,7 +109,7 @@ def saml_discovery_view(request: HttpRequest) -> HttpResponse:
     countries = SamlCountry.objects.filter(idps__isnull=False).distinct()
     return render(request, "users/saml_discovery.html", {
         "countries": countries,
-        "next": request.GET.get("next", ""),
+        "next": _safe_next(request, request.GET.get("next")) or "",
     })
 
 
@@ -117,6 +131,6 @@ def saml_discovery_idp_list(request: HttpRequest) -> HttpResponse:
 
     return render(request, "users/partials/saml_idp_list.html", {
         "idps": qs,
-        "next": request.GET.get("next", ""),
+        "next": _safe_next(request, request.GET.get("next")) or "",
         "trusted_login_url": reverse("users:saml_login"),
     })

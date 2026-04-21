@@ -1,23 +1,35 @@
 import logging
 import json
 import unicodedata
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from lacos.storage.permissions import can_manage_collection, resolve_collection_from_path
 from django.core.exceptions import PermissionDenied
-from django.http import JsonResponse, HttpResponse, QueryDict
+from django.http import HttpResponse, JsonResponse, QueryDict
+from django.middleware.csrf import get_token
+from django.template.loader import render_to_string
+from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.views import View
-from django.template.loader import render_to_string
-from django.middleware.csrf import get_token
-from django.urls import reverse
 
-from lacos.common.services.safe_html import render_safe_markdown
-from lacos.storage.services.bucket_service import BucketService
-from lacos.storage.services.media_processing_service import MediaProcessingService
 from lacos.common.mixins.htmx_template_helpers import HtmxTemplateHelperMixin
+from lacos.common.services.safe_html import render_safe_markdown
+from lacos.storage.permissions import can_manage_collection, resolve_collection_from_path
+from lacos.storage.services.bucket_service import BucketService
+from lacos.storage.services.dashboard_access_service import resolve_storage_dashboard_bucket
+from lacos.storage.services.media_processing_service import MediaProcessingService
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_allowed_bucket(request, bucket_name: str, *, bucket_service=None, default_bucket: str | None = None) -> str:
+    bucket_service = bucket_service or BucketService()
+    return resolve_storage_dashboard_bucket(
+        request.user,
+        bucket_service,
+        bucket_name,
+        default_bucket=default_bucket,
+    )
 
 
 @login_required
@@ -36,9 +48,7 @@ def file_content(request, bucket_type, file_path):
 
     try:
         bucket_service = BucketService()
-
-        # Use the bucket_type parameter directly as the bucket name
-        bucket = bucket_type
+        bucket = _resolve_allowed_bucket(request, bucket_type, bucket_service=bucket_service)
 
         # Get file content and metadata
         result = bucket_service.get_file_content(bucket, file_path)
@@ -62,6 +72,8 @@ def file_content(request, bucket_type, file_path):
             logger.error(error_message)
             return HttpResponse(error_message, status=404)
             
+    except PermissionDenied:
+        raise
     except Exception as e:
         error_message = f"Error retrieving file content: {str(e)}"
         logger.exception(error_message)
@@ -75,17 +87,7 @@ def file_viewer_htmx(request, bucket_type, object_path):
     if not can_manage_collection(request.user, collection):
         raise PermissionDenied("Collection manager access required.")
     bucket_service = BucketService()
-
-    accessible_buckets = set(bucket_service.get_all_accessible_buckets())
-
-    if bucket_type in accessible_buckets:
-        bucket_name = bucket_type
-    elif bucket_type == "ingest":
-        bucket_name = bucket_service.ingest_bucket
-    elif bucket_type == "production":
-        bucket_name = bucket_service.production_bucket
-    else:
-        return HttpResponse(status=404)
+    bucket_name = _resolve_allowed_bucket(request, bucket_type, bucket_service=bucket_service)
 
     info_result = bucket_service.get_file_info(bucket_name, object_path)
 
@@ -323,6 +325,7 @@ class RenameObjectHTMXView(HtmxTemplateHelperMixin, View):
         if not can_manage_collection(request.user, collection):
             raise PermissionDenied("Collection manager access required.")
         bucket_service = BucketService()
+        bucket_name = _resolve_allowed_bucket(request, bucket_name, bucket_service=bucket_service)
 
         new_name = (request.POST.get('newName') or request.POST.get('prompt') or '').strip()
         if not new_name and request.body:
@@ -449,23 +452,14 @@ def delete_object(request, bucket_type, object_type, object_path):
 
     try:
         bucket_service = BucketService()
-        
-        accessible_buckets = bucket_service.get_all_accessible_buckets()
-        if isinstance(accessible_buckets, (list, tuple, set)) and bucket_type in accessible_buckets:
-            bucket_name = bucket_type
-        elif bucket_type == 'ingest':
-            bucket_name = bucket_service.ingest_bucket
-        elif bucket_type == 'production':
-            bucket_name = bucket_service.production_bucket
-        else:
-            bucket_name = bucket_type
+        bucket_name = _resolve_allowed_bucket(request, bucket_type, bucket_service=bucket_service)
         
         # Delete the object based on its type
         if object_type == "folder":
             result = bucket_service.delete_folder(bucket_name, object_path)
         else:  # file
             result = bucket_service.delete_file(bucket_name, object_path)
-        
+
         if result.get("success", False):
             success_message = f"Successfully deleted {object_type} '{object_path}'"
             logger.info(success_message)
@@ -485,6 +479,8 @@ def delete_object(request, bucket_type, object_type, object_path):
                 return HttpResponse(error_message, status=400)
                 
             return JsonResponse({"success": False, "error": error_message})
+    except PermissionDenied as exc:
+        return JsonResponse({"success": False, "error": str(exc)}, status=403)
             
     except Exception as e:
         error_message = f"Error deleting {object_type}: {str(e)}"

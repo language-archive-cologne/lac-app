@@ -164,6 +164,7 @@ def test_delete_object_success(authenticated_client, s3_test_paths, object_type,
     """Test successful deletion of a file or folder."""
     with patch('lacos.storage.views.file_operations_views.BucketService') as MockBucketService:
         mock_service = MockBucketService.return_value
+        mock_service.ingest_bucket = s3_test_paths['bucket_type']
         mock_service.get_all_accessible_buckets.return_value = [s3_test_paths['bucket_type']]
         if is_directory:
             mock_service.delete_folder.return_value = {'success': True}
@@ -196,6 +197,7 @@ def test_delete_object_error(authenticated_client, s3_test_paths):
     """Test error handling when deleting an object."""
     with patch('lacos.storage.views.file_operations_views.BucketService') as MockBucketService:
         mock_service = MockBucketService.return_value
+        mock_service.ingest_bucket = s3_test_paths['bucket_type']
         mock_service.get_all_accessible_buckets.return_value = [s3_test_paths['bucket_type']]
         mock_service.delete_file.return_value = {
             'success': False,
@@ -257,6 +259,7 @@ def test_delete_object_with_htmx(admin_user, s3_test_paths):
     
     with patch('lacos.storage.views.file_operations_views.BucketService') as MockBucketService:
         mock_service = MockBucketService.return_value
+        mock_service.ingest_bucket = s3_test_paths['bucket_type']
         mock_service.get_all_accessible_buckets.return_value = [s3_test_paths['bucket_type']]
         mock_service.delete_file.return_value = {'success': True}
         

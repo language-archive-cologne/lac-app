@@ -48,6 +48,25 @@ def get_storage_dashboard_workspace_buckets(user, bucket_service) -> list[str]:
     return filtered_buckets or configured_buckets
 
 
+def resolve_storage_dashboard_bucket(
+    user,
+    bucket_service,
+    bucket_name: str | None,
+    *,
+    default_bucket: str | None = None,
+) -> str:
+    candidate = bucket_name or default_bucket
+    resolved_bucket = _resolve_workspace_bucket_name(bucket_service, candidate)
+    if not resolved_bucket:
+        raise PermissionDenied("Bucket not allowed.")
+
+    allowed_buckets = set(get_storage_dashboard_workspace_buckets(user, bucket_service))
+    if resolved_bucket not in allowed_buckets:
+        raise PermissionDenied("Bucket not allowed.")
+
+    return resolved_bucket
+
+
 def ensure_storage_dashboard_path_access(user, path: str | None) -> None:
     if is_archivist(user) or not path:
         return

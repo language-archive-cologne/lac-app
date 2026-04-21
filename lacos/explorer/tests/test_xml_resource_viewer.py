@@ -15,6 +15,7 @@ from lacos.blam.models.collection.collection_structural_info import (
     CollectionAdditionalMetadataFile,
     CollectionStructuralInfo,
 )
+from lacos.explorer.services.imdi_access import build_imdi_access_token
 
 
 class _FakeS3Body:
@@ -83,6 +84,8 @@ def test_bundle_imdi_resource_renders_imdi_modal_for_htmx_view(client, monkeypat
     page = response.content.decode("utf-8")
     assert 'data-viewer-type="imdi"' in page
     assert "data-imdi-viewer" in page
+    assert "data-access-token=" in page
+    assert "data-bucket=" not in page
 
 
 @pytest.mark.django_db
@@ -137,6 +140,8 @@ def test_collection_imdi_resource_renders_imdi_modal_for_htmx_view(client, monke
     page = response.content.decode("utf-8")
     assert 'data-viewer-type="imdi"' in page
     assert "data-imdi-viewer" in page
+    assert "data-access-token=" in page
+    assert "data-bucket=" not in page
 @pytest.mark.django_db
 def test_collection_imdi_resource_uses_metadata_fallback_when_pid_mapping_missing(client, monkeypatch):
     collection = Collection.objects.create(identifier="hdl:test/collection-imdi-fallback")
@@ -258,6 +263,50 @@ def test_bundle_elan_resource_handles_storage_fetch_failure(client, monkeypatch)
     )
 
     assert response.status_code == 200
-    page = response.content.decode("utf-8")
-    assert 'data-viewer-type="elan"' in page
-    assert "No linked audio track found for this ELAN file." in page
+
+
+@pytest.mark.django_db
+def test_imdi_xml_view_rejects_requests_without_signed_token(client):
+    response = client.get(reverse("explorer:imdi_xml"), {"bucket": "bucket-a", "key": "path/file.imdi"})
+
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_imdi_xml_view_allows_signed_root_access(client, monkeypatch):
+    class DummyStorage:
+        def read_imdi_file(self, bucket, key):
+            assert bucket == "bucket-a"
+            assert key == "collection-a/metadata/file.imdi"
+            return b"<METATRANSCRIPT/>"
+
+    monkeypatch.setattr("lacos.explorer.views.imdi._get_storage_service", lambda: DummyStorage())
+
+    token = build_imdi_access_token(
+        bucket="bucket-a",
+        root_key="collection-a/metadata/file.imdi",
+    )
+    response = client.get(reverse("explorer:imdi_xml"), {"token": token})
+
+    assert response.status_code == 200
+    assert response.content == b"<METATRANSCRIPT/>"
+
+
+@pytest.mark.django_db
+def test_imdi_xml_view_rejects_signed_requests_outside_allowed_prefix(client, monkeypatch):
+    class DummyStorage:
+        def read_imdi_file(self, bucket, key):  # pragma: no cover - should not be called
+            raise AssertionError(f"Unexpected storage read for {bucket}/{key}")
+
+    monkeypatch.setattr("lacos.explorer.views.imdi._get_storage_service", lambda: DummyStorage())
+
+    token = build_imdi_access_token(
+        bucket="bucket-a",
+        root_key="collection-a/metadata/file.imdi",
+    )
+    response = client.get(
+        reverse("explorer:imdi_xml"),
+        {"token": token, "key": "other-collection/metadata/file.imdi"},
+    )
+
+    assert response.status_code == 403

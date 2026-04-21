@@ -7,6 +7,7 @@ from django.http import HttpResponse
 from django.middleware.csrf import get_token
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils.html import format_html
 
 from .bucket_coordinator import BucketCoordinatorMixin
 from lacos.storage.services.dashboard_access_service import (
@@ -440,11 +441,17 @@ class HtmxTemplateHelperMixin(BucketCoordinatorMixin):
 
         icon_path = icon_paths.get(level, icon_paths['info'])
 
-        return f'''
-        <div class="alert {alert_class}">
-            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{icon_path}" />
-            </svg>
-            <span>{message}</span>
-        </div>
-        '''
+        return format_html(
+            (
+                '<div class="alert {}">'
+                '<svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" '
+                'fill="none" viewBox="0 0 24 24">'
+                '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{}" />'
+                '</svg>'
+                '<span>{}</span>'
+                '</div>'
+            ),
+            alert_class,
+            icon_path,
+            message,
+        )

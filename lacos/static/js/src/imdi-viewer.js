@@ -2,7 +2,7 @@
  * IMDI Viewer – client-side XML tree browser.
  *
  * Self-initialises on elements carrying `[data-imdi-viewer]`.
- * Reads `data-bucket`, `data-root-key` and `data-xml-url` from the
+ * Reads `data-access-token`, `data-root-key` and `data-xml-url` from the
  * container, fetches the raw XML from the Django endpoint, parses it
  * with DOMParser and renders a two-panel collapsible tree + detail view
  * using DaisyUI / Tailwind utility classes.
@@ -134,6 +134,12 @@ function labelFor(el) {
 function resolveKey(parentKey, relativePath) {
   const base = "https://d/" + parentKey;
   return new URL(relativePath, base).pathname.slice(1);
+}
+
+function buildXmlRequestUrl(xmlUrl, accessToken, key = null) {
+  const params = new URLSearchParams({ token: accessToken });
+  if (key) params.set("key", key);
+  return `${xmlUrl}?${params.toString()}`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -281,7 +287,7 @@ function getCorpusLink(el) {
 async function loadCorpusLink(relativePath, parentKey, ctx, placeholder, details) {
   const resolvedKey = resolveKey(parentKey, relativePath);
   try {
-    const url = `${ctx.xmlUrl}?bucket=${encodeURIComponent(ctx.bucket)}&key=${encodeURIComponent(resolvedKey)}`;
+    const url = buildXmlRequestUrl(ctx.xmlUrl, ctx.accessToken, resolvedKey);
     const resp = await fetch(url);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const xmlText = await resp.text();
@@ -429,17 +435,17 @@ function esc(str) {
 /* ------------------------------------------------------------------ */
 
 async function initViewer(container) {
-  const bucket = container.dataset.bucket;
+  const accessToken = container.dataset.accessToken;
   const rootKey = container.dataset.rootKey;
   const xmlUrl = container.dataset.xmlUrl;
 
-  if (!bucket || !rootKey || !xmlUrl) return;
+  if (!accessToken || !rootKey || !xmlUrl) return;
   // Prevent double-init
   if (container._imdiInitialised) return;
   container._imdiInitialised = true;
 
   try {
-    const url = `${xmlUrl}?bucket=${encodeURIComponent(bucket)}&key=${encodeURIComponent(rootKey)}`;
+    const url = buildXmlRequestUrl(xmlUrl, accessToken);
     const resp = await fetch(url);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const xmlText = await resp.text();
@@ -450,7 +456,7 @@ async function initViewer(container) {
     }
 
     const root = doc.documentElement;
-    const ctx = { bucket, parentKey: rootKey, xmlUrl, container };
+    const ctx = { accessToken, parentKey: rootKey, xmlUrl, container };
 
     // Build two-panel layout
     container.innerHTML = "";

@@ -291,8 +291,9 @@ class CollectionListView(ListView):
             and self.request.headers.get('HX-Target') == 'collections-table'
         )
 
+        context.setdefault('map_markers', [])
         if not context["is_htmx"] and not search_query:
-            context['map_markers_json'] = get_collection_map_markers()
+            context['map_markers'] = json.loads(get_collection_map_markers())
             context['main_map_style_url'] = settings.EXPLORER_MAIN_MAP_STYLE_URL
             context['main_map_dark_style_url'] = settings.EXPLORER_MAIN_MAP_DARK_STYLE_URL
 

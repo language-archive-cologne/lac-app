@@ -2,6 +2,7 @@ import pytest
 import json
 from unittest.mock import MagicMock, patch
 from django.contrib.auth.models import Group
+from django.core.exceptions import PermissionDenied
 from django.test import RequestFactory
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.sessions.middleware import SessionMiddleware
@@ -12,6 +13,7 @@ from lacos.users.tests.factories import UserFactory
 from lacos.storage.views.file_operations_views import (
     RenameObjectHTMXView,
     _fetch_markdown_html,
+    file_content,
     delete_object,
 )
 
@@ -94,9 +96,10 @@ def mock_bucket_service():
 
 
 @patch('lacos.storage.views.file_operations_views.get_token', return_value='csrf-token')
+@patch('lacos.storage.views.file_operations_views.resolve_storage_dashboard_bucket', return_value='bucket')
 @patch('lacos.storage.views.file_operations_views.BucketService')
 @patch.object(RenameObjectHTMXView, 'render_bucket_content_template', return_value='rendered-html')
-def test_rename_object_folder_success(mock_render_content, MockBucketService, mock_get_token, prepared_request):
+def test_rename_object_folder_success(mock_render_content, MockBucketService, _mock_resolve_bucket, mock_get_token, prepared_request):
     object_path = 'old/old/'
     request = prepared_request(
         '/storage/rename-object/bucket/folder/old/path/',
@@ -119,9 +122,10 @@ def test_rename_object_folder_success(mock_render_content, MockBucketService, mo
 
 
 @patch('lacos.storage.views.file_operations_views.get_token', return_value='csrf-token')
+@patch('lacos.storage.views.file_operations_views.resolve_storage_dashboard_bucket', return_value='bucket')
 @patch('lacos.storage.views.file_operations_views.BucketService')
 @patch.object(RenameObjectHTMXView, 'render_bucket_content_template', return_value='rendered-html')
-def test_rename_object_file_failure(mock_render_content, MockBucketService, mock_get_token, prepared_request):
+def test_rename_object_file_failure(mock_render_content, MockBucketService, _mock_resolve_bucket, mock_get_token, prepared_request):
     object_path = 'folder/file.txt'
     request = prepared_request(
         '/storage/rename-object/bucket/file/folder/file.txt',
@@ -146,8 +150,9 @@ def test_rename_object_file_failure(mock_render_content, MockBucketService, mock
     
 # Tests for delete_object view
 
+@patch('lacos.storage.views.file_operations_views.resolve_storage_dashboard_bucket', return_value='test-ingest-bucket')
 @patch('lacos.storage.views.file_operations_views.BucketService')
-def test_delete_object_folder_success(mock_bucket_service, prepared_request):
+def test_delete_object_folder_success(mock_bucket_service, _mock_resolve_bucket, prepared_request):
     """Test successful deletion of a folder."""
     # Configure mock service response
     mock_instance = mock_bucket_service.return_value
@@ -176,8 +181,9 @@ def test_delete_object_folder_success(mock_bucket_service, prepared_request):
     assert "Successfully deleted" in response_data['message']
 
 
+@patch('lacos.storage.views.file_operations_views.resolve_storage_dashboard_bucket', return_value='test-production-bucket')
 @patch('lacos.storage.views.file_operations_views.BucketService')
-def test_delete_object_file_success(mock_bucket_service, prepared_request):
+def test_delete_object_file_success(mock_bucket_service, _mock_resolve_bucket, prepared_request):
     """Test successful deletion of a file."""
     # Configure mock service response
     mock_instance = mock_bucket_service.return_value
@@ -206,8 +212,9 @@ def test_delete_object_file_success(mock_bucket_service, prepared_request):
     assert "Successfully deleted" in response_data['message']
 
 
+@patch('lacos.storage.views.file_operations_views.resolve_storage_dashboard_bucket', return_value='test-ingest-bucket')
 @patch('lacos.storage.views.file_operations_views.BucketService')
-def test_delete_object_failure(mock_bucket_service, prepared_request):
+def test_delete_object_failure(mock_bucket_service, _mock_resolve_bucket, prepared_request):
     """Test failed deletion of an object."""
     # Configure mock service response for failure
     mock_instance = mock_bucket_service.return_value
@@ -240,8 +247,9 @@ def test_delete_object_failure(mock_bucket_service, prepared_request):
     assert "File not found" in response_data['error']
 
 
+@patch('lacos.storage.views.file_operations_views.resolve_storage_dashboard_bucket', return_value='test-ingest-bucket')
 @patch('lacos.storage.views.file_operations_views.BucketService')
-def test_delete_object_exception(mock_bucket_service, prepared_request):
+def test_delete_object_exception(mock_bucket_service, _mock_resolve_bucket, prepared_request):
     """Test handling of exception during deletion operation."""
     # Configure mock service to raise an exception
     mock_instance = mock_bucket_service.return_value
@@ -300,6 +308,72 @@ def test_delete_object_method_not_allowed(mock_bucket_service, prepared_request)
     mock_instance = mock_bucket_service.return_value
     mock_instance.delete_folder.assert_not_called()
     mock_instance.delete_file.assert_not_called()
+
+
+@patch('lacos.storage.views.file_operations_views.get_token', return_value='csrf-token')
+@patch(
+    'lacos.storage.views.file_operations_views.resolve_storage_dashboard_bucket',
+    side_effect=PermissionDenied("Bucket not allowed."),
+)
+@patch('lacos.storage.views.file_operations_views.BucketService')
+def test_rename_object_rejects_disallowed_bucket(
+    mock_bucket_service,
+    _mock_resolve_bucket,
+    _mock_get_token,
+    prepared_request,
+):
+    object_path = 'collection-a/file.txt'
+    request = prepared_request(
+        '/storage/rename-object/bucket/file/collection-a/file.txt',
+        method='post',
+        htmx=True,
+        data={'newName': 'file.txt'},
+    )
+    _grant_collection_access(request, object_path)
+
+    with pytest.raises(PermissionDenied):
+        RenameObjectHTMXView.as_view()(request, bucket_name='bucket', object_type='file', object_path=object_path)
+
+    mock_instance = mock_bucket_service.return_value
+    mock_instance.rename_file.assert_not_called()
+
+
+@patch(
+    'lacos.storage.views.file_operations_views.resolve_storage_dashboard_bucket',
+    side_effect=PermissionDenied("Bucket not allowed."),
+)
+@patch('lacos.storage.views.file_operations_views.BucketService')
+def test_delete_object_rejects_disallowed_bucket(mock_bucket_service, _mock_resolve_bucket, prepared_request):
+    object_path = 'collection-a/file.txt'
+    request = prepared_request(
+        '/storage/delete/bucket/file/collection-a/file.txt',
+        method='post',
+    )
+    _grant_collection_access(request, object_path)
+
+    response = delete_object(request, 'bucket', 'file', object_path)
+
+    assert response.status_code == 403
+    response_data = json.loads(response.content.decode('utf-8'))
+    assert response_data['success'] is False
+    assert response_data['error'] == 'Bucket not allowed.'
+    mock_bucket_service.return_value.delete_file.assert_not_called()
+
+
+@patch(
+    'lacos.storage.views.file_operations_views.resolve_storage_dashboard_bucket',
+    side_effect=PermissionDenied("Bucket not allowed."),
+)
+def test_file_content_rejects_disallowed_bucket(_mock_resolve_bucket, prepared_request):
+    object_path = 'collection-a/file.txt'
+    request = prepared_request(
+        '/storage/file-content/private-bucket/collection-a/file.txt',
+        method='get',
+    )
+    _grant_collection_access(request, object_path)
+
+    with pytest.raises(PermissionDenied):
+        file_content(request, 'private-bucket', object_path)
 
 
 def test_fetch_markdown_html_sanitizes_active_content():

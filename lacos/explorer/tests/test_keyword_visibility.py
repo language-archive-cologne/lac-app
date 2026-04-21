@@ -79,6 +79,7 @@ def _allow_anonymous_read(obj) -> None:
 def test_collection_list_renders_compact_keywords(client):
     collection, general_info = _create_collection("COL-KW-1", "Keyword Collection")
     _create_collection("COL-KW-2", "No Keyword Collection")
+    _create_bundle("BUN-KW-1", "Keyword Bundle", collection)
 
     long_keyword = "very-long-keyword-value-for-tooltip-checking"
     keyword_values = [long_keyword, "phonology", "documentation", "archive"]

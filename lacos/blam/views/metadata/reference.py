@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -39,6 +40,7 @@ from lacos.blam.models.collection.collection_administrative_info import (
     CollectionRightsHolderIdentifier,
     CollectionIdenticalResource,
 )
+from lacos.storage.permissions import is_archivist
 from lacos.blam.models.bundle.bundle_structural_info import (
     BundleAdditionalMetadataFile,
     MediaResource,
@@ -241,7 +243,12 @@ def get_reference_config(reference_slug: str) -> dict:
     return config
 
 
-class ReferenceListView(View):
+class ReferenceAccessMixin(LoginRequiredMixin, UserPassesTestMixin):
+    def test_func(self):
+        return self.request.user.is_staff or is_archivist(self.request.user)
+
+
+class ReferenceListView(ReferenceAccessMixin, View):
     def get(self, request, reference_slug: str):
         config = get_reference_config(reference_slug)
         form = config["form"]()
@@ -284,7 +291,7 @@ class ReferenceListView(View):
         )
 
 
-class ReferenceEditView(View):
+class ReferenceEditView(ReferenceAccessMixin, View):
     def get(self, request, reference_slug: str, object_id):
         config = get_reference_config(reference_slug)
         obj = get_object_or_404(config["model"], pk=object_id)
@@ -325,7 +332,7 @@ class ReferenceEditView(View):
         )
 
 
-class ReferenceDeleteView(View):
+class ReferenceDeleteView(ReferenceAccessMixin, View):
     def post(self, request, reference_slug: str, object_id):
         config = get_reference_config(reference_slug)
         obj = get_object_or_404(config["model"], pk=object_id)

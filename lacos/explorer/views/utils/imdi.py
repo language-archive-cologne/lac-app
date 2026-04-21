@@ -11,6 +11,7 @@ from django.http import HttpRequest
 from django.http import HttpResponse
 from django.shortcuts import render
 
+from lacos.explorer.services.imdi_access import build_imdi_access_token
 from lacos.explorer.services.imdi_storage import ImdiStorageService
 
 logger = logging.getLogger(__name__)
@@ -51,7 +52,7 @@ def render_imdi_modal_response(
         "explorer/imdi/partials/modal_content.html",
         {
             "collection": collection,
-            "bucket": bucket,
+            "imdi_access_token": build_imdi_access_token(bucket=bucket, root_key=key),
             "root_key": key,
         },
     )

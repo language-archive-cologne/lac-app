@@ -187,6 +187,26 @@ def test_saml_login_view_preserves_selected_idp(client, settings):
 
 
 @pytest.mark.django_db
+def test_saml_login_view_preserves_internal_next(client, settings):
+    settings.SAML_LOGIN_ENABLED = True
+
+    response = client.get(reverse("users:saml_login"), {"next": "/collections/"})
+
+    assert response.status_code == 302
+    assert response.headers["Location"] == "/saml2/login/?next=%2Fcollections%2F"
+
+
+@pytest.mark.django_db
+def test_saml_login_view_strips_external_next(client, settings):
+    settings.SAML_LOGIN_ENABLED = True
+
+    response = client.get(reverse("users:saml_login"), {"next": "https://evil.example/phish"})
+
+    assert response.status_code == 302
+    assert response.headers["Location"] == "/saml2/login/"
+
+
+@pytest.mark.django_db
 def test_saml2_login_redirects_to_discovery_service(client, settings):
     disco_url = "https://wayf.aai.dfn.de/DFN-AAI/wayf"
     settings.SAML2_DISCO_URL = disco_url

@@ -1,9 +1,10 @@
 import ast
 import re
+
 from django import template
-from django.utils.html import conditional_escape, mark_safe
-from django.utils.safestring import SafeString
 from django.template.defaultfilters import stringfilter
+from django.utils.html import conditional_escape, format_html, mark_safe
+from django.utils.safestring import SafeString
 
 from lacos.explorer.identifier_display import format_identifier_html
 from lacos.explorer.media_utils import (
@@ -115,27 +116,31 @@ def urlize_text(text):
     # Combined pattern to find all URLs and DOIs
     pattern = f'({doi_pattern}|{url_pattern})'
     
-    # Process all matches
-    def replace_match(match):
+    rendered = []
+    last_end = 0
+
+    for match in re.finditer(pattern, text, flags=re.IGNORECASE):
+        rendered.append(str(conditional_escape(text[last_end:match.start()])))
+
         url = match.group(0)
-        
-        # Handle DOIs
         if url.startswith('10.'):
             full_url = f'https://doi.org/{url}'
         elif url.startswith('doi:'):
             full_url = f'https://doi.org/{url[4:]}'
-        # Handle URLs without protocol
         elif url.startswith('www.'):
             full_url = f'https://{url}'
         else:
             full_url = url
-            
-        return f'<a href="{full_url}" target="_blank" class="text-blue-600 hover:underline">{url}</a>'
-    
-    # Use a single regex operation to find and replace all URLs
-    result = re.sub(pattern, replace_match, text, flags=re.IGNORECASE)
-    
-    return mark_safe(result)
+
+        rendered.append(str(format_html(
+            '<a href="{}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">{}</a>',
+            full_url,
+            url,
+        )))
+        last_end = match.end()
+
+    rendered.append(str(conditional_escape(text[last_end:])))
+    return mark_safe("".join(rendered))
 
 
 @register.filter
