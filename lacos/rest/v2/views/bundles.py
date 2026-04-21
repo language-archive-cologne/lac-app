@@ -51,9 +51,8 @@ def bundle_list(request):
     )
     qs = qs.order_by(params.ordering)
 
-    bundles = list(qs)
-    total = len(bundles)
-    page = bundles[params.offset : params.offset + params.limit]
+    total = qs.count()
+    page = list(qs[params.offset : params.offset + params.limit])
 
     results = [serialize_bundle_list_item(b) for b in page]
 

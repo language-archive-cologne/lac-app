@@ -5,6 +5,8 @@ from django.conf import settings
 from django.http import Http404
 from django.shortcuts import render
 
+from lacos.common.services.safe_html import sanitize_html
+
 
 # Mapping from URL slug to MD filename (without extension)
 # Maps URL slugs to filenames in lac-guidelines/texts/
@@ -69,7 +71,7 @@ def guideline_view(request, slug: str):
     if not html_path.exists():
         raise Http404(f"Guideline '{slug}' not found")
 
-    raw_content = html_path.read_text(encoding="utf-8")
+    raw_content = sanitize_html(html_path.read_text(encoding="utf-8"))
 
     # Extract title from content's <h1> and strip it from content
     title, content = _extract_title_and_strip(raw_content)

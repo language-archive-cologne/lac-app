@@ -1,6 +1,6 @@
 import pytest
 import json
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from django.contrib.auth.models import Group
 from django.test import RequestFactory
 from django.contrib.messages.storage.fallback import FallbackStorage
@@ -9,7 +9,11 @@ from django.contrib.sessions.middleware import SessionMiddleware
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.users.models import CollectionManagerAssignment
 from lacos.users.tests.factories import UserFactory
-from lacos.storage.views.file_operations_views import delete_object, RenameObjectHTMXView
+from lacos.storage.views.file_operations_views import (
+    RenameObjectHTMXView,
+    _fetch_markdown_html,
+    delete_object,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -295,4 +299,17 @@ def test_delete_object_method_not_allowed(mock_bucket_service, prepared_request)
     # Verify service methods were not called
     mock_instance = mock_bucket_service.return_value
     mock_instance.delete_folder.assert_not_called()
-    mock_instance.delete_file.assert_not_called() 
+    mock_instance.delete_file.assert_not_called()
+
+
+def test_fetch_markdown_html_sanitizes_active_content():
+    mock_bucket_service = MagicMock()
+    mock_bucket_service.get_file_content.return_value = {
+        "content": b'[safe](https://example.com) [bad](javascript:alert(1)) <script>alert(1)</script>',
+    }
+
+    result = _fetch_markdown_html(mock_bucket_service, "bucket-a", "folder/readme.md")
+
+    assert result["markdown_html"] is not None
+    assert "javascript:" not in result["markdown_html"]
+    assert "<script" not in result["markdown_html"]

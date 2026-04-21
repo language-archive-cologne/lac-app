@@ -122,6 +122,23 @@ class TestCollectionList:
 
         assert str(collection_with_metadata.id) not in result_ids
 
+    def test_list_paginates_without_losing_total_count(
+        self,
+        api_client,
+        collection_with_metadata,
+        store_acl,
+    ):
+        second_collection = type(collection_with_metadata).objects.create(
+            identifier="hdl:11341/0000-0000-0000-PAGINATED-COL",
+        )
+        store_acl(collection_with_metadata, [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}])
+        store_acl(second_collection, [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}])
+
+        data = api_client.get("/api/v2/collections/?limit=1").json()
+
+        assert data["count"] >= 2
+        assert len(data["results"]) == 1
+
 
 @pytest.mark.django_db
 class TestCollectionDetail:

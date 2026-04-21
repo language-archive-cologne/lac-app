@@ -6,6 +6,7 @@ from django.contrib import messages
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.messages.middleware import MessageMiddleware
 from django.contrib.sessions.middleware import SessionMiddleware
+from django.http import Http404
 from django.http import HttpRequest
 from django.http import HttpResponseRedirect
 from django.test import RequestFactory
@@ -85,10 +86,17 @@ class TestUserRedirectView:
 class TestUserDetailView:
     def test_authenticated(self, user: User, rf: RequestFactory):
         request = rf.get("/fake-url/")
-        request.user = UserFactory()
+        request.user = user
         response = user_detail_view(request, username=user.username)
 
         assert response.status_code == HTTPStatus.OK
+
+    def test_other_user_is_hidden(self, user: User, rf: RequestFactory):
+        request = rf.get("/fake-url/")
+        request.user = UserFactory()
+
+        with pytest.raises(Http404):
+            user_detail_view(request, username=user.username)
 
     def test_not_authenticated(self, user: User, rf: RequestFactory):
         request = rf.get("/fake-url/")

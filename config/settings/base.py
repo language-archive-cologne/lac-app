@@ -84,6 +84,7 @@ THIRD_PARTY_APPS = [
     "allauth.mfa",
     "allauth.socialaccount",
     "rest_framework",
+    "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
     "drf_spectacular",
     "huey.contrib.djhuey",
@@ -159,6 +160,8 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "lacos.users.middleware.PrivilegedMFAEnforcementMiddleware",
+    "lacos.common.middleware.SecurityHeadersMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
@@ -254,10 +257,13 @@ FIXTURE_DIRS = (str(APPS_DIR / "fixtures"),)
 # ------------------------------------------------------------------------------
 # https://docs.djangoproject.com/en/dev/ref/settings/#session-cookie-httponly
 SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
 # https://docs.djangoproject.com/en/dev/ref/settings/#csrf-cookie-httponly
 CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SAMESITE = "Lax"
 # https://docs.djangoproject.com/en/dev/ref/settings/#x-frame-options
 X_FRAME_OPTIONS = "DENY"
+SECURE_REFERRER_POLICY = "same-origin"
 
 # EMAIL
 # ------------------------------------------------------------------------------
@@ -279,7 +285,7 @@ ADMINS = [("""Francisco Mondaca""", "mondaca@uni-koeln.de")]
 MANAGERS = ADMINS
 # https://cookiecutter-django.readthedocs.io/en/latest/settings.html#other-environment-settings
 # Force the `admin` sign in process to go through the `django-allauth` workflow
-DJANGO_ADMIN_FORCE_ALLAUTH = env.bool("DJANGO_ADMIN_FORCE_ALLAUTH", default=False)
+DJANGO_ADMIN_FORCE_ALLAUTH = env.bool("DJANGO_ADMIN_FORCE_ALLAUTH", default=True)
 
 # LOGGING
 # ------------------------------------------------------------------------------
@@ -464,6 +470,61 @@ UPLOAD_VERIFICATION_SCHEDULE_MINUTES = env.int(
     default=15,
 )
 
+# Direct upload hardening
+UPLOAD_ALLOWED_CONTENT_TYPES = env.list(
+    "UPLOAD_ALLOWED_CONTENT_TYPES",
+    default=[
+        "application/gzip",
+        "application/json",
+        "application/octet-stream",
+        "application/pdf",
+        "application/vnd.ms-excel",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/x-7z-compressed",
+        "application/x-bzip2",
+        "application/x-tar",
+        "application/xml",
+        "application/zip",
+        "text/csv",
+        "text/markdown",
+        "text/plain",
+        "text/tab-separated-values",
+        "text/xml",
+    ],
+)
+UPLOAD_ALLOWED_CONTENT_TYPE_PREFIXES = env.list(
+    "UPLOAD_ALLOWED_CONTENT_TYPE_PREFIXES",
+    default=["audio/", "image/", "text/", "video/"],
+)
+UPLOAD_BLOCKED_CONTENT_TYPES = env.list(
+    "UPLOAD_BLOCKED_CONTENT_TYPES",
+    default=[
+        "application/javascript",
+        "application/x-bat",
+        "application/x-csh",
+        "application/x-httpd-php",
+        "application/x-msdownload",
+        "application/xhtml+xml",
+        "image/svg+xml",
+        "text/html",
+        "text/javascript",
+    ],
+)
+UPLOAD_BLOCKED_EXTENSIONS = env.list(
+    "UPLOAD_BLOCKED_EXTENSIONS",
+    default=[".bat", ".cmd", ".cjs", ".exe", ".htm", ".html", ".js", ".mjs", ".php", ".ps1", ".sh", ".svg"],
+)
+UPLOAD_MAX_FILE_SIZE_BYTES = env.int(
+    "UPLOAD_MAX_FILE_SIZE_BYTES",
+    default=50 * 1024 * 1024 * 1024,
+)
+UPLOAD_MIN_FILE_SIZE_BYTES = env.int("UPLOAD_MIN_FILE_SIZE_BYTES", default=1)
+
+TRUSTED_PROXY_IPS = env.list("TRUSTED_PROXY_IPS", default=[])
+
 # Database backup configuration
 # ------------------------------------------------------------------------------
 DB_BACKUP_ENABLED = env.bool("DB_BACKUP_ENABLED", default=False)
@@ -486,6 +547,12 @@ ACCOUNT_LOGIN_METHODS = {"username"}
 ACCOUNT_EMAIL_REQUIRED = True
 # https://docs.allauth.org/en/latest/account/configuration.html
 ACCOUNT_EMAIL_VERIFICATION = "none"
+ACCOUNT_RATE_LIMITS = {
+    "login": "20/m/ip",
+    "login_failed": "10/m/ip,5/10m/key",
+    "request_login_code": "5/m/ip,3/10m/key",
+    "reset_password": "10/m/ip,5/15m/key",
+}
 # https://docs.allauth.org/en/latest/account/configuration.html
 ACCOUNT_ADAPTER = "lacos.users.adapters.AccountAdapter"
 # https://docs.allauth.org/en/latest/account/forms.html
@@ -518,14 +585,20 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(hours=1),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+    "REFRESH_TOKEN_LIFETIME": timedelta(hours=8),
     "AUTH_HEADER_TYPES": ("Bearer",),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": True,
 }
 
 # django-cors-headers - https://github.com/adamchainz/django-cors-headers#setup
 CORS_URLS_REGEX = r"^/api/.*$"
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
+CORS_ALLOW_CREDENTIALS = env.bool("CORS_ALLOW_CREDENTIALS", default=False)
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Language Archive Cologne API",

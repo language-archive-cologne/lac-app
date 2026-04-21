@@ -12,6 +12,12 @@ from lacos.users.models import User
 
 
 class TestUserAdmin:
+    @pytest.fixture
+    def admin_client(self, client, admin_user, enroll_mfa):
+        enroll_mfa(admin_user)
+        client.force_login(admin_user)
+        return client
+
     def test_changelist(self, admin_client):
         url = reverse("admin:users_user_changelist")
         response = admin_client.get(url)

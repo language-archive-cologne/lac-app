@@ -107,6 +107,29 @@ class TestBundleList:
 
         assert str(bundle_with_metadata.id) not in result_ids
 
+    def test_list_paginates_without_losing_total_count(
+        self,
+        api_client,
+        bundle_with_metadata,
+        store_acl,
+    ):
+        public_bundle = bundle_with_metadata
+        second_bundle = type(bundle_with_metadata).objects.create(
+            identifier="hdl:11341/0000-0000-0000-PAGINATED-BDL",
+        )
+        structural_info = public_bundle.structural_info.first()
+        type(structural_info).objects.create(
+            bundle=second_bundle,
+            is_member_of_collection=structural_info.is_member_of_collection,
+        )
+        store_acl(public_bundle, [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}])
+        store_acl(second_bundle, [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}])
+
+        data = api_client.get("/api/v2/bundles/?limit=1").json()
+
+        assert data["count"] >= 2
+        assert len(data["results"]) == 1
+
 
 @pytest.mark.django_db
 class TestBundleDetail:

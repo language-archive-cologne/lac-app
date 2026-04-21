@@ -45,9 +45,8 @@ def collection_list(request):
     )
     qs = qs.order_by(params.ordering)
 
-    collections = list(qs)
-    total = len(collections)
-    page = collections[params.offset : params.offset + params.limit]
+    total = qs.count()
+    page = list(qs[params.offset : params.offset + params.limit])
 
     results = [serialize_collection_list_item(c) for c in page]
 

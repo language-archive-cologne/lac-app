@@ -22,13 +22,15 @@ User = get_user_model()
 
 @pytest.fixture
 @pytest.mark.django_db
-def admin_user():
+def admin_user(enroll_mfa):
     """Create a test admin user."""
-    return User.objects.create_superuser(
+    user = User.objects.create_superuser(
         username='testadmin',
         email='testadmin@example.com',
         password='testpassword'
     )
+    enroll_mfa(user)
+    return user
 
 
 @pytest.fixture

@@ -1,5 +1,5 @@
 import pytest
-from rest_framework_simplejwt.tokens import AccessToken
+from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 
 
 @pytest.mark.django_db
@@ -34,3 +34,32 @@ class TestSessionToken:
     def test_session_token_without_session(self, api_client):
         response = api_client.post("/api/v2/auth/session-token/")
         assert response.status_code in (401, 403)
+
+    def test_session_token_requires_mfa_for_privileged_users(self, api_client, user):
+        user.is_staff = True
+        user.save(update_fields=["is_staff"])
+
+        api_client.force_authenticate(user=user)
+        response = api_client.post("/api/v2/auth/session-token/")
+
+        assert response.status_code == 403
+
+
+@pytest.mark.django_db
+class TestTokenRevocation:
+    def test_revoked_refresh_token_cannot_be_reused(self, api_client, user):
+        refresh = RefreshToken.for_user(user)
+
+        revoke_response = api_client.post(
+            "/api/v2/auth/token/revoke/",
+            {"refresh": str(refresh)},
+            format="json",
+        )
+        assert revoke_response.status_code == 200
+
+        refresh_response = api_client.post(
+            "/api/v2/auth/token/refresh/",
+            {"refresh": str(refresh)},
+            format="json",
+        )
+        assert refresh_response.status_code == 401

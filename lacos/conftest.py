@@ -12,3 +12,18 @@ def _media_storage(settings, tmpdir) -> None:
 @pytest.fixture
 def user(db) -> User:
     return UserFactory()
+
+
+@pytest.fixture
+def enroll_mfa(db):
+    def _enroll(user: User):
+        from allauth.mfa.models import Authenticator
+
+        authenticator, _ = Authenticator.objects.get_or_create(
+            user=user,
+            type=Authenticator.Type.TOTP,
+            defaults={"data": {"secret": "test-secret"}},
+        )
+        return authenticator
+
+    return _enroll

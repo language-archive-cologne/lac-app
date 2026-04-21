@@ -12,6 +12,11 @@ def test_session_token():
     assert resolve("/api/v2/auth/session-token/").view_name == "api:v2:session-token"
 
 
+def test_revoke_token():
+    assert reverse("api:v2:token-revoke") == "/api/v2/auth/token/revoke/"
+    assert resolve("/api/v2/auth/token/revoke/").view_name == "api:v2:token-revoke"
+
+
 def test_validate_token():
     assert reverse("api:v2:auth-validate") == "/api/v2/auth/validate/"
     assert resolve("/api/v2/auth/validate/").view_name == "api:v2:auth-validate"

@@ -7,9 +7,10 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-import markdown
 from django.conf import settings
 from huey.contrib.djhuey import task
+
+from lacos.common.services.safe_html import sanitize_html
 
 logger = logging.getLogger(__name__)
 
@@ -117,12 +118,7 @@ def _render_markdown_files(texts_dir: Path, output_dir: Path, tag: str) -> dict:
     for md_file in texts_dir.glob("*.md"):
         try:
             content = md_file.read_text(encoding="utf-8")
-            html = markdown.markdown(
-                content,
-                extensions=["tables", "fenced_code", "toc"],
-            )
-            # Fix internal links to point to proper URLs
-            html = _fix_internal_links(html)
+            html = sanitize_html(_fix_internal_links(content_to_html(content)))
             slug = md_file.stem
             output_path = output_dir / f"{slug}.html"
             output_path.write_text(html, encoding="utf-8")
@@ -138,6 +134,15 @@ def _render_markdown_files(texts_dir: Path, output_dir: Path, tag: str) -> dict:
     logger.info("Wrote version file: %s", tag)
 
     return {"rendered": rendered, "errors": errors}
+
+
+def content_to_html(content: str) -> str:
+    from lacos.common.services.safe_html import render_safe_markdown
+
+    return render_safe_markdown(
+        content,
+        extensions=["tables", "fenced_code", "toc"],
+    )
 
 
 @task(retries=2, retry_delay=60)

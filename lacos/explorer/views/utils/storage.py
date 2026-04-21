@@ -14,6 +14,7 @@ from lacos.blam.models.bundle.bundle_structural_info import BundleAdditionalMeta
 from lacos.blam.models.collection.collection_structural_info import (
     CollectionAdditionalMetadataFile,
 )
+from lacos.common.services.safe_html import render_safe_markdown
 from lacos.storage.services.file_discovery_service import FileDiscoveryService
 
 
@@ -140,9 +141,6 @@ def load_markdown_preview(
     max_preview_bytes: int = 2 * 1024 * 1024,
 ) -> Optional[str]:
     """Load Markdown content from S3 and convert to HTML for preview modals."""
-    import re
-    import markdown as md
-
     if not bucket_name or not object_key:
         return None
 
@@ -161,12 +159,7 @@ def load_markdown_preview(
         except UnicodeDecodeError:
             text = raw.decode("latin-1")
         text = unicodedata.normalize("NFC", text)
-        html = md.markdown(text, extensions=["fenced_code", "tables", "toc", "nl2br"])
-        # Strip dangerous tags to prevent XSS from embedded HTML in markdown
-        html = re.sub(r"<script[\s>].*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
-        html = re.sub(r"<style[\s>].*?</style>", "", html, flags=re.DOTALL | re.IGNORECASE)
-        html = re.sub(r"\bon\w+\s*=", "", html, flags=re.IGNORECASE)
-        return html
+        return render_safe_markdown(text)
     except Exception:
         logger.exception(
             "Could not build Markdown preview for s3://%s/%s",

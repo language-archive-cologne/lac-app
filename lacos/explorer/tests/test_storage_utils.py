@@ -9,6 +9,7 @@ from lacos.blam.models.collection.collection_structural_info import (
 )
 from lacos.explorer.views.utils.storage import load_xml_preview, resolve_resource_to_presigned
 from lacos.explorer.views.utils.storage import resolve_collection_metadata_to_presigned
+from lacos.explorer.views.utils.storage import load_markdown_preview
 
 
 def test_resolve_resource_to_presigned_syncs_resolved_location(monkeypatch):
@@ -215,3 +216,16 @@ def test_load_xml_preview_returns_none_on_s3_error():
     preview = load_xml_preview(service, "bucket-a", "path/file.xml")
 
     assert preview is None
+
+
+def test_load_markdown_preview_sanitizes_active_content():
+    service = MagicMock()
+    body = MagicMock()
+    body.read.return_value = b'[safe](https://example.com) [bad](javascript:alert(1)) <script>alert(1)</script>'
+    service.s3_client.get_object.return_value = {"Body": body}
+
+    preview = load_markdown_preview(service, "bucket-a", "path/file.md")
+
+    assert preview is not None
+    assert "javascript:" not in preview
+    assert "<script" not in preview

@@ -34,6 +34,7 @@ urlpatterns = [
     ),
     path("auth/token/", auth.ThrottledTokenObtainPairView.as_view(), name="token-obtain"),
     path("auth/token/refresh/", auth.ThrottledTokenRefreshView.as_view(), name="token-refresh"),
+    path("auth/token/revoke/", auth.revoke_token, name="token-revoke"),
     path("auth/session-token/", auth.session_token, name="session-token"),
     path("auth/validate/", auth.validate_token, name="auth-validate"),
 ]

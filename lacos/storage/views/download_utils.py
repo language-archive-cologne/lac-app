@@ -11,30 +11,9 @@ from lacos.storage.models.s3_resource_location import S3ResourceLocation
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
 from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 from lacos.blam.models.bundle.bundle_repository import Bundle
+from lacos.common.request_utils import get_client_ip
 
 logger = logging.getLogger(__name__)
-
-
-def get_client_ip(request) -> str:
-    """Extract client IP from request for rate limiting.
-
-    Only trusts X-Forwarded-For header if the request came from a trusted proxy.
-    Configure TRUSTED_PROXY_IPS in Django settings as a list of IP addresses.
-    If not configured or empty, falls back to REMOTE_ADDR only (secure default).
-    """
-    remote_addr = request.META.get('REMOTE_ADDR', 'unknown')
-
-    # Get trusted proxy list from settings
-    trusted_proxies = getattr(settings, 'TRUSTED_PROXY_IPS', None)
-
-    # Only trust X-Forwarded-For if request came from a trusted proxy
-    if trusted_proxies and remote_addr in trusted_proxies:
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            # Return the first (client) IP from the chain
-            return x_forwarded_for.split(',')[0].strip()
-
-    return remote_addr
 
 
 def check_rate_limit(request, key_prefix: str, max_requests: int, window_seconds: int) -> bool:

@@ -1,14 +1,75 @@
 import logging
-import time
 import os
-import json
-from typing import Dict, Any, List, Tuple, Set, Optional
+from typing import Dict, Any, List, Optional
+from pathlib import PurePosixPath
 
 import boto3
 
 from .base_storage_service import BaseStorageService
 
 logger = logging.getLogger(__name__)
+
+CONTENT_TYPE_ALIASES = {
+    "binary/octet-stream": "application/octet-stream",
+}
+
+
+DEFAULT_ALLOWED_CONTENT_TYPES = {
+    "application/gzip",
+    "application/json",
+    "application/octet-stream",
+    "application/pdf",
+    "application/vnd.ms-excel",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/x-7z-compressed",
+    "application/x-bzip2",
+    "application/x-tar",
+    "application/xml",
+    "application/zip",
+    "text/csv",
+    "text/markdown",
+    "text/plain",
+    "text/tab-separated-values",
+    "text/xml",
+}
+
+DEFAULT_ALLOWED_CONTENT_TYPE_PREFIXES = (
+    "audio/",
+    "image/",
+    "text/",
+    "video/",
+)
+
+DEFAULT_BLOCKED_CONTENT_TYPES = {
+    "application/javascript",
+    "application/x-bat",
+    "application/x-csh",
+    "application/x-httpd-php",
+    "application/x-msdownload",
+    "application/xhtml+xml",
+    "image/svg+xml",
+    "text/html",
+    "text/javascript",
+}
+
+DEFAULT_BLOCKED_EXTENSIONS = {
+    ".bat",
+    ".cmd",
+    ".cjs",
+    ".exe",
+    ".htm",
+    ".html",
+    ".js",
+    ".mjs",
+    ".php",
+    ".ps1",
+    ".sh",
+    ".svg",
+}
+
 
 class UploadService(BaseStorageService):
     """
@@ -44,6 +105,76 @@ class UploadService(BaseStorageService):
         logger.info("UploadService initialized")
         self.initialized = True
 
+    def _get_upload_security_settings(self) -> Dict[str, Any]:
+        try:
+            from django.conf import settings
+        except Exception:
+            return {
+                "allowed_types": set(DEFAULT_ALLOWED_CONTENT_TYPES),
+                "allowed_type_prefixes": tuple(DEFAULT_ALLOWED_CONTENT_TYPE_PREFIXES),
+                "blocked_types": set(DEFAULT_BLOCKED_CONTENT_TYPES),
+                "blocked_extensions": set(DEFAULT_BLOCKED_EXTENSIONS),
+                "max_file_size": 50 * 1024 * 1024 * 1024,
+                "min_file_size": 1,
+            }
+
+        return {
+            "allowed_types": set(
+                getattr(settings, "UPLOAD_ALLOWED_CONTENT_TYPES", DEFAULT_ALLOWED_CONTENT_TYPES),
+            ),
+            "allowed_type_prefixes": tuple(
+                getattr(
+                    settings,
+                    "UPLOAD_ALLOWED_CONTENT_TYPE_PREFIXES",
+                    DEFAULT_ALLOWED_CONTENT_TYPE_PREFIXES,
+                ),
+            ),
+            "blocked_types": set(
+                getattr(settings, "UPLOAD_BLOCKED_CONTENT_TYPES", DEFAULT_BLOCKED_CONTENT_TYPES),
+            ),
+            "blocked_extensions": set(
+                getattr(settings, "UPLOAD_BLOCKED_EXTENSIONS", DEFAULT_BLOCKED_EXTENSIONS),
+            ),
+            "max_file_size": int(
+                getattr(settings, "UPLOAD_MAX_FILE_SIZE_BYTES", 50 * 1024 * 1024 * 1024),
+            ),
+            "min_file_size": int(getattr(settings, "UPLOAD_MIN_FILE_SIZE_BYTES", 1)),
+        }
+
+    def _normalize_content_type(self, content_type: Optional[str]) -> str:
+        normalized = (content_type or "").split(";", 1)[0].strip().lower()
+        return CONTENT_TYPE_ALIASES.get(normalized, normalized)
+
+    def _normalize_path_prefix(self, path_prefix: Optional[str]) -> str:
+        if not path_prefix:
+            return ""
+
+        cleaned = path_prefix.replace("\\", "/").strip("/")
+        if "\x00" in cleaned:
+            raise ValueError("Path prefix contains invalid characters")
+
+        parts: list[str] = []
+        for part in PurePosixPath(cleaned).parts:
+            if part in ("", "."):
+                continue
+            if part == "..":
+                raise ValueError("Path prefix cannot contain parent directory traversal")
+            parts.append(part)
+        return "/".join(parts)
+
+    def _validate_file_name(self, file_name: Optional[str]) -> str:
+        if not file_name or not file_name.strip():
+            raise ValueError("File name cannot be empty")
+
+        normalized = file_name.strip()
+        if "\x00" in normalized:
+            raise ValueError("File name contains invalid characters")
+        if "/" in normalized or "\\" in normalized:
+            raise ValueError("File name must not contain path separators")
+        if normalized in {".", ".."}:
+            raise ValueError("File name is invalid")
+        return normalized
+
     def _generate_file_key(self, file_name: str, path_prefix: Optional[str] = None) -> str:
         """
         Generate a clean S3 key (path) for a file.
@@ -55,13 +186,12 @@ class UploadService(BaseStorageService):
         Returns:
             str: The generated S3 key
         """
-        # Sanitize the file name to work with S3 (replace spaces with underscores)
-        clean_file_name = file_name.replace(' ', '_')
+        validated_file_name = self._validate_file_name(file_name)
+        clean_file_name = validated_file_name.replace(' ', '_')
         
         # Build the full S3 key (path)
         if path_prefix:
-            # Ensure the path has no leading or trailing slashes
-            clean_prefix = path_prefix.strip('/')
+            clean_prefix = self._normalize_path_prefix(path_prefix)
             if clean_prefix:
                 return f"{clean_prefix}/{clean_file_name}"
         
@@ -85,6 +215,24 @@ class UploadService(BaseStorageService):
             Dictionary with presigned post data
         """
         try:
+            security_settings = self._get_upload_security_settings()
+            validation = self.validate_file_upload(
+                file_name=file_name,
+                file_size=file_size,
+                content_type=file_type,
+                allowed_types=list(security_settings["allowed_types"]),
+                max_file_size=security_settings["max_file_size"],
+                min_file_size=security_settings["min_file_size"],
+            )
+            if not validation["valid"]:
+                return {
+                    "success": False,
+                    "error": "; ".join(validation["errors"]),
+                }
+
+            file_name = validation["file_name"]
+            file_type = validation["content_type"]
+            path_prefix = self._normalize_path_prefix(path_prefix)
             # Generate a unique key for the file
             file_key = self._generate_file_key(file_name, path_prefix)
 
@@ -133,14 +281,15 @@ class UploadService(BaseStorageService):
                     'Content-Type': file_type
                 },
                 Conditions=[
-                    {'Content-Type': file_type}
+                    {'Content-Type': file_type},
+                    ["content-length-range", security_settings["min_file_size"], security_settings["max_file_size"]],
                 ],
                 ExpiresIn=expiration
             )
-            
-            # Log the generated URL for debugging
-            logger.info("Generated presigned URL", extra={"url": presigned_post['url']})
-            logger.info("Generated presigned fields", extra={"fields": presigned_post['fields']})
+            logger.info(
+                "Generated presigned upload policy",
+                extra={"file_key": file_key, "bucket": target_bucket, "upload_type": "single"},
+            )
             
             return {
                 'success': True,
@@ -210,6 +359,16 @@ class UploadService(BaseStorageService):
         """
         results = []
         failures = []
+        try:
+            normalized_path_prefix = self._normalize_path_prefix(path_prefix)
+        except ValueError as exc:
+            return {
+                'success': False,
+                'presigned_posts': [],
+                'failures': [{'file_meta': {}, 'error': str(exc)}],
+                'total_urls': 0,
+                'total_failures': 1,
+            }
         
         for file_meta in files_metadata:
             file_name = file_meta.get('file_name')
@@ -226,12 +385,20 @@ class UploadService(BaseStorageService):
             
             # Create effective path prefix by combining the overall prefix with file-specific path
             # Note: webkitRelativePath includes the filename, so we need to strip it
-            effective_path_prefix = path_prefix
+            effective_path_prefix = normalized_path_prefix
             if file_path:
                 # Strip the filename from the path if it ends with the filename
                 if file_path.endswith(file_name):
                     file_path = file_path[:-len(file_name)].rstrip('/')
                 if file_path:  # Only use if there's still a path after stripping
+                    try:
+                        file_path = self._normalize_path_prefix(file_path)
+                    except ValueError as exc:
+                        failures.append({
+                            'file_meta': file_meta,
+                            'error': str(exc),
+                        })
+                        continue
                     if effective_path_prefix:
                         effective_path_prefix = f"{effective_path_prefix}/{file_path}"
                     else:
@@ -311,14 +478,30 @@ class UploadService(BaseStorageService):
             Dict[str, Any]: Dictionary containing the presigned URL data with acceleration enabled or error information
         """
         try:
-            # Sanitize the file name to work with S3
+            security_settings = self._get_upload_security_settings()
+            validation = self.validate_file_upload(
+                file_name=file_name,
+                file_size=0,
+                content_type=file_type,
+                allowed_types=list(security_settings["allowed_types"]),
+                max_file_size=security_settings["max_file_size"],
+                min_file_size=security_settings["min_file_size"],
+            )
+            if not validation["valid"]:
+                return {
+                    'success': False,
+                    'error': "; ".join(validation["errors"]),
+                    'file_name': file_name,
+                }
+
+            file_name = validation["file_name"]
+            file_type = validation["content_type"]
             clean_file_name = file_name.replace(' ', '_')
             
             # Build the full S3 key (path)
             s3_key = clean_file_name
             if path_prefix:
-                # Ensure the path has a trailing slash but no leading slash
-                path_prefix = path_prefix.strip('/')
+                path_prefix = self._normalize_path_prefix(path_prefix)
                 if path_prefix:
                     s3_key = f"{path_prefix}/{clean_file_name}"
             
@@ -342,7 +525,8 @@ class UploadService(BaseStorageService):
                     'Content-Type': file_type
                 },
                 Conditions=[
-                    {'Content-Type': file_type}
+                    {'Content-Type': file_type},
+                    ["content-length-range", security_settings["min_file_size"], security_settings["max_file_size"]],
                 ],
                 ExpiresIn=expiration
             )
@@ -388,6 +572,23 @@ class UploadService(BaseStorageService):
             content_type = response.get('ContentType', 'application/octet-stream')
             last_modified = response.get('LastModified', None)
             etag = response.get('ETag', '').strip('"')
+            validation = self.validate_file_upload(
+                file_name=os.path.basename(s3_key),
+                file_size=file_size,
+                content_type=content_type,
+                allowed_types=list(self._get_upload_security_settings()["allowed_types"]),
+                max_file_size=self._get_upload_security_settings()["max_file_size"],
+                min_file_size=self._get_upload_security_settings()["min_file_size"],
+            )
+            if not validation["valid"]:
+                return {
+                    'success': False,
+                    'error': "; ".join(validation["errors"]),
+                    's3_key': s3_key,
+                    'exists': True,
+                    'file_size': file_size,
+                    'bucket_name': target_bucket,
+                }
             
             return {
                 'success': True,
@@ -592,23 +793,49 @@ class UploadService(BaseStorageService):
         Returns:
             Dict with validation result
         """
+        security_settings = self._get_upload_security_settings()
         errors = []
         warnings = []
+        normalized_file_name = file_name.strip() if isinstance(file_name, str) else ""
+        normalized_content_type = self._normalize_content_type(content_type)
+
+        if not normalized_content_type:
+            errors.append("Content type is required")
+
+        try:
+            normalized_file_name = self._validate_file_name(normalized_file_name)
+        except ValueError as exc:
+            errors.append(str(exc))
+
+        file_extension = os.path.splitext(normalized_file_name)[1].lower() if normalized_file_name else ""
+
+        if file_extension in security_settings["blocked_extensions"]:
+            errors.append(f"Files with extension '{file_extension}' are not allowed")
+
+        if normalized_content_type in security_settings["blocked_types"]:
+            errors.append(f"Content type '{normalized_content_type}' is not allowed")
+
+        effective_allowed_types = {
+            self._normalize_content_type(item) for item in (allowed_types or security_settings["allowed_types"])
+        }
+        allowed_prefixes = tuple(security_settings["allowed_type_prefixes"])
+        if normalized_content_type and not (
+            normalized_content_type in effective_allowed_types
+            or any(normalized_content_type.startswith(prefix) for prefix in allowed_prefixes)
+        ):
+            errors.append(
+                f"Content type '{normalized_content_type}' is not allowed for direct upload",
+            )
 
         # File size validation
-        if file_size < min_file_size:
-            errors.append(f"File size must be at least {min_file_size} bytes")
+        if file_size and file_size > 0:
+            if file_size < min_file_size:
+                errors.append(f"File size must be at least {min_file_size} bytes")
 
-        if max_file_size and file_size > max_file_size:
-            errors.append(f"File size {file_size} exceeds maximum allowed size of {max_file_size} bytes")
-
-        # File name validation
-        if not file_name or file_name.strip() == '':
-            errors.append("File name cannot be empty")
-
-        # Content type validation
-        if allowed_types and content_type not in allowed_types:
-            errors.append(f"Content type '{content_type}' not allowed. Allowed types: {', '.join(allowed_types)}")
+            if max_file_size and file_size > max_file_size:
+                errors.append(f"File size {file_size} exceeds maximum allowed size of {max_file_size} bytes")
+        else:
+            warnings.append("File size not provided; upload will be validated using multipart safeguards.")
 
         # Large file recommendation
         single_upload_limit = 5 * 1024 * 1024 * 1024  # 5GB (S3 single PUT limit)
@@ -621,7 +848,9 @@ class UploadService(BaseStorageService):
             'valid': len(errors) == 0,
             'errors': errors,
             'warnings': warnings,
-            'should_use_multipart': file_size > threshold
+            'should_use_multipart': file_size <= 0 or file_size > threshold,
+            'file_name': normalized_file_name,
+            'content_type': normalized_content_type,
         }
 
     # ----- Multipart Upload Methods -----
@@ -632,6 +861,7 @@ class UploadService(BaseStorageService):
         file_type: str,
         path_prefix: Optional[str] = None,
         bucket_name: Optional[str] = None,
+        file_size: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Initialize a multipart upload to S3.
@@ -645,6 +875,25 @@ class UploadService(BaseStorageService):
             Dict[str, Any]: Dictionary containing upload ID and S3 key or error information
         """
         try:
+            security_settings = self._get_upload_security_settings()
+            validation = self.validate_file_upload(
+                file_name=file_name,
+                file_size=file_size or 0,
+                content_type=file_type,
+                allowed_types=list(security_settings["allowed_types"]),
+                max_file_size=security_settings["max_file_size"],
+                min_file_size=security_settings["min_file_size"],
+            )
+            if not validation["valid"]:
+                return {
+                    'success': False,
+                    'error': "; ".join(validation["errors"]),
+                    'file_name': file_name,
+                }
+
+            file_name = validation["file_name"]
+            file_type = validation["content_type"]
+            path_prefix = self._normalize_path_prefix(path_prefix)
             # Generate a clean S3 key for the file
             s3_key = self._generate_file_key(file_name, path_prefix)
             

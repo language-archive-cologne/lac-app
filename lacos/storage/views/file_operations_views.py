@@ -12,6 +12,7 @@ from django.template.loader import render_to_string
 from django.middleware.csrf import get_token
 from django.urls import reverse
 
+from lacos.common.services.safe_html import render_safe_markdown
 from lacos.storage.services.bucket_service import BucketService
 from lacos.storage.services.media_processing_service import MediaProcessingService
 from lacos.common.mixins.htmx_template_helpers import HtmxTemplateHelperMixin
@@ -292,9 +293,6 @@ def _fetch_pretty_content(bucket_service, bucket_name, object_path, viewer_type)
 
 def _fetch_markdown_html(bucket_service, bucket_name, object_path):
     """Fetch a Markdown file from S3 and convert it to HTML for in-modal display."""
-    import re
-    import markdown as md
-
     MAX_PREVIEW_BYTES = 2 * 1024 * 1024  # 2 MB cap
 
     try:
@@ -308,11 +306,7 @@ def _fetch_markdown_html(bucket_service, bucket_name, object_path):
         except UnicodeDecodeError:
             text = raw.decode("latin-1")
         text = unicodedata.normalize("NFC", text)
-        html = md.markdown(text, extensions=["fenced_code", "tables", "toc", "nl2br"])
-        # Strip dangerous tags to prevent XSS from embedded HTML in markdown
-        html = re.sub(r"<script[\s>].*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
-        html = re.sub(r"<style[\s>].*?</style>", "", html, flags=re.DOTALL | re.IGNORECASE)
-        html = re.sub(r"\bon\w+\s*=", "", html, flags=re.IGNORECASE)
+        html = render_safe_markdown(text)
         return {"markdown_html": html}
     except Exception:
         logger.exception("Could not render markdown %s for preview", object_path)

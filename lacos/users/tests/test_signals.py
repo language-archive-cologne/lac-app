@@ -53,8 +53,9 @@ class TestAuthenticationLogging:
         record = _record_for(caplog, "LOGIN_SUCCESS")
         assert record.method == "saml"
 
-    def test_login_success_with_forwarded_ip(self, caplog):
-        """Test that X-Forwarded-For IP is extracted correctly."""
+    def test_login_success_with_forwarded_ip_from_trusted_proxy(self, caplog, settings):
+        """Trusted proxies may supply the client IP via X-Forwarded-For."""
+        settings.TRUSTED_PROXY_IPS = ["127.0.0.1"]
         user = UserFactory()
         request = Mock()
         request.META = {
@@ -68,6 +69,21 @@ class TestAuthenticationLogging:
 
         record = _record_for(caplog, "LOGIN_SUCCESS")
         assert record.ip == "203.0.113.50"
+
+    def test_login_success_ignores_forwarded_ip_from_untrusted_proxy(self, caplog):
+        user = UserFactory()
+        request = Mock()
+        request.META = {
+            "HTTP_USER_AGENT": "Mozilla/5.0",
+            "HTTP_X_FORWARDED_FOR": "203.0.113.50, 70.41.3.18",
+            "REMOTE_ADDR": "127.0.0.1",
+        }
+
+        with caplog.at_level("INFO", logger="lacos.security"):
+            user_logged_in.send(sender=User, request=request, user=user)
+
+        record = _record_for(caplog, "LOGIN_SUCCESS")
+        assert record.ip == "127.0.0.1"
 
     def test_logout_logs_event(self, caplog):
         """Test that logout is logged."""

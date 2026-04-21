@@ -15,24 +15,14 @@ from django.contrib.auth.signals import user_logged_in, user_logged_out, user_lo
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 
+from lacos.common.request_utils import get_client_ip
+
 # Import saml handlers so Django connects signal receivers on startup.
 from . import saml  # noqa: F401
 from .models import User
 from .utils import ensure_acl_agent_uri
 
 logger = logging.getLogger("lacos.security")
-
-
-def get_client_ip(request):
-    """Extract client IP address from request."""
-    if request is None:
-        return "unknown"
-    x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-    if x_forwarded_for:
-        ip = x_forwarded_for.split(",")[0].strip()
-    else:
-        ip = request.META.get("REMOTE_ADDR", "unknown")
-    return ip
 
 
 @receiver(post_save, sender=User)
@@ -102,4 +92,3 @@ def log_login_failed(sender, credentials, request, **kwargs):
         "LOGIN_FAILED",
         extra={"attempted_user": username, "ip": ip_address, "user_agent": user_agent},
     )
-

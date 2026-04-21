@@ -1,11 +1,13 @@
 from drf_spectacular.utils import extend_schema
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.authentication import SessionAuthentication
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+
+from lacos.users.security import user_has_mfa_authenticator, user_requires_mfa
 
 
 class ThrottledTokenObtainPairView(TokenObtainPairView):
@@ -32,6 +34,11 @@ class ThrottledTokenRefreshView(TokenRefreshView):
 @permission_classes([IsAuthenticated])
 def session_token(request):
     """Exchange an active session (e.g. Shibboleth) for a JWT token pair."""
+    if user_requires_mfa(request.user) and not user_has_mfa_authenticator(request.user):
+        return Response(
+            {"detail": "MFA enrollment is required before issuing privileged API tokens."},
+            status=403,
+        )
     refresh = RefreshToken.for_user(request.user)
     return Response({
         "access": str(refresh.access_token),
@@ -53,3 +60,26 @@ def validate_token(request):
         "username": request.user.username,
         "is_active": request.user.is_active,
     })
+
+
+@extend_schema(
+    summary="Revoke refresh token",
+    description="Blacklist a refresh token so it can no longer be used to mint access tokens.",
+    tags=["auth"],
+    request=None,
+    responses={200: None, 400: None},
+)
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def revoke_token(request):
+    refresh_token = request.data.get("refresh")
+    if not refresh_token:
+        return Response({"detail": "refresh is required"}, status=400)
+
+    try:
+        token = RefreshToken(refresh_token)
+        token.blacklist()
+    except Exception:
+        return Response({"detail": "invalid refresh token"}, status=400)
+
+    return Response(status=200)

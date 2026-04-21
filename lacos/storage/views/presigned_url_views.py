@@ -343,6 +343,7 @@ def initialize_multipart_upload(request):
         file_type = data.get("file_type")
         path_prefix = data.get("path_prefix")
         bucket_name = data.get("bucket_name")
+        file_size = data.get("file_size")
         
         # Validate required fields
         if not file_name or not file_type:
@@ -363,6 +364,7 @@ def initialize_multipart_upload(request):
             file_type=file_type,
             path_prefix=path_prefix,
             bucket_name=bucket_name,
+            file_size=int(file_size) if file_size else None,
         )
         
         if result["success"]:

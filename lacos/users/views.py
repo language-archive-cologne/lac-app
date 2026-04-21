@@ -21,6 +21,13 @@ class UserDetailView(LoginRequiredMixin, DetailView):
     slug_field = "username"
     slug_url_kwarg = "username"
 
+    def get_object(self, queryset: QuerySet | None = None) -> User:
+        user = super().get_object(queryset)
+        request_user = self.request.user
+        if request_user.is_staff or request_user == user:
+            return user
+        raise Http404("User not found")
+
 
 user_detail_view = UserDetailView.as_view()
 

@@ -254,28 +254,57 @@ def test_generate_batch_presigned_posts_with_same_name_different_paths(mock_uplo
 
 def test_generate_presigned_post_with_invalid_filename(mock_upload_service):
     """Test generating a presigned post URL with an invalid or empty filename"""
-    # Test with empty filename
     result = mock_upload_service.generate_presigned_post(
         file_name="",
         file_type="text/plain"
     )
-    
-    # With current implementation, an empty filename would still generate a URL
-    # but the S3 key would just be the path prefix or an empty string
-    assert result["s3_key"] == "", "S3 key should be empty for empty filename"
-    
-    # Test with None filename (should handle gracefully)
-    # Implementation may vary on how it handles this, adjust the test as needed
-    try:
+
+    assert result["success"] is False
+    assert "File name cannot be empty" in result["error"]
+
+    result = mock_upload_service.generate_presigned_post(
+        file_name="nested/path.txt",
+        file_type="text/plain",
+    )
+    assert result["success"] is False
+    assert "path separators" in result["error"]
+
+
+def test_generate_presigned_post_blocks_active_content_types(mock_upload_service):
+    result = mock_upload_service.generate_presigned_post(
+        file_name="dangerous.html",
+        file_type="text/html",
+        file_size=1024,
+    )
+
+    assert result["success"] is False
+    assert "not allowed" in result["error"]
+
+
+def test_generate_batch_presigned_posts_rejects_traversal_paths(mock_upload_service):
+    result = mock_upload_service.generate_batch_presigned_posts(
+        files_metadata=[
+            {"file_name": "file.txt", "file_type": "text/plain", "path": "../escape"},
+        ],
+        path_prefix=TEST_FOLDER_NAME,
+        file_size=1024,
+    )
+
+    assert result["success"] is False
+    assert result["total_failures"] == 1
+
+
+def test_generate_presigned_post_does_not_log_sensitive_policy_fields(mock_upload_service, caplog):
+    with caplog.at_level("INFO"):
         result = mock_upload_service.generate_presigned_post(
-            file_name=None,
-            file_type="text/plain"
+            file_name="test.txt",
+            file_type="text/plain",
+            file_size=10 * 1024 * 1024,
         )
-        # If it doesn't raise an exception, check it handled it reasonably
-        assert not result["success"] or result["s3_key"] == "", "Should either fail or create an empty S3 key"
-    except:
-        # This is also acceptable if the method doesn't handle None values
-        pass
+
+    assert result["success"] is True
+    assert "Generated presigned URL" not in caplog.text
+    assert "Generated presigned fields" not in caplog.text
 
 def test_mark_upload_complete(mock_s3, mock_upload_service):
     """Test marking an upload as complete and verifying the file"""
@@ -301,6 +330,22 @@ def test_mark_upload_complete(mock_s3, mock_upload_service):
     result = mock_upload_service.mark_upload_complete("nonexistent.txt")
     assert result["success"] is False, "Should fail for non-existent file"
     assert result["exists"] is False, "Should report file doesn't exist"
+
+
+def test_mark_upload_complete_rejects_blocked_content_type(mock_s3, mock_upload_service):
+    s3_key = f"{TEST_FOLDER_NAME}/dangerous.html"
+    mock_s3.put_object(
+        Bucket=TEST_BUCKET_NAME,
+        Key=s3_key,
+        Body=b"<html></html>",
+        ContentType="text/html",
+    )
+
+    result = mock_upload_service.mark_upload_complete(s3_key)
+
+    assert result["success"] is False
+    assert result["exists"] is True
+    assert "not allowed" in result["error"]
 
 def test_presigned_url_actual_upload(mock_s3, mock_upload_service):
     """Test that we can actually upload a file using the presigned URL"""
