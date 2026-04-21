@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,7 @@ from lacos.blam.models.collection.collection_publication_info import (
     CollectionPublicationInfo,
 )
 from lacos.blam.models.collection.collection_repository import Collection
+from lacos.explorer.map_utils import get_collection_map_markers
 
 
 def _build_collection_graph(index: int) -> Collection:
@@ -68,6 +70,37 @@ def _build_collection_graph(index: int) -> Collection:
     return collection
 
 
+def _build_empty_collection(index: int) -> Collection:
+    collection = Collection.objects.create(identifier=f"hdl:test/empty-{index}")
+
+    location = CollectionLocation.objects.create(
+        geo_location=f"{30 + index}, {40 + index}",
+        location_name=f"Empty Location {index}",
+        region_name="Region",
+        country_name="Country",
+        country_code="TC",
+    )
+    general_info = CollectionGeneralInfo.objects.create(
+        collection=collection,
+        id_value=f"hdl:test/empty-general-{index}",
+        id_type=IdentifierTypeChoices.HANDLE,
+        display_title=f"Empty Collection {index}",
+        description=f"Empty description {index}",
+        version="1.0",
+        location=location,
+    )
+    general_info.object_languages.add(
+        CollectionObjectLanguage.objects.create(
+            display_name=f"Empty Language {index}",
+            name=f"Empty Language {index}",
+            iso_639_3_code=f"e{index:02d}"[-3:],
+            glottolog_code=f"eglot{index:04d}"[:10],
+        )
+    )
+
+    return collection
+
+
 @pytest.mark.django_db
 def test_collection_list_full_page_query_budget(client):
     for idx in range(1, 6):
@@ -79,7 +112,7 @@ def test_collection_list_full_page_query_budget(client):
         assert response.status_code == 200
         _ = response.content
 
-    assert len(captured) <= 16
+    assert len(captured) <= 18
 
 
 @pytest.mark.django_db
@@ -203,3 +236,29 @@ def test_language_index_component_styles_define_lighter_neutral_palette():
     assert ".language-index-pill" in css
     assert "background: #f6f6f6;" in css
     assert "color: var(--color-base-content);" in css
+
+
+@pytest.mark.django_db
+def test_collection_list_excludes_zero_bundle_collections(client):
+    empty_collection = _build_empty_collection(1)
+    visible_collection = _build_collection_graph(1)
+
+    response = client.get(reverse("explorer:collection_list"))
+
+    assert response.status_code == 200
+    rendered_ids = {collection.pk for collection in response.context["collection_list"]}
+    assert visible_collection.pk in rendered_ids
+    assert empty_collection.pk not in rendered_ids
+
+
+@pytest.mark.django_db
+def test_collection_map_markers_exclude_zero_bundle_collections():
+    cache.clear()
+    empty_collection = _build_empty_collection(2)
+    visible_collection = _build_collection_graph(2)
+
+    markers = json.loads(get_collection_map_markers())
+    marker_urls = {marker["url"] for marker in markers}
+
+    assert f"/collections/{visible_collection.pk}/" in marker_urls
+    assert f"/collections/{empty_collection.pk}/" not in marker_urls

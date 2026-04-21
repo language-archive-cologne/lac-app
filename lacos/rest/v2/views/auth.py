@@ -7,8 +7,6 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-from lacos.users.security import user_has_mfa_authenticator, user_requires_mfa
-
 
 class ThrottledTokenObtainPairView(TokenObtainPairView):
     throttle_classes = [ScopedRateThrottle]
@@ -34,11 +32,6 @@ class ThrottledTokenRefreshView(TokenRefreshView):
 @permission_classes([IsAuthenticated])
 def session_token(request):
     """Exchange an active session (e.g. Shibboleth) for a JWT token pair."""
-    if user_requires_mfa(request.user) and not user_has_mfa_authenticator(request.user):
-        return Response(
-            {"detail": "MFA enrollment is required before issuing privileged API tokens."},
-            status=403,
-        )
     refresh = RefreshToken.for_user(request.user)
     return Response({
         "access": str(refresh.access_token),

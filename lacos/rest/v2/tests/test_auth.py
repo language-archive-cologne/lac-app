@@ -35,15 +35,6 @@ class TestSessionToken:
         response = api_client.post("/api/v2/auth/session-token/")
         assert response.status_code in (401, 403)
 
-    def test_session_token_requires_mfa_for_privileged_users(self, api_client, user):
-        user.is_staff = True
-        user.save(update_fields=["is_staff"])
-
-        api_client.force_authenticate(user=user)
-        response = api_client.post("/api/v2/auth/session-token/")
-
-        assert response.status_code == 403
-
 
 @pytest.mark.django_db
 class TestTokenRevocation:

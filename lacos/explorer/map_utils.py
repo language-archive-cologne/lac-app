@@ -29,7 +29,11 @@ def _all_map_collections():
             ),
             to_attr='prefetched_general_info',
         ),
-    ).annotate(bundles_count=Count('bundle_collection', distinct=True))
+    ).annotate(
+        bundles_count=Count('bundle_collection', distinct=True)
+    ).filter(
+        bundles_count__gt=0,
+    )
 
 
 def get_collection_map_markers(collections=None):

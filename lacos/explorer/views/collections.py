@@ -162,7 +162,11 @@ class CollectionListView(ListView):
                 queryset=CollectionPublicationInfo.objects.prefetch_related('creators'),
                 to_attr='prefetched_publication_info',
             ),
-        ).annotate(bundles_count=Count('bundle_collection', distinct=True))
+        ).annotate(
+            bundles_count=Count('bundle_collection', distinct=True)
+        ).filter(
+            bundles_count__gt=0,
+        )
 
         language_filter = self.request.GET.get("language", "").strip()
         if language_filter:
