@@ -38,6 +38,7 @@ class SecurityHeadersMiddleware:
         asset_origins = _origins_from_settings(
             "STATIC_URL",
             "MEDIA_URL",
+            "AWS_S3_BROWSER_ENDPOINT_URL",
             "EXPLORER_MAP_PMTILES_URL",
             "EXPLORER_MAP_GLYPHS_URL",
             "EXPLORER_MAIN_MAP_STYLE_URL",
@@ -50,6 +51,7 @@ class SecurityHeadersMiddleware:
         font_src = ["'self'", "data:", *asset_origins]
         connect_src = ["'self'", *asset_origins]
         media_src = ["'self'", *asset_origins]
+        frame_src = ["'self'", *asset_origins]
 
         return "; ".join(
             [
@@ -59,6 +61,7 @@ class SecurityHeadersMiddleware:
                 "frame-ancestors 'none'",
                 "form-action 'self'",
                 "worker-src 'self' blob:",
+                f"frame-src {' '.join(frame_src)}",
                 f"script-src {' '.join(script_src)}",
                 f"style-src {' '.join(style_src)}",
                 f"img-src {' '.join(img_src)}",

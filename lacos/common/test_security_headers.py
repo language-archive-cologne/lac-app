@@ -42,6 +42,19 @@ def test_csp_allows_configured_map_origins(client, settings):
 
 
 @pytest.mark.django_db
+def test_csp_allows_configured_storage_browser_origin_for_embeds(client, settings):
+    settings.AWS_S3_BROWSER_ENDPOINT_URL = "http://localhost:9100"
+
+    response = client.get("/")
+
+    csp = response.headers["Content-Security-Policy"]
+    assert "frame-src" in csp
+    assert "media-src" in csp
+    assert "img-src" in csp
+    assert "http://localhost:9100" in csp
+
+
+@pytest.mark.django_db
 def test_csp_allows_configured_static_origin(client, settings):
     settings.STATIC_URL = "https://static.example.test/static/"
 
