@@ -25,28 +25,6 @@ USERNAME_ATTR_KEYS: tuple[str, ...] = (
     "uid",
     "urn:oid:0.9.2342.19200300.100.1.1",
 )
-EMAIL_ATTR_KEYS: tuple[str, ...] = (
-    "mail",
-    "email",
-    "urn:oid:0.9.2342.19200300.100.1.3",
-    "urn:oid:1.2.840.113549.1.9.1",
-)
-DISPLAY_NAME_ATTR_KEYS: tuple[str, ...] = (
-    "displayName",
-    "cn",
-    "urn:oid:2.16.840.1.113730.3.1.241",
-)
-GIVEN_NAME_ATTR_KEYS: tuple[str, ...] = (
-    "givenName",
-    "urn:oid:2.5.4.42",
-)
-FAMILY_NAME_ATTR_KEYS: tuple[str, ...] = (
-    "sn",
-    "surname",
-    "urn:oid:2.5.4.4",
-)
-
-
 def _coerce_first(value: Any) -> str | None:
     if value is None:
         return None
@@ -71,22 +49,6 @@ def _extract_first(attributes: dict[str, Any], keys: Sequence[str]) -> str | Non
         if result:
             return result
     return None
-
-
-def _extract_persistent_id(session_info: dict[str, Any] | None) -> str | None:
-    if not session_info:
-        return None
-    name_id = session_info.get("name_id")
-    if name_id is None:
-        return None
-    # pysaml2 NameID objects expose a text attribute with the persistent value.
-    text = getattr(name_id, "text", None)
-    if text:
-        stripped = str(text).strip()
-        return stripped or None
-    return _coerce_first(name_id)
-
-
 if pre_user_save is not None:  # pragma: no branch - guarded by import
 
     @receiver(pre_user_save)
@@ -112,28 +74,9 @@ if pre_user_save is not None:  # pragma: no branch - guarded by import
             # Always prefer the IdP-provided eppn/uid over NameID for consistency.
             instance.username = username
 
-        email = _extract_first(attributes, EMAIL_ATTR_KEYS)
-        if email:
-            instance.email = email
-
-        display_name = _extract_first(attributes, DISPLAY_NAME_ATTR_KEYS)
-        if not display_name:
-            given = _extract_first(attributes, GIVEN_NAME_ATTR_KEYS)
-            family = _extract_first(attributes, FAMILY_NAME_ATTR_KEYS)
-            display_name = " ".join(part for part in (given, family) if part)
-        if display_name:
-            instance.name = display_name
-
-        persistent_id = _extract_persistent_id(session_info)
-        if persistent_id:
-            instance.saml_persistent_id = persistent_id
-
-        # Auto-generate ACL agent URI from eppn/email for ACL matching.
-        candidate = instance.username
-        if instance.email and "@" in instance.email:
-            candidate = instance.email
-        if candidate and "@" in candidate:
-            instance.acl_agent_uri = f"urn:lacos:eppn:{candidate}"
+        # Keep only the federated identifier required for login and ACL matching.
+        if instance.username:
+            instance.acl_agent_uri = f"urn:lacos:eppn:{instance.username}"
 
 
 if post_authenticated is not None:  # pragma: no branch - guarded by import

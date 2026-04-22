@@ -670,6 +670,37 @@ if SAML_LOGIN_ENABLED:
                 ),
                 "name_id_format": [SAML_DEFAULT_NAME_ID_FORMAT],
                 "required_attributes": ["eduPersonPrincipalName"],
+                "ui_info": {
+                    "display_name": [
+                        {"text": "Language Archive Cologne", "lang": "en"},
+                    ],
+                    "description": [
+                        {
+                            "text": (
+                                "Digital archive for endangered-language and "
+                                "ethnographic research data at the University "
+                                "of Cologne."
+                            ),
+                            "lang": "en",
+                        },
+                    ],
+                    "information_url": [
+                        {"text": "https://lacos.uni-koeln.de/", "lang": "en"},
+                    ],
+                    "privacy_statement_url": [
+                        {
+                            "text": "https://lacos.uni-koeln.de/privacy-policy/",
+                            "lang": "en",
+                        },
+                    ],
+                    "logo": [
+                        {
+                            "text": "https://lacos.uni-koeln.de/static/images/logo-LAC.png",
+                            "width": "180",
+                            "height": "78",
+                        },
+                    ],
+                },
             },
         },
         "http_client_timeout": env.int("SAML_HTTP_CLIENT_TIMEOUT", default=10),
@@ -690,6 +721,9 @@ if SAML_LOGIN_ENABLED:
                 "contact_type": "support",
                 "email_address": ["mailto:lac-helpdesk@uni-koeln.de"],
             },
+        ],
+        "entity_category": [
+            "https://refeds.org/category/code-of-conduct/v2",
         ],
         "security": {
             "wantAttributeStatementSigned": True,

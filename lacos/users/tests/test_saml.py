@@ -21,8 +21,6 @@ def enable_saml(settings):
     settings.SAML_DJANGO_USER_MAIN_ATTRIBUTE = "username"
     settings.SAML_ATTRIBUTE_MAPPING = {
         "eduPersonPrincipalName": ("username",),
-        "mail": ("email",),
-        "displayName": ("name",),
     }
 
 
@@ -34,7 +32,7 @@ def _build_session_info(name_id: str, attributes: dict[str, list[str]]) -> dict:
     }
 
 
-def test_sync_user_from_saml_populates_fields():
+def test_sync_user_from_saml_keeps_only_required_identifier():
     user = User()
     attributes = {
         "eduPersonPrincipalName": ["user123"],
@@ -52,12 +50,13 @@ def test_sync_user_from_saml_populates_fields():
     )
 
     assert user.username == "user123"
-    assert user.email == "user@example.com"
-    assert user.name == "Test User"
-    assert user.saml_persistent_id == "persistent-id-123"
+    assert user.email == ""
+    assert user.name == ""
+    assert user.saml_persistent_id in (None, "")
+    assert user.acl_agent_uri == "urn:lacos:eppn:user123"
 
 
-def test_sync_user_from_saml_combines_given_and_family_names():
+def test_sync_user_from_saml_ignores_optional_profile_attributes():
     user = User(name="")
     attributes = {
         "eduPersonPrincipalName": ["combined"],
@@ -75,11 +74,14 @@ def test_sync_user_from_saml_combines_given_and_family_names():
         session_info=session_info,
     )
 
-    assert user.name == "Alice Example"
+    assert user.username == "combined"
+    assert user.name == ""
+    assert user.email == ""
+    assert user.saml_persistent_id in (None, "")
 
 
 @pytest.mark.django_db
-def test_backend_creates_user_with_persistent_identifier(settings):
+def test_backend_creates_user_with_required_identifier_only(settings):
     backend = LacosSaml2Backend()
     attributes = {
         "eduPersonPrincipalName": ["backend-user"],
@@ -97,9 +99,10 @@ def test_backend_creates_user_with_persistent_identifier(settings):
 
     assert isinstance(user, User)
     assert user.username == "backend-user"
-    assert user.email == "backend@example.com"
-    assert user.name == "Backend User"
-    assert user.saml_persistent_id == "urn:persistent:abc123"
+    assert user.email == ""
+    assert user.name == ""
+    assert user.saml_persistent_id in (None, "")
+    assert user.acl_agent_uri == "urn:lacos:eppn:backend-user"
 
 
 @pytest.mark.django_db
@@ -127,9 +130,10 @@ def test_backend_links_existing_user_by_username(settings):
 
     assert user.pk == existing.pk
     user.refresh_from_db()
-    assert user.email == "updated@example.com"
-    assert user.name == "Updated Name"
     assert user.username == "existing-user"
+    assert user.email == "old@example.com"
+    assert user.name == "Old Name"
+    assert user.saml_persistent_id == "urn:persistent:link-me"
 
 
 @pytest.mark.django_db
@@ -155,7 +159,10 @@ def test_backend_creates_user_without_name_id_when_using_eppn(settings):
 
     assert isinstance(user, User)
     assert user.username == "eppn-user"
+    assert user.email == ""
+    assert user.name == ""
     assert user.saml_persistent_id in (None, "")
+    assert user.acl_agent_uri == "urn:lacos:eppn:eppn-user"
 
 
 @pytest.mark.django_db
