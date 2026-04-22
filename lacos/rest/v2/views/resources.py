@@ -23,6 +23,7 @@ from lacos.explorer.media_utils import determine_media_type, guess_source_mime_t
 from lacos.storage.models.s3_resource_location import S3ResourceLocation
 from lacos.storage.services.bucket_service import BucketService
 from lacos.storage.services.presigned_url_cache_service import PresignedUrlCacheService
+from lacos.common.request_utils import get_client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ def _get_s3_location(resource):
 def _build_auth_context(request):
     if request.user.is_authenticated:
         return f"user:{request.user.pk}"
-    return f"anon:{request.META.get('REMOTE_ADDR')}"
+    return f"anon:{get_client_ip(request)}"
 
 
 def _resource_download_path(resource) -> str:

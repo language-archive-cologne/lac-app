@@ -5,6 +5,8 @@ from urllib.parse import urlparse
 from django.conf import settings
 from django.utils.cache import patch_cache_control
 
+from lacos.common.services.csp import InlineCspHashes, collect_inline_csp_hashes
+
 
 def _origin_from_url(url: str | None) -> str | None:
     if not url:
@@ -33,7 +35,12 @@ class SecurityHeadersMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
-    def build_content_security_policy(self) -> str:
+    def build_content_security_policy(
+        self,
+        *,
+        inline_hashes: InlineCspHashes | None = None,
+    ) -> str:
+        inline_hashes = inline_hashes or InlineCspHashes()
         static_origins = _origins_from_settings("STATIC_URL")
         asset_origins = _origins_from_settings(
             "STATIC_URL",
@@ -45,13 +52,23 @@ class SecurityHeadersMiddleware:
             "EXPLORER_MAIN_MAP_DARK_STYLE_URL",
         )
 
-        script_src = ["'self'", "'unsafe-inline'", *static_origins]
-        style_src = ["'self'", "'unsafe-inline'", *static_origins]
+        script_src = ["'self'", *static_origins]
+        style_src = ["'self'", *static_origins]
         img_src = ["'self'", "data:", *asset_origins]
         font_src = ["'self'", "data:", *asset_origins]
         connect_src = ["'self'", *asset_origins]
         media_src = ["'self'", *asset_origins]
         frame_src = ["'self'", *asset_origins]
+
+        if inline_hashes.script_hashes:
+            if inline_hashes.has_script_attribute_hashes:
+                script_src.append("'unsafe-hashes'")
+            script_src.extend(inline_hashes.script_hashes)
+
+        if inline_hashes.style_hashes:
+            if inline_hashes.has_style_attribute_hashes:
+                style_src.append("'unsafe-hashes'")
+            style_src.extend(inline_hashes.style_hashes)
 
         return "; ".join(
             [
@@ -71,10 +88,26 @@ class SecurityHeadersMiddleware:
             ],
         )
 
+    def _response_inline_hashes(self, response) -> InlineCspHashes:
+        if getattr(response, "streaming", False) or not hasattr(response, "content"):
+            return InlineCspHashes()
+
+        content_type = response.headers.get("Content-Type", "")
+        if not content_type.startswith(("text/html", "application/xhtml+xml")):
+            return InlineCspHashes()
+
+        encoding = getattr(response, "charset", "utf-8") or "utf-8"
+        document = response.content.decode(encoding, errors="ignore")
+        return collect_inline_csp_hashes(document)
+
     def __call__(self, request):
         response = self.get_response(request)
+        inline_hashes = self._response_inline_hashes(response)
 
-        response.headers.setdefault("Content-Security-Policy", self.build_content_security_policy())
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            self.build_content_security_policy(inline_hashes=inline_hashes),
+        )
         response.headers.setdefault("Permissions-Policy", self.permissions_policy)
         response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
         response.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")

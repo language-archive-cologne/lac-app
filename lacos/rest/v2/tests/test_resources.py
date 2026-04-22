@@ -253,6 +253,34 @@ class TestResourceStream:
             auth_context=ANY,
         )
 
+    @patch("lacos.rest.v2.views.resources.PresignedUrlCacheService")
+    def test_public_resource_stream_uses_trusted_proxy_ip_in_auth_context(
+        self,
+        mock_cache_cls,
+        api_client,
+        media_resource_with_s3,
+        bundle_with_metadata,
+        store_acl,
+        settings,
+    ):
+        store_acl(bundle_with_metadata, [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}])
+        settings.TRUSTED_PROXY_IPS = ["127.0.0.1"]
+        mock_cache_cls.return_value.get_presigned_url.return_value = "https://s3.example.com/presigned-stream"
+
+        response = api_client.get(
+            f"/api/v2/resources/{media_resource_with_s3.id}/stream/",
+            REMOTE_ADDR="127.0.0.1",
+            HTTP_X_FORWARDED_FOR="203.0.113.25, 70.41.3.18",
+        )
+
+        assert response.status_code == 302
+        mock_cache_cls.return_value.get_presigned_url.assert_called_once_with(
+            bucket="lacos-production",
+            key="test-collection/test-bundle/recording.wav",
+            response_headers={"ResponseContentType": "audio/x-wav"},
+            auth_context="anon:203.0.113.25",
+        )
+
     def test_resource_stream_without_auth_denied(self, api_client, media_resource):
         response = api_client.get(
             f"/api/v2/resources/{media_resource.id}/stream/"

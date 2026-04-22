@@ -1,14 +1,19 @@
 import pytest
 
+from lacos.common.services.csp import build_csp_sha256, collect_inline_csp_hashes
 from lacos.users.tests.factories import UserFactory
 
 
 @pytest.mark.django_db
 def test_home_page_sets_security_headers(client):
     response = client.get("/")
+    csp = response.headers["Content-Security-Policy"]
 
     assert "Content-Security-Policy" in response.headers
-    assert "worker-src 'self' blob:" in response.headers["Content-Security-Policy"]
+    assert "worker-src 'self' blob:" in csp
+    assert "'unsafe-inline'" not in csp
+    assert "'unsafe-hashes'" in csp
+    assert "'sha256-" in csp
     assert response.headers["Referrer-Policy"] == "same-origin"
     assert response.headers["Cross-Origin-Opener-Policy"] == "same-origin"
 
@@ -61,5 +66,27 @@ def test_csp_allows_configured_static_origin(client, settings):
     response = client.get("/")
 
     csp = response.headers["Content-Security-Policy"]
-    assert "script-src 'self' 'unsafe-inline' https://static.example.test" in csp
-    assert "style-src 'self' 'unsafe-inline' https://static.example.test" in csp
+    assert "script-src 'self' https://static.example.test" in csp
+    assert "style-src 'self' https://static.example.test" in csp
+
+
+def test_collect_inline_csp_hashes_tracks_inline_scripts_handlers_and_styles():
+    document = """
+    <html>
+      <head>
+        <style>.banner { color: red; }</style>
+      </head>
+      <body onclick="closeModal()" style="display:none">
+        <script>window.bootstrapTheme();</script>
+      </body>
+    </html>
+    """
+
+    hashes = collect_inline_csp_hashes(document)
+
+    assert build_csp_sha256("window.bootstrapTheme();") in hashes.script_hashes
+    assert build_csp_sha256("closeModal()") in hashes.script_hashes
+    assert build_csp_sha256(".banner { color: red; }") in hashes.style_hashes
+    assert build_csp_sha256("display:none") in hashes.style_hashes
+    assert hashes.has_script_attribute_hashes is True
+    assert hashes.has_style_attribute_hashes is True

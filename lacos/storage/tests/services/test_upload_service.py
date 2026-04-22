@@ -347,6 +347,40 @@ def test_mark_upload_complete_rejects_blocked_content_type(mock_s3, mock_upload_
     assert result["exists"] is True
     assert "not allowed" in result["error"]
 
+
+def test_mark_upload_complete_rejects_html_disguised_as_text(mock_s3, mock_upload_service):
+    s3_key = f"{TEST_FOLDER_NAME}/dangerous.txt"
+    mock_s3.put_object(
+        Bucket=TEST_BUCKET_NAME,
+        Key=s3_key,
+        Body=b"<!DOCTYPE html><html><body>unsafe</body></html>",
+        ContentType="text/plain",
+    )
+
+    result = mock_upload_service.mark_upload_complete(s3_key)
+
+    assert result["success"] is False
+    assert result["exists"] is True
+    assert result["detected_content_type"] == "text/html"
+    assert "Detected blocked content" in result["error"]
+
+
+def test_mark_upload_complete_rejects_invalid_pdf_signature(mock_s3, mock_upload_service):
+    s3_key = f"{TEST_FOLDER_NAME}/report.pdf"
+    mock_s3.put_object(
+        Bucket=TEST_BUCKET_NAME,
+        Key=s3_key,
+        Body=b"not really a pdf",
+        ContentType="application/pdf",
+    )
+
+    result = mock_upload_service.mark_upload_complete(s3_key)
+
+    assert result["success"] is False
+    assert result["exists"] is True
+    assert "does not match the uploaded content" in result["error"]
+
+
 def test_presigned_url_actual_upload(mock_s3, mock_upload_service):
     """Test that we can actually upload a file using the presigned URL"""
     # Generate a presigned post URL with single-part upload

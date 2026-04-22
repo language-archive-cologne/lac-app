@@ -6,12 +6,9 @@ from pathlib import PurePosixPath
 import boto3
 
 from .base_storage_service import BaseStorageService
+from .upload_content_inspection import inspect_uploaded_content, normalize_content_type
 
 logger = logging.getLogger(__name__)
-
-CONTENT_TYPE_ALIASES = {
-    "binary/octet-stream": "application/octet-stream",
-}
 
 
 DEFAULT_ALLOWED_CONTENT_TYPES = {
@@ -142,8 +139,20 @@ class UploadService(BaseStorageService):
         }
 
     def _normalize_content_type(self, content_type: Optional[str]) -> str:
-        normalized = (content_type or "").split(";", 1)[0].strip().lower()
-        return CONTENT_TYPE_ALIASES.get(normalized, normalized)
+        return normalize_content_type(content_type)
+
+    def _read_upload_sample(self, bucket_name: str, s3_key: str, *, sample_bytes: int = 8192) -> bytes:
+        response = self.s3_client.get_object(Bucket=bucket_name, Key=s3_key)
+        body = response.get("Body")
+        if body is None:
+            return b""
+
+        try:
+            return body.read(sample_bytes)
+        finally:
+            close = getattr(body, "close", None)
+            if callable(close):
+                close()
 
     def _normalize_path_prefix(self, path_prefix: Optional[str]) -> str:
         if not path_prefix:
@@ -562,6 +571,7 @@ class UploadService(BaseStorageService):
         """
         try:
             target_bucket = bucket_name or self.ingest_bucket
+            security_settings = self._get_upload_security_settings()
             # Check if the file exists in S3
             response = self.s3_client.head_object(
                 Bucket=target_bucket,
@@ -569,24 +579,37 @@ class UploadService(BaseStorageService):
             )
             
             file_size = response.get('ContentLength', 0)
-            content_type = response.get('ContentType', 'application/octet-stream')
+            content_type = self._normalize_content_type(
+                response.get('ContentType', 'application/octet-stream'),
+            )
             last_modified = response.get('LastModified', None)
             etag = response.get('ETag', '').strip('"')
+            sample_bytes = self._read_upload_sample(target_bucket, s3_key)
+            inspection = inspect_uploaded_content(
+                file_name=os.path.basename(s3_key),
+                declared_content_type=content_type,
+                sample_bytes=sample_bytes,
+                blocked_content_types=security_settings["blocked_types"],
+            )
+            effective_content_type = inspection.detected_content_type or content_type
             validation = self.validate_file_upload(
                 file_name=os.path.basename(s3_key),
                 file_size=file_size,
-                content_type=content_type,
-                allowed_types=list(self._get_upload_security_settings()["allowed_types"]),
-                max_file_size=self._get_upload_security_settings()["max_file_size"],
-                min_file_size=self._get_upload_security_settings()["min_file_size"],
+                content_type=effective_content_type,
+                allowed_types=list(security_settings["allowed_types"]),
+                max_file_size=security_settings["max_file_size"],
+                min_file_size=security_settings["min_file_size"],
             )
-            if not validation["valid"]:
+            errors = [*inspection.errors, *validation["errors"]]
+            if errors:
                 return {
                     'success': False,
-                    'error': "; ".join(validation["errors"]),
+                    'error': "; ".join(errors),
                     's3_key': s3_key,
                     'exists': True,
                     'file_size': file_size,
+                    'content_type': effective_content_type,
+                    'detected_content_type': inspection.detected_content_type,
                     'bucket_name': target_bucket,
                 }
             
@@ -596,7 +619,8 @@ class UploadService(BaseStorageService):
                 'exists': True,
                 'file_size': file_size,
                 'file_size_formatted': self._format_size(file_size),
-                'content_type': content_type,
+                'content_type': effective_content_type,
+                'detected_content_type': inspection.detected_content_type,
                 'last_modified': last_modified.isoformat() if last_modified else None,
                 'etag': etag,
                 'bucket_name': target_bucket,
