@@ -1,35 +1,34 @@
 <div
   id="acl-tab-controls"
-  class="navbar rounded-xl border border-base-300 bg-base-100 shadow-sm"
-  role="navigation"
+  role="group"
+  aria-label="ACL view"
+  class="flex items-center gap-2"
   {% if hx_oob %}hx-swap-oob="outerHTML"{% endif %}
 >
-  <div class="navbar-start">
-    <span class="btn btn-ghost text-base font-semibold normal-case">ACL</span>
-  </div>
-  <div class="navbar-center">
-    <div class="join">
+  <span class="text-[11px] font-semibold uppercase tracking-widest text-base-content/50">ACL</span>
+  <div class="join">
+    {% if active_tab == 'dashboard' %}
+      <button type="button" aria-pressed="true" class="btn btn-sm join-item btn-primary pointer-events-none">Dashboard</button>
       <button
         type="button"
-        class="btn btn-sm join-item {% if active_tab == 'dashboard' %}btn-primary{% else %}btn-ghost{% endif %}"
-        hx-get="{% url 'storage:acl_dashboard_panel' %}?scope={{ records_scope|default:'collection' }}"
-        hx-target="#acl-tab-content"
-        hx-swap="innerHTML"
-        hx-push-url="false"
-      >
-        Dashboard
-      </button>
-      <button
-        type="button"
-        class="btn btn-sm join-item {% if active_tab == 'records' %}btn-primary{% else %}btn-ghost{% endif %}"
+        aria-pressed="false"
+        class="btn btn-sm join-item bg-base-100 border border-base-300 text-base-content/70 hover:bg-base-200"
         hx-get="{% url 'storage:acl_records_panel' %}?scope={{ records_scope|default:'collection' }}"
         hx-target="#acl-tab-content"
         hx-swap="innerHTML"
         hx-push-url="false"
-      >
-        ACL Records
-      </button>
-    </div>
+      >Records</button>
+    {% else %}
+      <button
+        type="button"
+        aria-pressed="false"
+        class="btn btn-sm join-item bg-base-100 border border-base-300 text-base-content/70 hover:bg-base-200"
+        hx-get="{% url 'storage:acl_dashboard_panel' %}?scope={{ records_scope|default:'collection' }}"
+        hx-target="#acl-tab-content"
+        hx-swap="innerHTML"
+        hx-push-url="false"
+      >Dashboard</button>
+      <button type="button" aria-pressed="true" class="btn btn-sm join-item btn-primary pointer-events-none">Records</button>
+    {% endif %}
   </div>
-  <div class="navbar-end"></div>
 </div>

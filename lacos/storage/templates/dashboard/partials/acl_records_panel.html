@@ -1,39 +1,34 @@
 {% include "dashboard/partials/acl_edit_modal.html" %}
 
 <div class="space-y-4">
-  <div
-    class="navbar rounded-xl border border-base-300 bg-base-100 shadow-sm"
-    role="navigation"
-  >
-    <div class="navbar-start">
-      <span class="btn btn-ghost text-sm font-semibold normal-case">Scope</span>
-    </div>
-    <div class="navbar-center">
-      <div class="join">
+  <div role="group" aria-label="ACL scope" class="flex items-center gap-2">
+    <span class="text-[11px] font-semibold uppercase tracking-widest text-base-content/50">Scope</span>
+    <div class="join">
+      {% if records_scope == 'collection' %}
+        <button type="button" aria-pressed="true" class="btn btn-sm join-item btn-primary pointer-events-none">Collections</button>
         <button
           type="button"
-          class="btn btn-sm join-item {% if records_scope == 'collection' %}btn-primary{% else %}btn-ghost{% endif %}"
-          hx-get="{% url 'storage:acl_records_panel' %}?scope=collection"
-          hx-target="#acl-tab-content"
-          hx-swap="innerHTML"
-          hx-push-url="false"
-        >
-          Collections
-        </button>
-        <button
-          type="button"
-          class="btn btn-sm join-item {% if records_scope == 'bundle' %}btn-primary{% else %}btn-ghost{% endif %}"
+          aria-pressed="false"
+          class="btn btn-sm join-item bg-base-100 border border-base-300 text-base-content/70 hover:bg-base-200"
           hx-get="{% url 'storage:acl_records_panel' %}?scope=bundle"
           hx-target="#acl-tab-content"
           hx-swap="innerHTML"
           hx-push-url="false"
-        >
-          Bundles
-        </button>
-      </div>
+        >Bundles</button>
+      {% else %}
+        <button
+          type="button"
+          aria-pressed="false"
+          class="btn btn-sm join-item bg-base-100 border border-base-300 text-base-content/70 hover:bg-base-200"
+          hx-get="{% url 'storage:acl_records_panel' %}?scope=collection"
+          hx-target="#acl-tab-content"
+          hx-swap="innerHTML"
+          hx-push-url="false"
+        >Collections</button>
+        <button type="button" aria-pressed="true" class="btn btn-sm join-item btn-primary pointer-events-none">Bundles</button>
+      {% endif %}
     </div>
-    <div class="navbar-end"></div>
   </div>
 
-  {% include "dashboard/partials/acl_records_table_wrapper.html" with scope=records_context.scope page_obj=records_context.page_obj sort=records_context.sort direction=records_context.direction available_sorts=records_context.available_sorts endpoint=records_context.endpoint access_level_choices=records_context.access_level_choices next_url=records_context.next_url page_size=records_context.page_size sort_toggles=records_context.sort_toggles orphan_count=records_context.orphan_count missing_acl_count=records_context.missing_acl_count missing_object_count=records_context.missing_object_count has_acl_count=records_context.has_acl_count total_count=records_context.total_count filtered_count=records_context.filtered_count search_term=records_context.search_term status_filter=records_context.status_filter access_filter=records_context.access_filter filter_query=records_context.filter_query %}
+  {% include "dashboard/partials/acl_records_table_wrapper.html" with scope=records_context.scope page_obj=records_context.page_obj sort=records_context.sort direction=records_context.direction available_sorts=records_context.available_sorts endpoint=records_context.endpoint access_level_choices=records_context.access_level_choices next_url=records_context.next_url page_size=records_context.page_size sort_toggles=records_context.sort_toggles orphan_count=records_context.orphan_count missing_acl_count=records_context.missing_acl_count missing_object_count=records_context.missing_object_count has_acl_count=records_context.has_acl_count total_count=records_context.total_count filtered_count=records_context.filtered_count search_term=records_context.search_term status_filter=records_context.status_filter status_filter_options=records_context.status_filter_options access_filter=records_context.access_filter filter_query=records_context.filter_query %}
 </div>
