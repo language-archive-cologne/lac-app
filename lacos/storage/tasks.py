@@ -9,9 +9,87 @@ except ImportError:
 from lacos.storage.services.bucket_service import BucketService
 from lacos.storage.services.ocfl_service import OCFLService
 from lacos.storage.services.ocfl_fixture_manager import OCFLFixtureManager
+from lacos.storage.services.acl_bulk_loader import load_collection_bundle_acls
 from lacos.storage.services.background_task_service import BackgroundTaskService
+from lacos.blam.models.collection.collection_repository import Collection
 
 logger = logging.getLogger(__name__)
+
+
+def _build_collection_bundle_task_message(summary: Dict[str, Any]) -> str:
+    total = int(summary.get("total", 0) or 0)
+    loaded = int(summary.get("loaded", 0) or 0)
+    errors = int(summary.get("errors", 0) or 0)
+
+    if total == 0:
+        return "No bundle ACLs matched this action."
+    if errors:
+        label = "error" if errors == 1 else "errors"
+        return f"Loaded {loaded} of {total} bundle ACLs with {errors} {label}."
+    return f"Loaded {loaded} bundle ACLs."
+
+
+@task()
+def load_collection_bundles_task(
+    collection_id: str,
+    mode: str,
+    tracking_id: str | None = None,
+) -> Dict[str, Any]:
+    """Load bundle ACLs for one collection in the background."""
+    if tracking_id:
+        BackgroundTaskService.mark_running(tracking_id, message="Loading bundle ACLs")
+
+    try:
+        collection = Collection.objects.get(pk=collection_id)
+    except Collection.DoesNotExist:
+        error_message = f"Collection {collection_id} not found."
+        if tracking_id:
+            BackgroundTaskService.mark_failed(tracking_id, error_message=error_message)
+        return {
+            "success": False,
+            "collection_id": collection_id,
+            "mode": mode,
+            "error": error_message,
+        }
+
+    try:
+        def _touch_progress(current: int, total: int, bundle) -> None:
+            if not tracking_id:
+                return
+            BackgroundTaskService.touch(
+                tracking_id,
+                message=f"Loading bundle ACLs {current}/{total}: {bundle.identifier}",
+            )
+
+        summary = load_collection_bundle_acls(
+            collection,
+            mode,
+            progress_callback=_touch_progress,
+        )
+        message = _build_collection_bundle_task_message(summary)
+
+        if tracking_id:
+            BackgroundTaskService.mark_success(
+                tracking_id,
+                message=message,
+                result=summary,
+            )
+
+        return {"success": True, **summary}
+    except Exception as exc:
+        error_message = f"Error loading bundle ACLs: {exc}"
+        logger.exception(
+            "Error loading bundle ACLs",
+            extra={"collection_id": collection_id, "mode": mode},
+        )
+        if tracking_id:
+            BackgroundTaskService.mark_failed(tracking_id, error_message=error_message)
+        return {
+            "success": False,
+            "collection_id": collection_id,
+            "mode": mode,
+            "error": error_message,
+        }
 
 
 @task()

@@ -56,6 +56,11 @@ urlpatterns = [
     path("dashboard/acl/records/", views.acl_records_panel, name="acl_records_panel"),
     path("dashboard/acl/records/<str:scope>/", views.acl_records_table, name="acl_records_table"),
     path("dashboard/acl/load/", views.acl_load_all, name="acl_load_all"),
+    path(
+        "dashboard/acl/load/collection/<uuid:collection_id>/bundles/",
+        views.acl_load_collection_bundles,
+        name="acl_load_collection_bundles",
+    ),
     path("dashboard/acl/load/selected/", views.acl_load_selected, name="acl_load_selected"),
     path("dashboard/acl/load/<str:object_type>/<str:object_id>/", views.acl_load_single, name="acl_load_single"),
     path("dashboard/acl/save/", views.acl_save_all, name="acl_save_all"),

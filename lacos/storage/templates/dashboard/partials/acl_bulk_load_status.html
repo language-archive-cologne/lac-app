@@ -1,0 +1,39 @@
+{% with status=task.status result=task.result %}
+<div
+  id="acl-bulk-load-task-{{ task.id }}"
+  class="rounded-md border px-3 py-2 text-xs space-y-1 {% if status == 'failed' %}border-error/40 bg-error/10 text-error-content{% elif status == 'success' and result.errors %}border-warning/40 bg-warning/10{% elif status == 'success' %}border-success/40 bg-success/10{% else %}border-info/40 bg-info/10{% endif %}"
+  {% if status != 'success' and status != 'failed' %}
+  hx-get="{% url 'storage:background_task_status' task.id %}"
+  hx-trigger="load, every 4s"
+  hx-target="this"
+  hx-swap="outerHTML"
+  {% endif %}
+>
+  <div class="font-medium">{{ task.metadata.mode_label|default:"Bundle ACL load" }}</div>
+  <div class="text-base-content/75">{{ task.message|default:"Queued" }}</div>
+
+  {% if task.metadata.collection_identifier %}
+  <div class="font-mono text-[11px] text-base-content/60">{{ task.metadata.collection_identifier }}</div>
+  {% endif %}
+
+  {% if result.total or task.metadata.bundle_total %}
+  <div class="flex flex-wrap gap-1">
+    <span class="badge badge-ghost badge-xs">
+      Total {% if result.total %}{{ result.total }}{% else %}{{ task.metadata.bundle_total }}{% endif %}
+    </span>
+    {% if result.loaded or result.loaded == 0 %}
+    <span class="badge badge-success badge-xs">Loaded {{ result.loaded }}</span>
+    {% endif %}
+    {% if result.errors %}
+    <span class="badge badge-error badge-xs">Errors {{ result.errors }}</span>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if status == 'failed' and task.error %}
+  <div class="text-[11px] break-words">{{ task.error }}</div>
+  {% elif result.failed_bundles %}
+  <div class="text-[11px] break-words">Failed: {{ result.failed_bundles|join:", " }}</div>
+  {% endif %}
+</div>
+{% endwith %}

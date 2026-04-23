@@ -271,6 +271,60 @@
             <td>
               <div class="flex items-center gap-2">
                 <div class="join">
+                  {% if scope == 'collection' %}
+                  <div class="tooltip" data-tip="Load missing bundle ACLs from S3">
+                    <form
+                      method="post"
+                      action="{% url 'storage:acl_load_collection_bundles' row.object_id %}"
+                      hx-post="{% url 'storage:acl_load_collection_bundles' row.object_id %}"
+                      hx-target="#acl-action-status-{{ row.object_id }}"
+                      hx-swap="innerHTML"
+                      hx-confirm="Load missing bundle ACLs from S3? This will fill ACL records for bundles that are still missing them."
+                    >
+                      {% csrf_token %}
+                      <input type="hidden" name="sort" value="{{ sort }}">
+                      <input type="hidden" name="dir" value="{{ direction }}">
+                      <input type="hidden" name="page" value="{{ page_obj.number }}">
+                      <input type="hidden" name="q" value="{{ search_term }}">
+                      <input type="hidden" name="status" value="{{ status_filter }}">
+                      <input type="hidden" name="access" value="{{ access_filter }}">
+                      <input type="hidden" name="mode" value="missing">
+                      <button type="submit" class="btn btn-xs join-item" {% if not row.object_exists or not row.bundle_access_summary.total_bundles %}disabled{% endif %}>Load missing</button>
+                    </form>
+                  </div>
+                  <div class="dropdown dropdown-end">
+                    <button
+                      type="button"
+                      tabindex="0"
+                      class="btn btn-xs join-item"
+                      {% if not row.object_exists or not row.bundle_access_summary.total_bundles %}disabled{% endif %}
+                    >
+                      ▾
+                    </button>
+                    <ul tabindex="0" class="dropdown-content menu z-[1] w-40 rounded-box border border-base-300 bg-base-100 p-2 shadow-sm">
+                      <li>
+                        <form
+                          method="post"
+                          action="{% url 'storage:acl_load_collection_bundles' row.object_id %}"
+                          hx-post="{% url 'storage:acl_load_collection_bundles' row.object_id %}"
+                          hx-target="#acl-action-status-{{ row.object_id }}"
+                          hx-swap="innerHTML"
+                          hx-confirm="Re-load all bundle ACLs from S3? This will overwrite existing bundle ACL database records for this collection."
+                        >
+                          {% csrf_token %}
+                          <input type="hidden" name="sort" value="{{ sort }}">
+                          <input type="hidden" name="dir" value="{{ direction }}">
+                          <input type="hidden" name="page" value="{{ page_obj.number }}">
+                          <input type="hidden" name="q" value="{{ search_term }}">
+                          <input type="hidden" name="status" value="{{ status_filter }}">
+                          <input type="hidden" name="access" value="{{ access_filter }}">
+                          <input type="hidden" name="mode" value="all">
+                          <button type="submit" class="w-full text-left">Re-load all</button>
+                        </form>
+                      </li>
+                    </ul>
+                  </div>
+                  {% else %}
                   <div class="tooltip" data-tip="Load from S3">
                     <form
                       method="post"
@@ -290,6 +344,7 @@
                       <button type="submit" class="btn btn-xs join-item" {% if not row.object_exists %}disabled{% endif %}>Load</button>
                     </form>
                   </div>
+                  {% endif %}
                   <div class="tooltip" data-tip="Save to S3">
                     <form
                       method="post"

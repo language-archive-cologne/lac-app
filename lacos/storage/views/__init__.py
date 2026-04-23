@@ -9,6 +9,7 @@ from .dashboard.archivist import archivist_dashboard, dashboard_content, load_fo
 from .dashboard.acl import (
     acl_admin_dashboard,
     acl_load_all,
+    acl_load_collection_bundles,
     acl_load_selected,
     acl_load_single,
     acl_save_all,
