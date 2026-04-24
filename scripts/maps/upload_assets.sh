@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Upload ./build/maps/ to the lacos-maps bucket.
+# Optional helper: upload ./build/maps/ to a MinIO/S3-compatible lacos-maps
+# bucket for map asset experiments or local fallback URLs. Production map
+# assets are copied to /opt/lacos/map-assets and served by nginx instead.
+#
 # Target bucket layout:
 #   /ne.pmtiles
 #   /glyphs/<fontstack>/<range>.pbf
