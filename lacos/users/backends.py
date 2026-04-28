@@ -68,7 +68,7 @@ class LacosSaml2Backend(_Saml2Backend):
             **kwargs,
         )
         if user is not None:
-            self._sync_persistent_id(user, session_info)
+            self._sync_acl_agent_uri(user)
         return user
 
     @staticmethod
@@ -88,24 +88,20 @@ class LacosSaml2Backend(_Saml2Backend):
         text = str(value).strip()
         return text or None
 
-    def _sync_persistent_id(
-        self,
-        user: Any,
-        session_info: dict[str, Any] | None,
-    ) -> None:
-        if session_info is None:
+    @staticmethod
+    def _sync_acl_agent_uri(user: Any) -> None:
+        username = getattr(user, "username", "")
+        if not username:
             return
 
-        name_id = session_info.get("name_id")
-        if name_id is None:
+        saml_uri = f"urn:lacos:eppn:{username}"
+        native_uri = f"urn:lacos:user:{username}"
+        current_uri = getattr(user, "acl_agent_uri", None)
+        if current_uri not in (None, "", native_uri) or current_uri == saml_uri:
             return
 
-        persistent_id = self._coerce_first(getattr(name_id, "text", None)) or self._coerce_first(name_id)
-        if not persistent_id or getattr(user, "saml_persistent_id", None) == persistent_id:
-            return
-
-        user.saml_persistent_id = persistent_id
-        user.save(update_fields=["saml_persistent_id"])
+        user.acl_agent_uri = saml_uri
+        user.save(update_fields=["acl_agent_uri"])
 
     def _log_lookup_attribute(
         self,

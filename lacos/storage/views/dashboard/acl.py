@@ -14,7 +14,7 @@ from lacos.storage.permissions import archivist_required
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.http import HttpResponse, QueryDict
-from django.shortcuts import render, redirect
+from django.shortcuts import get_object_or_404, render, redirect
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.html import escape
@@ -26,6 +26,14 @@ from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.storage.models.acl_config import ACLConfig
 from lacos.storage.models.acl_permissions import ACLPermissions
 from lacos.storage.constants import ACL_LEVEL_PUBLIC, ACL_LEVEL_ACADEMIC, ACL_LEVEL_RESTRICTED
+from lacos.storage.services.acl_bulk_loader import (
+    ACL_COLLECTION_BUNDLE_LOAD_MODE_ALL,
+    ACL_COLLECTION_BUNDLE_LOAD_MODE_MISSING,
+    VALID_COLLECTION_BUNDLE_LOAD_MODES,
+    get_collection_bundle_queryset,
+)
+from lacos.storage.services.background_task_service import BackgroundTaskService
+from lacos.storage.tasks import load_collection_bundles_task
 from lacos.storage.utils.acl import normalize_agent_uri
 from lacos.users.utils import ensure_acl_agent_uri, generate_acl_agent_uri
 
@@ -95,6 +103,21 @@ def _render_load_summary_partial(request, summary=None, error_message=None):
 
 # Route alias for legacy callers
 _render_sync_summary_partial = _render_load_summary_partial
+
+
+def _get_collection_bundle_mode_label(mode: str) -> str:
+    if mode == ACL_COLLECTION_BUNDLE_LOAD_MODE_ALL:
+        return "Re-load all"
+    return "Load missing"
+
+
+def _render_acl_bulk_load_status_partial(request, task) -> HttpResponse:
+    html = render_to_string(
+        "dashboard/partials/acl_bulk_load_status.html",
+        {"task": task},
+        request=request,
+    )
+    return HttpResponse(html)
 
 
 def _build_acl_table_context_from_post_state(request, scope: str) -> dict[str, object]:
@@ -465,6 +488,59 @@ def acl_load_selected(request):
         if request.headers.get("HX-Request"):
             return _render_load_summary_partial(request, error_message=str(e))
         return redirect(f"{reverse('storage:acl_admin_dashboard')}?message=Load failed: {e}")
+
+
+@archivist_required
+@require_http_methods(["POST"])
+def acl_load_collection_bundles(request, collection_id):
+    """Enqueue bundle ACL loading for all bundles in one collection."""
+    mode = request.POST.get("mode", ACL_COLLECTION_BUNDLE_LOAD_MODE_MISSING)
+    if mode not in VALID_COLLECTION_BUNDLE_LOAD_MODES:
+        return HttpResponse(f"Invalid mode: {escape(mode)}", status=400)
+
+    collection = get_object_or_404(Collection, pk=collection_id)
+    bundle_total = get_collection_bundle_queryset(collection, mode).count()
+
+    if bundle_total == 0:
+        message = "No bundle ACLs matched this action."
+        if request.headers.get("HX-Request"):
+            return HttpResponse(f'<span class="text-xs text-base-content/70">{escape(message)}</span>')
+        return redirect(f"{reverse('storage:acl_admin_dashboard')}?message={quote_plus(message)}")
+
+    mode_label = _get_collection_bundle_mode_label(mode)
+    task_record = BackgroundTaskService.create(
+        task_name="acl_load_collection_bundles",
+        description=f"{mode_label} bundle ACLs for {collection.identifier}",
+        metadata={
+            "collection_id": str(collection.pk),
+            "collection_identifier": collection.identifier,
+            "mode": mode,
+            "mode_label": mode_label,
+            "bundle_total": bundle_total,
+            "status_template": "dashboard/partials/acl_bulk_load_status.html",
+            "refresh_event": "aclRecordsRefresh",
+            "refresh_payload": {"scope": "collection"},
+        },
+    )
+
+    task_result = load_collection_bundles_task(
+        collection_id=str(collection.pk),
+        mode=mode,
+        tracking_id=str(task_record.id),
+    )
+    task_id = getattr(task_result, "id", None)
+    if task_id:
+        BackgroundTaskService.attach_huey_id(task_record, task_id)
+        task_record.metadata["task_id"] = task_id
+        task_record.save(update_fields=["metadata", "updated_at"])
+
+    if request.headers.get("HX-Request"):
+        return _render_acl_bulk_load_status_partial(request, task_record)
+
+    return redirect(
+        f"{reverse('storage:acl_admin_dashboard')}?message="
+        f"{quote_plus(f'{mode_label} queued for {collection.identifier}.')}"
+    )
 
 
 def _render_save_summary_partial(request, summary=None, error_message=None):

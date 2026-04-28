@@ -15,16 +15,16 @@ Shibboleth / SAML login
 ``lacos`` exposes Shibboleth single sign-on next to the existing Django
 credentials page. When ``SAML_LOGIN_ENABLED`` is true, the login form renders a
 "Sign in with university account" button that proxies to ``/saml2/login/``.
-Successful assertions populate and persist ``User.saml_persistent_id`` together
-with the familiar ``username``, ``email`` and ``name`` fields.
+Successful assertions populate the local ``username`` from
+``eduPersonPrincipalName`` and derive an ``acl_agent_uri`` from it for ACL
+matching.
 
 Key settings
 
 * ``SAML_SP_BASE_URL`` – external HTTPS endpoint used to mint ACS and logout
   URLs.
 * ``SAML_DJANGO_USER_MAIN_ATTRIBUTE`` – defaults to ``username`` so users are
-  looked up by ``eduPersonPrincipalName`` (ePPN); the persistent NameID is
-  still captured in ``User.saml_persistent_id`` when released.
+  looked up by ``eduPersonPrincipalName`` (ePPN).
 * ``SAML_IDP_METADATA_LOCAL`` / ``SAML_IDP_METADATA_REMOTE`` – IdP metadata
   sources. The repository ships a local fallback
   ``shibboleth.xml`` for development.
@@ -49,14 +49,13 @@ Certificate rotation
 Troubleshooting
     ``HTTP 403``
         The IdP denied the request or attribute mapping rejected the payload.
-        Confirm the IdP releases ``eduPersonPrincipalName`` and ``mail`` and
-        that the service is authorised for the selected scope.
+        Confirm the IdP releases ``eduPersonPrincipalName`` and that the
+        service is authorised for the selected scope.
 
     Attribute mismatch
         Inspect ``session_info['ava']`` in the Django shell while reproducing
         the login. Missing ``eduPersonPrincipalName`` values prevent account
-        provisioning because the ePPN drives lookups; ``name_id`` is only used
-        to populate ``User.saml_persistent_id``.
+        provisioning because the ePPN drives lookups.
 
     Redirect loops
         Ensure Traefik forwards ``X-Forwarded-Proto=https`` and that

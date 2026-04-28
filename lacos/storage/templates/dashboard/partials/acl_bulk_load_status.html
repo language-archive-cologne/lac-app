@@ -1,0 +1,44 @@
+{% with status=task.status result=task.result %}
+<div
+  id="acl-bulk-load-task-{{ task.id }}"
+  class="rounded-xl border px-3 py-2 text-xs space-y-1.5 max-w-sm {% if status == 'failed' %}border-error/40 bg-error/10 text-error-content{% elif status == 'success' and result.errors %}border-warning/40 bg-warning/10{% elif status == 'success' %}border-success/40 bg-success/10{% else %}border-info/40 bg-info/10{% endif %}"
+  {% if status != 'success' and status != 'failed' %}
+  hx-get="{% url 'storage:background_task_status' task.id %}"
+  hx-trigger="load, every 4s"
+  hx-target="this"
+  hx-swap="outerHTML"
+  {% endif %}
+>
+  <div class="flex items-center gap-2">
+    {% if status != 'success' and status != 'failed' %}
+    <span class="loading loading-dots loading-xs text-info" aria-hidden="true"></span>
+    {% endif %}
+    <span class="font-semibold uppercase tracking-widest text-[11px]">{{ task.metadata.mode_label|default:"Bundle ACL load" }}</span>
+  </div>
+  <div class="text-base-content/75">{{ task.message|default:"Queued" }}</div>
+
+  {% if task.metadata.collection_identifier %}
+  <div class="font-mono text-[11px] text-base-content/60 break-all">{{ task.metadata.collection_identifier }}</div>
+  {% endif %}
+
+  {% if result.total or task.metadata.bundle_total %}
+  <div class="flex flex-wrap gap-1 pt-0.5">
+    <span class="badge badge-ghost badge-xs">
+      Total {% if result.total %}{{ result.total }}{% else %}{{ task.metadata.bundle_total }}{% endif %}
+    </span>
+    {% if result.loaded or result.loaded == 0 %}
+    <span class="badge badge-success badge-xs">Loaded {{ result.loaded }}</span>
+    {% endif %}
+    {% if result.errors %}
+    <span class="badge badge-error badge-xs">Errors {{ result.errors }}</span>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if status == 'failed' and task.error %}
+  <div class="text-[11px] break-words text-error">{{ task.error }}</div>
+  {% elif result.failed_bundles %}
+  <div class="text-[11px] break-words text-base-content/70">Failed: {{ result.failed_bundles|join:", " }}</div>
+  {% endif %}
+</div>
+{% endwith %}

@@ -353,9 +353,10 @@ RESOURCE_PATH_PATTERN = env("RESOURCE_PATH_PATTERN")
 
 # Explorer Map Configuration
 # ------------------------------------------------------------------------------
-# Maps use self-hosted Natural Earth pmtiles + Noto Sans PBF glyphs from the
-# `lacos-maps` bucket (MinIO locally, self-hosted S3 in prod). See
-# `scripts/maps/README.md` for the offline build + upload pipeline.
+# Maps use self-hosted Natural Earth PMTiles + Noto Sans PBF glyphs.
+# Production/dev should point these URLs at server-hosted assets, currently
+# nginx serving `/opt/lacos/map-assets/` under `/map-assets/`. The MinIO-style
+# defaults below are local fallbacks only. See `scripts/maps/README.md`.
 EXPLORER_MAP_PMTILES_URL = env(
     "EXPLORER_MAP_PMTILES_URL",
     default="http://localhost:9100/lacos-maps/ne.pmtiles",
@@ -742,6 +743,37 @@ if SAML_LOGIN_ENABLED:
                 ),
                 "name_id_format": [SAML_DEFAULT_NAME_ID_FORMAT],
                 "required_attributes": ["eduPersonPrincipalName"],
+                "ui_info": {
+                    "display_name": [
+                        {"text": "Language Archive Cologne", "lang": "en"},
+                    ],
+                    "description": [
+                        {
+                            "text": (
+                                "Digital archive for endangered-language and "
+                                "ethnographic research data at the University "
+                                "of Cologne."
+                            ),
+                            "lang": "en",
+                        },
+                    ],
+                    "information_url": [
+                        {"text": "https://lacos.uni-koeln.de/", "lang": "en"},
+                    ],
+                    "privacy_statement_url": [
+                        {
+                            "text": "https://lacos.uni-koeln.de/privacy-policy/",
+                            "lang": "en",
+                        },
+                    ],
+                    "logo": [
+                        {
+                            "text": "https://lacos.uni-koeln.de/static/images/logo-LAC.png",
+                            "width": "180",
+                            "height": "78",
+                        },
+                    ],
+                },
             },
         },
         "http_client_timeout": env.int("SAML_HTTP_CLIENT_TIMEOUT", default=10),
@@ -762,6 +794,9 @@ if SAML_LOGIN_ENABLED:
                 "contact_type": "support",
                 "email_address": ["mailto:lac-helpdesk@uni-koeln.de"],
             },
+        ],
+        "entity_category": [
+            "https://refeds.org/category/code-of-conduct/v2",
         ],
         "security": {
             "wantAttributeStatementSigned": True,

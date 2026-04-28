@@ -1,3 +1,6 @@
+import json
+import uuid
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -16,6 +19,7 @@ from lacos.storage.constants import (
     ACL_LEVEL_PUBLIC,
     ACL_LEVEL_RESTRICTED,
 )
+from lacos.storage.models import BackgroundTask
 from lacos.storage.models.acl_permissions import ACLPermissions
 from lacos.storage.permissions import ARCHIVIST_GROUP_NAME
 
@@ -118,7 +122,186 @@ def test_acl_records_panel_renders(client, django_user_model):
     assert response.status_code == 200
     html = response.content.decode()
     assert "id=\"acl-records-table\"" in html
-    assert "Collections" in html
+
+
+@pytest.mark.django_db
+def test_acl_records_table_collection_rows_render_bundle_bulk_load_actions(
+    client, django_user_model
+):
+    user = django_user_model.objects.create_user("row-viewer", "row@example.com", "pass")
+    _make_archivist(user)
+    client.force_login(user)
+
+    collection = Collection.objects.create(identifier="col-row")
+    bundle = Bundle.objects.create(identifier="bundle-row")
+    BundleStructuralInfo.objects.create(bundle=bundle, is_member_of_collection=collection)
+
+    response = client.get(reverse("storage:acl_records_table", args=["collection"]))
+
+    assert response.status_code == 200
+    html = response.content.decode()
+    assert "Load missing" in html
+    assert "Re-load all" in html
+
+
+@pytest.mark.django_db
+def test_acl_load_collection_bundles_requires_archivist(client, django_user_model):
+    user = django_user_model.objects.create_user("plain", "plain@example.com", "pass")
+    client.force_login(user)
+
+    collection = Collection.objects.create(identifier="col-secure")
+
+    response = client.post(
+        reverse("storage:acl_load_collection_bundles", args=[str(collection.pk)]),
+        data={"mode": "missing"},
+        HTTP_HX_REQUEST="true",
+    )
+
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_acl_load_collection_bundles_rejects_invalid_mode(client, django_user_model):
+    user = django_user_model.objects.create_user("invalid", "invalid@example.com", "pass")
+    _make_archivist(user)
+    client.force_login(user)
+
+    collection = Collection.objects.create(identifier="col-invalid")
+
+    response = client.post(
+        reverse("storage:acl_load_collection_bundles", args=[str(collection.pk)]),
+        data={"mode": "bogus"},
+        HTTP_HX_REQUEST="true",
+    )
+
+    assert response.status_code == 400
+    assert "Invalid mode" in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_acl_load_collection_bundles_returns_404_for_unknown_collection(
+    client, django_user_model
+):
+    user = django_user_model.objects.create_user("missing", "missing@example.com", "pass")
+    _make_archivist(user)
+    client.force_login(user)
+
+    response = client.post(
+        reverse("storage:acl_load_collection_bundles", args=[str(uuid.uuid4())]),
+        data={"mode": "missing"},
+        HTTP_HX_REQUEST="true",
+    )
+
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+@patch("lacos.storage.views.dashboard.acl.load_collection_bundles_task")
+def test_acl_load_collection_bundles_enqueues_background_task(
+    mock_task, client, django_user_model
+):
+    user = django_user_model.objects.create_user("queue", "queue@example.com", "pass")
+    _make_archivist(user)
+    client.force_login(user)
+
+    collection = Collection.objects.create(identifier="col-queue")
+    bundle = Bundle.objects.create(identifier="bundle-queue")
+    BundleStructuralInfo.objects.create(bundle=bundle, is_member_of_collection=collection)
+    mock_task.return_value = SimpleNamespace(id="huey-123")
+
+    response = client.post(
+        reverse("storage:acl_load_collection_bundles", args=[str(collection.pk)]),
+        data={"mode": "missing"},
+        HTTP_HX_REQUEST="true",
+    )
+
+    assert response.status_code == 200
+
+    task_record = BackgroundTask.objects.get(task_name="acl_load_collection_bundles")
+    assert task_record.metadata["collection_id"] == str(collection.pk)
+    assert task_record.metadata["collection_identifier"] == collection.identifier
+    assert task_record.metadata["mode"] == "missing"
+    assert task_record.huey_task_id == "huey-123"
+
+    mock_task.assert_called_once_with(
+        collection_id=str(collection.pk),
+        mode="missing",
+        tracking_id=str(task_record.id),
+    )
+
+    html = response.content.decode()
+    assert str(task_record.id) in html
+    assert "Load missing" in html
+
+
+@pytest.mark.django_db
+@patch("lacos.storage.views.dashboard.acl.load_collection_bundles_task")
+def test_acl_load_collection_bundles_returns_no_work_message_when_nothing_is_missing(
+    mock_task, client, django_user_model
+):
+    user = django_user_model.objects.create_user("empty", "empty@example.com", "pass")
+    _make_archivist(user)
+    client.force_login(user)
+
+    collection = Collection.objects.create(identifier="col-empty")
+    bundle = Bundle.objects.create(identifier="bundle-ready")
+    BundleStructuralInfo.objects.create(bundle=bundle, is_member_of_collection=collection)
+
+    bundle_ct = ContentType.objects.get_for_model(Bundle)
+    ACLPermissions.objects.create(
+        content_type=bundle_ct,
+        object_id=str(bundle.pk),
+        access_level=ACL_LEVEL_PUBLIC,
+    )
+
+    response = client.post(
+        reverse("storage:acl_load_collection_bundles", args=[str(collection.pk)]),
+        data={"mode": "missing"},
+        HTTP_HX_REQUEST="true",
+    )
+
+    assert response.status_code == 200
+    assert "No bundle ACLs matched this action." in response.content.decode()
+    assert BackgroundTask.objects.count() == 0
+    mock_task.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_background_task_status_triggers_acl_records_refresh_for_acl_bulk_load(
+    client, django_user_model
+):
+    user = django_user_model.objects.create_user("status", "status@example.com", "pass")
+    _make_archivist(user)
+    client.force_login(user)
+
+    task_record = BackgroundTask.objects.create(
+        task_name="acl_load_collection_bundles",
+        status=BackgroundTask.Status.SUCCESS,
+        message="Loaded 2 of 2 bundle ACLs.",
+        metadata={
+            "collection_identifier": "col-status",
+            "mode_label": "Load missing",
+            "status_template": "dashboard/partials/acl_bulk_load_status.html",
+            "refresh_event": "aclRecordsRefresh",
+            "refresh_payload": {"scope": "collection"},
+        },
+        result={
+            "total": 2,
+            "loaded": 2,
+            "errors": 0,
+            "failed_bundles": [],
+        },
+    )
+
+    response = client.get(reverse("storage:background_task_status", args=[str(task_record.id)]))
+
+    assert response.status_code == 200
+    html = response.content.decode()
+    assert "Loaded 2" in html
+
+    trigger = json.loads(response["HX-Trigger"])
+    assert trigger["showMessage"]["level"] == "success"
+    assert trigger["aclRecordsRefresh"]["scope"] == "collection"
 
 
 @pytest.mark.django_db

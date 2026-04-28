@@ -100,7 +100,8 @@ def map_style_view(request):
 
     Placeholders (`__PMTILES_URL__`, `__GLYPHS_URL__`) in the checked-in JSON
     are replaced from Django settings. This keeps the static file clean while
-    still letting dev (MinIO) and prod (S3) differ only in env vars.
+    allowing each environment to point at its configured asset host. Production
+    and dev should use nginx-served VM assets under `/map-assets/`.
     """
     if not _STYLE_PATH.is_file():
         return HttpResponseNotFound("style missing")

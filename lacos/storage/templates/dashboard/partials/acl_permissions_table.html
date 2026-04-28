@@ -1,370 +1,445 @@
 {% load acl_extras %}
 {% with rows=page_obj.object_list %}
-<div class="card bg-base-100 shadow-sm h-full">
-  <div class="card-body space-y-4">
-    <div class="flex items-start justify-between gap-3 flex-wrap">
-      <div>
-        <h3 class="card-title text-lg">{{ scope|title }} records</h3>
-        <p class="text-sm text-base-content/70">
-          Showing {{ rows|length }} of {{ filtered_count }} results
-          {% if filtered_count != total_count %}
-          <span class="text-xs text-base-content/50">(filtered from {{ total_count }})</span>
+<div class="rounded-2xl border border-base-300 bg-base-100 shadow-sm overflow-hidden h-full flex flex-col">
+  <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-base-300 bg-base-200">
+    <div class="flex flex-wrap items-center gap-3 text-xs text-base-content/60">
+      <span class="font-semibold uppercase tracking-widest">{{ total_count }} {{ scope }}{{ total_count|pluralize }}</span>
+      <span class="text-base-content/40">·</span>
+      <span class="font-semibold uppercase tracking-widest">{{ has_acl_count }} with ACL</span>
+      {% if missing_acl_count %}
+      <span class="text-base-content/40">·</span>
+      <span class="font-semibold uppercase tracking-widest text-warning">{{ missing_acl_count }} missing</span>
+      {% endif %}
+      {% if missing_object_count %}
+      <span class="text-base-content/40">·</span>
+      <span class="font-semibold uppercase tracking-widest text-error">{{ missing_object_count }} orphaned</span>
+      {% endif %}
+      {% if filtered_count != total_count %}
+      <span class="text-base-content/40">·</span>
+      <span class="text-base-content/70">Showing {{ filtered_count }}</span>
+      {% endif %}
+    </div>
+    <div class="flex items-center gap-2 flex-wrap" data-acl-scope="{{ scope }}">
+      <form
+        method="post"
+        action="{% url 'storage:acl_load_selected' %}"
+        hx-post="{% url 'storage:acl_load_selected' %}"
+        hx-target="#acl-records-status"
+        hx-swap="innerHTML"
+        hx-include="[data-acl-selected-inputs]"
+        hx-confirm="Load ACLs for selected {{ scope }}s? This will overwrite the database records."
+        data-acl-selection-form
+        data-acl-scope="{{ scope }}"
+      >
+        {% csrf_token %}
+        <input type="hidden" name="scope" value="{{ scope }}">
+        <div data-acl-selected-inputs></div>
+        <button type="submit" class="btn btn-ghost btn-xs uppercase tracking-widest">Load selected</button>
+      </form>
+      <span class="text-[11px] uppercase tracking-widest text-base-content/50">
+        Selected <span class="font-mono text-base-content/80" data-acl-selected-count="{{ scope }}">0</span>
+      </span>
+      {% if orphan_count %}
+      <form
+        method="post"
+        action="{% url 'storage:acl_delete_orphans' scope %}?sort={{ sort }}&dir={{ direction }}&page={{ page_obj.number }}{% if filter_query %}&{{ filter_query }}{% endif %}"
+        hx-post="{% url 'storage:acl_delete_orphans' scope %}?sort={{ sort }}&dir={{ direction }}&page={{ page_obj.number }}{% if filter_query %}&{{ filter_query }}{% endif %}"
+        hx-target="#acl-records-table"
+        hx-swap="outerHTML"
+        hx-confirm="Delete {{ orphan_count }} orphaned ACL record(s)?"
+      >
+        {% csrf_token %}
+        <button type="submit" class="btn btn-ghost btn-xs uppercase tracking-widest text-error hover:bg-error/10">
+          Clean orphans ({{ orphan_count }})
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="flex flex-wrap items-end gap-x-6 gap-y-3 px-4 py-3 border-b border-base-300">
+    <form
+      id="acl-records-filters-{{ scope }}"
+      class="flex flex-wrap items-end gap-x-6 gap-y-3 flex-1 min-w-0"
+      hx-get="{{ endpoint }}"
+      hx-target="#acl-records-table"
+      hx-swap="outerHTML"
+      hx-push-url="false"
+      hx-trigger="change, keyup delay:400ms from:#acl-records-search-{{ scope }}"
+    >
+      <input type="hidden" name="sort" value="{{ sort }}">
+      <input type="hidden" name="dir" value="{{ direction }}">
+      <input type="hidden" name="page" value="1">
+      <input type="hidden" name="status" value="{{ status_filter }}">
+      <label class="flex flex-col gap-1 min-w-[16rem] flex-1">
+        <span class="text-[11px] font-semibold uppercase tracking-widest text-base-content/50">Search</span>
+        <input
+          id="acl-records-search-{{ scope }}"
+          name="q"
+          value="{{ search_term }}"
+          class="input input-bordered input-sm w-full"
+          placeholder="Identifier or name"
+        >
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="text-[11px] font-semibold uppercase tracking-widest text-base-content/50">Access</span>
+        <select name="access" class="select select-bordered select-sm w-40">
+          <option value="all" {% if access_filter == 'all' %}selected{% endif %}>All</option>
+          {% for value, label in access_level_choices %}
+          <option value="{{ value }}" {% if access_filter == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </form>
+
+    <div role="group" aria-label="Filter by status" class="flex flex-col gap-1">
+      <span class="text-[11px] font-semibold uppercase tracking-widest text-base-content/50">Status</span>
+      <div class="join">
+        {% for value, label, count in status_filter_options %}
+          {% if status_filter == value %}
+            <button type="button" aria-pressed="true" class="btn btn-sm join-item btn-primary pointer-events-none">{{ label }}</button>
           {% else %}
-          <span class="text-xs text-base-content/50">(total {{ total_count }})</span>
+            <button
+              type="button"
+              aria-pressed="false"
+              class="btn btn-sm join-item bg-base-100 border border-base-300 text-base-content/70 hover:bg-base-200"
+              hx-get="{{ endpoint }}?sort={{ sort }}&dir={{ direction }}&page=1&q={{ search_term|urlencode }}&access={{ access_filter|urlencode }}&status={{ value|urlencode }}"
+              hx-target="#acl-records-table"
+              hx-swap="outerHTML"
+              hx-push-url="false"
+            >{{ label }}</button>
           {% endif %}
-        </p>
-      </div>
-      <div class="flex items-center gap-2 flex-wrap" data-acl-scope="{{ scope }}">
-        <form
-          method="post"
-          action="{% url 'storage:acl_load_selected' %}"
-          hx-post="{% url 'storage:acl_load_selected' %}"
-          hx-target="#acl-records-status"
-          hx-swap="innerHTML"
-          hx-include="[data-acl-selected-inputs]"
-          hx-confirm="Load ACLs for selected {{ scope }}s? This will overwrite the database records."
-          data-acl-selection-form
-          data-acl-scope="{{ scope }}"
-        >
-          {% csrf_token %}
-          <input type="hidden" name="scope" value="{{ scope }}">
-          <div data-acl-selected-inputs></div>
-          <button type="submit" class="btn btn-outline btn-xs">Load selected</button>
-        </form>
-        <span class="text-xs text-base-content/60">Selected: <span data-acl-selected-count="{{ scope }}">0</span></span>
-        {% if orphan_count %}
-        <form
-          method="post"
-          action="{% url 'storage:acl_delete_orphans' scope %}?sort={{ sort }}&dir={{ direction }}&page={{ page_obj.number }}{% if filter_query %}&{{ filter_query }}{% endif %}"
-          hx-post="{% url 'storage:acl_delete_orphans' scope %}?sort={{ sort }}&dir={{ direction }}&page={{ page_obj.number }}{% if filter_query %}&{{ filter_query }}{% endif %}"
-          hx-target="#acl-records-table"
-          hx-swap="outerHTML"
-          hx-confirm="Delete {{ orphan_count }} orphaned ACL record(s)?"
-        >
-          {% csrf_token %}
-          <button type="submit" class="btn btn-outline btn-xs">
-            Clean orphans ({{ orphan_count }})
-          </button>
-        </form>
-        {% endif %}
+        {% endfor %}
       </div>
     </div>
-    <div id="acl-records-status"></div>
-    <div class="rounded-lg border border-base-200 bg-base-200/30 p-2">
-      <div class="grid gap-2 md:grid-cols-4">
-        <div class="flex items-center justify-between rounded-md bg-base-100/80 px-2 py-1">
-          <div class="text-[11px] text-base-content/60">Total</div>
-          <div class="text-xs font-semibold">{{ total_count }}</div>
-        </div>
-        <div class="flex items-center justify-between rounded-md bg-base-100/80 px-2 py-1">
-          <div class="text-[11px] text-base-content/60">With ACL</div>
-          <div class="text-xs font-semibold">{{ has_acl_count }}</div>
-        </div>
-        <div class="flex items-center justify-between rounded-md bg-base-100/80 px-2 py-1">
-          <div class="text-[11px] text-base-content/60">Missing ACL</div>
-          <div class="text-xs font-semibold text-warning">{{ missing_acl_count }}</div>
-        </div>
-        <div class="flex items-center justify-between rounded-md bg-base-100/80 px-2 py-1">
-          <div class="text-[11px] text-base-content/60">Orphaned</div>
-          <div class="text-xs font-semibold text-error">{{ missing_object_count }}</div>
-        </div>
-      </div>
-      <form
-        id="acl-records-filters-{{ scope }}"
-        class="mt-2 flex flex-wrap items-end gap-2"
-        hx-get="{{ endpoint }}"
+
+    <div class="ml-auto">
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm uppercase tracking-widest text-base-content/70"
+        hx-get="{{ endpoint }}?sort={{ sort }}&dir={{ direction }}&page=1"
         hx-target="#acl-records-table"
         hx-swap="outerHTML"
         hx-push-url="false"
-        hx-trigger="change, keyup delay:400ms from:#acl-records-search-{{ scope }}"
-      >
-        <input type="hidden" name="sort" value="{{ sort }}">
-        <input type="hidden" name="dir" value="{{ direction }}">
-        <input type="hidden" name="page" value="1">
-        <label class="form-control">
-          <span class="label-text text-[11px] text-base-content/70">Search</span>
-          <input
-            id="acl-records-search-{{ scope }}"
-            name="q"
-            value="{{ search_term }}"
-            class="input input-bordered input-xs w-52"
-            placeholder="Identifier or name"
-          >
-        </label>
-        <label class="form-control">
-          <span class="label-text text-[11px] text-base-content/70">Status</span>
-          <select name="status" class="select select-bordered select-xs w-36">
-            <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All</option>
-            <option value="missing_acl" {% if status_filter == 'missing_acl' %}selected{% endif %}>
-              Missing ACL ({{ missing_acl_count }})
-            </option>
-            <option value="missing_object" {% if status_filter == 'missing_object' %}selected{% endif %}>
-              Orphaned ACL ({{ missing_object_count }})
-            </option>
-            <option value="has_acl" {% if status_filter == 'has_acl' %}selected{% endif %}>Has ACL</option>
-          </select>
-        </label>
-        <label class="form-control">
-          <span class="label-text text-[11px] text-base-content/70">Access</span>
-          <select name="access" class="select select-bordered select-xs w-36">
-            <option value="all" {% if access_filter == 'all' %}selected{% endif %}>All</option>
-            {% for value, label in access_level_choices %}
-            <option value="{{ value }}" {% if access_filter == value %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <button
-          type="button"
-          class="btn btn-ghost btn-xs"
-          hx-get="{{ endpoint }}?sort={{ sort }}&dir={{ direction }}&page=1"
-          hx-target="#acl-records-table"
-          hx-swap="outerHTML"
-          hx-push-url="false"
-        >
-          Clear
-        </button>
-      </form>
+      >Clear</button>
     </div>
+  </div>
 
-    <div id="acl-records-selection" class="overflow-x-auto rounded-lg border border-base-300" data-acl-scope="{{ scope }}">
-      <table class="table table-sm">
-        <thead>
-          <tr class="text-xs uppercase text-base-content/60">
-            <th class="w-8">
-              <input
-                type="checkbox"
-                class="checkbox checkbox-xs"
-                aria-label="Select all on page"
-                data-acl-select-all
-                data-acl-scope="{{ scope }}"
-              >
-            </th>
-            <th class="w-1/2">
-              <button
-                type="button"
-                class="flex items-center gap-1 font-medium text-left"
-                hx-get="{{ endpoint }}?sort=identifier&dir={{ sort_toggles.identifier }}&page=1{% if filter_query %}&{{ filter_query }}{% endif %}"
-                hx-target="#acl-records-table"
-                hx-swap="outerHTML"
-                hx-push-url="false"
-              >
-                Identifier / Name
-                {% if sort == 'identifier' %}
-                  <span>{% if direction == 'asc' %}&uarr;{% else %}&darr;{% endif %}</span>
-                {% endif %}
-              </button>
-            </th>
-            <th class="w-24">
-              <button
-                type="button"
-                class="flex items-center gap-1 font-medium text-left"
-                hx-get="{{ endpoint }}?sort=access_level&dir={{ sort_toggles.access_level }}&page=1{% if filter_query %}&{{ filter_query }}{% endif %}"
-                hx-target="#acl-records-table"
-                hx-swap="outerHTML"
-                hx-push-url="false"
-              >
-                Access level
-                {% if sort == 'access_level' %}
-                  <span>{% if direction == 'asc' %}&uarr;{% else %}&darr;{% endif %}</span>
-                {% endif %}
-              </button>
-            </th>
-            <th>
-              <button
-                type="button"
-                class="flex items-center gap-1 font-medium text-left"
-                hx-get="{{ endpoint }}?sort=last_synced&dir={{ sort_toggles.last_synced }}&page=1{% if filter_query %}&{{ filter_query }}{% endif %}"
-                hx-target="#acl-records-table"
-                hx-swap="outerHTML"
-                hx-push-url="false"
-              >
-                Last synced
-                {% if sort == 'last_synced' %}
-                  <span>{% if direction == 'asc' %}&uarr;{% else %}&darr;{% endif %}</span>
-                {% endif %}
-              </button>
-            </th>
+  <div id="acl-records-status" class="px-4 pt-3 empty:hidden"></div>
+
+  <div id="acl-records-selection" class="overflow-x-auto" data-acl-scope="{{ scope }}">
+    <table class="table">
+      <thead>
+        <tr class="text-[11px] uppercase tracking-widest text-base-content/50">
+          <th class="w-8">
+            <input
+              type="checkbox"
+              class="checkbox checkbox-xs"
+              aria-label="Select all on page"
+              data-acl-select-all
+              data-acl-scope="{{ scope }}"
+            >
+          </th>
+          <th class="w-1/2">
+            <button
+              type="button"
+              class="flex items-center gap-1 font-medium text-left"
+              hx-get="{{ endpoint }}?sort=identifier&dir={{ sort_toggles.identifier }}&page=1{% if filter_query %}&{{ filter_query }}{% endif %}"
+              hx-target="#acl-records-table"
+              hx-swap="outerHTML"
+              hx-push-url="false"
+            >
+              Identifier / Name
+              {% if sort == 'identifier' %}
+                <span>{% if direction == 'asc' %}&uarr;{% else %}&darr;{% endif %}</span>
+              {% endif %}
+            </button>
+          </th>
+          <th class="w-24">
+            <button
+              type="button"
+              class="flex items-center gap-1 font-medium text-left"
+              hx-get="{{ endpoint }}?sort=access_level&dir={{ sort_toggles.access_level }}&page=1{% if filter_query %}&{{ filter_query }}{% endif %}"
+              hx-target="#acl-records-table"
+              hx-swap="outerHTML"
+              hx-push-url="false"
+            >
+              Access level
+              {% if sort == 'access_level' %}
+                <span>{% if direction == 'asc' %}&uarr;{% else %}&darr;{% endif %}</span>
+              {% endif %}
+            </button>
+          </th>
+          <th>
+            <button
+              type="button"
+              class="flex items-center gap-1 font-medium text-left"
+              hx-get="{{ endpoint }}?sort=last_synced&dir={{ sort_toggles.last_synced }}&page=1{% if filter_query %}&{{ filter_query }}{% endif %}"
+              hx-target="#acl-records-table"
+              hx-swap="outerHTML"
+              hx-push-url="false"
+            >
+              Last synced
+              {% if sort == 'last_synced' %}
+                <span>{% if direction == 'asc' %}&uarr;{% else %}&darr;{% endif %}</span>
+              {% endif %}
+            </button>
+          </th>
+          {% if scope == 'collection' %}
+          <th class="w-56">Bundle access</th>
+          {% endif %}
+          <th class="w-1/3">Read agents</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr class="align-top">
+          <td>
+            <input
+              type="checkbox"
+              class="checkbox checkbox-xs"
+              data-acl-select
+              data-acl-scope="{{ scope }}"
+              name="{% if scope == 'collection' %}collection_ids{% else %}bundle_ids{% endif %}"
+              value="{{ row.object_id }}"
+              {% if not row.object_exists %}disabled{% endif %}
+            >
+          </td>
+          <td class="space-y-1 py-3">
             {% if scope == 'collection' %}
-            <th class="w-56">Bundle access</th>
+              <div class="font-semibold text-base-content leading-snug">{{ row.name|default:row.identifier }}</div>
+              {% if row.identifier and row.identifier != row.name %}
+              <div class="text-xs font-mono text-base-content/55">{{ row.identifier }}</div>
+              {% endif %}
+            {% else %}
+              {% if row.name %}
+              <div class="font-semibold leading-snug">{{ row.name }}</div>
+              {% endif %}
+              <div class="text-xs font-mono text-base-content/55">{{ row.identifier }}</div>
             {% endif %}
-            <th class="w-1/3">Read agents</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in rows %}
-          <tr class="align-top">
-            <td>
-              <input
-                type="checkbox"
-                class="checkbox checkbox-xs"
-                data-acl-select
-                data-acl-scope="{{ scope }}"
-                name="{% if scope == 'collection' %}collection_ids{% else %}bundle_ids{% endif %}"
-                value="{{ row.object_id }}"
-                {% if not row.object_exists %}disabled{% endif %}
-              >
-            </td>
-            <td class="space-y-0.5">
+            {% if not row.object_exists %}
+            <span class="inline-flex items-center rounded-full border border-error/40 bg-error/10 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-error">Object missing</span>
+            {% elif not row.has_permission %}
+            <span class="inline-flex items-center rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-warning">No ACL record</span>
+            {% endif %}
+            {% if row.bucket or row.key %}
+            <div class="text-[11px] font-mono text-base-content/45 break-all">
+              {% if row.bucket %}{{ row.bucket }}{% endif %}{% if row.key %}/{% endif %}{% if row.key %}{{ row.key }}{% endif %}
+            </div>
+            {% endif %}
+          </td>
+          <td class="w-24">
+            <span class="badge badge-sm {% if row.access_level == 'public' %}badge-success{% elif row.access_level == 'academic' %}badge-warning{% else %}bg-amber-600 text-white border-amber-600{% endif %}">
+              {% if row.access_level == 'public' %}
+                Public
+              {% elif row.access_level == 'academic' %}
+                Academic
+              {% else %}
+                Restricted
+              {% endif %}
+            </span>
+          </td>
+          <td class="text-sm text-base-content/70">
+            {{ row.last_synced|date:"Y-m-d H:i"|default:"—" }}
+          </td>
+          {% if scope == 'collection' %}
+          <td class="text-xs text-base-content/70 w-56 py-3">
+            {% with summary=row.bundle_access_summary %}
+              <div class="space-y-1.5">
+                <div class="text-[11px] uppercase tracking-widest text-base-content/50">
+                  {{ summary.total_bundles|default:0 }} bundle{{ summary.total_bundles|pluralize }}
+                </div>
+                <div class="flex flex-wrap gap-1">
+                  {% if summary.public_count %}<span class="badge badge-success badge-xs">Public {{ summary.public_count }}</span>{% endif %}
+                  {% if summary.academic_count %}<span class="badge badge-warning badge-xs">Academic {{ summary.academic_count }}</span>{% endif %}
+                  {% if summary.restricted_count %}<span class="badge badge-xs bg-amber-600 text-white border-amber-600">Restricted {{ summary.restricted_count }}</span>{% endif %}
+                  {% if summary.missing_acl_count %}<span class="inline-flex items-center rounded-full border border-error/40 bg-error/10 px-2 py-0.5 text-[10.5px] font-medium text-error">Missing {{ summary.missing_acl_count }}</span>{% endif %}
+                </div>
+              </div>
+            {% endwith %}
+          </td>
+          {% endif %}
+          <td class="text-sm text-base-content/70 w-1/3">
+            {% if row.read_agents %}
+              <div class="space-y-1 max-w-xs">
+                {% for agent in row.read_agents %}
+                  <div class="text-xs break-all" title="{{ agent }}">{{ agent|acl_agent_display }}</div>
+                {% endfor %}
+              </div>
+            {% else %}
+              —
+            {% endif %}
+          </td>
+          <td class="py-3">
+            <div class="flex items-center gap-1">
               {% if scope == 'collection' %}
-                <div class="font-semibold text-base-content">{{ row.name|default:row.identifier }}</div>
-                {% if row.identifier and row.identifier != row.name %}
-                <div class="text-[11px] font-mono text-base-content/45">{{ row.identifier }}</div>
+                {% if row.object_exists and row.bundle_access_summary.total_bundles %}
+                <div class="dropdown dropdown-end">
+                  <button tabindex="0" type="button" class="btn btn-sm btn-soft btn-primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+                    </svg>
+                    Load bundles
+                  </button>
+                  <ul tabindex="0" class="dropdown-content menu menu-sm z-[1] w-60 rounded-xl border border-base-300 bg-base-100 p-1 shadow-lg">
+                    <li>
+                      <form
+                        method="post"
+                        action="{% url 'storage:acl_load_collection_bundles' row.object_id %}"
+                        hx-post="{% url 'storage:acl_load_collection_bundles' row.object_id %}"
+                        hx-target="#acl-action-status-{{ row.object_id }}"
+                        hx-swap="innerHTML"
+                        hx-confirm="Load missing bundle ACLs from S3? This will fill ACL records for bundles that are still missing them."
+                      >
+                        {% csrf_token %}
+                        <input type="hidden" name="sort" value="{{ sort }}">
+                        <input type="hidden" name="dir" value="{{ direction }}">
+                        <input type="hidden" name="page" value="{{ page_obj.number }}">
+                        <input type="hidden" name="q" value="{{ search_term }}">
+                        <input type="hidden" name="status" value="{{ status_filter }}">
+                        <input type="hidden" name="access" value="{{ access_filter }}">
+                        <input type="hidden" name="mode" value="missing">
+                        <button type="submit" class="flex flex-col items-start gap-0 w-full">
+                          <span class="font-medium">Load missing</span>
+                          <span class="text-[11px] text-base-content/60">Only bundles without an ACL</span>
+                        </button>
+                      </form>
+                    </li>
+                    <li>
+                      <form
+                        method="post"
+                        action="{% url 'storage:acl_load_collection_bundles' row.object_id %}"
+                        hx-post="{% url 'storage:acl_load_collection_bundles' row.object_id %}"
+                        hx-target="#acl-action-status-{{ row.object_id }}"
+                        hx-swap="innerHTML"
+                        hx-confirm="Re-load all bundle ACLs from S3? This will overwrite existing bundle ACL database records for this collection."
+                      >
+                        {% csrf_token %}
+                        <input type="hidden" name="sort" value="{{ sort }}">
+                        <input type="hidden" name="dir" value="{{ direction }}">
+                        <input type="hidden" name="page" value="{{ page_obj.number }}">
+                        <input type="hidden" name="q" value="{{ search_term }}">
+                        <input type="hidden" name="status" value="{{ status_filter }}">
+                        <input type="hidden" name="access" value="{{ access_filter }}">
+                        <input type="hidden" name="mode" value="all">
+                        <button type="submit" class="flex flex-col items-start gap-0 w-full">
+                          <span class="font-medium">Re-load all</span>
+                          <span class="text-[11px] text-base-content/60">Overwrite every bundle ACL</span>
+                        </button>
+                      </form>
+                    </li>
+                  </ul>
+                </div>
+                {% elif row.object_exists %}
+                <span class="text-[11px] uppercase tracking-widest text-base-content/40 px-2">No bundles</span>
                 {% endif %}
               {% else %}
-                {% if row.name %}
-                <div class="font-semibold">{{ row.name }}</div>
-                {% endif %}
-                <div class="text-xs font-mono text-base-content/50">{{ row.identifier }}</div>
+              <form
+                method="post"
+                action="{% url 'storage:acl_load_single' scope row.object_id %}"
+                hx-post="{% url 'storage:acl_load_single' scope row.object_id %}"
+                hx-target="#acl-action-status-{{ row.object_id }}"
+                hx-swap="innerHTML"
+                hx-confirm="Load ACL from S3? This will overwrite the database record."
+              >
+                {% csrf_token %}
+                <input type="hidden" name="sort" value="{{ sort }}">
+                <input type="hidden" name="dir" value="{{ direction }}">
+                <input type="hidden" name="page" value="{{ page_obj.number }}">
+                <input type="hidden" name="q" value="{{ search_term }}">
+                <input type="hidden" name="status" value="{{ status_filter }}">
+                <input type="hidden" name="access" value="{{ access_filter }}">
+                <button type="submit" class="btn btn-sm btn-soft btn-primary tooltip" data-tip="Load ACL from S3" {% if not row.object_exists %}disabled{% endif %}>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+                  </svg>
+                  Load
+                </button>
+              </form>
               {% endif %}
-              {% if not row.object_exists %}
-              <div class="badge badge-error badge-outline badge-xs">Object missing</div>
-              {% elif not row.has_permission %}
-              <div class="badge badge-warning badge-outline badge-xs">No ACL record</div>
-              {% endif %}
-              {% if row.bucket or row.key %}
-              <div class="text-[11px] text-base-content/50">
-                {% if row.bucket %}{{ row.bucket }}{% endif %}{% if row.key %}/{% endif %}{% if row.key %}{{ row.key }}{% endif %}
-              </div>
-              {% endif %}
-            </td>
-            <td class="w-24">
-              <span class="badge badge-sm {% if row.access_level == 'public' %}badge-success{% elif row.access_level == 'academic' %}badge-warning{% else %}bg-amber-600 text-white border-amber-600{% endif %}">
-                {% if row.access_level == 'public' %}
-                  Public
-                {% elif row.access_level == 'academic' %}
-                  Academic
+              <form
+                method="post"
+                action="{% url 'storage:acl_save_single' scope row.object_id %}"
+                hx-post="{% url 'storage:acl_save_single' scope row.object_id %}"
+                hx-target="#acl-action-status-{{ row.object_id }}"
+                hx-swap="innerHTML"
+                hx-confirm="Save ACL to S3? This will overwrite the S3 file."
+              >
+                {% csrf_token %}
+                <input type="hidden" name="sort" value="{{ sort }}">
+                <input type="hidden" name="dir" value="{{ direction }}">
+                <input type="hidden" name="page" value="{{ page_obj.number }}">
+                <input type="hidden" name="q" value="{{ search_term }}">
+                <input type="hidden" name="status" value="{{ status_filter }}">
+                <input type="hidden" name="access" value="{{ access_filter }}">
+                <button type="submit" class="btn btn-sm btn-ghost tooltip" data-tip="Save ACL to S3" {% if not row.object_exists or not row.has_permission %}disabled{% endif %}>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+                  </svg>
+                  Save
+                </button>
+              </form>
+              <button
+                type="button"
+                class="btn btn-sm btn-ghost tooltip"
+                data-tip="Edit ACL permissions"
+                {% if row.object_exists %}
+                hx-get="{% url 'storage:acl_edit_permission_form' scope row.object_id %}"
+                hx-target="#acl-edit-modal-content"
+                hx-swap="innerHTML"
+                onclick="document.getElementById('acl-edit-modal').showModal()"
                 {% else %}
-                  Restricted
+                disabled
                 {% endif %}
-              </span>
-            </td>
-            <td class="text-sm text-base-content/70">
-              {{ row.last_synced|date:"Y-m-d H:i"|default:"—" }}
-            </td>
-            {% if scope == 'collection' %}
-            <td class="text-xs text-base-content/70 w-56">
-              {% with summary=row.bundle_access_summary %}
-                <div class="space-y-1">
-                  <div class="text-[11px] text-base-content/60">Bundles: {{ summary.total_bundles|default:0 }}</div>
-                  <div class="flex flex-wrap gap-1">
-                    {% if summary.public_count %}<span class="badge badge-success badge-xs">Public {{ summary.public_count }}</span>{% endif %}
-                    {% if summary.academic_count %}<span class="badge badge-warning badge-xs">Academic {{ summary.academic_count }}</span>{% endif %}
-                    {% if summary.restricted_count %}<span class="badge badge-xs bg-amber-600 text-white border-amber-600">Restricted {{ summary.restricted_count }}</span>{% endif %}
-                    {% if summary.missing_acl_count %}<span class="badge badge-error badge-outline badge-xs">Missing {{ summary.missing_acl_count }}</span>{% endif %}
-                  </div>
-                </div>
-              {% endwith %}
-            </td>
-            {% endif %}
-            <td class="text-sm text-base-content/70 w-1/3">
-              {% if row.read_agents %}
-                <div class="space-y-1 max-w-xs">
-                  {% for agent in row.read_agents %}
-                    <div class="text-xs break-all" title="{{ agent }}">{{ agent|acl_agent_display }}</div>
-                  {% endfor %}
-                </div>
-              {% else %}
-                —
-              {% endif %}
-            </td>
-            <td>
-              <div class="flex items-center gap-2">
-                <div class="join">
-                  <div class="tooltip" data-tip="Load from S3">
-                    <form
-                      method="post"
-                      action="{% url 'storage:acl_load_single' scope row.object_id %}"
-                      hx-post="{% url 'storage:acl_load_single' scope row.object_id %}"
-                      hx-target="#acl-action-status-{{ row.object_id }}"
-                      hx-swap="innerHTML"
-                      hx-confirm="Load ACL from S3? This will overwrite the database record."
-                    >
-                      {% csrf_token %}
-                      <input type="hidden" name="sort" value="{{ sort }}">
-                      <input type="hidden" name="dir" value="{{ direction }}">
-                      <input type="hidden" name="page" value="{{ page_obj.number }}">
-                      <input type="hidden" name="q" value="{{ search_term }}">
-                      <input type="hidden" name="status" value="{{ status_filter }}">
-                      <input type="hidden" name="access" value="{{ access_filter }}">
-                      <button type="submit" class="btn btn-xs join-item" {% if not row.object_exists %}disabled{% endif %}>Load</button>
-                    </form>
-                  </div>
-                  <div class="tooltip" data-tip="Save to S3">
-                    <form
-                      method="post"
-                      action="{% url 'storage:acl_save_single' scope row.object_id %}"
-                      hx-post="{% url 'storage:acl_save_single' scope row.object_id %}"
-                      hx-target="#acl-action-status-{{ row.object_id }}"
-                      hx-swap="innerHTML"
-                      hx-confirm="Save ACL to S3? This will overwrite the S3 file."
-                    >
-                      {% csrf_token %}
-                      <input type="hidden" name="sort" value="{{ sort }}">
-                      <input type="hidden" name="dir" value="{{ direction }}">
-                      <input type="hidden" name="page" value="{{ page_obj.number }}">
-                      <input type="hidden" name="q" value="{{ search_term }}">
-                      <input type="hidden" name="status" value="{{ status_filter }}">
-                      <input type="hidden" name="access" value="{{ access_filter }}">
-                      <button type="submit" class="btn btn-xs join-item" {% if not row.object_exists or not row.has_permission %}disabled{% endif %}>Save</button>
-                    </form>
-                  </div>
-                  <button
-                    type="button"
-                    class="btn btn-xs join-item"
-                    {% if row.object_exists %}
-                    hx-get="{% url 'storage:acl_edit_permission_form' scope row.object_id %}"
-                    hx-target="#acl-edit-modal-content"
-                    hx-swap="innerHTML"
-                    onclick="document.getElementById('acl-edit-modal').showModal()"
-                    {% else %}
-                    disabled
-                    {% endif %}
-                  >Edit</button>
-                </div>
-                <span id="acl-action-status-{{ row.object_id }}"></span>
-              </div>
-            </td>
-          </tr>
-          {% empty %}
-          <tr>
-            <td colspan="{% if scope == 'collection' %}7{% else %}6{% endif %}" class="py-6 text-center text-sm text-base-content/60">
-              No {{ scope }}s to display.
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.862 4.487zm0 0L19.5 7.125"/>
+                </svg>
+                Edit
+              </button>
+            </div>
+            <div id="acl-action-status-{{ row.object_id }}" class="text-xs mt-2 empty:mt-0 empty:hidden"></div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="{% if scope == 'collection' %}7{% else %}6{% endif %}" class="py-6 text-center text-sm text-base-content/60">
+            No {{ scope }}s to display.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 
-    <div class="flex items-center justify-between text-sm text-base-content/70">
-      <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
-      <div class="join">
-        <button
-          type="button"
-          class="join-item btn btn-xs {% if not page_obj.has_previous %}btn-disabled{% else %}btn-outline{% endif %}"
-          {% if page_obj.has_previous %}
-          hx-get="{{ endpoint }}?page={{ page_obj.previous_page_number }}&sort={{ sort }}&dir={{ direction }}{% if filter_query %}&{{ filter_query }}{% endif %}"
-          hx-target="#acl-records-table"
-          hx-swap="outerHTML"
-          hx-push-url="false"
-          {% endif %}
-        >
-          Prev
-        </button>
-        <button
-          type="button"
-          class="join-item btn btn-xs {% if not page_obj.has_next %}btn-disabled{% else %}btn-outline{% endif %}"
-          {% if page_obj.has_next %}
-          hx-get="{{ endpoint }}?page={{ page_obj.next_page_number }}&sort={{ sort }}&dir={{ direction }}{% if filter_query %}&{{ filter_query }}{% endif %}"
-          hx-target="#acl-records-table"
-          hx-swap="outerHTML"
-          hx-push-url="false"
-          {% endif %}
-        >
-          Next
-        </button>
-      </div>
+  <div class="flex items-center justify-between gap-3 px-4 py-3 border-t border-base-300 bg-base-200 text-xs text-base-content/70">
+    <span class="uppercase tracking-widest">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+    <div class="join">
+      <button
+        type="button"
+        class="join-item btn btn-xs {% if not page_obj.has_previous %}btn-disabled{% else %}btn-outline{% endif %}"
+        {% if page_obj.has_previous %}
+        hx-get="{{ endpoint }}?page={{ page_obj.previous_page_number }}&sort={{ sort }}&dir={{ direction }}{% if filter_query %}&{{ filter_query }}{% endif %}"
+        hx-target="#acl-records-table"
+        hx-swap="outerHTML"
+        hx-push-url="false"
+        {% endif %}
+      >
+        Prev
+      </button>
+      <button
+        type="button"
+        class="join-item btn btn-xs {% if not page_obj.has_next %}btn-disabled{% else %}btn-outline{% endif %}"
+        {% if page_obj.has_next %}
+        hx-get="{{ endpoint }}?page={{ page_obj.next_page_number }}&sort={{ sort }}&dir={{ direction }}{% if filter_query %}&{{ filter_query }}{% endif %}"
+        hx-target="#acl-records-table"
+        hx-swap="outerHTML"
+        hx-push-url="false"
+        {% endif %}
+      >
+        Next
+      </button>
     </div>
   </div>
 </div>

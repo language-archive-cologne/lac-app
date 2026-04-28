@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Provision the lacos-maps bucket with public-read + permissive CORS.
-# Defaults target local MinIO; override MC_HOST / S3_ENDPOINT for prod.
+# Optional helper: provision a MinIO/S3-compatible lacos-maps bucket for map
+# asset experiments or local fallback URLs. Production map assets are served
+# from the VM filesystem with nginx, not through this script.
 set -euo pipefail
 
 BUCKET="${BUCKET:-lacos-maps}"

@@ -372,6 +372,13 @@ def _build_acl_table_context(request, scope: str) -> dict[str, object]:
         else:
             sort_toggles[field] = "asc"
 
+    status_filter_options = [
+        ("all", "All", None),
+        ("has_acl", "Has ACL", has_acl_count),
+        ("missing_acl", "Missing", missing_acl_count),
+        ("missing_object", "Orphaned", missing_object_count),
+    ]
+
     return {
         "scope": scope,
         "page_obj": page_obj,
@@ -383,6 +390,7 @@ def _build_acl_table_context(request, scope: str) -> dict[str, object]:
         "filtered_count": filtered_count,
         "search_term": search_term,
         "status_filter": status_filter,
+        "status_filter_options": status_filter_options,
         "access_filter": access_filter,
         "filter_query": filter_query,
         "sort": sort,
