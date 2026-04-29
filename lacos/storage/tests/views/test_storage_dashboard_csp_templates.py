@@ -11,10 +11,20 @@ INLINE_HANDLER_PATTERN = re.compile(
     r"\s(?:on[a-z]+|hx-on(?:::[a-z-]+)?|style)\s*=",
     re.IGNORECASE,
 )
+SUMMARY_PATTERN = re.compile(r"<summary\b[\s\S]*?</summary>", re.IGNORECASE)
+INTERACTIVE_ELEMENT_PATTERN = re.compile(
+    r"<(?:a|button|input|label|select|textarea)\b",
+    re.IGNORECASE,
+)
 
 
 def _assert_no_inline_handlers(html: str):
     assert INLINE_HANDLER_PATTERN.search(html) is None
+
+
+def _assert_no_interactive_elements_in_summary(html: str):
+    for summary in SUMMARY_PATTERN.findall(html):
+        assert INTERACTIVE_ELEMENT_PATTERN.search(summary) is None
 
 
 def test_archivist_dashboard_template_uses_external_dashboard_scripts():
@@ -77,6 +87,9 @@ def test_folder_contents_partial_has_no_inline_event_handlers():
     )
 
     _assert_no_inline_handlers(html)
+    _assert_no_interactive_elements_in_summary(html)
+    assert "<summary" not in html
+    assert "data-folder-toggle" in html
     assert "data-open-file-viewer" in html
     assert "data-remove-on-success" in html
 

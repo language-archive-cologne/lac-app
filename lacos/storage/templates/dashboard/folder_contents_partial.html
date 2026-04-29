@@ -20,24 +20,31 @@ Nested folder contents returned via HTMX when a folder is expanded.
     {% with folder_slug=item.path|slugify %}
     <li data-folder-path="{{ item.path }}">
         {% url 'storage:load_folder_contents' bucket_type=bucket_type folder_path=item.path as folder_url %}
-        <details data-folder-path="{{ item.path }}"
-                 hx-get="{{ folder_url }}{% if max_keys %}?max_keys={{ max_keys }}{% endif %}"
-                 hx-trigger="toggle once"
-                 hx-target="#children-{{ folder_slug }}"
-                 hx-swap="innerHTML"
-                 hx-indicator="#indicator-{{ folder_slug }}">
-            <summary class="flex items-center gap-3 py-2 px-3 hover:bg-base-200/40 rounded-lg cursor-pointer transition-colors">
-                <span class="flex items-center gap-2 font-medium flex-1 text-sm">
-                    <svg class="h-4 w-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="flex items-center gap-3 py-2 px-3 hover:bg-base-200/40 rounded-lg transition-colors">
+            <button type="button"
+                    class="flex flex-1 items-center gap-3 text-left min-w-0 cursor-pointer"
+                    data-folder-toggle
+                    data-folder-path="{{ item.path }}"
+                    data-folder-panel="#children-{{ folder_slug }}"
+                    aria-expanded="false"
+                    aria-controls="children-{{ folder_slug }}"
+                    hx-get="{{ folder_url }}{% if max_keys %}?max_keys={{ max_keys }}{% endif %}"
+                    hx-trigger="click once"
+                    hx-target="#children-{{ folder_slug }}"
+                    hx-swap="innerHTML"
+                    hx-indicator="#indicator-{{ folder_slug }}">
+                <span class="flex items-center gap-2 font-medium flex-1 text-sm min-w-0">
+                    <svg class="h-4 w-4 text-primary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                               d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                     </svg>
-                    <span>{{ item.name }}</span>
+                    <span class="truncate">{{ item.name }}</span>
                     {% if item.is_blam_object %}
-                        <span class="badge badge-xs badge-outline">{{ item.blam_type|title }}</span>
+                        <span class="badge badge-xs badge-outline shrink-0">{{ item.blam_type|title }}</span>
                     {% endif %}
                 </span>
-                <div class="flex items-center gap-2">
+            </button>
+            <div class="flex items-center gap-2 shrink-0">
                     <button type="button"
                             class="btn btn-ghost btn-xs"
                             title="Rename Folder"
@@ -117,18 +124,16 @@ Nested folder contents returned via HTMX when a folder is expanded.
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                         </svg>
                     </button>
-                </div>
-            </summary>
-            <div class="pl-5 mt-1 space-y-2">
-                <div id="indicator-{{ folder_slug }}" class="loading-indicator htmx-indicator flex items-center gap-2 text-xs text-base-content/60">
-                    <span class="loading loading-spinner loading-xs"></span>
-                    <span>Loading…</span>
-                </div>
-                <ul id="children-{{ folder_slug }}" class="menu menu-xs bg-base-50 rounded-lg border-l border-primary/20 folder-children"
-                    data-folder-path="{{ item.path }}"
-                    data-bucket-type="{{ bucket_type }}"></ul>
             </div>
-        </details>
+        </div>
+        <ul id="children-{{ folder_slug }}" class="menu menu-xs hidden bg-base-50 rounded-lg border-l border-primary/20 folder-children"
+            data-folder-path="{{ item.path }}"
+            data-bucket-type="{{ bucket_type }}">
+            <li id="indicator-{{ folder_slug }}" class="loading-indicator htmx-indicator flex items-center gap-2 text-xs text-base-content/60">
+                <span class="loading loading-spinner loading-xs"></span>
+                <span>Loading…</span>
+            </li>
+        </ul>
     </li>
     {% endwith %}
     {% elif item.type == 'file' %}

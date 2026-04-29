@@ -435,6 +435,16 @@
     }
   }
 
+  function toggleFolderPanel(toggle) {
+    const panelSelector = toggle.dataset.folderPanel;
+    const panel = panelSelector ? qs(panelSelector) : null;
+    const expanded = toggle.getAttribute("aria-expanded") === "true";
+
+    toggle.setAttribute("aria-expanded", expanded ? "false" : "true");
+    panel?.classList.toggle("hidden", expanded);
+    setCurrentFolderPath(toggle.dataset.folderPath || "");
+  }
+
   function handleClick(event) {
     const stopToggle = event.target.closest("[data-stop-folder-toggle]");
     if (stopToggle) {
@@ -467,10 +477,9 @@
       document.activeElement?.blur();
     }
 
-    const summary = event.target.closest("summary");
-    const details = summary?.closest("details[data-folder-path]");
-    if (details) {
-      setCurrentFolderPath(details.dataset.folderPath || "");
+    const folderToggle = event.target.closest("[data-folder-toggle]");
+    if (folderToggle) {
+      toggleFolderPanel(folderToggle);
     }
 
     const bucketLink = event.target.closest("#bucket-tabs .dropdown-content a[hx-get]");
@@ -554,14 +563,6 @@
 
     if (event.detail?.elt?.id === "bucket-tabs" || event.detail?.elt?.closest?.("#bucket-tabs")) {
       updateActiveBucketInput();
-    }
-  });
-
-  document.addEventListener("toggle", (event) => {
-    const details = event.target;
-    if (!details?.matches?.("details[data-folder-path]")) return;
-    if (details.open) {
-      setCurrentFolderPath(details.dataset.folderPath || "");
     }
   });
 
