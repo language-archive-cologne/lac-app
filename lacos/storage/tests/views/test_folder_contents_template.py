@@ -43,10 +43,8 @@ def test_folder_contents_load_more_uses_append_swap_pattern():
     assert "continuation_token=abc/def%3D" in button_html
     assert 'hx-target="closest ul"' in button_html
     assert 'hx-swap="beforeend"' in button_html
-    assert (
-        'hx-on::after-request="if (event.detail.successful) { this.closest(\'li\')?.remove(); }"'
-        in button_html
-    )
+    assert "data-remove-on-success" in button_html
+    assert "hx-on" not in button_html
 
 
 def test_folder_contents_omits_load_more_when_not_paginated():

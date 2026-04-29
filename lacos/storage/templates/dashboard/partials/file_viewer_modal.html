@@ -39,7 +39,7 @@
             </div>
         {% endif %}
         <a href="{{ download_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-primary">Open in new tab</a>
-        <button type="button" class="btn btn-sm btn-ghost" onclick="closeFileViewer()">✕</button>
+        <button type="button" class="btn btn-sm btn-ghost" data-close-file-viewer>✕</button>
     </div>
 </div>
 
@@ -96,7 +96,6 @@
 {% elif viewer_type == "json" or viewer_type == "xml" %}
     {% if file_content %}
         <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-auto h-full leading-relaxed"><code id="file-viewer-code" class="{{ language_class }}">{{ file_content }}</code></pre>
-        <script>if (window.Prism) { Prism.highlightElement(document.getElementById('file-viewer-code')); }</script>
     {% else %}
         <iframe src="{{ download_url }}" class="w-full h-full rounded-lg border bg-base-100" title="{{ filename }}"></iframe>
     {% endif %}

@@ -33,6 +33,7 @@
     {% endblock seo_meta %}
 
     {% block structured_data %}{% endblock structured_data %}
+  <meta name="htmx-config" content='{"refreshOnHistoryMiss":true,"includeIndicatorStyles":false}'>
   <!-- Theme initialization (runs before body to prevent flash) -->
   <script>
     (function() {
@@ -49,6 +50,7 @@
     <link href="{% static 'css/output.css' %}" rel="stylesheet" />
     <!-- Third-party CSS libraries -->
     <link href="{% static 'vendor/css/prism.css' %}" rel="stylesheet" />
+    <link id="__altcha-css" href="{% static 'vendor/css/altcha.css' %}" rel="stylesheet" />
     <!-- Project-specific CSS -->
     <link href="{% static 'css/project.css' %}" rel="stylesheet" />
   {% endblock css %}
