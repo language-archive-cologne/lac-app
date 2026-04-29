@@ -80,6 +80,9 @@ class Command(BaseCommand):
                     )
                 )
                 return 1
+            if not self._s3_object_exists(discovery_service, bucket_to_use, s3_key):
+                self._remove_missing_collection(collection, dry_run=dry_run)
+                return 0
 
             collection_id = self._reindex_collection(
                 bucket_to_use,
@@ -158,6 +161,9 @@ class Command(BaseCommand):
                         collection.id,
                     )
                     continue
+                if not self._s3_object_exists(discovery_service, bucket_to_use, s3_key):
+                    self._remove_missing_collection(collection, dry_run=dry_run)
+                    continue
                 collection_id = self._reindex_collection(
                     bucket_to_use,
                     s3_key,
@@ -179,6 +185,52 @@ class Command(BaseCommand):
             return 0
 
         return 0
+
+    def _s3_object_exists(
+        self,
+        discovery_service: FileDiscoveryService,
+        bucket: str,
+        s3_key: str,
+    ) -> bool:
+        """Return False only when S3 confirms the object is missing."""
+        try:
+            return discovery_service.head_s3_object(bucket, s3_key) is not None
+        except Exception as exc:
+            logger.warning(
+                "Could not verify collection XML %s/%s before reindex: %s",
+                bucket,
+                s3_key,
+                exc,
+            )
+            return True
+
+    def _remove_missing_collection(
+        self,
+        collection: Collection,
+        *,
+        dry_run: bool = False,
+    ) -> None:
+        """Remove a DB collection whose import XML no longer exists in S3."""
+        from lacos.ingest.services.orphan_cleanup import delete_orphaned_bundles
+
+        if dry_run:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"DRY RUN: would remove missing collection {collection.identifier}"
+                )
+            )
+            return
+
+        collection_id = collection.id
+        collection_identifier = collection.identifier
+        deleted_bundles = delete_orphaned_bundles(collection_id, s3_bundle_keys=[])
+        collection.delete()
+        self.stdout.write(
+            self.style.WARNING(
+                "Removed missing collection "
+                f"{collection_identifier} and {len(deleted_bundles)} linked bundle(s)"
+            )
+        )
 
     @staticmethod
     def _infer_collection_identifier(s3_key: str) -> Optional[str]:

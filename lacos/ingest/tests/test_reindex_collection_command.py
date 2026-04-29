@@ -1,6 +1,11 @@
 import uuid
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+from lacos.blam.models.bundle.bundle_repository import Bundle
+from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
+from lacos.blam.models.collection.collection_repository import Collection
 from lacos.ingest.management.commands.reindex_collection import Command
 
 
@@ -103,6 +108,60 @@ def test_handle_prefix_reindexes_only_associated_bundles(mock_discovery_service_
         "col-b/bundle-2/v1/content/bundle-2.xml",
         "col-b/bundle-3/v1/content/bundle-3.xml",
     ]
+
+
+@pytest.mark.django_db
+@patch("lacos.ingest.management.commands.reindex_collection.connection.close")
+@patch("lacos.ingest.management.commands.reindex_collection.close_old_connections")
+@patch("lacos.ingest.management.commands.reindex_collection.FileDiscoveryService")
+def test_handle_all_removes_collection_missing_from_storage(
+    mock_discovery_service_cls,
+    _mock_close_old_connections,
+    _mock_connection_close,
+):
+    collection = Collection.objects.create(
+        identifier="hdl:11341/missing-storage-collection",
+        import_bucket="lacos-ingest",
+        import_object_key=(
+            "missing_storage/missing_storage/v1/content/missing_storage.xml"
+        ),
+    )
+    bundle = Bundle.objects.create(
+        identifier="hdl:11341/missing-storage-bundle",
+        import_object_key=(
+            "missing_storage/missing_bundle/v1/content/missing_bundle.xml"
+        ),
+    )
+    BundleStructuralInfo.objects.create(
+        bundle=bundle,
+        is_member_of_collection=collection,
+    )
+
+    discovery_service = MagicMock()
+    discovery_service.production_bucket = "lacos-production"
+    discovery_service.head_s3_object.return_value = None
+    mock_discovery_service_cls.return_value = discovery_service
+
+    command = Command()
+    command._reindex_collection = MagicMock()
+    command._reindex_bundles_for_collection = MagicMock()
+    command._update_s3_resource_locations = MagicMock()
+
+    result = command.handle(
+        identifier=None,
+        prefix=None,
+        bucket=None,
+        all=True,
+        update_bundles=True,
+        dry_run=False,
+    )
+
+    assert result == 0
+    assert not Collection.objects.filter(id=collection.id).exists()
+    assert not Bundle.objects.filter(id=bundle.id).exists()
+    command._reindex_collection.assert_not_called()
+    command._reindex_bundles_for_collection.assert_not_called()
+    command._update_s3_resource_locations.assert_not_called()
 
 
 @patch("lacos.ingest.management.commands.reindex_collection.ResourceMappingService")
