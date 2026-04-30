@@ -5,7 +5,11 @@ from urllib.parse import urlparse
 from django.conf import settings
 from django.utils.cache import patch_cache_control
 
-from lacos.common.services.csp import InlineCspHashes, collect_inline_csp_hashes
+from lacos.common.services.csp import (
+    InlineCspHashes,
+    collect_form_action_origins,
+    collect_inline_csp_hashes,
+)
 
 
 def _origin_from_url(url: str | None) -> str | None:
@@ -48,6 +52,7 @@ class SecurityHeadersMiddleware:
         self,
         *,
         inline_hashes: InlineCspHashes | None = None,
+        form_action_origins: tuple[str, ...] = (),
     ) -> str:
         inline_hashes = inline_hashes or InlineCspHashes()
         static_origins = _origins_from_settings("STATIC_URL")
@@ -90,6 +95,9 @@ class SecurityHeadersMiddleware:
         media_src = ["'self'", "blob:", *asset_origins]
         frame_src = ["'self'", *asset_origins]
         form_action = ["'self'", *saml_form_origins]
+        form_action.extend(
+            origin for origin in form_action_origins if origin not in form_action
+        )
 
         if inline_hashes.script_hashes:
             if inline_hashes.has_script_attribute_hashes:
@@ -121,25 +129,29 @@ class SecurityHeadersMiddleware:
             ],
         )
 
-    def _response_inline_hashes(self, response) -> InlineCspHashes:
+    def _response_document(self, response) -> str:
         if getattr(response, "streaming", False) or not hasattr(response, "content"):
-            return InlineCspHashes()
+            return ""
 
         content_type = response.headers.get("Content-Type", "")
         if not content_type.startswith(("text/html", "application/xhtml+xml")):
-            return InlineCspHashes()
+            return ""
 
         encoding = getattr(response, "charset", "utf-8") or "utf-8"
-        document = response.content.decode(encoding, errors="ignore")
-        return collect_inline_csp_hashes(document)
+        return response.content.decode(encoding, errors="ignore")
 
     def __call__(self, request):
         response = self.get_response(request)
-        inline_hashes = self._response_inline_hashes(response)
+        document = self._response_document(response)
+        inline_hashes = collect_inline_csp_hashes(document) if document else InlineCspHashes()
+        form_action_origins = collect_form_action_origins(document) if document else ()
 
         response.headers.setdefault(
             "Content-Security-Policy",
-            self.build_content_security_policy(inline_hashes=inline_hashes),
+            self.build_content_security_policy(
+                inline_hashes=inline_hashes,
+                form_action_origins=form_action_origins,
+            ),
         )
         response.headers.setdefault("Permissions-Policy", self.permissions_policy)
         response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
