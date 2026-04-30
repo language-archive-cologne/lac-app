@@ -8,6 +8,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.urls import reverse
 from pytest_django.asserts import assertRedirects
 
+from lacos.users.admin import AuthSourceFilter, user_has_saml_identity
 from lacos.users.models import User
 
 
@@ -49,6 +50,41 @@ class TestUserAdmin:
         url = reverse("admin:users_user_change", kwargs={"object_id": user.pk})
         response = admin_client.get(url)
         assert response.status_code == HTTPStatus.OK
+
+    def test_auth_source_uses_eppn_acl_uri(self):
+        user_admin = admin.site._registry[User]
+        saml_user = User(
+            username="sievert@uni-wuppertal.de",
+            acl_agent_uri="urn:lacos:eppn:sievert@uni-wuppertal.de",
+        )
+        local_user = User(username="local-user", saml_persistent_id="legacy-id")
+
+        assert user_has_saml_identity(saml_user) is True
+        assert user_admin.auth_source(saml_user) == "SAML"
+        assert user_has_saml_identity(local_user) is False
+        assert user_admin.auth_source(local_user) == "Local"
+
+    @pytest.mark.django_db
+    def test_auth_source_filter_uses_eppn_acl_uri(self):
+        saml_user = User.objects.create_user(
+            username="sievert@uni-wuppertal.de",
+            acl_agent_uri="urn:lacos:eppn:sievert@uni-wuppertal.de",
+        )
+        local_user = User.objects.create_user(
+            username="local-user",
+            saml_persistent_id="legacy-id",
+        )
+        saml_filter = AuthSourceFilter.__new__(AuthSourceFilter)
+        saml_filter.used_parameters = {"auth_source": "saml"}
+        local_filter = AuthSourceFilter.__new__(AuthSourceFilter)
+        local_filter.used_parameters = {"auth_source": "local"}
+
+        assert list(saml_filter.queryset(None, User.objects.order_by("username"))) == [
+            saml_user,
+        ]
+        assert list(local_filter.queryset(None, User.objects.order_by("username"))) == [
+            local_user,
+        ]
 
     @pytest.fixture
     def _force_allauth(self, settings):

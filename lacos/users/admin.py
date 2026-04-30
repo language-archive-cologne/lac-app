@@ -9,6 +9,8 @@ from .forms import UserAdminChangeForm
 from .forms import UserAdminCreationForm
 from .models import CollectionManagerAssignment, GroupACL, SamlCountry, SamlIdp, User
 
+SAML_ACL_AGENT_URI_PREFIX = "urn:lacos:eppn:"
+
 if settings.DJANGO_ADMIN_FORCE_ALLAUTH:
     # Force the `admin` sign in process to go through the `django-allauth` workflow:
     # https://docs.allauth.org/en/latest/common/admin.html#admin
@@ -29,15 +31,17 @@ class AuthSourceFilter(admin.SimpleListFilter):
     def queryset(self, request, queryset):
         value = self.value()
         if value == "saml":
-            return queryset.exclude(saml_persistent_id__isnull=True).exclude(
-                saml_persistent_id="",
-            )
+            return queryset.filter(acl_agent_uri__startswith=SAML_ACL_AGENT_URI_PREFIX)
         if value == "local":
-            return queryset.filter(
-                models.Q(saml_persistent_id__isnull=True)
-                | models.Q(saml_persistent_id=""),
-            )
+            return queryset.exclude(acl_agent_uri__startswith=SAML_ACL_AGENT_URI_PREFIX)
         return queryset
+
+
+def user_has_saml_identity(user: User) -> bool:
+    return bool(
+        user.acl_agent_uri
+        and user.acl_agent_uri.startswith(SAML_ACL_AGENT_URI_PREFIX),
+    )
 
 
 class CollectionManagerAssignmentInline(admin.TabularInline):
@@ -124,7 +128,7 @@ class UserAdmin(auth_admin.UserAdmin):
 
     @admin.display(description=_("Auth source"))
     def auth_source(self, obj):
-        if obj.saml_persistent_id:
+        if user_has_saml_identity(obj):
             return "SAML"
         return "Local"
 
