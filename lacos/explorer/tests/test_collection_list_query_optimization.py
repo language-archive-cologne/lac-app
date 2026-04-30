@@ -208,6 +208,12 @@ def test_collection_list_full_page_uses_globe_style_variant(client):
     assert "const GLOBE_DARK_STYLE_URL = DARK_STYLE_URL + (DARK_STYLE_URL.includes('?') ? '&' : '?') + 'projection=globe';" in page
     assert "style: isDark ? GLOBE_DARK_STYLE_URL : GLOBE_STYLE_URL," in page
     assert "setProjection({ type: 'globe' })" not in page
+    assert 'rel="preload" href="/static/vendor/js/maplibre-gl/maplibre-gl.css" as="style"' in page
+    assert 'rel="preload" href="/static/vendor/js/maplibre-gl/maplibre-gl.js" as="script"' in page
+    assert 'rel="preload" href="/static/vendor/js/pmtiles/pmtiles.js" as="script"' in page
+    assert 'rel="preload" href="/maps/style/natural-earth-c.json" as="fetch"' in page
+    assert "initCollectionsMap();" in page
+    assert "DOMContentLoaded', initCollectionsMap" not in page
 
 
 @pytest.mark.django_db

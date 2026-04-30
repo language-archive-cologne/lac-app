@@ -5,6 +5,16 @@
 
 {% block title %}{% translate "Collections" %} - {{ block.super }}{% endblock title %}
 
+{% block css %}
+  {{ block.super }}
+  {% if collection_list and not search_query %}
+    <link rel="preload" href="{% static 'vendor/js/maplibre-gl/maplibre-gl.css' %}" as="style" />
+    <link rel="preload" href="{% static 'vendor/js/maplibre-gl/maplibre-gl.js' %}" as="script" />
+    <link rel="preload" href="{% static 'vendor/js/pmtiles/pmtiles.js' %}" as="script" />
+    <link rel="preload" href="{{ main_map_style_url }}" as="fetch" type="application/json" crossorigin />
+  {% endif %}
+{% endblock css %}
+
 {% block page_title %}{% endblock page_title %}
 
 {% block explorer_content %}
@@ -432,11 +442,7 @@
       });
       document.body.addEventListener('htmx:historyRestore', refreshCollectionsMap);
 
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initCollectionsMap);
-      } else {
-        initCollectionsMap();
-      }
+      initCollectionsMap();
     })();
   </script>
 {% endblock explorer_content %}

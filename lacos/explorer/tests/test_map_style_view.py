@@ -63,7 +63,33 @@ def test_map_style_view_glyphs_url_has_fontstack_range_template(client):
 @pytest.mark.django_db
 def test_map_style_view_cache_header_present(client):
     response = client.get(reverse("explorer:map_style_ne_c"))
-    assert "max-age" in response["Cache-Control"]
+    assert response["Cache-Control"] == "public, max-age=86400, stale-while-revalidate=604800"
+
+
+@pytest.mark.django_db
+def test_map_style_view_sets_content_length(client):
+    response = client.get(reverse("explorer:map_style_ne_c"))
+    assert int(response["Content-Length"]) == len(response.content)
+
+
+def test_render_map_style_body_cache_invalidates_with_mtime(tmp_path):
+    from lacos.explorer.views.utils import location as loc
+
+    loc._render_map_style_body.cache_clear()
+    style_path = tmp_path / "style.json"
+    style_path.write_text(
+        '{"version":8,"sources":{"ne":{"url":"pmtiles://__PMTILES_URL__"}},"glyphs":"__GLYPHS_URL__"}',
+        encoding="utf-8",
+    )
+
+    body = loc._render_map_style_body(str(style_path), 1, "/first.pmtiles", "/glyphs", None)
+    style_path.write_text('{"version":8,"name":"changed"}', encoding="utf-8")
+
+    cached_body = loc._render_map_style_body(str(style_path), 1, "/first.pmtiles", "/glyphs", None)
+    refreshed_body = loc._render_map_style_body(str(style_path), 2, "/first.pmtiles", "/glyphs", None)
+
+    assert cached_body == body
+    assert json.loads(refreshed_body)["name"] == "changed"
 
 
 @pytest.mark.django_db

@@ -95,6 +95,26 @@ def map_popup_view(request):
 _STYLE_PATH = Path(settings.APPS_DIR) / "static" / "vendor" / "maps" / "lac" / "natural-earth-c.json"
 
 
+@lru_cache(maxsize=16)
+def _render_map_style_body(
+    style_path: str,
+    _style_mtime_ns: int,
+    pmtiles_url: str,
+    glyphs_url: str,
+    projection: str | None,
+) -> str:
+    body = Path(style_path).read_text(encoding="utf-8")
+    body = body.replace("__PMTILES_URL__", pmtiles_url)
+    body = body.replace("__GLYPHS_URL__", glyphs_url)
+
+    if projection:
+        style = json.loads(body)
+        style["projection"] = {"type": projection}
+        body = json.dumps(style, separators=(",", ":"))
+
+    return body
+
+
 def map_style_view(request):
     """Serve the LAC Natural Earth style JSON with per-env URLs substituted.
 
@@ -105,14 +125,19 @@ def map_style_view(request):
     """
     if not _STYLE_PATH.is_file():
         return HttpResponseNotFound("style missing")
-    body = _STYLE_PATH.read_text(encoding="utf-8")
-    body = body.replace("__PMTILES_URL__", settings.EXPLORER_MAP_PMTILES_URL)
-    body = body.replace("__GLYPHS_URL__", settings.EXPLORER_MAP_GLYPHS_URL)
+
     projection = request.GET.get("projection")
-    if projection in {"globe", "mercator"}:
-        style = json.loads(body)
-        style["projection"] = {"type": projection}
-        body = json.dumps(style)
+    if projection not in {"globe", "mercator"}:
+        projection = None
+
+    body = _render_map_style_body(
+        str(_STYLE_PATH),
+        _STYLE_PATH.stat().st_mtime_ns,
+        settings.EXPLORER_MAP_PMTILES_URL,
+        settings.EXPLORER_MAP_GLYPHS_URL,
+        projection,
+    )
     resp = HttpResponse(body, content_type="application/json")
-    resp["Cache-Control"] = "public, max-age=300"
+    resp["Content-Length"] = str(len(body.encode("utf-8")))
+    resp["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=604800"
     return resp

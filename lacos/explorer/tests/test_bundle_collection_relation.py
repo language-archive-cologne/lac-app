@@ -118,6 +118,7 @@ def test_bundle_detail_shows_explicit_parent_collection(client):
     assert "Bundle Parent Title" in page
     assert "Part of" in page
     assert "Bundle Parent Title" in page
+    assert 'rel="preload" href="/static/vendor/js/pmtiles/pmtiles.js" as="script"' in page
 
 
 @pytest.mark.django_db

@@ -50,6 +50,7 @@ def test_collection_detail_shows_bundle_access_summary_by_main_levels(client):
     assert "Academic 1" in page
     assert "Restricted 1" in page
     assert "Missing" not in page
+    assert 'rel="preload" href="/static/vendor/js/pmtiles/pmtiles.js" as="script"' in page
 
 
 @pytest.mark.django_db
