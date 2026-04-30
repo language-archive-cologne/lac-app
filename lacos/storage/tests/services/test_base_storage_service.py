@@ -168,6 +168,7 @@ def test_base_storage_service_uses_separate_presigned_client():
 
 @override_settings(
     AWS_S3_ENDPOINT_URL="http://storage.internal:9000",
+    AWS_S3_BROWSER_ENDPOINT_URL=None,
     USE_MINIO=False,
     S3_WORKSPACE_BUCKETS=["lacos-ingest"],
 )
