@@ -1,7 +1,13 @@
 import pytest
+from django.http import HttpResponse
+from django.test import RequestFactory
 
 from lacos.common.middleware import SecurityHeadersMiddleware
-from lacos.common.services.csp import build_csp_sha256, collect_inline_csp_hashes
+from lacos.common.services.csp import (
+    build_csp_sha256,
+    collect_form_action_origins,
+    collect_inline_csp_hashes,
+)
 from lacos.users.tests.factories import UserFactory
 
 
@@ -103,6 +109,45 @@ def test_csp_allows_configured_saml_form_action_origins(client, settings):
     csp = response.headers["Content-Security-Policy"]
     assert "form-action 'self' https://idp.rrz.uni-koeln.de https://idp.example.org" in csp
     assert "form-action 'self' https:;" not in csp
+
+
+def test_collect_form_action_origins_tracks_external_form_destinations():
+    document = """
+    <html>
+      <body>
+        <form action="https://login.th-koeln.de/nidp/saml2/sso"></form>
+        <form action="/local/post/"></form>
+      </body>
+    </html>
+    """
+
+    origins = collect_form_action_origins(document)
+
+    assert origins == ("https://login.th-koeln.de",)
+
+
+def test_csp_allows_response_form_action_origins(settings):
+    settings.SAML_METADATA_REFRESH_URL = "https://idp.rrz.uni-koeln.de/idp/shibboleth"
+    html = """
+    <html>
+      <body>
+        <form action="https://login.th-koeln.de/nidp/saml2/sso" method="post">
+          <input type="hidden" name="SAMLRequest" value="abc">
+        </form>
+      </body>
+    </html>
+    """
+    middleware = SecurityHeadersMiddleware(
+        lambda request: HttpResponse(html, content_type="text/html"),
+    )
+
+    response = middleware(RequestFactory().get("/saml2/login/"))
+
+    csp = response.headers["Content-Security-Policy"]
+    assert (
+        "form-action 'self' https://idp.rrz.uni-koeln.de "
+        "https://login.th-koeln.de"
+    ) in csp
 
 
 @pytest.mark.django_db
