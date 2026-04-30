@@ -35,3 +35,14 @@ def test_api_schema_generated_successfully(admin_client):
     url = reverse("api-schema")
     response = admin_client.get(url)
     assert response.status_code == HTTPStatus.OK
+
+
+def test_api_schema_uses_current_host_server(admin_client):
+    url = reverse("api-schema")
+    response = admin_client.get(url)
+    body = response.content.decode("utf-8")
+
+    assert response.status_code == HTTPStatus.OK
+    assert "url: /" in body
+    assert "description: Current host" in body
+    assert "https://lacos.uni-koeln.de" not in body
