@@ -165,6 +165,43 @@
         audioElement.addEventListener('ended', () => { segmentEndTime = null; });
       };
 
+      const initializeVideoSubtitles = () => {
+        modalContent.querySelectorAll('video[data-subtitle-url]').forEach((video) => {
+          if (video.dataset.subtitleInitialized === 'true') return;
+          const url = video.getAttribute('data-subtitle-url');
+          if (!url) return;
+          video.dataset.subtitleInitialized = 'true';
+
+          fetch(url)
+            .then((response) => response.text())
+            .then((srt) => {
+              const vtt = 'WEBVTT\n\n' + srt
+                .replace(/\r\n/g, '\n')
+                .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
+              const blob = new Blob([vtt], { type: 'text/vtt' });
+              const track = document.createElement('track');
+              track.kind = 'subtitles';
+              track.label = 'Subtitles';
+              track.srclang = 'en';
+              track.src = URL.createObjectURL(blob);
+              track.default = true;
+              video.appendChild(track);
+              if (video.textTracks && video.textTracks[0]) {
+                video.textTracks[0].mode = 'showing';
+              }
+            })
+            .catch(() => {});
+        });
+      };
+
+      const highlightXmlPreview = () => {
+        if (!window.Prism) return;
+        const xmlCodeEl = modalContent.querySelector('#resource-xml-content');
+        if (xmlCodeEl) {
+          Prism.highlightElement(xmlCodeEl);
+        }
+      };
+
       const openModal = () => {
         modal.classList.remove('hidden');
         modal.classList.add('flex');
@@ -187,6 +224,8 @@
           audioPlayer = null;
           activePlayerContainer = null;
         }
+        initializeVideoSubtitles();
+        highlightXmlPreview();
       };
 
       const closeModal = () => {

@@ -27,6 +27,15 @@ def _origins_from_settings(*setting_names: str) -> list[str]:
     return origins
 
 
+def _origins_from_values(values: list[str] | tuple[str, ...]) -> list[str]:
+    origins: list[str] = []
+    for value in values:
+        origin = _origin_from_url(value)
+        if origin and origin not in origins:
+            origins.append(origin)
+    return origins
+
+
 class SecurityHeadersMiddleware:
     """Set baseline browser security headers and disable caching for sensitive responses."""
 
@@ -46,19 +55,41 @@ class SecurityHeadersMiddleware:
             "STATIC_URL",
             "MEDIA_URL",
             "AWS_S3_BROWSER_ENDPOINT_URL",
+            "AWS_S3_ENDPOINT_URL",
             "EXPLORER_MAP_PMTILES_URL",
             "EXPLORER_MAP_GLYPHS_URL",
             "EXPLORER_MAIN_MAP_STYLE_URL",
             "EXPLORER_MAIN_MAP_DARK_STYLE_URL",
         )
+        asset_origins.extend(
+            origin
+            for origin in _origins_from_values(
+                getattr(settings, "CSP_EXTRA_ASSET_ORIGINS", [])
+            )
+            if origin not in asset_origins
+        )
+        saml_form_origins = _origins_from_settings(
+            "SAML_METADATA_REFRESH_URL",
+            "SAML2_DISCO_URL",
+        )
+        saml_form_origins.extend(
+            origin
+            for origin in _origins_from_values(
+                getattr(settings, "SAML_FORM_ACTION_ORIGINS", [])
+            )
+            if origin not in saml_form_origins
+        )
 
         script_src = ["'self'", *static_origins]
-        style_src = ["'self'", *static_origins]
+        style_src = ["'self'", "'unsafe-inline'", *static_origins]
+        style_elem = ["'self'", "'unsafe-inline'", *static_origins]
+        style_attr = ["'unsafe-inline'"]
         img_src = ["'self'", "data:", *asset_origins]
         font_src = ["'self'", "data:", *asset_origins]
         connect_src = ["'self'", *asset_origins]
         media_src = ["'self'", *asset_origins]
         frame_src = ["'self'", *asset_origins]
+        form_action = ["'self'", *saml_form_origins]
 
         if inline_hashes.script_hashes:
             if inline_hashes.has_script_attribute_hashes:
@@ -76,11 +107,13 @@ class SecurityHeadersMiddleware:
                 "base-uri 'self'",
                 "object-src 'none'",
                 "frame-ancestors 'none'",
-                "form-action 'self'",
+                f"form-action {' '.join(form_action)}",
                 "worker-src 'self' blob:",
                 f"frame-src {' '.join(frame_src)}",
                 f"script-src {' '.join(script_src)}",
                 f"style-src {' '.join(style_src)}",
+                f"style-src-elem {' '.join(style_elem)}",
+                f"style-src-attr {' '.join(style_attr)}",
                 f"img-src {' '.join(img_src)}",
                 f"font-src {' '.join(font_src)}",
                 f"connect-src {' '.join(connect_src)}",

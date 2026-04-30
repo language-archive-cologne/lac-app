@@ -189,34 +189,6 @@
         <source src="{{ stream_url }}" type="{{ source_mime_type }}">
         <p>{% translate "Your browser does not support the video element." %}</p>
       </video>
-      {% if subtitle_url %}
-        <script>
-          (function() {
-            var video = document.currentScript.previousElementSibling;
-            var url = video.getAttribute('data-subtitle-url');
-            if (!url) return;
-            fetch(url)
-              .then(function(r) { return r.text(); })
-              .then(function(srt) {
-                var vtt = 'WEBVTT\n\n' + srt
-                  .replace(/\r\n/g, '\n')
-                  .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
-                var blob = new Blob([vtt], { type: 'text/vtt' });
-                var track = document.createElement('track');
-                track.kind = 'subtitles';
-                track.label = 'Subtitles';
-                track.srclang = 'en';
-                track.src = URL.createObjectURL(blob);
-                track.default = true;
-                video.appendChild(track);
-                if (video.textTracks && video.textTracks[0]) {
-                  video.textTracks[0].mode = 'showing';
-                }
-              })
-              .catch(function() {});
-          })();
-        </script>
-      {% endif %}
       <p class="mt-3 text-sm text-slate-600">
         {% translate "If this video does not play, your browser may not support its codecs. Use the download button below or try a different browser." %}
       </p>
@@ -436,14 +408,6 @@
           </div>
           <pre class="p-4 overflow-auto max-h-[70vh] text-xs leading-relaxed"><code id="resource-xml-content" class="language-xml">{{ xml_content }}</code></pre>
         </div>
-        <script>
-          if (window.Prism) {
-            const xmlCodeEl = document.getElementById('resource-xml-content');
-            if (xmlCodeEl) {
-              Prism.highlightElement(xmlCodeEl);
-            }
-          }
-        </script>
       {% else %}
         <div class="alert alert-info">
           <span>{% translate "XML preview is unavailable for this file." %}</span>

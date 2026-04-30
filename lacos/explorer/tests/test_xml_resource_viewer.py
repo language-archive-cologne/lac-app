@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
+from django.template.loader import render_to_string
 from django.urls import reverse
 
 from lacos.blam.models.bundle.bundle_repository import Bundle
@@ -32,6 +33,37 @@ class _FakeS3Client:
 
     def get_object(self, **_kwargs):
         return {"Body": _FakeS3Body(self._payload)}
+
+
+def test_resource_modal_htmx_fragments_do_not_include_inline_scripts():
+    xml_page = render_to_string(
+        "explorer/partials/resource_modal_content.html",
+        {
+            "resource_name": "metadata.xml",
+            "media_type": "xml",
+            "mime_type": "application/xml",
+            "preview_url": "https://example.test/metadata.xml",
+            "download_url": "https://example.test/download",
+            "xml_content": "<METATRANSCRIPT/>",
+        },
+    )
+    video_page = render_to_string(
+        "explorer/partials/resource_modal_content.html",
+        {
+            "resource_name": "interview.mp4",
+            "media_type": "video",
+            "mime_type": "video/mp4",
+            "source_mime_type": "video/mp4",
+            "stream_url": "https://example.test/interview.mp4",
+            "download_url": "https://example.test/download",
+            "subtitle_url": "https://example.test/interview.srt",
+        },
+    )
+
+    assert "<script" not in xml_page.lower()
+    assert "<script" not in video_page.lower()
+    assert 'id="resource-xml-content"' in xml_page
+    assert 'data-subtitle-url="https://example.test/interview.srt"' in video_page
 
 
 @pytest.mark.django_db

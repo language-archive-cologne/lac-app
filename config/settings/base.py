@@ -389,6 +389,8 @@ S3_INGEST_BUCKET = env("S3_INGEST_BUCKET", default="lacos-ingest")
 S3_PRODUCTION_BUCKET = env("S3_PRODUCTION_BUCKET", default="lacos-production")
 # Increase botocore HTTP pool size to avoid connection pool saturation under Huey/media load.
 AWS_S3_MAX_POOL_CONNECTIONS = env.int("AWS_S3_MAX_POOL_CONNECTIONS", default=50)
+AWS_S3_BROWSER_ENDPOINT_URL = env("AWS_S3_BROWSER_ENDPOINT_URL", default="")
+CSP_EXTRA_ASSET_ORIGINS = env.list("CSP_EXTRA_ASSET_ORIGINS", default=[])
 
 # Cache configuration for storage subsystems
 STORAGE_ACL_CACHE_TIMEOUT = env.int("STORAGE_ACL_CACHE_TIMEOUT", default=900)
@@ -648,6 +650,7 @@ SAML_METADATA_REFRESH_EXPECTED_ENTITY_ID = env(
     "SAML_METADATA_REFRESH_EXPECTED_ENTITY_ID",
     default="",
 )
+SAML_FORM_ACTION_ORIGINS = env.list("SAML_FORM_ACTION_ORIGINS", default=[])
 
 # SAML / Shibboleth
 # ------------------------------------------------------------------------------
