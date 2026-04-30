@@ -1,6 +1,7 @@
 import logging
 from typing import Iterable, Optional, Set
 
+from django.conf import settings
 from django.db.models import Count, Q
 from django.utils import timezone
 
@@ -84,7 +85,11 @@ class UploadVerificationService:
             self._invalidate_affected_folders(bucket_name, s3_keys)
 
         # Enqueue media processing for verified audio files
-        if upload_session and total_verified > 0:
+        if (
+            upload_session
+            and total_verified > 0
+            and getattr(settings, "AUDIO_SIDECAR_AUTO_GENERATE", False)
+        ):
             self._enqueue_media_processing(upload_session)
 
         return {

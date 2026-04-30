@@ -1,4 +1,5 @@
 from unittest.mock import Mock
+from unittest.mock import patch
 
 import pytest
 
@@ -143,3 +144,87 @@ def test_verify_keys_keeps_session_in_progress_until_all_files_done(django_user_
     assert file_two.status == "pending"
     assert session.status == "in_progress"
     assert session.completed_at is None
+
+
+@pytest.mark.django_db
+@patch("lacos.storage.services.upload_verification_service.settings")
+@patch("lacos.storage.media_tasks.generate_peaks_task")
+def test_verify_keys_does_not_auto_enqueue_audio_sidecars_by_default(
+    mock_generate_peaks_task,
+    mock_settings,
+    django_user_model,
+):
+    mock_settings.AUDIO_SIDECAR_AUTO_GENERATE = False
+    user = django_user_model.objects.create_user(username="verifier4", password="pass")
+    session = UploadSession.objects.create(
+        user=user,
+        folder_name="uploads",
+        bucket_name="test-bucket",
+        total_files=1,
+    )
+    file_obj = S3FileObject.objects.create(
+        session=session,
+        file_name="audio.wav",
+        s3_key="uploads/audio.wav",
+    )
+
+    upload_service = Mock()
+    upload_service.mark_upload_complete.return_value = {
+        "success": True,
+        "exists": True,
+        "s3_key": file_obj.s3_key,
+        "file_size": 10,
+        "content_type": "audio/wav",
+    }
+    upload_service._format_size.return_value = "10 B"
+
+    service = UploadVerificationService(upload_service=upload_service)
+    service.verify_keys(
+        [file_obj.s3_key],
+        upload_session=session,
+        bucket_name="test-bucket",
+    )
+
+    mock_generate_peaks_task.assert_not_called()
+
+
+@pytest.mark.django_db
+@patch("lacos.storage.services.upload_verification_service.settings")
+@patch("lacos.storage.media_tasks.generate_peaks_task")
+def test_verify_keys_can_auto_enqueue_audio_sidecars_when_enabled(
+    mock_generate_peaks_task,
+    mock_settings,
+    django_user_model,
+):
+    mock_settings.AUDIO_SIDECAR_AUTO_GENERATE = True
+    user = django_user_model.objects.create_user(username="verifier5", password="pass")
+    session = UploadSession.objects.create(
+        user=user,
+        folder_name="uploads",
+        bucket_name="test-bucket",
+        total_files=1,
+    )
+    file_obj = S3FileObject.objects.create(
+        session=session,
+        file_name="audio.wav",
+        s3_key="uploads/audio.wav",
+    )
+
+    upload_service = Mock()
+    upload_service.mark_upload_complete.return_value = {
+        "success": True,
+        "exists": True,
+        "s3_key": file_obj.s3_key,
+        "file_size": 10,
+        "content_type": "audio/wav",
+    }
+    upload_service._format_size.return_value = "10 B"
+
+    service = UploadVerificationService(upload_service=upload_service)
+    service.verify_keys(
+        [file_obj.s3_key],
+        upload_session=session,
+        bucket_name="test-bucket",
+    )
+
+    mock_generate_peaks_task.assert_called_once_with("test-bucket", "uploads/audio.wav")

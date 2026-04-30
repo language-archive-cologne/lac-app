@@ -429,6 +429,12 @@ ACL_LOG_ACCESS_ATTEMPTS = env.bool("ACL_LOG_ACCESS_ATTEMPTS", default=True)
 ACL_DEFAULT_DENY = env.bool("ACL_DEFAULT_DENY", default=True)
 ACL_SYNC_ON_STARTUP = env.bool("ACL_SYNC_ON_STARTUP", default=False)
 
+# Media sidecar generation
+# ------------------------------------------------------------------------------
+# Keep automatic upload-triggered audio processing disabled by default. Large
+# folder uploads can enqueue one Huey task per WAV and block admin maintenance.
+AUDIO_SIDECAR_AUTO_GENERATE = env.bool("AUDIO_SIDECAR_AUTO_GENERATE", default=False)
+
 # Multipart Upload Configuration
 # ------------------------------------------------------------------------------
 MULTIPART_UPLOAD_SETTINGS = {
