@@ -57,10 +57,13 @@ class TestUserAdmin:
             username="sievert@uni-wuppertal.de",
             acl_agent_uri="urn:lacos:eppn:sievert@uni-wuppertal.de",
         )
-        local_user = User(username="local-user", saml_persistent_id="legacy-id")
+        legacy_saml_user = User(username="legacy-saml", saml_persistent_id="legacy-id")
+        local_user = User(username="local-user")
 
         assert user_has_saml_identity(saml_user) is True
         assert user_admin.auth_source(saml_user) == "SAML"
+        assert user_has_saml_identity(legacy_saml_user) is True
+        assert user_admin.auth_source(legacy_saml_user) == "SAML"
         assert user_has_saml_identity(local_user) is False
         assert user_admin.auth_source(local_user) == "Local"
 
@@ -70,16 +73,18 @@ class TestUserAdmin:
             username="sievert@uni-wuppertal.de",
             acl_agent_uri="urn:lacos:eppn:sievert@uni-wuppertal.de",
         )
-        local_user = User.objects.create_user(
-            username="local-user",
+        legacy_saml_user = User.objects.create_user(
+            username="legacy-saml",
             saml_persistent_id="legacy-id",
         )
+        local_user = User.objects.create_user(username="local-user")
         saml_filter = AuthSourceFilter.__new__(AuthSourceFilter)
         saml_filter.used_parameters = {"auth_source": "saml"}
         local_filter = AuthSourceFilter.__new__(AuthSourceFilter)
         local_filter.used_parameters = {"auth_source": "local"}
 
         assert list(saml_filter.queryset(None, User.objects.order_by("username"))) == [
+            legacy_saml_user,
             saml_user,
         ]
         assert list(local_filter.queryset(None, User.objects.order_by("username"))) == [

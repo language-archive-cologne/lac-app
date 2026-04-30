@@ -31,16 +31,28 @@ class AuthSourceFilter(admin.SimpleListFilter):
     def queryset(self, request, queryset):
         value = self.value()
         if value == "saml":
-            return queryset.filter(acl_agent_uri__startswith=SAML_ACL_AGENT_URI_PREFIX)
+            return queryset.filter(
+                models.Q(saml_persistent_id__isnull=False)
+                & ~models.Q(saml_persistent_id="")
+                | models.Q(acl_agent_uri__startswith=SAML_ACL_AGENT_URI_PREFIX),
+            )
         if value == "local":
-            return queryset.exclude(acl_agent_uri__startswith=SAML_ACL_AGENT_URI_PREFIX)
+            return queryset.filter(
+                models.Q(saml_persistent_id__isnull=True)
+                | models.Q(saml_persistent_id=""),
+            ).exclude(
+                acl_agent_uri__startswith=SAML_ACL_AGENT_URI_PREFIX,
+            )
         return queryset
 
 
 def user_has_saml_identity(user: User) -> bool:
     return bool(
-        user.acl_agent_uri
-        and user.acl_agent_uri.startswith(SAML_ACL_AGENT_URI_PREFIX),
+        user.saml_persistent_id
+        or (
+            user.acl_agent_uri
+            and user.acl_agent_uri.startswith(SAML_ACL_AGENT_URI_PREFIX)
+        ),
     )
 
 
