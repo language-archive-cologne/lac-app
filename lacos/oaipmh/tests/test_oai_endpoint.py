@@ -9,6 +9,8 @@ def test_identify(client):
     body = response.content.decode("utf-8")
     assert "<Identify>" in body
     assert "<repositoryName>" in body
+    assert "<adminEmail>lac-helpdesk@uni-koeln.de</adminEmail>" in body
+    assert "support@example.com" not in body
 
 
 @pytest.mark.django_db

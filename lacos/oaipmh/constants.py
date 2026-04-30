@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 REPO_NAME = "LACOS Repository"
-REPO_ADMIN_EMAIL = "support@example.com"
+REPO_ADMIN_EMAIL = "lac-helpdesk@uni-koeln.de"
 REPO_PROTOCOL_VERSION = "2.0"
 REPO_DELETED_RECORD = "no"
 REPO_GRANULARITY = "YYYY-MM-DDThh:mm:ssZ"
