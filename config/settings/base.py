@@ -624,6 +624,8 @@ SPECTACULAR_SETTINGS = {
         "Tokens expire after 1 hour — use `/auth/token/refresh/` to renew."
     ),
     "VERSION": "2.0.0",
+    "SWAGGER_UI_DIST": f"{STATIC_URL}vendor/swagger-ui",
+    "SWAGGER_UI_FAVICON_HREF": f"{STATIC_URL}vendor/swagger-ui/favicon-32x32.png",
     "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"],
     "SCHEMA_PATH_PREFIX": "/api/v2/",
     "PREPROCESSING_HOOKS": ["lacos.rest.v2.schema.filter_v2_endpoints"],
