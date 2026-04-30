@@ -248,6 +248,7 @@ def test_saml_discovery_idp_list_routes_via_trusted_login_view(client, settings)
     assert "idp.example.org" in rendered
     assert "next=" in rendered
     assert "<img" not in rendered
+    assert "<svg" not in rendered
     assert "https://idp.example.org/logo.png" not in rendered
     assert "onerror=" not in rendered
     assert reverse("saml2_login") not in rendered
