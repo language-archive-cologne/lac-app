@@ -5,12 +5,7 @@
     {% for idp in idps %}
       <li>
         <a href="{{ trusted_login_url }}?idp={{ idp.entity_id|urlencode }}{% if next %}&next={{ next|urlencode }}{% endif %}"
-           class="flex items-center gap-3 p-3 rounded-lg hover:bg-base-200 transition-colors cursor-pointer border border-base-300">
-          <div class="w-10 h-10 bg-base-200 rounded flex items-center justify-center flex-shrink-0">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-base-content/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-          </div>
+           class="block p-3 rounded-lg hover:bg-base-200 transition-colors cursor-pointer border border-base-300">
           <div class="min-w-0 flex-1">
             <div class="font-medium truncate">{{ idp.display_name }}</div>
             {% if idp.country %}
