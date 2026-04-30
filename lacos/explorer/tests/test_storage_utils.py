@@ -1,7 +1,8 @@
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 import pytest
+from botocore.exceptions import ClientError
 
 from lacos.blam.models.bundle.bundle_structural_info import BundleAdditionalMetadataFile
 from lacos.blam.models.collection.collection_structural_info import (
@@ -10,6 +11,18 @@ from lacos.blam.models.collection.collection_structural_info import (
 from lacos.explorer.views.utils.storage import load_xml_preview, resolve_resource_to_presigned
 from lacos.explorer.views.utils.storage import resolve_collection_metadata_to_presigned
 from lacos.explorer.views.utils.storage import load_markdown_preview
+
+
+def _not_found_error():
+    return ClientError(
+        {
+            "Error": {
+                "Code": "NoSuchKey",
+                "Message": "The specified key does not exist.",
+            },
+        },
+        "HeadObject",
+    )
 
 
 def test_resolve_resource_to_presigned_syncs_resolved_location(monkeypatch):
@@ -58,7 +71,9 @@ def test_resolve_resource_to_presigned_syncs_resolved_location(monkeypatch):
     )
 
 
-def test_resolve_resource_to_presigned_uses_existing_location_without_probe(monkeypatch):
+def test_resolve_resource_to_presigned_uses_existing_location_when_object_exists(
+    monkeypatch,
+):
     resource = SimpleNamespace(
         id="resource-1",
         file_name="clip.wav",
@@ -73,12 +88,12 @@ def test_resolve_resource_to_presigned_uses_existing_location_without_probe(monk
     )
     service.generate_presigned_url.return_value = "https://example.test/existing"
 
-    monkeypatch.setattr(
-        "lacos.explorer.views.utils.storage.resolve_existing_object",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("should not probe storage")),
+    result = resolve_resource_to_presigned(
+        service,
+        resource,
+        bundle,
+        collection_for_path=None,
     )
-
-    result = resolve_resource_to_presigned(service, resource, bundle, collection_for_path=None)
 
     assert result == {
         "bucket": "grails-dev",
@@ -90,6 +105,84 @@ def test_resolve_resource_to_presigned_uses_existing_location_without_probe(monk
         "already/mapped/clip.wav",
         response_headers=None,
     )
+    service.s3_client.head_object.assert_called_once_with(
+        Bucket="grails-dev",
+        Key="already/mapped/clip.wav",
+    )
+
+
+def test_resolve_resource_to_presigned_ignores_stale_mapped_location(monkeypatch):
+    resource_key = (
+        "ivac_explorations/chankaquechua_1/v1/content/"
+        "chankaquechua-0001-part2.mp4"
+    )
+    resource = SimpleNamespace(
+        id="resource-1",
+        file_name="chankaquechua-0001-part2.mp4",
+        file_pid="hdl:11341/0000-0000-0000-43E0",
+    )
+    bundle = SimpleNamespace(
+        id="chankaquechua_1",
+        import_bucket="lacos-ingest",
+        import_object_key=(
+            "ivac_explorations/chankaquechua_1/v1/metadata/"
+            "chankaquechua_1.xml"
+        ),
+    )
+    collection = SimpleNamespace(
+        id="ivac_explorations",
+        import_bucket=None,
+        import_object_key=None,
+    )
+
+    service = MagicMock()
+    service.production_bucket = "lacos-production"
+    service.resolve_pid_to_s3.return_value = SimpleNamespace(
+        s3_bucket="lacos-ingest",
+        s3_key=resource_key,
+    )
+    service.generate_presigned_url.return_value = "https://example.test/production"
+
+    def head_object(**kwargs):
+        bucket = kwargs["Bucket"]
+        key = kwargs["Key"]
+        if bucket == "lacos-ingest":
+            raise _not_found_error()
+        assert bucket == "lacos-production"
+        assert key == resource_key
+        return {}
+
+    service.s3_client.head_object.side_effect = head_object
+
+    result = resolve_resource_to_presigned(service, resource, bundle, collection)
+
+    assert result == {
+        "bucket": "lacos-production",
+        "key": resource_key,
+        "url": "https://example.test/production",
+    }
+    service.generate_presigned_url.assert_called_once_with(
+        "lacos-production",
+        resource_key,
+        response_headers=None,
+    )
+    service.register_s3_location.assert_called_once_with(
+        resource,
+        "lacos-production",
+        resource_key,
+        pid_url="hdl:11341/0000-0000-0000-43E0",
+        fetch_metadata=False,
+    )
+    assert service.s3_client.head_object.call_args_list[:2] == [
+        call(
+            Bucket="lacos-ingest",
+            Key=resource_key,
+        ),
+        call(
+            Bucket="lacos-production",
+            Key=resource_key,
+        ),
+    ]
 
 
 @pytest.mark.django_db
@@ -175,6 +268,60 @@ def test_resolve_collection_metadata_to_presigned_falls_back_to_ocfl_additional_
         "grails-dev",
         "test-coll/v1/metadata/additional_metadata/collection-metadata.imdi",
         pid_url="hdl:11341/0000-0000-0000-CCCC",
+        fetch_metadata=False,
+    )
+
+
+@pytest.mark.django_db
+def test_resolve_collection_metadata_to_presigned_ignores_stale_mapped_location(
+    monkeypatch,
+):
+    metadata_key = (
+        "ivac_explorations/v1/metadata/additional_metadata/"
+        "collection-metadata.imdi"
+    )
+    metadata_file = CollectionAdditionalMetadataFile.objects.create(
+        file_name="collection-metadata.imdi",
+        file_pid="hdl:11341/0000-0000-0000-DDDD",
+        mime_type="application/xml",
+        is_metadata_for="collection",
+    )
+    collection = SimpleNamespace(
+        import_bucket="lacos-ingest",
+        import_object_key="ivac_explorations/v1/metadata/ivac_explorations.xml",
+    )
+
+    service = MagicMock()
+    service.production_bucket = "lacos-production"
+    service.resolve_pid_to_s3.return_value = SimpleNamespace(
+        s3_bucket="lacos-ingest",
+        s3_key=metadata_key,
+    )
+    service.generate_presigned_url.return_value = "https://example.test/collection-metadata"
+
+    def head_object(**kwargs):
+        bucket = kwargs["Bucket"]
+        key = kwargs["Key"]
+        if bucket == "lacos-ingest":
+            raise _not_found_error()
+        assert bucket == "lacos-production"
+        assert key == metadata_key
+        return {}
+
+    service.s3_client.head_object.side_effect = head_object
+
+    result = resolve_collection_metadata_to_presigned(service, metadata_file, collection)
+
+    assert result == {
+        "bucket": "lacos-production",
+        "key": metadata_key,
+        "url": "https://example.test/collection-metadata",
+    }
+    service.register_s3_location.assert_called_once_with(
+        metadata_file,
+        "lacos-production",
+        metadata_key,
+        pid_url="hdl:11341/0000-0000-0000-DDDD",
         fetch_metadata=False,
     )
 

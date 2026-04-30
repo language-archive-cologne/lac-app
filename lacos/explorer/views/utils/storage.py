@@ -3,10 +3,11 @@
 import logging
 import os
 import unicodedata
-from pathlib import PurePosixPath
-from typing import Optional, Sequence, Tuple
-from urllib.parse import quote
 import xml.dom.minidom
+from collections.abc import Sequence
+from pathlib import PurePosixPath
+from typing import Optional, Tuple
+from urllib.parse import quote
 
 from botocore.exceptions import ClientError
 
@@ -80,6 +81,19 @@ def resolve_existing_object(
             return bucket, key
 
     return None, None
+
+
+def resolve_mapped_object(
+    resource_service,
+    location,
+) -> tuple[str | None, str | None]:
+    """Return mapped bucket/key only when the mapped object is still reachable."""
+    bucket = getattr(location, "s3_bucket", None)
+    key = getattr(location, "s3_key", None)
+    if not bucket or not key:
+        return None, None
+
+    return resolve_existing_object(resource_service, [(bucket, key)])
 
 
 def _strip_whitespace_nodes(node):
@@ -181,18 +195,33 @@ def resolve_resource_to_presigned(
 
     Returns dict with 'bucket', 'key', and 'url' or None if not found.
     """
+    stale_mapped_location: tuple[str | None, str | None] | None = None
     location = resource_service.resolve_pid_to_s3(getattr(resource, "file_pid", None))
-    if location and getattr(location, "s3_bucket", None) and getattr(location, "s3_key", None):
-        presigned_url = resource_service.generate_presigned_url(
-            location.s3_bucket,
-            location.s3_key,
-            response_headers=response_headers,
-        )
-        return {
-            "bucket": location.s3_bucket,
-            "key": location.s3_key,
-            "url": presigned_url,
-        }
+    if (
+        location
+        and getattr(location, "s3_bucket", None)
+        and getattr(location, "s3_key", None)
+    ):
+        bucket_name, object_key = resolve_mapped_object(resource_service, location)
+        if not bucket_name or not object_key:
+            stale_mapped_location = (location.s3_bucket, location.s3_key)
+            logger.info(
+                "Ignoring stale mapped S3 location for resource %s: s3://%s/%s",
+                getattr(resource, "id", "unknown"),
+                location.s3_bucket,
+                location.s3_key,
+            )
+        else:
+            presigned_url = resource_service.generate_presigned_url(
+                bucket_name,
+                object_key,
+                response_headers=response_headers,
+            )
+            return {
+                "bucket": bucket_name,
+                "key": object_key,
+                "url": presigned_url,
+            }
 
     fallback_bucket = (
         getattr(bundle, "import_bucket", None)
@@ -204,6 +233,13 @@ def resolve_resource_to_presigned(
     ) or resource_service.production_bucket
 
     candidate_locations: list[tuple[Optional[str], Optional[str]]] = []
+    if (
+        stale_mapped_location
+        and stale_mapped_location[0] != resource_service.production_bucket
+    ):
+        candidate_locations.append(
+            (resource_service.production_bucket, stale_mapped_location[1]),
+        )
 
     def add_import_location(import_bucket: Optional[str], import_key: Optional[str]):
         if not import_bucket or not import_key:
@@ -243,11 +279,12 @@ def resolve_resource_to_presigned(
         candidate_locations.append((fallback_bucket, derived_key))
         if fallback_bucket != resource_service.production_bucket:
             candidate_locations.append(
-                (resource_service.production_bucket, derived_key)
+                (resource_service.production_bucket, derived_key),
             )
 
     bucket_name, object_key = resolve_existing_object(
-        resource_service, candidate_locations
+        resource_service,
+        candidate_locations,
     )
 
     if not bucket_name or not object_key:
@@ -293,22 +330,48 @@ def resolve_collection_metadata_to_presigned(
     response_headers: Optional[dict] = None,
 ):
     """Resolve a collection additional metadata file to bucket/key/url."""
-    location = resource_service.resolve_pid_to_s3(getattr(metadata_file, "file_pid", None))
-    if location and getattr(location, "s3_bucket", None) and getattr(location, "s3_key", None):
-        presigned_url = resource_service.generate_presigned_url(
+    stale_mapped_location: tuple[str | None, str | None] | None = None
+    location = resource_service.resolve_pid_to_s3(
+        getattr(metadata_file, "file_pid", None),
+    )
+    if (
+        location
+        and getattr(location, "s3_bucket", None)
+        and getattr(location, "s3_key", None)
+    ):
+        bucket_name, object_key = resolve_mapped_object(resource_service, location)
+        if bucket_name and object_key:
+            presigned_url = resource_service.generate_presigned_url(
+                bucket_name,
+                object_key,
+                response_headers=response_headers,
+            )
+            return {
+                "bucket": bucket_name,
+                "key": object_key,
+                "url": presigned_url,
+            }
+        stale_mapped_location = (location.s3_bucket, location.s3_key)
+        logger.info(
+            "Ignoring stale mapped S3 location for collection metadata %s: s3://%s/%s",
+            getattr(metadata_file, "id", "unknown"),
             location.s3_bucket,
             location.s3_key,
-            response_headers=response_headers,
         )
-        return {
-            "bucket": location.s3_bucket,
-            "key": location.s3_key,
-            "url": presigned_url,
-        }
 
     candidate_locations: list[tuple[Optional[str], Optional[str]]] = []
-    import_bucket = getattr(collection, "import_bucket", None) or resource_service.production_bucket
+    import_bucket = (
+        getattr(collection, "import_bucket", None)
+        or resource_service.production_bucket
+    )
     import_object_key = getattr(collection, "import_object_key", None)
+    if (
+        stale_mapped_location
+        and stale_mapped_location[0] != resource_service.production_bucket
+    ):
+        candidate_locations.append(
+            (resource_service.production_bucket, stale_mapped_location[1]),
+        )
 
     if isinstance(metadata_file, CollectionAdditionalMetadataFile):
         base_path = resource_service._get_ocfl_additional_metadata_base_path(import_object_key)
