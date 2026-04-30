@@ -6,6 +6,8 @@ FROM docker.io/python:3.12-slim-trixie@sha256:9e01bf1ae5db7649a236da7be1e94ffbbb
 # Python build stage
 FROM python AS python-build-stage
 ARG BUILD_ENVIRONMENT=local
+ARG UV_LINK_MODE=copy
+ENV UV_LINK_MODE=${UV_LINK_MODE}
 
 # Make apt resilient in bridged networks (DNS/IPv6 hiccups are common in Docker builds).
 RUN printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\nAcquire::ForceIPv4 "true";\n' > /etc/apt/apt.conf.d/99-network-retries

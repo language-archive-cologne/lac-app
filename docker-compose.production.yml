@@ -13,6 +13,8 @@ services:
       context: .
       dockerfile: ./compose/local/django/Dockerfile
       target: web-run-stage
+      args:
+        UV_LINK_MODE: copy
     image: lacos_production_django
     container_name: lacos_production_django
     restart: unless-stopped
@@ -96,6 +98,8 @@ services:
       context: .
       dockerfile: ./compose/local/django/Dockerfile
       target: worker-run-stage
+      args:
+        UV_LINK_MODE: copy
     image: lacos_production_huey
     container_name: lacos_production_huey
     restart: unless-stopped
