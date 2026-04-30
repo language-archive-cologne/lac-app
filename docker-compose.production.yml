@@ -81,6 +81,7 @@ services:
     image: "redis:8.2-alpine@sha256:a308ca111032fa8f306a2dc7be7ba5deb8b777ed5d258c733cddba48a1fd7904"
     container_name: lacos_production_redis
     restart: unless-stopped
+    command: redis-server --loglevel warning
     logging:
       driver: "json-file"
       options:

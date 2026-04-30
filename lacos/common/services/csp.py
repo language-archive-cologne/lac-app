@@ -83,3 +83,34 @@ def collect_inline_csp_hashes(document: str) -> InlineCspHashes:
     parser.feed(document)
     parser.close()
     return parser.inline_hashes()
+
+
+class _FormActionOriginParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._origins: set[str] = set()
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() != "form":
+            return
+
+        for name, value in attrs:
+            if name.lower() == "action" and value:
+                self._add_origin(value)
+
+    def _add_origin(self, url: str) -> None:
+        from urllib.parse import urlparse
+
+        parsed = urlparse(url)
+        if parsed.scheme and parsed.netloc:
+            self._origins.add(f"{parsed.scheme}://{parsed.netloc}")
+
+    def origins(self) -> tuple[str, ...]:
+        return tuple(sorted(self._origins))
+
+
+def collect_form_action_origins(document: str) -> tuple[str, ...]:
+    parser = _FormActionOriginParser()
+    parser.feed(document)
+    parser.close()
+    return parser.origins()
