@@ -9,13 +9,52 @@ from .forms import UserAdminChangeForm
 from .forms import UserAdminCreationForm
 from .models import CollectionManagerAssignment, GroupACL, SamlCountry, SamlIdp, User
 
-SAML_ACL_AGENT_URI_PREFIX = "urn:lacos:eppn:"
+# ---------------------------------------------------------------------------
+# SAML identification
+# ---------------------------------------------------------------------------
+# Going forward, the only SAML identifier accepted by the system is the user's
+# eduPersonPrincipalName (EPPN), stored on ``User.acl_agent_uri`` with the
+# prefix below. New SAML logins always populate this field; nothing should
+# read or write ``saml_persistent_id`` for new accounts.
+#
+# ``saml_persistent_id`` predates the EPPN URI scheme. It is retained on the
+# model only so that pre-migration accounts can still be back-classified as
+# SAML in the admin (see ``is_legacy_saml``). Do not extend its use.
+EPPN_ACL_AGENT_URI_PREFIX = "urn:lacos:eppn:"
 
 if settings.DJANGO_ADMIN_FORCE_ALLAUTH:
     # Force the `admin` sign in process to go through the `django-allauth` workflow:
     # https://docs.allauth.org/en/latest/common/admin.html#admin
     admin.autodiscover()
     admin.site.login = secure_admin_login(admin.site.login)  # type: ignore[method-assign]
+
+
+# Q predicates shared between the helpers and the admin filter.
+_EPPN_SAML_Q = models.Q(acl_agent_uri__startswith=EPPN_ACL_AGENT_URI_PREFIX)
+_LEGACY_SAML_Q = models.Q(saml_persistent_id__isnull=False) & ~models.Q(
+    saml_persistent_id="",
+)
+
+
+def is_eppn_saml(user: User) -> bool:
+    """Return True iff ``user`` carries the canonical EPPN-based SAML URI."""
+    return bool(
+        user.acl_agent_uri
+        and user.acl_agent_uri.startswith(EPPN_ACL_AGENT_URI_PREFIX),
+    )
+
+
+def is_legacy_saml(user: User) -> bool:
+    """Return True iff ``user`` has a pre-migration ``saml_persistent_id``.
+
+    Legacy-only path. New code must not rely on ``saml_persistent_id``.
+    """
+    return bool(user.saml_persistent_id)
+
+
+def user_has_saml_identity(user: User) -> bool:
+    """Return True iff ``user`` is SAML-authenticated, by either path."""
+    return is_eppn_saml(user) or is_legacy_saml(user)
 
 
 class AuthSourceFilter(admin.SimpleListFilter):
@@ -31,29 +70,15 @@ class AuthSourceFilter(admin.SimpleListFilter):
     def queryset(self, request, queryset):
         value = self.value()
         if value == "saml":
-            return queryset.filter(
-                models.Q(saml_persistent_id__isnull=False)
-                & ~models.Q(saml_persistent_id="")
-                | models.Q(acl_agent_uri__startswith=SAML_ACL_AGENT_URI_PREFIX),
-            )
+            return queryset.filter(_EPPN_SAML_Q | _LEGACY_SAML_Q)
         if value == "local":
+            # Filter+exclude (rather than ``exclude(_EPPN_SAML_Q | _LEGACY_SAML_Q)``)
+            # to stay NULL-safe across both nullable CharFields.
             return queryset.filter(
                 models.Q(saml_persistent_id__isnull=True)
                 | models.Q(saml_persistent_id=""),
-            ).exclude(
-                acl_agent_uri__startswith=SAML_ACL_AGENT_URI_PREFIX,
-            )
+            ).exclude(acl_agent_uri__startswith=EPPN_ACL_AGENT_URI_PREFIX)
         return queryset
-
-
-def user_has_saml_identity(user: User) -> bool:
-    return bool(
-        user.saml_persistent_id
-        or (
-            user.acl_agent_uri
-            and user.acl_agent_uri.startswith(SAML_ACL_AGENT_URI_PREFIX)
-        ),
-    )
 
 
 class CollectionManagerAssignmentInline(admin.TabularInline):

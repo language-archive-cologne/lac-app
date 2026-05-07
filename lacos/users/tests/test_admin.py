@@ -8,7 +8,12 @@ from django.contrib.auth.models import AnonymousUser
 from django.urls import reverse
 from pytest_django.asserts import assertRedirects
 
-from lacos.users.admin import AuthSourceFilter, user_has_saml_identity
+from lacos.users.admin import (
+    AuthSourceFilter,
+    is_eppn_saml,
+    is_legacy_saml,
+    user_has_saml_identity,
+)
 from lacos.users.models import User
 
 
@@ -58,12 +63,34 @@ class TestUserAdmin:
             acl_agent_uri="urn:lacos:eppn:sievert@uni-wuppertal.de",
         )
         legacy_saml_user = User(username="legacy-saml", saml_persistent_id="legacy-id")
+        combined_user = User(
+            username="combined",
+            saml_persistent_id="legacy-id-2",
+            acl_agent_uri="urn:lacos:eppn:combined@uni-koeln.de",
+        )
         local_user = User(username="local-user")
 
+        # Canonical EPPN path
+        assert is_eppn_saml(saml_user) is True
+        assert is_legacy_saml(saml_user) is False
         assert user_has_saml_identity(saml_user) is True
         assert user_admin.auth_source(saml_user) == "SAML"
+
+        # Legacy-only path
+        assert is_eppn_saml(legacy_saml_user) is False
+        assert is_legacy_saml(legacy_saml_user) is True
         assert user_has_saml_identity(legacy_saml_user) is True
         assert user_admin.auth_source(legacy_saml_user) == "SAML"
+
+        # Both flags set — still SAML, both predicates True
+        assert is_eppn_saml(combined_user) is True
+        assert is_legacy_saml(combined_user) is True
+        assert user_has_saml_identity(combined_user) is True
+        assert user_admin.auth_source(combined_user) == "SAML"
+
+        # Neither flag set
+        assert is_eppn_saml(local_user) is False
+        assert is_legacy_saml(local_user) is False
         assert user_has_saml_identity(local_user) is False
         assert user_admin.auth_source(local_user) == "Local"
 
@@ -77,6 +104,11 @@ class TestUserAdmin:
             username="legacy-saml",
             saml_persistent_id="legacy-id",
         )
+        combined_user = User.objects.create_user(
+            username="combined",
+            saml_persistent_id="legacy-id-2",
+            acl_agent_uri="urn:lacos:eppn:combined@uni-koeln.de",
+        )
         local_user = User.objects.create_user(username="local-user")
         saml_filter = AuthSourceFilter.__new__(AuthSourceFilter)
         saml_filter.used_parameters = {"auth_source": "saml"}
@@ -84,6 +116,7 @@ class TestUserAdmin:
         local_filter.used_parameters = {"auth_source": "local"}
 
         assert list(saml_filter.queryset(None, User.objects.order_by("username"))) == [
+            combined_user,
             legacy_saml_user,
             saml_user,
         ]
