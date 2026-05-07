@@ -716,6 +716,7 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
         if self.request.headers.get('HX-Request'):
             if (
                 'bundle_page' in self.request.GET
+                or 'bundle_per_page' in self.request.GET
                 or 'bundle_search' in self.request.GET
                 or 'bundle_sort' in self.request.GET
                 or 'bundle_order' in self.request.GET
