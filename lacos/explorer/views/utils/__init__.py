@@ -25,6 +25,7 @@ from .imdi import (
 )
 from .resource import (
     annotate_resource,
+    build_s3_location_lookup,
     find_resource_in_bundle,
     iter_bundle_resources,
     prepare_resource_lists,
@@ -69,6 +70,7 @@ __all__ = [
     "render_imdi_modal_response",
     # Resource utilities
     "annotate_resource",
+    "build_s3_location_lookup",
     "find_resource_in_bundle",
     "iter_bundle_resources",
     "prepare_resource_lists",

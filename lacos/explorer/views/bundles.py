@@ -36,6 +36,7 @@ from lacos.storage.services.resource_mapping_service import ResourceMappingServi
 
 from .utils import (
     annotate_resource,
+    build_s3_location_lookup,
     build_content_disposition,
     find_resource_in_bundle,
     find_subtitle_for_video,
@@ -55,6 +56,15 @@ from .utils import (
 
 
 logger = logging.getLogger(__name__)
+
+
+def _iter_bundle_detail_resources(resources_container, structural_info=None):
+    if resources_container:
+        yield from resources_container.bundle_media_resources.all()
+        yield from resources_container.bundle_written_resources.all()
+        yield from resources_container.bundle_other_resources.all()
+    if structural_info:
+        yield from structural_info.additional_metadata_files.all()
 
 
 class BundleLookupPermissionMixin(ACLPermissionMixin):
@@ -109,6 +119,9 @@ class BundleDetailView(MetadataExposureMixin, HandleLookupMixin, ACLPermissionMi
             "administrative_info",
             "administrative_info__licenses",
             "resources",
+            "resources__bundle_media_resources",
+            "resources__bundle_written_resources",
+            "resources__bundle_other_resources",
         )
 
     def render_to_response(self, context, **response_kwargs):
@@ -134,8 +147,11 @@ class BundleDetailView(MetadataExposureMixin, HandleLookupMixin, ACLPermissionMi
         context["can_read_bundle"] = allowed
         context["acl_enforcement_enabled"] = enforcement_enabled
 
-        if hasattr(self.object, 'structural_info') and self.object.structural_info.first():
-            context['collection'] = self.object.structural_info.first().is_member_of_collection
+        structural_info = None
+        if hasattr(self.object, 'structural_info'):
+            structural_info = self.object.structural_info.first()
+        if structural_info:
+            context['collection'] = structural_info.is_member_of_collection
 
         if self.object.get_general_info and self.object.get_general_info.location:
             location = self.object.get_general_info.location
@@ -156,18 +172,31 @@ class BundleDetailView(MetadataExposureMixin, HandleLookupMixin, ACLPermissionMi
         context['restricted_resources'] = False
 
         resources = self.object.resources.first()
+        content_type_cache = {}
+        s3_locations_by_resource = build_s3_location_lookup(
+            _iter_bundle_detail_resources(resources, structural_info),
+            content_type_cache=content_type_cache,
+        )
         if allowed and resources:
-            media_resources, written_resources, other_resources = prepare_resource_lists(resources)
+            media_resources, written_resources, other_resources = prepare_resource_lists(
+                resources,
+                s3_locations_by_resource=s3_locations_by_resource,
+                content_type_cache=content_type_cache,
+            )
             context['media_resources'] = media_resources
             context['written_resources'] = written_resources
             context['other_resources'] = other_resources
         elif resources:
             context['restricted_resources'] = True
 
-        if hasattr(self.object, 'structural_info') and self.object.structural_info.first():
+        if structural_info:
             metadata_files = [
-                annotate_resource(res)
-                for res in self.object.structural_info.first().additional_metadata_files.all()
+                annotate_resource(
+                    res,
+                    s3_locations_by_resource=s3_locations_by_resource,
+                    content_type_cache=content_type_cache,
+                )
+                for res in structural_info.additional_metadata_files.all()
             ]
             context['metadata_files'] = [res for res in metadata_files if res]
 
@@ -310,20 +339,36 @@ class BundleResourcesView(View):
         context['acl_enforcement_enabled'] = acl_service.enforcement_enabled
 
         resources = bundle.resources.first()
+        struct_info_manager = getattr(bundle, 'structural_info', None)
+        structural_info = struct_info_manager.first() if struct_info_manager else None
+        content_type_cache = {}
+        s3_locations_by_resource = build_s3_location_lookup(
+            _iter_bundle_detail_resources(resources, structural_info),
+            content_type_cache=content_type_cache,
+        )
         if can_read and resources:
-            media_resources, written_resources, other_resources = prepare_resource_lists(resources)
+            media_resources, written_resources, other_resources = prepare_resource_lists(
+                resources,
+                s3_locations_by_resource=s3_locations_by_resource,
+                content_type_cache=content_type_cache,
+            )
             context['media_resources'] = media_resources
             context['written_resources'] = written_resources
             context['other_resources'] = other_resources
         elif resources:
             context['restricted_resources'] = True
 
-        struct_info_manager = getattr(bundle, 'structural_info', None)
-        structural_info = struct_info_manager.first() if struct_info_manager else None
         if structural_info:
             context['collection'] = structural_info.is_member_of_collection
             # Additional metadata files are always public, no ACL check needed
-            metadata_files = [annotate_resource(res) for res in structural_info.additional_metadata_files.all()]
+            metadata_files = [
+                annotate_resource(
+                    res,
+                    s3_locations_by_resource=s3_locations_by_resource,
+                    content_type_cache=content_type_cache,
+                )
+                for res in structural_info.additional_metadata_files.all()
+            ]
             metadata_files = [res for res in metadata_files if res]
             context['metadata_files'] = metadata_files
 

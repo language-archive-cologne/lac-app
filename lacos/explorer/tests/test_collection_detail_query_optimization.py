@@ -66,6 +66,33 @@ def _create_bundle_graph(collection: Collection, index: int) -> Bundle:
     return bundle
 
 
+def _create_resource_rich_bundle(collection: Collection, resource_count: int) -> Bundle:
+    bundle = Bundle.objects.create(identifier="bundle-detail-many-resources")
+    BundleStructuralInfo.objects.create(bundle=bundle, is_member_of_collection=collection)
+    resources = BundleResources.objects.create(bundle=bundle)
+
+    media_resources = [
+        MediaResource(
+            file_name=f"media-rich-{index:03d}.wav",
+            file_pid=f"https://hdl.handle.net/media-rich-{index:03d}",
+            mime_type="audio/wav",
+            file_length="12345",
+            file_description="Media resource",
+        )
+        for index in range(resource_count)
+    ]
+    MediaResource.objects.bulk_create(media_resources)
+
+    created_resources = list(
+        MediaResource.objects.filter(file_name__startswith="media-rich-").order_by("file_name")
+    )
+    resources.bundle_media_resources.add(*created_resources)
+    for resource in created_resources:
+        _create_s3_location(resource, bucket="test-bucket", key_prefix="media-rich")
+
+    return bundle
+
+
 @pytest.mark.django_db
 def test_collection_detail_query_budget_with_resource_rich_bundles(client):
     collection = Collection.objects.create(identifier="hdl:11341/detail-query-budget")
@@ -87,3 +114,24 @@ def test_collection_detail_query_budget_with_resource_rich_bundles(client):
         _ = response.content
 
     assert len(captured) <= 40
+
+
+@pytest.mark.django_db
+def test_bundle_detail_bulk_loads_s3_locations_for_many_resources(client):
+    collection = Collection.objects.create(identifier="hdl:11341/bundle-many-resources")
+    collection_ct = ContentType.objects.get_for_model(Collection)
+    ACLPermissions.objects.create(
+        content_type=collection_ct,
+        object_id=str(collection.pk),
+        access_level=ACL_LEVEL_PUBLIC,
+        permissions_data=[{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}],
+    )
+    bundle = _create_resource_rich_bundle(collection, 60)
+
+    with CaptureQueriesContext(connection) as captured:
+        response = client.get(reverse("explorer:bundle_detail", kwargs={"pk": bundle.pk}))
+        assert response.status_code == 200
+        page = response.content.decode("utf-8")
+
+    assert page.count("media-rich-") >= 60
+    assert len(captured) <= 55
