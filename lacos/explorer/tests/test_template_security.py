@@ -41,8 +41,11 @@ def test_collection_list_map_triggers_use_delegated_modal_js(client):
     assert response.status_code == 200
     page = response.content.decode("utf-8")
     assert 'src="/static/js/src/map-modal.js"' in page
+    assert 'src="/static/js/src/explorer-copy.js"' in page
     assert 'id="map-modal"' in page
     assert "data-map-modal-trigger" in page
+    assert 'data-copy-text="hdl:test/query-opt-92"' in page
+    assert "onclick=\"navigator.clipboard" not in page
     assert "hx-on::after-request" not in page
     assert "hx-on::before-request" not in page
 

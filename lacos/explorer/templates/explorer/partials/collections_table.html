@@ -144,7 +144,7 @@
                 <div class="flex flex-wrap items-center gap-2 text-xs text-base-content/60">
                   <span class="font-mono text-base-content/50">{{ collection.identifier }}</span>
                   <button type="button"
-                          onclick="navigator.clipboard.writeText('{{ collection.identifier }}'); this.querySelector('.copy-icon').classList.add('hidden'); this.querySelector('.check-icon').classList.remove('hidden'); setTimeout(() => { this.querySelector('.copy-icon').classList.remove('hidden'); this.querySelector('.check-icon').classList.add('hidden'); }, 1500);"
+                          data-copy-text="{{ collection.identifier }}"
                           class="text-base-content/40 hover:text-primary transition-colors"
                           title="{% translate 'Copy handle' %}">
                     <svg class="w-3.5 h-3.5 copy-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
