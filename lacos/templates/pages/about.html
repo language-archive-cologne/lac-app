@@ -7,13 +7,14 @@
 <style>
   .about-page {
     --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
-    --ink-hero: #00497a;
-    --ink: #002b3f;
-    --ink-soft: #355e7a;
-    --ink-mute: #6f8da0;
-    --ink-faint: #a5b8c6;
-    --ink-line: rgba(0, 110, 160, 0.28);
-    --ink-accent: #006a99;
+    /* Sourced from the navbar scale (hue ~200°, sat ~100%) for visual cohesion */
+    --ink-hero: #004565;   /* navbar surface tone */
+    --ink: #002a3d;        /* darkest — body baseline */
+    --ink-soft: #005176;   /* navbar gradient mid */
+    --ink-mute: #006a99;   /* navbar active/hover accent */
+    --ink-faint: #0b79ab;  /* navbar bright — lightest tier */
+    --ink-line: rgba(0, 106, 153, 0.32);
+    --ink-accent: #0b79ab;
     color: var(--ink);
   }
   [data-theme="dark"] .about-page {
@@ -150,7 +151,10 @@
       <div class="mt-12 md:mt-14 grid md:grid-cols-12 gap-x-8 gap-y-6">
         <div class="md:col-span-7 md:col-start-6 reveal" style="--reveal-delay:160;">
           <p class="text-base md:text-lg leading-relaxed ink-soft">
-            A digital repository for language documentation. The archive holds primary language data, including audio and video recordings, transcriptions, translations, and annotations.
+            A digital repository for language documentation.
+          </p>
+          <p class="mt-4 text-base md:text-lg leading-relaxed ink-soft">
+            The archive holds primary language data, including audio and video recordings, transcriptions, translations, and annotations.
           </p>
           <p class="mt-4 text-base md:text-lg leading-relaxed ink-mute">
             Dedicated to the long-term preservation and accessibility of these resources for research, education, and cultural heritage.
