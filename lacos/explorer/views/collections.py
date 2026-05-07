@@ -55,6 +55,7 @@ from .utils import (
     paginate_bundle_contexts,
     resolve_collection_metadata_to_presigned,
     render_imdi_modal_response,
+    find_subtitle_for_collection_video,
     summarize_bundle_access_levels_by_collection_ids,
     summarize_collection_bundle_access_levels,
 )
@@ -789,6 +790,14 @@ class CollectionResourcesView(View):
 
             detected_media_type = determine_media_type(mime_type, file_name)
             source_mime_type = guess_source_mime_type(mime_type, file_name, detected_media_type)
+            subtitle_url = None
+            if detected_media_type == 'video' and structural_info:
+                subtitle_url = find_subtitle_for_collection_video(
+                    collection,
+                    structural_info,
+                    metadata_file,
+                    resource_service,
+                )
 
             # Generate presigned URL for streaming/preview
             presigned_url = storage_resolution["url"]
@@ -895,6 +904,7 @@ class CollectionResourcesView(View):
                     spectrogram_available=spectrogram_available,
                     pitch_data_url=pitch_data_url,
                     pitch_available=pitch_available,
+                    subtitle_url=subtitle_url,
                     resource_play_url=resource_play_url,
                     resource_analyze_url=resource_analyze_url,
                     resource_pitch_url=resource_pitch_url,
@@ -928,6 +938,7 @@ class CollectionResourcesView(View):
         spectrogram_available=False,
         pitch_data_url=None,
         pitch_available=False,
+        subtitle_url=None,
         resource_play_url=None,
         resource_analyze_url=None,
         resource_pitch_url=None,
@@ -954,6 +965,7 @@ class CollectionResourcesView(View):
             'spectrogram_available': spectrogram_available,
             'pitch_data_url': pitch_data_url,
             'pitch_available': pitch_available,
+            'subtitle_url': subtitle_url,
             'resource_play_url': resource_play_url,
             'resource_analyze_url': resource_analyze_url,
             'resource_pitch_url': resource_pitch_url,

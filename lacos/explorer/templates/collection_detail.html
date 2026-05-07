@@ -179,15 +179,15 @@
                 <dt class="text-sm font-semibold text-base-content/70 mb-1.5">{% translate "Location" %}</dt>
                 <dd class="text-sm text-base-content">
                   {% if collection.geo_location %}
-                    <button
-                      class="text-primary hover:underline transition-colors"
-                      hx-get="{% url 'explorer:map_popup' %}?geo={{ collection.geo_location }}&title={% if collection.region_facet %}{{ collection.region_facet|urlencode }}{% endif %}{% if collection.region_facet and collection.country_facet %}, {% endif %}{% if collection.country_facet %}{{ collection.country_facet|urlencode }}{% endif %}"
-                      hx-target="#map-modal-content"
-                      hx-swap="innerHTML"
-                      hx-on::before-request="document.getElementById('map-modal-content').innerHTML = '';"
-                      hx-on::after-request="document.getElementById('map-modal').classList.remove('hidden'); document.body.classList.add('overflow-hidden');"
-                      title="{% translate 'Show on map' %}"
-                    >
+	                    <button
+	                      type="button"
+	                      data-map-modal-trigger
+	                      class="text-primary hover:underline transition-colors"
+	                      hx-get="{% url 'explorer:map_popup' %}?geo={{ collection.geo_location }}&title={% if collection.region_facet %}{{ collection.region_facet|urlencode }}{% endif %}{% if collection.region_facet and collection.country_facet %}, {% endif %}{% if collection.country_facet %}{{ collection.country_facet|urlencode }}{% endif %}"
+	                      hx-target="#map-modal-content"
+	                      hx-swap="innerHTML"
+	                      title="{% translate 'Show on map' %}"
+	                    >
                       {% if collection.region_facet %}{{ collection.region_facet }}{% endif %}{% if collection.region_facet and collection.country_facet %}, {% endif %}{% if collection.country_facet %}{{ collection.country_facet }}{% endif %}
                     </button>
                   {% else %}
@@ -492,18 +492,7 @@
   <link rel="preload" href="{% static 'vendor/js/pmtiles/pmtiles.js' %}" as="script" />
   <script src="{% static 'vendor/js/maplibre-gl/maplibre-gl.js' %}"></script>
 
-  <!-- Map Modal -->
-  <div id="map-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
-    <div
-      class="absolute inset-0 bg-neutral/60"
-      onclick="document.getElementById('map-modal').classList.add('hidden'); document.body.classList.remove('overflow-hidden');"
-    ></div>
-    <div id="map-modal-content" class="relative w-full max-w-lg bg-base-100 rounded-xl shadow-xl">
-      <!-- Content loaded via HTMX -->
-    </div>
-  </div>
-
-  <!-- Metadata Viewer Modal -->
+	  <!-- Metadata Viewer Modal -->
   <div id="metadata-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
     <div
       class="absolute inset-0 bg-neutral/60"

@@ -207,15 +207,15 @@
             <td class="px-6 py-5 align-top text-center text-sm text-base-content/70">
               {% if collection.region_facet or collection.country_facet %}
                 {% if collection.geo_location %}
-                  <button
-                    class="text-primary hover:underline transition-colors"
-                    hx-get="{% url 'explorer:map_popup' %}?geo={{ collection.geo_location }}&title={% if collection.region_facet %}{{ collection.region_facet|urlencode }}{% endif %}{% if collection.region_facet and collection.country_facet %}, {% endif %}{% if collection.country_facet %}{{ collection.country_facet|urlencode }}{% endif %}"
-                    hx-target="#map-modal-content"
-                    hx-swap="innerHTML"
-                    hx-on::before-request="document.getElementById('map-modal-content').innerHTML = '';"
-                    hx-on::after-request="document.getElementById('map-modal').classList.remove('hidden'); document.body.classList.add('overflow-hidden');"
-                    title="{% translate 'Show on map' %}"
-                  >
+	                  <button
+	                    type="button"
+	                    data-map-modal-trigger
+	                    class="text-primary hover:underline transition-colors"
+	                    hx-get="{% url 'explorer:map_popup' %}?geo={{ collection.geo_location }}&title={% if collection.region_facet %}{{ collection.region_facet|urlencode }}{% endif %}{% if collection.region_facet and collection.country_facet %}, {% endif %}{% if collection.country_facet %}{{ collection.country_facet|urlencode }}{% endif %}"
+	                    hx-target="#map-modal-content"
+	                    hx-swap="innerHTML"
+	                    title="{% translate 'Show on map' %}"
+	                  >
                     {% if collection.region_facet %}{{ collection.region_facet }}{% endif %}{% if collection.region_facet and collection.country_facet %}, {% endif %}{% if collection.country_facet %}{{ collection.country_facet }}{% endif %}
                   </button>
                 {% else %}

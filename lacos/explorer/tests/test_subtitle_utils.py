@@ -1,7 +1,10 @@
 from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
 
-from lacos.explorer.views.utils.subtitle import find_subtitle_for_video
+from lacos.explorer.views.utils.subtitle import (
+    find_subtitle_for_collection_video,
+    find_subtitle_for_video,
+)
 
 
 def _make_resource(file_name, resource_id=None, mime_type=None, file_pid=None):
@@ -90,3 +93,47 @@ def test_returns_none_when_resolve_fails(mock_iter, mock_resolve):
     result = find_subtitle_for_video(MagicMock(), video, MagicMock(), None)
 
     assert result is None
+
+
+@patch("lacos.explorer.views.utils.subtitle.resolve_collection_metadata_to_presigned")
+def test_finds_collection_metadata_matching_srt(mock_resolve):
+    video = _make_resource("interview.mp4", resource_id="vid-1")
+    subtitle = _make_resource("interview.srt", resource_id="sub-1")
+    structural_info = SimpleNamespace(
+        additional_metadata_files=SimpleNamespace(all=lambda: [video, subtitle]),
+    )
+    collection = MagicMock()
+    service = MagicMock()
+
+    mock_resolve.return_value = {
+        "bucket": "b",
+        "key": "k",
+        "url": "https://s3/interview.srt",
+    }
+
+    result = find_subtitle_for_collection_video(
+        collection,
+        structural_info,
+        video,
+        service,
+    )
+
+    assert result == "https://s3/interview.srt"
+    mock_resolve.assert_called_once_with(service, subtitle, collection)
+
+
+@patch("lacos.explorer.views.utils.subtitle.resolve_collection_metadata_to_presigned")
+def test_collection_metadata_subtitle_requires_matching_stem(mock_resolve):
+    video = _make_resource("interview.mp4", resource_id="vid-1")
+    subtitle = _make_resource("other.srt", resource_id="sub-1")
+    structural_info = SimpleNamespace(additional_metadata_files=[video, subtitle])
+
+    result = find_subtitle_for_collection_video(
+        MagicMock(),
+        structural_info,
+        video,
+        MagicMock(),
+    )
+
+    assert result is None
+    mock_resolve.assert_not_called()

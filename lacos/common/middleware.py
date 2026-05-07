@@ -87,7 +87,7 @@ class SecurityHeadersMiddleware:
         img_src = ["'self'", "data:", *asset_origins]
         font_src = ["'self'", "data:", *asset_origins]
         connect_src = ["'self'", *asset_origins]
-        media_src = ["'self'", *asset_origins]
+        media_src = ["'self'", "blob:", *asset_origins]
         frame_src = ["'self'", *asset_origins]
         form_action = ["'self'", *saml_form_origins]
 
