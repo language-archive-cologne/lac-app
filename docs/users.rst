@@ -28,6 +28,9 @@ Key settings
 * ``SAML_IDP_METADATA_LOCAL`` / ``SAML_IDP_METADATA_REMOTE`` – IdP metadata
   sources. The repository ships a local fallback
   ``shibboleth.xml`` for development.
+* The SP metadata advertises REFEDS Code of Conduct v2, REFEDS Research and
+  Scholarship, and CLARIN member entity categories, matching LACOS' role as the
+  KA3 successor service.
 
 Operations runbook
 ----------------------------------------------------------------------

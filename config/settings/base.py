@@ -811,6 +811,8 @@ if SAML_LOGIN_ENABLED:
         ],
         "entity_category": [
             "https://refeds.org/category/code-of-conduct/v2",
+            "http://refeds.org/category/research-and-scholarship",
+            "http://clarin.eu/category/clarin-member",
         ],
         "security": {
             "wantAttributeStatementSigned": True,
