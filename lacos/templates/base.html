@@ -37,9 +37,11 @@
   <!-- Theme initialization (runs before body to prevent flash) -->
   <script>
     (function() {
+      const valid = ['corporate', 'dark'];
       const stored = localStorage.getItem('theme');
       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      const theme = stored || (prefersDark ? 'dark' : 'corporate');
+      const fallback = prefersDark ? 'dark' : 'corporate';
+      const theme = valid.includes(stored) ? stored : fallback;
       document.documentElement.setAttribute('data-theme', theme);
     })();
   </script>
