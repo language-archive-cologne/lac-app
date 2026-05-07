@@ -15,15 +15,17 @@ services:
       dockerfile: ./compose/local/django/Dockerfile
       target: web-run-stage
     image: lacos_local_django
-    restart: unless-stopped
+    restart: "on-failure:3"
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
     depends_on:
-      - postgres
-      - minio
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     volumes:
       - .:/app:z
       - ../lac-guidelines:/lac-guidelines:ro
@@ -59,6 +61,12 @@ services:
       - lacos_local_postgres_data_backups:/backups
     env_file:
       - ./.envs/.local/.postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p $${POSTGRES_PORT:-5432} -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     networks:
       - lacos_network_ws
 
