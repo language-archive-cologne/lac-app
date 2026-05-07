@@ -73,6 +73,105 @@
     }
   }
 
+  /* Hero image */
+  .about-page .hero-image {
+    position: relative;
+    aspect-ratio: 3 / 2;
+    border-radius: 1rem;
+    overflow: hidden;
+    background: color-mix(in oklab, currentColor 6%, transparent);
+  }
+  .about-page .hero-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: contrast(1.02) saturate(0.92);
+    transition: filter 450ms ease, transform 700ms var(--ease-out-strong);
+  }
+  [data-theme="dark"] .about-page .hero-image img {
+    filter: contrast(1.02) saturate(0.85) brightness(0.92);
+  }
+
+  /* Info badge — always visible hint that the image has a description */
+  .about-page .hero-image .info-badge {
+    position: absolute;
+    bottom: 0.75rem;
+    left: 0.75rem;
+    width: 1.875rem;
+    height: 1.875rem;
+    border-radius: 9999px;
+    background: rgba(8, 14, 22, 0.55);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    color: rgba(255, 255, 255, 0.92);
+    display: inline-grid;
+    place-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    cursor: default;
+    z-index: 2;
+    transition:
+      background 220ms ease,
+      transform 320ms var(--ease-out-strong),
+      color 220ms ease;
+  }
+  .about-page .hero-image .info-badge:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.85);
+    outline-offset: 2px;
+  }
+  .about-page .hero-image .info-badge svg {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  /* Caption overlay — slides up on hover/focus */
+  .about-page .hero-image .caption-overlay {
+    position: absolute;
+    inset: auto 0 0 0;
+    padding: 2.25rem 1rem 0.95rem 3.5rem;
+    margin: 0;
+    background: linear-gradient(
+      to top,
+      rgba(2, 12, 20, 0.82) 0%,
+      rgba(2, 12, 20, 0.62) 55%,
+      rgba(2, 12, 20, 0) 100%
+    );
+    color: rgba(255, 255, 255, 0.94);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    letter-spacing: 0.005em;
+    opacity: 0;
+    transform: translateY(20%);
+    transition:
+      opacity 360ms var(--ease-out-strong),
+      transform 420ms var(--ease-out-strong);
+    pointer-events: none;
+    z-index: 1;
+  }
+  .about-page .hero-image:hover .caption-overlay,
+  .about-page .hero-image:focus-within .caption-overlay {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .about-page .hero-image:hover .info-badge,
+  .about-page .hero-image:focus-within .info-badge {
+    background: rgba(8, 14, 22, 0.78);
+    transform: scale(0.94);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .about-page .hero-image:hover img {
+      transform: scale(1.02);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .about-page .hero-image img,
+    .about-page .hero-image .caption-overlay,
+    .about-page .hero-image .info-badge {
+      transition: opacity 200ms ease !important;
+      transform: none !important;
+    }
+  }
+
   /* Team member */
   .about-page .member {
     display: block;
@@ -148,8 +247,26 @@
         <span class="ink-faint">Cologne</span>
       </h1>
 
-      <div class="mt-12 md:mt-14 grid md:grid-cols-12 gap-x-8 gap-y-6">
-        <div class="md:col-span-7 md:col-start-6 reveal" style="--reveal-delay:160;">
+      <div class="mt-12 md:mt-14 grid md:grid-cols-12 gap-x-8 gap-y-8 items-start">
+        <figure class="md:col-span-5 reveal" style="--reveal-delay:120;">
+          <div class="hero-image">
+            <img src="{% static 'images/sulawesi_winarno.jpg' %}"
+                 alt="On Sulawesi: project member Winarno (right) interviewing Totoli speaker Abdullah Allamudi at his house in Kalankangan."
+                 loading="lazy">
+            <button type="button"
+                    class="info-badge"
+                    aria-label="Image description"
+                    aria-describedby="hero-image-caption">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-7-4a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM9 9a.75.75 0 0 0 0 1.5h.253a.25.25 0 0 1 .244.304l-.459 2.066A1.75 1.75 0 0 0 10.747 15H11a.75.75 0 0 0 0-1.5h-.253a.25.25 0 0 1-.244-.304l.459-2.066A1.75 1.75 0 0 0 9.253 9H9Z" clip-rule="evenodd" />
+              </svg>
+            </button>
+            <figcaption id="hero-image-caption" class="caption-overlay">
+              On Sulawesi: project member Winarno (right) interviews Totoli speaker Abdullah Allamudi at his house in Kalankangan.
+            </figcaption>
+          </div>
+        </figure>
+        <div class="md:col-span-7 reveal" style="--reveal-delay:160;">
           <p class="text-base md:text-lg leading-relaxed ink-soft">
             A digital repository for language documentation.
           </p>
