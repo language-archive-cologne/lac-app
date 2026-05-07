@@ -140,23 +140,8 @@
     {% endif %}
   </div>
 
-  <!-- Modal reused by the per-row "Show on map" button on detail/bundle pages -->
-  <div id="map-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
-    <div class="absolute inset-0 bg-neutral/60"
-         onclick="document.getElementById('map-modal').classList.add('hidden'); document.body.classList.remove('overflow-hidden');"></div>
-    <div id="map-modal-content" class="relative w-full max-w-lg bg-base-100 rounded-xl shadow-xl"></div>
-  </div>
-
-  <script>
-    document.addEventListener('keydown', function(e) {
-      const modal = document.getElementById('map-modal');
-      if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
-        modal.classList.add('hidden');
-        document.body.classList.remove('overflow-hidden');
-      }
-    });
-
-    (function() {
+	  <script>
+	    (function() {
       const STYLE_URL = '{{ main_map_style_url|escapejs }}';
       const DARK_STYLE_URL = '{{ main_map_dark_style_url|escapejs }}';
       const GLOBE_STYLE_URL = STYLE_URL + (STYLE_URL.includes('?') ? '&' : '?') + 'projection=globe';

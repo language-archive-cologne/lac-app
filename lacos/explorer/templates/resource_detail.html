@@ -17,7 +17,7 @@
   <div class="flex items-center gap-2 mb-4 text-sm text-base-content/70">
     <span class="font-mono">{{ resource.file_pid }}</span>
     <button type="button"
-            onclick="navigator.clipboard.writeText('{{ resource.file_pid|escapejs }}'); this.classList.add('text-success'); setTimeout(() => this.classList.remove('text-success'), 2000);"
+            data-copy-text="{{ resource.file_pid }}"
             class="btn btn-xs btn-ghost btn-square"
             title="{% translate 'Copy handle' %}">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

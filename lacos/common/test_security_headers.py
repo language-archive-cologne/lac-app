@@ -18,6 +18,7 @@ def test_home_page_sets_security_headers(client):
 
     assert "Content-Security-Policy" in response.headers
     assert "worker-src 'self' blob:" in csp
+    assert "media-src 'self' blob:" in csp
     assert "script-src 'self' 'unsafe-inline'" not in csp
     assert "style-src 'self' 'unsafe-inline'" in csp
     assert "style-src-elem 'self' 'unsafe-inline'" in csp
@@ -94,6 +95,7 @@ def test_csp_allows_storage_api_and_extra_asset_origins_for_media(client, settin
 
     csp = response.headers["Content-Security-Policy"]
     assert "media-src" in csp
+    assert "media-src 'self' blob:" in csp
     assert "connect-src" in csp
     assert "https://rdsp.fds.uni-koeln.de" in csp
     assert "https://media-cdn.example.test" in csp

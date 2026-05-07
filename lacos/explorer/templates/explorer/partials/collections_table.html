@@ -144,7 +144,7 @@
                 <div class="flex flex-wrap items-center gap-2 text-xs text-base-content/60">
                   <span class="font-mono text-base-content/50">{{ collection.identifier }}</span>
                   <button type="button"
-                          onclick="navigator.clipboard.writeText('{{ collection.identifier }}'); this.querySelector('.copy-icon').classList.add('hidden'); this.querySelector('.check-icon').classList.remove('hidden'); setTimeout(() => { this.querySelector('.copy-icon').classList.remove('hidden'); this.querySelector('.check-icon').classList.add('hidden'); }, 1500);"
+                          data-copy-text="{{ collection.identifier }}"
                           class="text-base-content/40 hover:text-primary transition-colors"
                           title="{% translate 'Copy handle' %}">
                     <svg class="w-3.5 h-3.5 copy-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -207,15 +207,15 @@
             <td class="px-6 py-5 align-top text-center text-sm text-base-content/70">
               {% if collection.region_facet or collection.country_facet %}
                 {% if collection.geo_location %}
-                  <button
-                    class="text-primary hover:underline transition-colors"
-                    hx-get="{% url 'explorer:map_popup' %}?geo={{ collection.geo_location }}&title={% if collection.region_facet %}{{ collection.region_facet|urlencode }}{% endif %}{% if collection.region_facet and collection.country_facet %}, {% endif %}{% if collection.country_facet %}{{ collection.country_facet|urlencode }}{% endif %}"
-                    hx-target="#map-modal-content"
-                    hx-swap="innerHTML"
-                    hx-on::before-request="document.getElementById('map-modal-content').innerHTML = '';"
-                    hx-on::after-request="document.getElementById('map-modal').classList.remove('hidden'); document.body.classList.add('overflow-hidden');"
-                    title="{% translate 'Show on map' %}"
-                  >
+	                  <button
+	                    type="button"
+	                    data-map-modal-trigger
+	                    class="text-primary hover:underline transition-colors"
+	                    hx-get="{% url 'explorer:map_popup' %}?geo={{ collection.geo_location }}&title={% if collection.region_facet %}{{ collection.region_facet|urlencode }}{% endif %}{% if collection.region_facet and collection.country_facet %}, {% endif %}{% if collection.country_facet %}{{ collection.country_facet|urlencode }}{% endif %}"
+	                    hx-target="#map-modal-content"
+	                    hx-swap="innerHTML"
+	                    title="{% translate 'Show on map' %}"
+	                  >
                     {% if collection.region_facet %}{{ collection.region_facet }}{% endif %}{% if collection.region_facet and collection.country_facet %}, {% endif %}{% if collection.country_facet %}{{ collection.country_facet }}{% endif %}
                   </button>
                 {% else %}

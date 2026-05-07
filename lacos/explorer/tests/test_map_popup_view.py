@@ -1,5 +1,7 @@
 """Tests for the map popup view (HTMX endpoint for detail map modals)."""
 
+from pathlib import Path
+
 import pytest
 from django.urls import reverse
 
@@ -37,9 +39,7 @@ def test_map_popup_view_style_url_is_not_third_party(client):
 def test_map_popup_view_passes_lac_style_url(client, settings):
     url = reverse("explorer:map_popup")
     response = client.get(url, {"geo": "50.9254927,6.9328194", "title": "x"})
-    # The template JSON-encodes the style URL inside a JS literal, so hyphens are
-    # escaped as \u002D.  Decode the body with unicode_escape to restore them.
-    body = response.content.decode("unicode_escape", errors="replace")
+    body = response.content.decode()
     assert settings.EXPLORER_MAIN_MAP_STYLE_URL in body
 
 
@@ -49,7 +49,27 @@ def test_map_popup_view_bootstraps_local_map_dependencies(client):
     response = client.get(url, {"geo": "50.9254927,6.9328194", "title": "x"})
     body = response.content.decode()
 
-    assert "function ensureScript(src, isReady, key)" in body
+    assert "data-map-popup" in body
+    assert 'class="lac-map-popup"' in body
+    assert "data-lat=\"50.9254927\"" in body
+    assert "data-lng=\"6.9328194\"" in body
     assert "vendor/js/maplibre-gl/maplibre-gl.js" in body
     assert "vendor/js/pmtiles/pmtiles.js" in body
-    assert "document.head.appendChild(script);" in body
+
+
+@pytest.mark.django_db
+def test_map_popup_view_does_not_include_inline_script_or_style(client):
+    url = reverse("explorer:map_popup")
+    response = client.get(url, {"geo": "50.9254927,6.9328194", "title": "x"})
+    body = response.content.decode()
+
+    assert "<script" not in body.lower()
+    assert " style=" not in body.lower()
+
+
+def test_map_popup_has_css_backed_dimensions():
+    css = Path("lacos/static/css/project.css").read_text()
+
+    assert ".lac-map-popup" in css
+    assert "height: 400px;" in css
+    assert "min-height: 400px;" in css

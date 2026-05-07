@@ -25,6 +25,7 @@ from .imdi import (
 )
 from .resource import (
     annotate_resource,
+    build_s3_location_lookup,
     find_resource_in_bundle,
     iter_bundle_resources,
     prepare_resource_lists,
@@ -38,6 +39,7 @@ from .storage import (
     resolve_resource_to_presigned,
 )
 from .subtitle import (
+    find_subtitle_for_collection_video,
     find_subtitle_for_video,
 )
 from .lookup import (
@@ -68,6 +70,7 @@ __all__ = [
     "render_imdi_modal_response",
     # Resource utilities
     "annotate_resource",
+    "build_s3_location_lookup",
     "find_resource_in_bundle",
     "iter_bundle_resources",
     "prepare_resource_lists",
@@ -79,6 +82,7 @@ __all__ = [
     "resolve_existing_object",
     "resolve_resource_to_presigned",
     # Subtitle utilities
+    "find_subtitle_for_collection_video",
     "find_subtitle_for_video",
     # Lookup utilities
     "get_object_by_pk_or_handle",

@@ -205,13 +205,27 @@
                 <span class="cursor-help" title="{{ collection.get_general_info.description }}">{{ collection.get_general_info.description|truncatewords:12|highlight_query:search_query }}</span>
               {% endif %}
             </td>
-            <td class="px-6 py-5 align-top text-sm text-base-content/70">
-              {% with gi=collection.get_general_info %}
-                {% if gi and gi.location %}
-                  {% if gi.location.region_facet %}{{ gi.location.region_facet }}{% endif %}{% if gi.location.region_facet and gi.location.country_facet %}, {% endif %}{% if gi.location.country_facet %}{{ gi.location.country_facet }}{% endif %}
-                {% endif %}
-              {% endwith %}
-            </td>
+	            <td class="px-6 py-5 align-top text-sm text-base-content/70">
+	              {% with gi=collection.get_general_info %}
+	                {% if gi and gi.location %}
+	                  {% if gi.location.geo_location %}
+	                    <button
+	                      type="button"
+	                      data-map-modal-trigger
+	                      class="text-primary hover:underline transition-colors"
+	                      hx-get="{% url 'explorer:map_popup' %}?geo={{ gi.location.geo_location }}&title={% if gi.location.region_facet %}{{ gi.location.region_facet|urlencode }}{% endif %}{% if gi.location.region_facet and gi.location.country_facet %}, {% endif %}{% if gi.location.country_facet %}{{ gi.location.country_facet|urlencode }}{% endif %}"
+	                      hx-target="#map-modal-content"
+	                      hx-swap="innerHTML"
+	                      title="{% translate 'Show on map' %}"
+	                    >
+	                      {% if gi.location.region_facet %}{{ gi.location.region_facet }}{% endif %}{% if gi.location.region_facet and gi.location.country_facet %}, {% endif %}{% if gi.location.country_facet %}{{ gi.location.country_facet }}{% endif %}
+	                    </button>
+	                  {% else %}
+	                    {% if gi.location.region_facet %}{{ gi.location.region_facet }}{% endif %}{% if gi.location.region_facet and gi.location.country_facet %}, {% endif %}{% if gi.location.country_facet %}{{ gi.location.country_facet }}{% endif %}
+	                  {% endif %}
+	                {% endif %}
+	              {% endwith %}
+	            </td>
             <td class="px-6 py-5 align-top text-sm text-base-content/70">
               <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-xs font-semibold text-base-content/70">
                 {{ collection.bundles_count }}

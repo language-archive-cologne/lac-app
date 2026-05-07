@@ -21,3 +21,12 @@
 .htmx-request.htmx-indicator {
   opacity: 1;
 }
+
+.lac-map-popup {
+  width: 100%;
+  height: 400px;
+  min-height: 400px;
+  overflow: hidden;
+  border-radius: 0.5rem;
+  background-color: #eef2f4;
+}

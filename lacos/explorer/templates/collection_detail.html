@@ -87,7 +87,7 @@
           </a>
           <button
             type="button"
-            onclick="navigator.clipboard.writeText('{{ request.scheme }}://{{ request.get_host }}{% url 'explorer:collection_detail_by_handle' handle=collection.handle_path %}'); this.classList.add('text-success'); setTimeout(() => this.classList.remove('text-success'), 2000);"
+            data-copy-text="{{ request.scheme }}://{{ request.get_host }}{% url 'explorer:collection_detail_by_handle' handle=collection.handle_path %}"
             class="btn btn-xs btn-ghost btn-square text-base-content/60 hover:text-base-content"
             title="{% translate 'Copy handle URL' %}"
           >
@@ -179,15 +179,15 @@
                 <dt class="text-sm font-semibold text-base-content/70 mb-1.5">{% translate "Location" %}</dt>
                 <dd class="text-sm text-base-content">
                   {% if collection.geo_location %}
-                    <button
-                      class="text-primary hover:underline transition-colors"
-                      hx-get="{% url 'explorer:map_popup' %}?geo={{ collection.geo_location }}&title={% if collection.region_facet %}{{ collection.region_facet|urlencode }}{% endif %}{% if collection.region_facet and collection.country_facet %}, {% endif %}{% if collection.country_facet %}{{ collection.country_facet|urlencode }}{% endif %}"
-                      hx-target="#map-modal-content"
-                      hx-swap="innerHTML"
-                      hx-on::before-request="document.getElementById('map-modal-content').innerHTML = '';"
-                      hx-on::after-request="document.getElementById('map-modal').classList.remove('hidden'); document.body.classList.add('overflow-hidden');"
-                      title="{% translate 'Show on map' %}"
-                    >
+	                    <button
+	                      type="button"
+	                      data-map-modal-trigger
+	                      class="text-primary hover:underline transition-colors"
+	                      hx-get="{% url 'explorer:map_popup' %}?geo={{ collection.geo_location }}&title={% if collection.region_facet %}{{ collection.region_facet|urlencode }}{% endif %}{% if collection.region_facet and collection.country_facet %}, {% endif %}{% if collection.country_facet %}{{ collection.country_facet|urlencode }}{% endif %}"
+	                      hx-target="#map-modal-content"
+	                      hx-swap="innerHTML"
+	                      title="{% translate 'Show on map' %}"
+	                    >
                       {% if collection.region_facet %}{{ collection.region_facet }}{% endif %}{% if collection.region_facet and collection.country_facet %}, {% endif %}{% if collection.country_facet %}{{ collection.country_facet }}{% endif %}
                     </button>
                   {% else %}
@@ -321,14 +321,16 @@
           <p class="text-sm text-base-content leading-relaxed break-words">{{ citation }}</p>
           <button
             type="button"
-            onclick="navigator.clipboard.writeText('{{ citation|escapejs }}'); this.querySelector('span').textContent = '{% translate "Copied!" %}'; setTimeout(() => this.querySelector('span').textContent = '{% translate "Copy" %}', 2000);"
+            data-copy-text="{{ citation }}"
+            data-copy-default-label="{% translate 'Copy' %}"
+            data-copy-success-label="{% translate 'Copied!' %}"
             class="btn btn-xs btn-ghost gap-1 mt-2"
             title="{% translate 'Copy citation' %}"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
-            <span>{% translate "Copy" %}</span>
+            <span data-copy-label>{% translate "Copy" %}</span>
           </button>
         </div>
       </div>
@@ -382,7 +384,7 @@
                       <span class="text-xs font-mono text-base-content/80 break-all hidden sm:inline">{{ file.file_pid }}</span>
                       <button
                         type="button"
-                        onclick="navigator.clipboard.writeText('{{ file.file_pid|escapejs }}'); this.classList.add('text-success'); setTimeout(() => this.classList.remove('text-success'), 2000);"
+                        data-copy-text="{{ file.file_pid }}"
                         class="btn btn-xs btn-ghost btn-square text-base-content/60 hover:text-base-content"
                         title="{{ file.file_pid }}"
                       >
@@ -492,18 +494,7 @@
   <link rel="preload" href="{% static 'vendor/js/pmtiles/pmtiles.js' %}" as="script" />
   <script src="{% static 'vendor/js/maplibre-gl/maplibre-gl.js' %}"></script>
 
-  <!-- Map Modal -->
-  <div id="map-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
-    <div
-      class="absolute inset-0 bg-neutral/60"
-      onclick="document.getElementById('map-modal').classList.add('hidden'); document.body.classList.remove('overflow-hidden');"
-    ></div>
-    <div id="map-modal-content" class="relative w-full max-w-lg bg-base-100 rounded-xl shadow-xl">
-      <!-- Content loaded via HTMX -->
-    </div>
-  </div>
-
-  <!-- Metadata Viewer Modal -->
+	  <!-- Metadata Viewer Modal -->
   <div id="metadata-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
     <div
       class="absolute inset-0 bg-neutral/60"

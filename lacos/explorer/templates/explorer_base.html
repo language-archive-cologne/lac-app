@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n static %}
 
 {% block title %}{% translate "Explorer" %} - {{ block.super }}{% endblock title %}
 
@@ -14,7 +14,22 @@
 
 {% endblock content %}
 
+{% block javascript %}
+  {{ block.super }}
+  <script defer src="{% static 'js/src/map-modal.js' %}"></script>
+  <script defer src="{% static 'js/src/explorer-copy.js' %}"></script>
+{% endblock javascript %}
+
 {% block modal %}
+  <div id="map-modal"
+       class="hidden fixed inset-0 z-50 flex items-center justify-center p-4"
+       aria-hidden="true"
+       role="dialog"
+       aria-modal="true">
+    <div class="absolute inset-0 bg-neutral/60" data-map-modal-close></div>
+    <div id="map-modal-content" class="relative w-full max-w-lg bg-base-100 rounded-xl shadow-xl"></div>
+  </div>
+
   <div id="resource-modal" class="fixed inset-0 z-50 hidden items-start justify-center px-4 py-10 overflow-y-auto min-h-[100vh]" aria-hidden="true" role="dialog" aria-modal="true">
     <div class="absolute inset-0 bg-neutral/60" data-modal-close></div>
     <div class="relative w-full max-w-[90vw] lg:max-w-5xl max-h-[92vh] overflow-auto rounded-2xl bg-base-100 shadow-xl">

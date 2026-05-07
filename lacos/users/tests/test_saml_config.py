@@ -1,4 +1,14 @@
+from django.conf import settings
+
 from lacos.users.saml_config import DEFAULT_MDQ_URL, build_saml_metadata_sources
+
+
+def test_saml_settings_publish_ka3_successor_entity_categories():
+    assert settings.SAML_CONFIG["entity_category"] == [
+        "https://refeds.org/category/code-of-conduct/v2",
+        "http://refeds.org/category/research-and-scholarship",
+        "http://clarin.eu/category/clarin-member",
+    ]
 
 
 def test_build_saml_metadata_sources_uses_mdq_by_default():

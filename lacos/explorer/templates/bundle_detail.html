@@ -99,7 +99,7 @@
           </a>
           <button
             type="button"
-            onclick="navigator.clipboard.writeText('{{ request.scheme }}://{{ request.get_host }}{% url 'explorer:bundle_detail_by_handle' handle=bundle.handle_path %}'); this.classList.add('text-success'); setTimeout(() => this.classList.remove('text-success'), 2000);"
+            data-copy-text="{{ request.scheme }}://{{ request.get_host }}{% url 'explorer:bundle_detail_by_handle' handle=bundle.handle_path %}"
             class="btn btn-xs btn-ghost btn-square text-base-content/60 hover:text-base-content"
             title="{% translate 'Copy handle URL' %}"
           >
@@ -272,15 +272,15 @@
             <dt class="text-sm font-semibold text-base-content/70 mb-1.5">{% translate "Location" %}</dt>
             <dd class="text-sm text-base-content">
               {% if bundle.geo_location %}
-                <button
-                  class="text-primary hover:underline transition-colors"
-                  hx-get="{% url 'explorer:map_popup' %}?geo={{ bundle.geo_location }}&title={% if bundle.region_facet %}{{ bundle.region_facet|urlencode }}{% endif %}{% if bundle.region_facet and bundle.country_facet %}, {% endif %}{% if bundle.country_facet %}{{ bundle.country_facet|urlencode }}{% endif %}"
-                  hx-target="#map-modal-content"
-                  hx-swap="innerHTML"
-                  hx-on::before-request="document.getElementById('map-modal-content').innerHTML = '';"
-                  hx-on::after-request="document.getElementById('map-modal').classList.remove('hidden'); document.body.classList.add('overflow-hidden');"
-                  title="{% translate 'Show on map' %}"
-                >
+	                <button
+	                  type="button"
+	                  data-map-modal-trigger
+	                  class="text-primary hover:underline transition-colors"
+	                  hx-get="{% url 'explorer:map_popup' %}?geo={{ bundle.geo_location }}&title={% if bundle.region_facet %}{{ bundle.region_facet|urlencode }}{% endif %}{% if bundle.region_facet and bundle.country_facet %}, {% endif %}{% if bundle.country_facet %}{{ bundle.country_facet|urlencode }}{% endif %}"
+	                  hx-target="#map-modal-content"
+	                  hx-swap="innerHTML"
+	                  title="{% translate 'Show on map' %}"
+	                >
                   {% if bundle.region_facet %}{{ bundle.region_facet }}{% endif %}{% if bundle.region_facet and bundle.country_facet %}, {% endif %}{% if bundle.country_facet %}{{ bundle.country_facet }}{% endif %}
                 </button>
               {% else %}
@@ -357,7 +357,7 @@
                         <span class="text-xs font-mono text-base-content/80 break-all hidden sm:inline">{{ resource.file_pid }}</span>
                         <button
                           type="button"
-                          onclick="navigator.clipboard.writeText('{{ resource.file_pid|escapejs }}'); this.classList.add('text-success'); setTimeout(() => this.classList.remove('text-success'), 2000);"
+                          data-copy-text="{{ resource.file_pid }}"
                           class="btn btn-xs btn-ghost btn-square text-base-content/60 hover:text-base-content"
                           title="{{ resource.file_pid }}"
                         >
@@ -461,7 +461,7 @@
                         <span class="text-xs font-mono text-base-content/80 break-all hidden sm:inline">{{ resource.file_pid }}</span>
                         <button
                           type="button"
-                          onclick="navigator.clipboard.writeText('{{ resource.file_pid|escapejs }}'); this.classList.add('text-success'); setTimeout(() => this.classList.remove('text-success'), 2000);"
+                          data-copy-text="{{ resource.file_pid }}"
                           class="btn btn-xs btn-ghost btn-square text-base-content/60 hover:text-base-content"
                           title="{{ resource.file_pid }}"
                         >
@@ -569,7 +569,7 @@
                         <span class="text-xs font-mono text-base-content/80 break-all hidden sm:inline">{{ resource.file_pid }}</span>
                         <button
                           type="button"
-                          onclick="navigator.clipboard.writeText('{{ resource.file_pid|escapejs }}'); this.classList.add('text-success'); setTimeout(() => this.classList.remove('text-success'), 2000);"
+                          data-copy-text="{{ resource.file_pid }}"
                           class="btn btn-xs btn-ghost btn-square text-base-content/60 hover:text-base-content"
                           title="{{ resource.file_pid }}"
                         >
@@ -681,7 +681,7 @@
                         <span class="text-xs font-mono text-base-content/80 break-all hidden sm:inline">{{ metadata_file.file_pid }}</span>
                         <button
                           type="button"
-                          onclick="navigator.clipboard.writeText('{{ metadata_file.file_pid|escapejs }}'); this.classList.add('text-success'); setTimeout(() => this.classList.remove('text-success'), 2000);"
+                          data-copy-text="{{ metadata_file.file_pid }}"
                           class="btn btn-xs btn-ghost btn-square text-base-content/60 hover:text-base-content"
                           title="{{ metadata_file.file_pid }}"
                         >
@@ -770,18 +770,7 @@
   <link rel="preload" href="{% static 'vendor/js/pmtiles/pmtiles.js' %}" as="script" />
   <script src="{% static 'vendor/js/maplibre-gl/maplibre-gl.js' %}"></script>
 
-  <!-- Map Modal -->
-  <div id="map-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
-    <div
-      class="absolute inset-0 bg-neutral/60"
-      onclick="document.getElementById('map-modal').classList.add('hidden'); document.body.classList.remove('overflow-hidden');"
-    ></div>
-    <div id="map-modal-content" class="relative w-full max-w-lg bg-base-100 rounded-xl shadow-xl">
-      <!-- Content loaded via HTMX -->
-    </div>
-  </div>
-
-  {% if bundle.identifier %}
+	  {% if bundle.identifier %}
   <!-- Metadata Viewer Modal -->
   <div id="metadata-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
     <div
