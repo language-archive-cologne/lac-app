@@ -415,6 +415,16 @@ def test_faceted_search_page_loads(client):
 
 
 @pytest.mark.django_db
+def test_scope_switch_button_does_not_become_default_search_submitter(client):
+    response = client.get("/search/")
+    assert response.status_code == 200
+    page = response.content.decode("utf-8")
+
+    assert 'type="button" data-search-scope-submit' in page
+    assert 'form="faceted-search-form"' not in page
+
+
+@pytest.mark.django_db
 def test_htmx_returns_partial(client):
     """HTMX requests should return partial HTML."""
     _create_collection("C1", "Alpha", languages=[("Akan", "aka")], country="Ghana")
