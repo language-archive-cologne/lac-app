@@ -36,7 +36,7 @@ def build_fts_query(search_term: str) -> SearchQuery | None:
     Returns None if the search term contains no searchable words.
     """
     sanitized = sanitize_search_term(search_term)
-    words = sanitized.split()
+    words = [word.lower() for word in sanitized.split()]
     if not words:
         return None
     prefix_terms = " & ".join(

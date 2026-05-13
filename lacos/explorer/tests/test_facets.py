@@ -340,6 +340,25 @@ def test_text_search_highlights_literal_query_in_description(client):
 
 
 @pytest.mark.django_db
+def test_text_search_is_case_insensitive(client):
+    c1 = _create_collection(
+        "C1",
+        "Case Search Archive",
+        country="Mali",
+        description="Description text for case-insensitive lookup.",
+    )
+    update_collection_search_vector(c1)
+
+    lowercase_response = client.get("/search/", {"q": "description"})
+    uppercase_response = client.get("/search/", {"q": "Description"})
+
+    assert lowercase_response.status_code == 200
+    assert uppercase_response.status_code == 200
+    assert [c.identifier for c in lowercase_response.context["collections"]] == ["C1"]
+    assert [c.identifier for c in uppercase_response.context["collections"]] == ["C1"]
+
+
+@pytest.mark.django_db
 def test_text_search_highlights_literal_query_in_title(client):
     c1 = _create_collection(
         "C1",
