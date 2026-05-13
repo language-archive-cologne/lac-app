@@ -142,17 +142,18 @@ def prepare_resource_lists(
         media.extend(media_from_other)
         other = [res for res in other if res not in media_from_other]
 
-    # Move ELAN annotation files (.eaf/.elan) from written -> media
-    annotations_from_written = [
-        res for res in written
+    # ELAN annotation files are written resources even when legacy metadata
+    # stored them in the media relation.
+    annotations_from_media = [
+        res for res in media
         if is_annotation_file(
             getattr(res, "mime_type", None),
             getattr(res, "file_name", None),
         )
     ]
-    if annotations_from_written:
-        media.extend(annotations_from_written)
-        written = [res for res in written if res not in annotations_from_written]
+    if annotations_from_media:
+        written.extend(annotations_from_media)
+        media = [res for res in media if res not in annotations_from_media]
 
     return media, written, other
 
