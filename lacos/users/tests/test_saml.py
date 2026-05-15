@@ -1,16 +1,23 @@
 from __future__ import annotations
 
 import html
+import logging
+from http import HTTPStatus
 from types import SimpleNamespace
 
 import pytest
+from django.core.exceptions import PermissionDenied
+from django.test import RequestFactory
+from django.urls import resolve
 from django.urls import reverse
 
 from lacos.users.adapters import TRUSTED_SAML_SESSION_KEY
 from lacos.users.backends import LacosSaml2Backend
-from lacos.users.models import SamlCountry, SamlIdp
+from lacos.users.models import SamlCountry
+from lacos.users.models import SamlIdp
 from lacos.users.models import User
 from lacos.users.saml import sync_user_from_saml
+from lacos.users.saml_views import LacosAssertionConsumerServiceView
 from lacos.users.tests.factories import UserFactory
 
 
@@ -165,12 +172,146 @@ def test_backend_creates_user_without_name_id_when_using_eppn(settings):
     assert user.acl_agent_uri == "urn:lacos:eppn:eppn-user"
 
 
+def test_saml_acs_view_skips_subject_storage_without_name_id(
+    monkeypatch,
+    caplog,
+    settings,
+):
+    authenticated_user = User(username="pah95jk@uni-wuerzburg.de")
+    request = RequestFactory().post("/saml2/acs/")
+    request.saml_session = {}
+    view = LacosAssertionConsumerServiceView()
+    view.request = request
+    post_login_calls = []
+    customize_calls = []
+    subject_ids = []
+
+    monkeypatch.setattr(
+        "lacos.users.saml_views.auth.authenticate",
+        lambda **_kwargs: authenticated_user,
+    )
+    monkeypatch.setattr(
+        "lacos.users.saml_views.auth.login",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "lacos.users.saml_views._set_subject_id",
+        lambda _session, subject_id: subject_ids.append(subject_id),
+    )
+    monkeypatch.setattr(
+        view,
+        "post_login_hook",
+        lambda *_args: post_login_calls.append(True),
+    )
+    monkeypatch.setattr(
+        view,
+        "customize_session",
+        lambda *_args: customize_calls.append(True),
+    )
+    session_info = {
+        "issuer": "https://shibboleth-idp.uni-wuerzburg.de/idp/shibboleth",
+        "name_id": None,
+        "ava": {"eduPersonPrincipalName": ["pah95jk@uni-wuerzburg.de"]},
+    }
+
+    with caplog.at_level(logging.WARNING, logger="lacos.users.saml_views"):
+        user = view.authenticate_user(
+            request,
+            session_info,
+            settings.SAML_ATTRIBUTE_MAPPING,
+            create_unknown_user=True,
+            assertion_info={},
+        )
+
+    assert user is authenticated_user
+    assert subject_ids == []
+    assert post_login_calls == [True]
+    assert customize_calls == [True]
+    assert request.saml_session == {}
+    assert "did not include NameID" in caplog.text
+
+
+def test_saml_acs_view_stores_subject_id_when_name_id_exists(monkeypatch, settings):
+    authenticated_user = User(username="user@example.org")
+    name_id = SimpleNamespace(text="persistent-subject")
+    request = RequestFactory().post("/saml2/acs/")
+    request.saml_session = {}
+    view = LacosAssertionConsumerServiceView()
+    view.request = request
+    subject_ids = []
+
+    monkeypatch.setattr(
+        "lacos.users.saml_views.auth.authenticate",
+        lambda **_kwargs: authenticated_user,
+    )
+    monkeypatch.setattr(
+        "lacos.users.saml_views.auth.login",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "lacos.users.saml_views._set_subject_id",
+        lambda _session, subject_id: subject_ids.append(subject_id),
+    )
+    monkeypatch.setattr(view, "post_login_hook", lambda *_args: None)
+    monkeypatch.setattr(view, "customize_session", lambda *_args: None)
+    session_info = {
+        "issuer": "https://idp.example.org/idp/shibboleth",
+        "name_id": name_id,
+        "ava": {"eduPersonPrincipalName": ["user@example.org"]},
+    }
+
+    user = view.authenticate_user(
+        request,
+        session_info,
+        settings.SAML_ATTRIBUTE_MAPPING,
+        create_unknown_user=True,
+        assertion_info={},
+    )
+
+    assert user is authenticated_user
+    assert subject_ids == [name_id]
+
+
+def test_saml_acs_view_raises_permission_denied_when_authentication_fails(
+    monkeypatch,
+    settings,
+):
+    request = RequestFactory().post("/saml2/acs/")
+    request.saml_session = {}
+    view = LacosAssertionConsumerServiceView()
+    view.request = request
+
+    monkeypatch.setattr(
+        "lacos.users.saml_views.auth.authenticate",
+        lambda **_kwargs: None,
+    )
+
+    with pytest.raises(PermissionDenied):
+        view.authenticate_user(
+            request,
+            {
+                "issuer": "https://idp.example.org/idp/shibboleth",
+                "name_id": None,
+                "ava": {},
+            },
+            settings.SAML_ATTRIBUTE_MAPPING,
+            create_unknown_user=True,
+            assertion_info={},
+        )
+
+
+def test_saml2_acs_route_uses_lacos_view():
+    match = resolve("/saml2/acs/")
+
+    assert match.func.view_class is LacosAssertionConsumerServiceView
+
+
 @pytest.mark.django_db
 def test_saml_login_view_sets_session_marker(client, settings):
     settings.SAML_LOGIN_ENABLED = True
     response = client.get(reverse("users:saml_login"))
 
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     assert response.headers["Location"].endswith("/saml2/login/")
     session = client.session
     assert session.get(TRUSTED_SAML_SESSION_KEY) is True
@@ -185,7 +326,7 @@ def test_saml_login_view_preserves_selected_idp(client, settings):
         {"idp": "https://idp.example.org/idp/shibboleth"},
     )
 
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     assert response.headers["Location"] == (
         "/saml2/login/?idp=https%3A%2F%2Fidp.example.org%2Fidp%2Fshibboleth"
     )
@@ -199,7 +340,7 @@ def test_saml_login_view_preserves_internal_next(client, settings):
 
     response = client.get(reverse("users:saml_login"), {"next": "/collections/"})
 
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     assert response.headers["Location"] == "/saml2/login/?next=%2Fcollections%2F"
 
 
@@ -209,7 +350,7 @@ def test_saml_login_view_strips_external_next(client, settings):
 
     response = client.get(reverse("users:saml_login"), {"next": "https://evil.example/phish"})
 
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     assert response.headers["Location"] == "/saml2/login/"
 
 
@@ -220,7 +361,7 @@ def test_saml2_login_redirects_to_discovery_service(client, settings):
 
     response = client.get("/saml2/login/")
 
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     location = response.headers["Location"]
     assert location.startswith(disco_url)
 
@@ -241,7 +382,7 @@ def test_saml_discovery_idp_list_routes_via_trusted_login_view(client, settings)
         {"search": "Example", "next": "/target/"},
     )
 
-    assert response.status_code == 200
+    assert response.status_code == HTTPStatus.OK
     rendered = html.unescape(response.content.decode())
     assert reverse("users:saml_login") in rendered
     assert 'href="/users/login/saml/?idp=' in rendered

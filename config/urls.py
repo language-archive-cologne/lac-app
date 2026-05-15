@@ -128,7 +128,7 @@ urlpatterns = [
 ]
 
 if settings.SAML_LOGIN_ENABLED:
-    urlpatterns.append(path("saml2/", include("djangosaml2.urls")))
+    urlpatterns.append(path("saml2/", include("lacos.users.saml_urls")))
 if settings.DEBUG:
     # Static file serving when using Gunicorn + Uvicorn for local web socket development
     urlpatterns += staticfiles_urlpatterns()

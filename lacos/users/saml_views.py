@@ -1,0 +1,75 @@
+from __future__ import annotations
+
+import logging
+from typing import TYPE_CHECKING
+from typing import Any
+
+from django.contrib import auth
+from django.core.exceptions import PermissionDenied
+from djangosaml2.views import AssertionConsumerServiceView
+from djangosaml2.views import _set_subject_id
+
+if TYPE_CHECKING:
+    from django.http import HttpRequest
+
+logger = logging.getLogger(__name__)
+
+
+class LacosAssertionConsumerServiceView(AssertionConsumerServiceView):
+    """Authenticate SAML responses that identify users by ePPN attributes."""
+
+    def authenticate_user(
+        self,
+        request: HttpRequest,
+        session_info: dict[str, Any],
+        attribute_mapping: Any,
+        create_unknown_user: Any,
+        assertion_info: dict[str, Any],
+    ) -> Any:
+        """Authenticate a verified SAML response without requiring NameID."""
+        logger.debug("Trying to authenticate the user. Session info: %s", session_info)
+
+        user = auth.authenticate(
+            request=request,
+            session_info=session_info,
+            attribute_mapping=attribute_mapping,
+            create_unknown_user=create_unknown_user,
+            assertion_info=assertion_info,
+        )
+        if user is None:
+            logger.warning(
+                "Could not authenticate user received in SAML Assertion. "
+                "Session info: %s",
+                session_info,
+            )
+            message = "No user could be authenticated."
+            raise PermissionDenied(message)
+
+        auth.login(self.request, user)
+        name_id = session_info.get("name_id")
+        if name_id is None:
+            self._log_missing_name_id(user, session_info)
+        else:
+            _set_subject_id(request.saml_session, name_id)
+        logger.debug("User %s authenticated via SSO.", user)
+
+        self.post_login_hook(request, user, session_info)
+        self.customize_session(user, session_info)
+
+        return user
+
+    def _log_missing_name_id(self, user: Any, session_info: dict[str, Any]) -> None:
+        attributes = session_info.get("ava") or {}
+        has_eppn = bool(
+            attributes.get("eduPersonPrincipalName")
+            or attributes.get("urn:oid:1.3.6.1.4.1.5923.1.1.1.6"),
+        )
+        logger.warning(
+            "SAML response did not include NameID; continuing with "
+            "attribute-based login.",
+            extra={
+                "issuer": session_info.get("issuer", ""),
+                "user": getattr(user, "username", ""),
+                "has_eppn": has_eppn,
+            },
+        )
