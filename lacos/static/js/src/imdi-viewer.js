@@ -200,8 +200,7 @@ function buildNode(el, ctx, open) {
     const details = document.createElement("details");
     if (open) details.open = true;
     const summary = document.createElement("summary");
-    summary.className = "cursor-pointer select-none";
-    summary.style.width = "fit-content";
+    summary.className = "cursor-pointer select-none break-words";
     summary.innerHTML =
       iconHtml("CorpusLink") +
       `<span>${esc(labelFor(el))}</span>` +
@@ -236,8 +235,7 @@ function buildNode(el, ctx, open) {
     const details = document.createElement("details");
     if (open) details.open = true;
     const summary = document.createElement("summary");
-    summary.className = "cursor-pointer select-none";
-    summary.style.width = "fit-content";
+    summary.className = "cursor-pointer select-none break-words";
     summary.innerHTML = iconHtml(tag) + `<span>${esc(labelFor(el))}</span>`;
 
     summary.addEventListener("click", (e) => {
@@ -259,11 +257,11 @@ function buildNode(el, ctx, open) {
     // Leaf node: inline tag: value
     const text = (el.textContent || "").trim();
     const span = document.createElement("span");
-    span.className = "cursor-pointer select-none flex items-center gap-1 justify-start text-left";
+    span.className = "cursor-pointer select-none flex flex-wrap items-baseline gap-1 text-left min-w-0";
     span.innerHTML =
       iconHtml(tag, "xs") +
       `<span class="text-base-content/70 shrink-0">${esc(tag)}:</span>` +
-      `<span class="truncate">${esc(text)}</span>`;
+      `<span class="break-words min-w-0">${esc(text)}</span>`;
     span.addEventListener("click", () => selectNode(el, tag, ctx));
     li.appendChild(span);
   }
@@ -335,13 +333,13 @@ function renderDetail(el, nodeType, container) {
   html += `<div class="flex items-center gap-3 mb-4">`;
   html += iconHtml(nodeType, "lg");
   html += `<div>`;
-  html += `<h2 class="text-lg font-semibold text-base-content">${esc(label)}</h2>`;
+  html += `<h2 class="text-lg font-semibold text-base-content break-words min-w-0">${esc(label)}</h2>`;
   html += `<span class="badge badge-primary badge-sm">${esc(nodeType)}</span>`;
   html += `</div></div>`;
 
   // Attributes table
   if (attrs.length > 0) {
-    html += `<table class="table table-sm w-full mb-4">`;
+    html += `<table class="table table-sm w-full mb-4 table-fixed">`;
     html += `<thead><tr><th class="w-1/3">Attribute</th><th>Value</th></tr></thead><tbody>`;
     for (const a of attrs) {
       html += `<tr class="hover:bg-base-200"><td class="font-mono text-xs text-base-content/70">@${esc(a.name)}</td><td class="break-all">${esc(a.value)}</td></tr>`;
@@ -367,7 +365,7 @@ function renderDetail(el, nodeType, container) {
   }
 
   if (leafChildren.length > 0) {
-    html += `<table class="table table-sm w-full mb-4">`;
+    html += `<table class="table table-sm w-full mb-4 table-fixed">`;
     html += `<thead><tr><th class="w-1/3">Field</th><th>Value</th></tr></thead><tbody>`;
     for (const ch of leafChildren) {
       const val = (ch.textContent || "").trim();
@@ -484,7 +482,7 @@ async function initViewer(container) {
     // Tree panel (wider – leaves show inline values)
     const treePanel = document.createElement("div");
     treePanel.className =
-      "min-w-0 border-b lg:border-b-0 border-base-300 overflow-y-auto overflow-x-auto max-h-[72vh] p-4";
+      "min-w-0 border-b lg:border-b-0 border-base-300 overflow-y-auto max-h-[72vh] p-4";
     treePanel.setAttribute("data-imdi-tree", "");
     const tree = buildTree(root, ctx);
     treePanel.appendChild(tree);
