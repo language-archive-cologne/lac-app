@@ -1,3 +1,4 @@
+from allauth.account.views import LoginView as AllauthLoginView
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
@@ -100,6 +101,26 @@ def _build_saml_login_url(*, next_url: str | None = None, idp: str | None = None
     if params:
         saml_login_url = f"{saml_login_url}?{urlencode(params)}"
     return saml_login_url
+
+
+class LoginView(AllauthLoginView):
+    """Redirect to SAML discovery when enabled, unless `?credentials=1` is set."""
+
+    def dispatch(self, request, *args, **kwargs):
+        if (
+            settings.SAML_LOGIN_ENABLED
+            and request.method == "GET"
+            and request.GET.get("credentials") != "1"
+        ):
+            url = reverse("users:saml_discovery")
+            next_url = _safe_next(request, request.GET.get("next"))
+            if next_url:
+                url = f"{url}?{urlencode({'next': next_url})}"
+            return redirect(url)
+        return super().dispatch(request, *args, **kwargs)
+
+
+login_view = LoginView.as_view()
 
 
 @require_http_methods(["GET"])

@@ -24,6 +24,7 @@ from lacos.explorer.views import (
     legacy_bundle_by_handle,
     legacy_collection_by_handle,
 )
+from lacos.users.views import login_view
 
 urlpatterns = [
     path(
@@ -99,6 +100,7 @@ urlpatterns = [
     path(settings.ADMIN_URL, admin.site.urls),
     # User management
     path("users/", include("lacos.users.urls", namespace="users")),
+    path("accounts/login/", login_view, name="account_login"),
     path("accounts/", include("allauth.urls")),
     path("storage/", include("lacos.storage.urls", namespace="storage")),
     path("blam/", include("lacos.blam.urls")),

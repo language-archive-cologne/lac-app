@@ -48,7 +48,8 @@
         </div>
 
         <div class="divider text-sm">{% trans "or" %}</div>
-        <a href="{% url 'account_login' %}" class="btn btn-ghost btn-sm w-full">
+        <a href="{% url 'account_login' %}?credentials=1{% if next %}&amp;next={{ next|urlencode }}{% endif %}"
+           class="btn btn-ghost btn-sm w-full">
           {% trans "Sign in with credentials" %}
         </a>
       </div>
