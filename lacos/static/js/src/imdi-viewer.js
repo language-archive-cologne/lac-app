@@ -461,59 +461,73 @@ async function initViewer(container) {
     // Build two-panel layout
     container.innerHTML = "";
 
-    // Layout toggle bar (visible on lg only)
-    const toggleBar = document.createElement("div");
-    toggleBar.className = "join mb-2 hidden lg:inline-flex";
-
-    const colIcon = (l, r) =>
-      `<svg class="size-4" viewBox="0 0 20 14" fill="currentColor">` +
-      `<rect x="0" y="0" width="${l}" height="14" rx="1.5" opacity="0.85"/>` +
-      `<rect x="${l + 1}" y="0" width="${r}" height="14" rx="1.5" opacity="0.3"/></svg>`;
-
-    const layouts = [
-      { icon: colIcon(13, 6), title: "Tree wider", treeW: "lg:w-2/3", detailW: "lg:w-1/3" },
-      { icon: colIcon(9.5, 9.5), title: "Equal split", treeW: "lg:w-1/2", detailW: "lg:w-1/2" },
-      { icon: colIcon(6, 13), title: "Detail wider", treeW: "lg:w-1/3", detailW: "lg:w-2/3" },
-    ];
+    // Inject resizer styles once (CSS var drives panel widths on lg+)
+    if (!document.getElementById("imdi-resizer-styles")) {
+      const style = document.createElement("style");
+      style.id = "imdi-resizer-styles";
+      style.textContent =
+        "@media (min-width: 1024px) {" +
+        " [data-imdi-wrapper] > [data-imdi-tree] { flex: 0 0 var(--imdi-tree-width, 66.6667%); }" +
+        " [data-imdi-wrapper] > [data-imdi-detail] { flex: 1 1 0; }" +
+        "}";
+      document.head.appendChild(style);
+    }
 
     const wrapper = document.createElement("div");
     wrapper.className = "flex flex-col lg:flex-row min-h-[58vh]";
+    wrapper.setAttribute("data-imdi-wrapper", "");
+
+    const STORAGE_KEY = "imdi-tree-width";
+    const savedWidth = localStorage.getItem(STORAGE_KEY);
+    if (savedWidth) wrapper.style.setProperty("--imdi-tree-width", savedWidth);
 
     // Tree panel (wider – leaves show inline values)
     const treePanel = document.createElement("div");
     treePanel.className =
-      "lg:w-2/3 min-w-0 border-r border-base-300 overflow-y-auto overflow-x-auto max-h-[72vh] p-4";
+      "min-w-0 border-b lg:border-b-0 border-base-300 overflow-y-auto overflow-x-auto max-h-[72vh] p-4";
     treePanel.setAttribute("data-imdi-tree", "");
     const tree = buildTree(root, ctx);
     treePanel.appendChild(tree);
 
-    // Detail panel (narrower, scrollable)
-    const detailPanel = document.createElement("div");
-    detailPanel.className = "lg:w-1/3 min-w-0 p-6 overflow-y-auto max-h-[72vh]";
-    detailPanel.setAttribute("data-imdi-detail", "");
+    // Draggable vertical divider (lg only)
+    const divider = document.createElement("div");
+    divider.className =
+      "hidden lg:block shrink-0 cursor-col-resize bg-base-300 hover:bg-primary/50 transition-colors";
+    divider.style.width = "4px";
+    divider.style.touchAction = "none";
+    divider.setAttribute("role", "separator");
+    divider.setAttribute("aria-orientation", "vertical");
+    divider.title = "Drag to resize";
 
-    // Wire up toggle buttons
-    const widthClasses = ["lg:w-1/3", "lg:w-1/2", "lg:w-2/3"];
-    layouts.forEach((layout, i) => {
-      const btn = document.createElement("button");
-      btn.className = "join-item btn btn-xs btn-ghost";
-      btn.title = layout.title;
-      if (i === 0) btn.classList.add("btn-active");
-      btn.innerHTML = layout.icon;
-      btn.addEventListener("click", () => {
-        toggleBar.querySelectorAll("button").forEach((b) =>
-          b.classList.remove("btn-active"),
-        );
-        btn.classList.add("btn-active");
-        widthClasses.forEach((c) => {
-          treePanel.classList.remove(c);
-          detailPanel.classList.remove(c);
-        });
-        treePanel.classList.add(layout.treeW);
-        detailPanel.classList.add(layout.detailW);
-      });
-      toggleBar.appendChild(btn);
+    divider.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      const rect = wrapper.getBoundingClientRect();
+      try { divider.setPointerCapture(e.pointerId); } catch (_) {}
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+
+      const onMove = (ev) => {
+        const pct = ((ev.clientX - rect.left) / rect.width) * 100;
+        const clamped = Math.max(15, Math.min(85, pct));
+        wrapper.style.setProperty("--imdi-tree-width", clamped.toFixed(2) + "%");
+      };
+      const onUp = () => {
+        try { divider.releasePointerCapture(e.pointerId); } catch (_) {}
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointerup", onUp);
+        const w = wrapper.style.getPropertyValue("--imdi-tree-width");
+        if (w) localStorage.setItem(STORAGE_KEY, w);
+      };
+      document.addEventListener("pointermove", onMove);
+      document.addEventListener("pointerup", onUp);
     });
+
+    // Detail panel (scrollable)
+    const detailPanel = document.createElement("div");
+    detailPanel.className = "min-w-0 p-6 overflow-y-auto max-h-[72vh]";
+    detailPanel.setAttribute("data-imdi-detail", "");
 
     // Render initial detail for root content element
     const topChildren = visibleChildren(root);
@@ -525,8 +539,8 @@ async function initViewer(container) {
     }
 
     wrapper.appendChild(treePanel);
+    wrapper.appendChild(divider);
     wrapper.appendChild(detailPanel);
-    container.appendChild(toggleBar);
     container.appendChild(wrapper);
   } catch (err) {
     container.innerHTML = `<div class="alert alert-error"><span>Failed to load IMDI data: ${esc(err.message)}</span></div>`;
