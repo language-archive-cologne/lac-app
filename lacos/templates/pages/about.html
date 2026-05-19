@@ -175,7 +175,19 @@
   /* Team member */
   .about-page .member {
     display: block;
+    text-align: center;
     transition: transform 320ms var(--ease-out-strong);
+  }
+  .about-page .team-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    column-gap: 2rem;
+    row-gap: 3rem;
+  }
+  .about-page .team-grid .member {
+    flex: 0 1 7.5rem;
+    max-width: 8rem;
   }
   .about-page .portrait {
     position: relative;
@@ -292,25 +304,18 @@
   <section class="px-6 sm:px-10 md:px-16 lg:px-24 pt-16 md:pt-24 pb-12 md:pb-16">
     <div class="max-w-5xl mx-auto">
 
-      <div class="grid md:grid-cols-12 gap-x-8 gap-y-6 mb-16 md:mb-20">
-        <div class="md:col-span-4 reveal" style="--reveal-delay:0;">
-          <p class="eyebrow ink-mute">The Team</p>
-        </div>
-        <div class="md:col-span-8 reveal" style="--reveal-delay:80;">
-          <h2 class="text-xl md:text-2xl lg:text-3xl font-normal tracking-tight leading-snug ink-mute">
-            The archive is sustained by a cross-faculty cooperation at the University of Cologne, bringing together linguistics, research data management, research software engineering, and computing infrastructure.
-          </h2>
-        </div>
+      <div class="max-w-4xl mx-auto mb-16 md:mb-20 text-center reveal" style="--reveal-delay:80;">
+        <h2 class="text-xl md:text-2xl lg:text-3xl font-normal tracking-tight leading-snug ink-mute">
+          The archive is sustained by a cross-faculty cooperation at the University of Cologne, bringing together linguistics, research data management, research software engineering, and computing infrastructure.
+        </h2>
       </div>
 
       <!-- Department: General Linguistics -->
       <div class="mb-16 md:mb-20 reveal" style="--reveal-delay:120;">
-        <div class="flex items-baseline gap-4 mb-8">
-          <span class="eyebrow ink-faint tabular-nums">01</span>
+        <div class="mb-8 text-center">
           <span class="eyebrow ink-mute">General Linguistics</span>
-          <span class="flex-1 h-px ink-line"></span>
         </div>
-        <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-x-8 gap-y-12" id="dept-01">
+        <div class="team-grid" id="dept-01">
           <a class="member group"
              href="https://ifl.phil-fak.uni-koeln.de/allgemeine-sprachwissenschaft/personen/prof-dr-nikolaus-p-himmelmann"
              target="_blank" rel="noopener noreferrer">
@@ -325,12 +330,10 @@
 
       <!-- Department: DCH -->
       <div class="mb-16 md:mb-20 reveal" style="--reveal-delay:180;">
-        <div class="flex items-baseline gap-4 mb-8">
-          <span class="eyebrow ink-faint tabular-nums">02</span>
+        <div class="mb-8 text-center">
           <span class="eyebrow ink-mute">Data Center for the Humanities</span>
-          <span class="flex-1 h-px ink-line"></span>
         </div>
-        <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-x-8 gap-y-12">
+        <div class="team-grid">
           <a class="member group"
              href="https://dch.phil-fak.uni-koeln.de/ueber-das-dch/team/felix-rau"
              target="_blank" rel="noopener noreferrer">
@@ -361,12 +364,10 @@
 
       <!-- Department: ITCC -->
       <div class="reveal" style="--reveal-delay:240;">
-        <div class="flex items-baseline gap-4 mb-8">
-          <span class="eyebrow ink-faint tabular-nums">03</span>
+        <div class="mb-8 text-center">
           <span class="eyebrow ink-mute">IT Center University of Cologne</span>
-          <span class="flex-1 h-px ink-line"></span>
         </div>
-        <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-x-8 gap-y-12">
+        <div class="team-grid">
           <a class="member group"
              href="https://cds.uni-koeln.de/en/people/core-scientists/prof-dr-stefan-wesner"
              target="_blank" rel="noopener noreferrer">
