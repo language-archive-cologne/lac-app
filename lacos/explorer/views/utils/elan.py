@@ -19,6 +19,37 @@ def _media_reference_stem(reference: str) -> str:
     return Path(candidate_name).stem.lower()
 
 
+def _merge_annotations_by_time(annotations: list[dict]) -> list[dict]:
+    """Merge independent tier annotations that share the same time interval."""
+    merged_annotations: list[dict] = []
+    annotations_by_time: dict[tuple[float, float], dict] = {}
+
+    for annotation in annotations:
+        start = annotation.get("start")
+        end = annotation.get("end")
+        if start is None or end is None:
+            merged_annotations.append(annotation)
+            continue
+
+        time_key = (start, end)
+        merged = annotations_by_time.get(time_key)
+        if merged is None:
+            annotations_by_time[time_key] = annotation
+            merged_annotations.append(annotation)
+            continue
+
+        for tier_id, tier_text in annotation.get("tiers", {}).items():
+            if not tier_text:
+                continue
+            existing_text = merged.setdefault("tiers", {}).get(tier_id)
+            if existing_text and existing_text != tier_text:
+                merged["tiers"][tier_id] = f"{existing_text}\n{tier_text}"
+            else:
+                merged["tiers"][tier_id] = tier_text
+
+    return merged_annotations
+
+
 def parse_elan_document(resource_service, bucket_name: str, object_key: str) -> dict:
     """Fetch and parse ELAN (.eaf) metadata for annotations and media links."""
     try:
@@ -167,7 +198,7 @@ def parse_elan_text(elan_text: str) -> dict:
         entry = ensure_entry(root_id)
         entry.setdefault("tiers", {})[tier_id] = value_text
 
-    annotations = list(annotations_map.values())
+    annotations = _merge_annotations_by_time(list(annotations_map.values()))
 
     if "Tier" in tier_headers and len(tier_headers) > 1:
         del tier_headers["Tier"]
