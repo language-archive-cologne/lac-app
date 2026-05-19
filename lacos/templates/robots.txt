@@ -1,5 +1,5 @@
 # Language Archive Cologne - robots.txt
-# https://lacos.uni-koeln.de
+# {{ PUBLIC_BASE_URL }}
 
 # Default: Allow all standard crawlers
 User-agent: *
@@ -134,7 +134,7 @@ Disallow: /
 # ============================================
 # Sitemap
 # ============================================
-Sitemap: https://lacos.uni-koeln.de/sitemap.xml
+Sitemap: {{ PUBLIC_BASE_URL }}/sitemap.xml
 
 # ============================================
 # LLMs.txt - AI Usage Policy

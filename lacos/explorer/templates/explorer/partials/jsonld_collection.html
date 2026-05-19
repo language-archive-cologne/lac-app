@@ -5,13 +5,13 @@
   "@type": "Dataset",
   "name": "{% if collection.get_general_info.display_title %}{{ collection.get_general_info.display_title|escapejs }}{% elif collection.get_general_info.title %}{{ collection.get_general_info.title|escapejs }}{% else %}{{ collection.identifier|escapejs }}{% endif %}",
   {% if collection.get_general_info.description %}"description": "{{ collection.get_general_info.description|escapejs }}",{% endif %}
-  "url": "{{ request.scheme }}://{{ request.get_host }}{% url 'explorer:collection_detail_by_handle' handle=collection.handle_path %}",
+  "url": "{{ PUBLIC_BASE_URL }}{% url 'explorer:collection_detail_by_handle' handle=collection.handle_path %}",
   "identifier": "{{ collection.identifier|escapejs }}",
   "encodingFormat": "audio-visual",
   "provider": {
     "@type": "Organization",
     "name": "Language Archive Cologne",
-    "url": "https://lacos.uni-koeln.de"
+    "url": "{{ PUBLIC_BASE_URL }}"
   },
   "publisher": {
     "@type": "Organization",
@@ -39,6 +39,6 @@
     }{% endif %}
   }{% if not forloop.last %}, {% endif %}{% endfor %}]{% endif %}{% endif %},
   "isAccessibleForFree": {% if collection_acl_check_result.access_level == 'public' %}true{% else %}false{% endif %},
-  "license": "https://lacos.uni-koeln.de/privacy-policy/"
+  "license": "{{ PUBLIC_BASE_URL }}/privacy-policy/"
 }
 </script>

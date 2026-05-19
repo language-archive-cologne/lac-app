@@ -6,7 +6,7 @@ The archive preserves endangered and under-documented languages through systemat
 
 ## Main Sections
 
-- [Collections](/explorer/collections/): Browse language documentation collections organized by language, region, and project
+- [Collections](/collections/): Browse language documentation collections organized by language, region, and project
 - [About](/about/): Learn about the archive's mission, history, and team
 - [User Guides](/user-guides/): Documentation for researchers and archivists
 - [API Documentation](/api/docs/): REST API for programmatic access to metadata
@@ -53,9 +53,9 @@ This archive contains copyrighted and culturally sensitive language documentatio
 ## Contact
 
 - Helpdesk: lac-helpdesk@uni-koeln.de
-- Website: https://lacos.uni-koeln.de
-- Imprint: https://lacos.uni-koeln.de/imprint/
-- Privacy Policy: https://lacos.uni-koeln.de/privacy-policy/
+- Website: {{ PUBLIC_BASE_URL }}
+- Imprint: {{ PUBLIC_BASE_URL }}/imprint/
+- Privacy Policy: {{ PUBLIC_BASE_URL }}/privacy-policy/
 
 ## Legal
 

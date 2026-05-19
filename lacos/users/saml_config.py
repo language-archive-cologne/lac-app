@@ -1,8 +1,27 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 DEFAULT_MDQ_URL = "https://mdq.aai.dfn.de/"
+
+
+def build_saml_endpoints(
+    *,
+    primary_url: str,
+    additional_urls: Sequence[str] | None,
+    binding: str,
+) -> list[tuple[str, str]]:
+    """Build a deduplicated SAML endpoint list for one binding."""
+    endpoints: list[tuple[str, str]] = []
+    for url in [primary_url, *(additional_urls or [])]:
+        normalized_url = (url or "").strip()
+        endpoint = (normalized_url, binding)
+        if normalized_url and endpoint not in endpoints:
+            endpoints.append(endpoint)
+    return endpoints
 
 
 def build_saml_metadata_sources(

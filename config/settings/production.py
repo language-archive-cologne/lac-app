@@ -10,7 +10,15 @@ from .base import env
 # https://docs.djangoproject.com/en/dev/ref/settings/#secret-key
 SECRET_KEY = env("DJANGO_SECRET_KEY")
 # https://docs.djangoproject.com/en/dev/ref/settings/#allowed-hosts
-ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["lacos.uni-koeln.de"])
+ALLOWED_HOSTS = list(
+    dict.fromkeys(
+        [
+            *env.list("DJANGO_ALLOWED_HOSTS", default=[]),
+            "lacos.uni-koeln.de",
+            "lac.uni-koeln.de",
+        ],
+    ),
+)
 
 # DATABASES
 # ------------------------------------------------------------------------------

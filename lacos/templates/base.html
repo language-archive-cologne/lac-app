@@ -13,23 +13,23 @@
     {% block seo_meta %}
     <!-- Default SEO Meta Tags -->
     <meta name="description" content="The Language Archive Cologne is a digital archive of language resources containing collections of primary language data, including audio and video recordings, as well as linguistic analyses." />
-    <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}" />
+    <link rel="canonical" href="{{ PUBLIC_BASE_URL }}{{ request.path }}" />
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}" />
+    <meta property="og:url" content="{{ PUBLIC_BASE_URL }}{{ request.path }}" />
     <meta property="og:title" content="Language Archive Cologne" />
     <meta property="og:description" content="The Language Archive Cologne is a digital archive of language resources containing collections of primary language data, including audio and video recordings, as well as linguistic analyses." />
-    <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'images/og-image.png' %}" />
+    <meta property="og:image" content="{{ PUBLIC_BASE_URL }}{% static 'images/og-image.png' %}" />
     <meta property="og:site_name" content="Language Archive Cologne" />
     <meta property="og:locale" content="{{ LANGUAGE_CODE }}" />
 
     <!-- Twitter Cards -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}" />
+    <meta name="twitter:url" content="{{ PUBLIC_BASE_URL }}{{ request.path }}" />
     <meta name="twitter:title" content="Language Archive Cologne" />
     <meta name="twitter:description" content="The Language Archive Cologne is a digital archive of language resources containing collections of primary language data, including audio and video recordings, as well as linguistic analyses." />
-    <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'images/og-image.png' %}" />
+    <meta name="twitter:image" content="{{ PUBLIC_BASE_URL }}{% static 'images/og-image.png' %}" />
     {% endblock seo_meta %}
 
     {% block structured_data %}{% endblock structured_data %}

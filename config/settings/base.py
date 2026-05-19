@@ -201,6 +201,13 @@ MEDIA_ROOT = str(APPS_DIR / "media")
 # https://docs.djangoproject.com/en/dev/ref/settings/#media-url
 MEDIA_URL = "/media/"
 
+# PUBLIC URLS
+# ------------------------------------------------------------------------------
+# Canonical public origin used in SEO, robots/LLM surfaces, and SAML UI metadata.
+# Keep this configurable so lacos.uni-koeln.de can remain available during the
+# federation transition while lac.uni-koeln.de becomes the advertised URL.
+PUBLIC_BASE_URL = env("PUBLIC_BASE_URL", default="https://lacos.uni-koeln.de").rstrip("/")
+
 # GUIDELINES
 # ------------------------------------------------------------------------------
 GUIDELINES_REPO_URL = env(
@@ -233,6 +240,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "lacos.users.context_processors.allauth_settings",
                 "lacos.users.context_processors.version_info",
+                "lacos.common.context_processors.public_urls",
                 "lacos.storage.context_processors.upload_client_config",
                 "lacos.storage.context_processors.navbar_access",
             ],
@@ -666,9 +674,12 @@ SAML_FORM_ACTION_ORIGINS = env.list("SAML_FORM_ACTION_ORIGINS", default=[])
 # SAML / Shibboleth
 # ------------------------------------------------------------------------------
 if SAML_LOGIN_ENABLED:
-    from saml2 import BINDING_HTTP_POST, BINDING_HTTP_REDIRECT  # type: ignore[import-not-found]
+    from saml2 import BINDING_HTTP_POST  # type: ignore[import-not-found]
+    from saml2 import BINDING_HTTP_REDIRECT  # type: ignore[import-not-found]
 
-    from lacos.users.saml_config import DEFAULT_MDQ_URL, build_saml_metadata_sources
+    from lacos.users.saml_config import DEFAULT_MDQ_URL
+    from lacos.users.saml_config import build_saml_endpoints
+    from lacos.users.saml_config import build_saml_metadata_sources
 
     SAML_SP_BASE_URL = env("SAML_SP_BASE_URL", default="http://localhost:8000")
     _saml_base = SAML_SP_BASE_URL.rstrip("/")
@@ -677,9 +688,17 @@ if SAML_LOGIN_ENABLED:
         "SAML_ASSERTION_CONSUMER_SERVICE_URL",
         default=f"{_saml_base}/saml2/acs/",
     )
+    SAML_ADDITIONAL_ASSERTION_CONSUMER_SERVICE_URLS = env.list(
+        "SAML_ADDITIONAL_ASSERTION_CONSUMER_SERVICE_URLS",
+        default=[],
+    )
     SAML_SINGLE_LOGOUT_SERVICE_URL = env(
         "SAML_SINGLE_LOGOUT_SERVICE_URL",
         default=f"{_saml_base}/saml2/ls/",
+    )
+    SAML_ADDITIONAL_SINGLE_LOGOUT_SERVICE_URLS = env.list(
+        "SAML_ADDITIONAL_SINGLE_LOGOUT_SERVICE_URLS",
+        default=[],
     )
     SAML_DEFAULT_NAME_ID_FORMAT = env(
         "SAML_NAME_ID_FORMAT",
@@ -697,10 +716,7 @@ if SAML_LOGIN_ENABLED:
         "SAML_IDP_METADATA_LOCAL",
         default=[str(BASE_DIR / "shibboleth.xml")],
     )
-    SAML_METADATA_REMOTE = [
-        url
-        for url in env.list("SAML_IDP_METADATA_REMOTE", default=[])
-    ]
+    SAML_METADATA_REMOTE = env.list("SAML_IDP_METADATA_REMOTE", default=[])
     _saml_metadata_mdq_url = env("SAML_METADATA_MDQ_URL", default=DEFAULT_MDQ_URL)
     SAML_METADATA_MDQ_CERT_FILE = env("SAML_METADATA_MDQ_CERT_FILE", default="")
     SAML2_DISCO_URL = env("SAML2_DISCO_URL", default="")
@@ -719,6 +735,16 @@ if SAML_LOGIN_ENABLED:
         mdq_cert_file=SAML_METADATA_MDQ_CERT_FILE,
         fallback_local_path=str(BASE_DIR / "shibboleth.xml"),
     )
+    _saml_assertion_consumer_services = build_saml_endpoints(
+        primary_url=SAML_ASSERTION_CONSUMER_SERVICE_URL,
+        additional_urls=SAML_ADDITIONAL_ASSERTION_CONSUMER_SERVICE_URLS,
+        binding=BINDING_HTTP_POST,
+    )
+    _saml_single_logout_services = build_saml_endpoints(
+        primary_url=SAML_SINGLE_LOGOUT_SERVICE_URL,
+        additional_urls=SAML_ADDITIONAL_SINGLE_LOGOUT_SERVICE_URLS,
+        binding=BINDING_HTTP_REDIRECT,
+    )
     SAML_CONFIG = {
         "debug": DEBUG,
         "entityid": SAML_ENTITY_ID,
@@ -728,12 +754,8 @@ if SAML_LOGIN_ENABLED:
             "sp": {
                 "name": "Language Archive Cologne",
                 "endpoints": {
-                    "assertion_consumer_service": [
-                        (SAML_ASSERTION_CONSUMER_SERVICE_URL, BINDING_HTTP_POST),
-                    ],
-                    "single_logout_service": [
-                        (SAML_SINGLE_LOGOUT_SERVICE_URL, BINDING_HTTP_REDIRECT),
-                    ],
+                    "assertion_consumer_service": _saml_assertion_consumer_services,
+                    "single_logout_service": _saml_single_logout_services,
                 },
                 "allow_unsolicited": env.bool(
                     "SAML_ALLOW_UNSOLICITED",
@@ -772,17 +794,17 @@ if SAML_LOGIN_ENABLED:
                         },
                     ],
                     "information_url": [
-                        {"text": "https://lacos.uni-koeln.de/", "lang": "en"},
+                        {"text": f"{PUBLIC_BASE_URL}/", "lang": "en"},
                     ],
                     "privacy_statement_url": [
                         {
-                            "text": "https://lacos.uni-koeln.de/privacy-policy/",
+                            "text": f"{PUBLIC_BASE_URL}/privacy-policy/",
                             "lang": "en",
                         },
                     ],
                     "logo": [
                         {
-                            "text": "https://lacos.uni-koeln.de/static/images/logo-LAC.png",
+                            "text": f"{PUBLIC_BASE_URL}/static/images/logo-LAC.png",
                             "width": "180",
                             "height": "78",
                         },
