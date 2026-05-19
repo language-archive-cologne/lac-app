@@ -10,8 +10,13 @@ from botocore.exceptions import ClientError
 
 from .resource import iter_bundle_resources
 
-
 logger = logging.getLogger(__name__)
+
+
+def _media_reference_stem(reference: str) -> str:
+    """Extract a normalized filename stem from an ELAN media reference."""
+    candidate_name = Path(unquote(reference)).name
+    return Path(candidate_name).stem.lower()
 
 
 def parse_elan_document(resource_service, bucket_name: str, object_key: str) -> dict:
@@ -198,17 +203,29 @@ def parse_elan_text(elan_text: str) -> dict:
 
 def pick_elan_audio_resource(bundle, target_resource, elan_data: dict):
     """Choose the most relevant audio resource for an ELAN file."""
-    base_names = {Path(target_resource.file_name).stem.lower()}
-    for candidate in elan_data.get("media_files", []):
-        if not candidate:
-            continue
-        candidate_name = Path(unquote(candidate)).name
-        base_names.add(Path(candidate_name).stem.lower())
+    referenced_stems = {
+        stem
+        for candidate in elan_data.get("media_files", [])
+        if candidate and (stem := _media_reference_stem(candidate))
+    }
 
-    audio_candidates: list[tuple[int, object]] = []
+    fallback_stems = set()
+    if not referenced_stems and getattr(target_resource, "file_name", None):
+        fallback_stems.add(Path(target_resource.file_name).stem.lower())
+
+    target_stems = referenced_stems or fallback_stems
+    if not target_stems:
+        return None
+
+    target_resource_key = (
+        target_resource.__class__,
+        getattr(target_resource, "id", None),
+    )
+    matches: list[object] = []
 
     for resource in iter_bundle_resources(bundle):
-        if resource.id == target_resource.id:
+        resource_key = (resource.__class__, getattr(resource, "id", None))
+        if resource_key == target_resource_key:
             continue
         mime = getattr(resource, "mime_type", "") or ""
         lowered_mime = mime.lower()
@@ -216,20 +233,7 @@ def pick_elan_audio_resource(bundle, target_resource, elan_data: dict):
             continue
 
         resource_stem = Path(resource.file_name).stem.lower()
-        score = 0
-        if resource_stem in base_names:
-            score += 2
-        if resource_stem == Path(target_resource.file_name).stem.lower():
-            score += 1
+        if resource_stem in target_stems:
+            matches.append(resource)
 
-        if score == 0 and not audio_candidates:
-            score = 1
-
-        audio_candidates.append((score, resource))
-
-    if not audio_candidates:
-        return None
-
-    audio_candidates.sort(key=lambda item: item[0], reverse=True)
-    best_score, best_resource = audio_candidates[0]
-    return best_resource if best_score > 0 else None
+    return matches[0] if matches else None
