@@ -9,6 +9,7 @@ function modalMarkup() {
             <input type="hidden" name="csrfmiddlewaretoken" value="csrf-token">
             <div id="bundle-download-summary"></div>
             <span id="bundle-download-count"></span>
+            <span id="bundle-download-total-size"></span>
             <p id="bundle-download-name"></p>
             <div id="bundle-download-methods">
                 <button type="button" class="tab tab-active" data-download-tab="package"></button>
@@ -48,9 +49,11 @@ function modalMarkup() {
                 </div>
                 <div data-script-panel="powershell">
                     <button id="btn-download-powershell" type="button"></button>
+                    <button id="btn-copy-powershell-command" type="button"></button>
                 </div>
                 <div data-script-panel="bash" class="hidden">
                     <button id="btn-download-bash" type="button"></button>
+                    <button id="btn-copy-bash-command" type="button"></button>
                 </div>
                 <div data-script-panel="manifest" class="hidden">
                     <button id="btn-download-manifest" type="button"></button>
@@ -93,6 +96,10 @@ describe('BundleDownloadModal', () => {
         global.fetch = jest.fn();
         global.URL.createObjectURL = jest.fn(() => 'blob:package');
         global.URL.revokeObjectURL = jest.fn();
+        Object.defineProperty(navigator, 'clipboard', {
+            value: { writeText: jest.fn().mockResolvedValue(undefined) },
+            configurable: true,
+        });
         clickSpy = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
     });
 
@@ -143,6 +150,7 @@ describe('BundleDownloadModal', () => {
                         files: [{ filename: 'file.wav', url: 'https://example.test/file.wav' }],
                     },
                 },
+                total_size: 2048,
                 errors: [],
             }),
         });
@@ -161,6 +169,17 @@ describe('BundleDownloadModal', () => {
             resource_ids: ['res-1'],
         });
         expect(document.getElementById('bundle-script-options').classList.contains('hidden')).toBe(false);
+        expect(document.getElementById('bundle-download-total-size').textContent).toBe('2 KB');
+    });
+
+    test('shows selected total size in the modal summary', () => {
+        const modal = makeModal();
+
+        modal.open('bundle-1', ['res-1', 'res-2'], 'Bundle', { totalSizeBytes: 1536 });
+
+        expect(document.getElementById('bundle-download-count').textContent).toBe('2');
+        expect(document.getElementById('bundle-download-total-size').textContent).toBe('1.5 KB');
+        expect(document.getElementById('bundle-download-name').textContent).toBe('Bundle');
     });
 
     test('package action prompts verification without changing the selected download tab', () => {
@@ -205,6 +224,22 @@ describe('BundleDownloadModal', () => {
 
         expect(document.querySelector('[data-script-panel="powershell"]').classList.contains('hidden')).toBe(true);
         expect(document.querySelector('[data-script-panel="bash"]').classList.contains('hidden')).toBe(false);
+    });
+
+    test('script tabs copy safe local run commands', async () => {
+        const modal = makeModal();
+        modal._showCopyFeedback = jest.fn();
+
+        document.getElementById('btn-copy-powershell-command').click();
+        await Promise.resolve();
+
+        expect(navigator.clipboard.writeText).toHaveBeenCalledWith('.\\download.ps1');
+
+        document.getElementById('btn-copy-bash-command').click();
+        await Promise.resolve();
+
+        expect(navigator.clipboard.writeText).toHaveBeenCalledWith('bash download.sh');
+        expect(modal._showCopyFeedback).toHaveBeenCalledTimes(2);
     });
 
     test('switching from package result to scripts preserves the selected resources', async () => {

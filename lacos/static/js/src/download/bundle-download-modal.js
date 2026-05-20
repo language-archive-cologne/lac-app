@@ -6,6 +6,8 @@
  * file or generate scripts (Bash, PowerShell) and curl commands.
  */
 
+import { formatBytes } from './resource-selector.js';
+
 export class BundleDownloadModal {
     /**
      * @param {HTMLDialogElement} modalElement - The modal dialog element
@@ -26,6 +28,7 @@ export class BundleDownloadModal {
         this.bundles = null;  // For multi-bundle mode: [{bundle_id, resource_ids}]
         this.resourceIds = [];
         this.bundleName = '';
+        this.totalSizeBytes = 0;
         this.scriptsData = null;
         this.selectedMethod = 'package';
         this.selectedScriptTab = 'powershell';
@@ -46,6 +49,7 @@ export class BundleDownloadModal {
             title: this.modal.querySelector('#bundle-download-title'),
             summary: this.modal.querySelector('#bundle-download-summary'),
             fileCount: this.modal.querySelector('#bundle-download-count'),
+            totalSize: this.modal.querySelector('#bundle-download-total-size'),
             bundleName: this.modal.querySelector('#bundle-download-name'),
             methods: this.modal.querySelector('#bundle-download-methods'),
             methodTabs: this.modal.querySelectorAll('[data-download-tab]'),
@@ -71,6 +75,8 @@ export class BundleDownloadModal {
             expiresAt: this.modal.querySelector('#bundle-expires-at'),
             btnBash: this.modal.querySelector('#btn-download-bash'),
             btnPowershell: this.modal.querySelector('#btn-download-powershell'),
+            btnCopyBashCommand: this.modal.querySelector('#btn-copy-bash-command'),
+            btnCopyPowershellCommand: this.modal.querySelector('#btn-copy-powershell-command'),
             btnManifest: this.modal.querySelector('#btn-download-manifest'),
             btnCopyCurl: this.modal.querySelector('#btn-copy-curl'),
             fileCommands: this.modal.querySelector('#bundle-file-commands'),
@@ -91,6 +97,8 @@ export class BundleDownloadModal {
         this.elements.btnStartScripts?.addEventListener('click', () => this._promptVerification('scripts'));
         this.elements.btnBash.addEventListener('click', () => this.downloadScript('bash'));
         this.elements.btnPowershell.addEventListener('click', () => this.downloadScript('powershell'));
+        this.elements.btnCopyBashCommand?.addEventListener('click', () => this.copyScriptRunCommand('bash'));
+        this.elements.btnCopyPowershellCommand?.addEventListener('click', () => this.copyScriptRunCommand('powershell'));
         this.elements.btnManifest.addEventListener('click', () => this.downloadManifest());
         this.elements.btnCopyCurl.addEventListener('click', () => this.copyAllCurlCommands());
         this.elements.btnPackageUseScripts?.addEventListener('click', () => {
@@ -120,6 +128,7 @@ export class BundleDownloadModal {
      * @param {string} entityName - Display name of the bundle/collection
      * @param {Object} options - Optional configuration
      * @param {boolean} options.isCollection - If true, treat entityId as collection_id
+     * @param {number} options.totalSizeBytes - Total size of selected resources
      */
     open(entityId, resourceIds, entityName, options = {}) {
         this._reset();
@@ -133,10 +142,9 @@ export class BundleDownloadModal {
         }
         this.resourceIds = resourceIds;
         this.bundleName = entityName;
+        this.totalSizeBytes = this._normalizeSize(options.totalSizeBytes);
 
-        // Update summary
-        this.elements.fileCount.textContent = resourceIds.length;
-        this.elements.bundleName.textContent = entityName;
+        this._updateSummary(resourceIds.length, this.totalSizeBytes, entityName);
 
         this.modal.showModal();
     }
@@ -146,8 +154,10 @@ export class BundleDownloadModal {
      * @param {Array<{bundleId: string, resourceIds: string[]}>} bundlesData - Array of bundle/resource mappings
      * @param {string} entityName - Display name for the download
      * @param {number} totalCount - Total number of files
+     * @param {Object} options - Optional configuration
+     * @param {number} options.totalSizeBytes - Total size of selected resources
      */
-    openMultiBundles(bundlesData, entityName, totalCount) {
+    openMultiBundles(bundlesData, entityName, totalCount, options = {}) {
         this._reset();
 
         this.bundles = bundlesData.map(b => ({
@@ -157,10 +167,9 @@ export class BundleDownloadModal {
         this.bundleId = null;
         this.collectionId = null;
         this.bundleName = entityName;
+        this.totalSizeBytes = this._normalizeSize(options.totalSizeBytes);
 
-        // Update summary
-        this.elements.fileCount.textContent = totalCount;
-        this.elements.bundleName.textContent = entityName;
+        this._updateSummary(totalCount, this.totalSizeBytes, entityName);
 
         this.modal.showModal();
     }
@@ -184,6 +193,7 @@ export class BundleDownloadModal {
             this.bundles = null;
             this.resourceIds = [];
             this.bundleName = '';
+            this.totalSizeBytes = 0;
         }
         this.scriptsData = null;
 
@@ -337,7 +347,10 @@ export class BundleDownloadModal {
 
         // Update file count to match actual resolved count from backend
         if (data.file_count !== undefined) {
-            this.elements.fileCount.textContent = data.file_count;
+            const totalSize = data.total_size !== undefined
+                ? this._normalizeSize(data.total_size)
+                : this.totalSizeBytes;
+            this._updateSummary(data.file_count, totalSize, this.bundleName);
         }
 
         // Show warning if some files were skipped
@@ -384,6 +397,33 @@ export class BundleDownloadModal {
         });
 
         this.elements.skippedWarning.classList.remove('hidden');
+    }
+
+    /**
+     * Update selected-file count, total size, and entity name in the summary.
+     * @param {number} fileCount - Selected or resolved file count
+     * @param {number} totalSizeBytes - Total size in bytes
+     * @param {string} entityName - Display name
+     * @private
+     */
+    _updateSummary(fileCount, totalSizeBytes, entityName) {
+        this.totalSizeBytes = this._normalizeSize(totalSizeBytes);
+        this.elements.fileCount.textContent = fileCount;
+        if (this.elements.totalSize) {
+            this.elements.totalSize.textContent = formatBytes(this.totalSizeBytes);
+        }
+        this.elements.bundleName.textContent = entityName;
+    }
+
+    /**
+     * Coerce an unknown size input to a safe non-negative byte count.
+     * @param {unknown} value - Candidate byte count
+     * @returns {number} Non-negative byte count
+     * @private
+     */
+    _normalizeSize(value) {
+        const size = Number(value);
+        return Number.isFinite(size) && size > 0 ? size : 0;
     }
 
     /**
@@ -577,6 +617,21 @@ export class BundleDownloadModal {
             .join('\n\n');
 
         await this._copyToClipboard(commands, this.elements.btnCopyCurl);
+    }
+
+    /**
+     * Copy the local command used after downloading a script.
+     * @param {'bash' | 'powershell'} type - Script type
+     */
+    async copyScriptRunCommand(type) {
+        const command = type === 'bash' ? 'bash download.sh' : '.\\download.ps1';
+        const button = type === 'bash'
+            ? this.elements.btnCopyBashCommand
+            : this.elements.btnCopyPowershellCommand;
+
+        if (!button) return;
+
+        await this._copyToClipboard(command, button);
     }
 
     /**

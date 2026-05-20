@@ -900,3 +900,7 @@ class TestBundlePackageDownloadView:
 
         assert response.status_code == 413
         assert "Package is too large" in data["error"]
+        assert data["detail"] == (
+            "Maximum package size is 500 MB. "
+            "Use the Scripts tab and run the generated script for larger downloads."
+        )

@@ -17,7 +17,12 @@
 
     {# Summary section #}
     <div id="bundle-download-summary" class="mb-4 p-3 bg-base-200 rounded-lg">
-      <p><span id="bundle-download-count" class="font-semibold">0</span> {% translate "files selected" %}</p>
+      <p>
+        <span id="bundle-download-count" class="font-semibold">0</span>
+        {% translate "files selected" %}
+        <span class="text-base-content/40 mx-1">|</span>
+        <span id="bundle-download-total-size" class="font-semibold">0 B</span>
+      </p>
       <p class="text-sm text-base-content/60" id="bundle-download-name"></p>
     </div>
 
@@ -44,6 +49,16 @@
             </svg>
             {% translate "Download package" %}
           </button>
+        </div>
+        <div class="alert alert-warning mt-3 text-sm">
+          <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+          </svg>
+          <span>
+            {% blocktranslate with limit=DOWNLOAD_CLIENT_CONFIG.package_max_bytes_label|default:"500 MB" trimmed %}
+              Packages larger than {{ limit }} cannot be created. Use Scripts and run the generated script for larger downloads.
+            {% endblocktranslate %}
+          </span>
         </div>
       </div>
 
@@ -163,12 +178,20 @@
               <p class="font-medium">{% translate "PowerShell Script" %}</p>
               <p class="text-base-content/70">{% translate "Run in PowerShell:" %} <code class="bg-base-300 px-1 rounded">.\download.ps1</code></p>
             </div>
-            <button id="btn-download-powershell" class="btn btn-secondary btn-sm sm:flex-shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              download.ps1
-            </button>
+            <div class="flex flex-wrap gap-2 sm:justify-end">
+              <button id="btn-download-powershell" type="button" class="btn btn-secondary btn-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                download.ps1
+              </button>
+              <button id="btn-copy-powershell-command" type="button" class="btn btn-outline btn-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                {% translate "Copy run command" %}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -178,12 +201,20 @@
               <p class="font-medium">{% translate "Bash Script" %}</p>
               <p class="text-base-content/70">{% translate "Run in Terminal:" %} <code class="bg-base-300 px-1 rounded">bash download.sh</code></p>
             </div>
-            <button id="btn-download-bash" class="btn btn-primary btn-sm sm:flex-shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              download.sh
-            </button>
+            <div class="flex flex-wrap gap-2 sm:justify-end">
+              <button id="btn-download-bash" type="button" class="btn btn-primary btn-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                download.sh
+              </button>
+              <button id="btn-copy-bash-command" type="button" class="btn btn-outline btn-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                {% translate "Copy run command" %}
+              </button>
+            </div>
           </div>
         </div>
 

@@ -668,7 +668,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     '{{ collection.pk }}',
                     selectedIds,
                     collectionDisplayName,
-                    { isCollection: true }
+                    {
+                        isCollection: true,
+                        totalSizeBytes: metadataSelector.getTotalSize(),
+                    }
                 );
             }
         };
@@ -787,7 +790,8 @@ function initBundlesTableSelector() {
         window.bundleDownloadModal.openMultiBundles(
             bundlesData,
             collectionDisplayName,
-            selectedIds.length
+            selectedIds.length,
+            { totalSizeBytes: selector.getTotalSize() }
         );
     };
 }

@@ -9,6 +9,11 @@ from django.http import FileResponse, JsonResponse
 from django.views import View
 
 from lacos.blam.models.bundle.bundle_repository import Bundle
+from lacos.storage.download_config import (
+    DEFAULT_DOWNLOAD_PACKAGE_MAX_BYTES,
+    download_package_max_bytes,
+    format_bytes,
+)
 from lacos.storage.services.altcha_service import get_altcha_service
 from lacos.storage.services.download_package_service import DownloadPackageService, DownloadPackageTooLarge
 from lacos.storage.services.resource_resolver_service import ResourceResolverService, ResolvedResource
@@ -321,7 +326,7 @@ class BundlePackageDownloadView(BundleScriptDownloadView):
     """Generate a no-compression TAR package for selected resources."""
 
     RATE_LIMIT_MAX = 3
-    PACKAGE_SIZE_LIMIT = 500 * 1024 * 1024
+    PACKAGE_SIZE_LIMIT = DEFAULT_DOWNLOAD_PACKAGE_MAX_BYTES
     REQUEST_BODY_LIMIT = 64 * 1024
     MAX_ID_LENGTH = 128
 
@@ -408,11 +413,7 @@ class BundlePackageDownloadView(BundleScriptDownloadView):
         package_size_limit = self._package_size_limit()
         total_size = sum(resource.size or 0 for resource in resolved)
         if total_size > package_size_limit:
-            return JsonResponse({
-                'success': False,
-                'error': 'Package is too large. Please use the script download method.',
-                'detail': f'Maximum package size is {package_size_limit} bytes.',
-            }, status=413)
+            return self._package_too_large_response(package_size_limit)
 
         package_service = DownloadPackageService()
         error_list = [
@@ -428,11 +429,7 @@ class BundlePackageDownloadView(BundleScriptDownloadView):
                 max_total_size=package_size_limit,
             )
         except DownloadPackageTooLarge:
-            return JsonResponse({
-                'success': False,
-                'error': 'Package is too large. Please use the script download method.',
-                'detail': f'Maximum package size is {package_size_limit} bytes.',
-            }, status=413)
+            return self._package_too_large_response(package_size_limit)
         except Exception as exc:
             logger.exception("Failed to build download package", extra={"error": str(exc)})
             return JsonResponse({
@@ -461,11 +458,17 @@ class BundlePackageDownloadView(BundleScriptDownloadView):
             return None
 
     def _package_size_limit(self) -> int:
-        try:
-            configured_limit = int(getattr(settings, 'DOWNLOAD_PACKAGE_MAX_BYTES', self.PACKAGE_SIZE_LIMIT))
-        except (TypeError, ValueError):
-            return self.PACKAGE_SIZE_LIMIT
-        return configured_limit if configured_limit > 0 else self.PACKAGE_SIZE_LIMIT
+        return download_package_max_bytes()
+
+    def _package_too_large_response(self, package_size_limit: int) -> JsonResponse:
+        return JsonResponse({
+            "success": False,
+            "error": "Package is too large. Please use the script download method.",
+            "detail": (
+                f"Maximum package size is {format_bytes(package_size_limit)}. "
+                "Use the Scripts tab and run the generated script for larger downloads."
+            ),
+        }, status=413)
 
     def _validate_package_payload(self, bundle_id, collection_id, bundles, resource_ids):
         selector_count = sum([
