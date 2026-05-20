@@ -436,7 +436,7 @@ class TestGenerateManifest:
         assert file1["size"] == sample_downloads[0].size
         assert file1["checksum"] == "abc123def456"
         assert file1["checksum_algorithm"] == "sha256"
-        assert file1["original_key"] == "audio/file1.wav"
+        assert "original_key" not in file1
 
         file2 = manifest["files"][1]
         assert file2["checksum"] is None

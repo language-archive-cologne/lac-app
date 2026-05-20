@@ -240,4 +240,5 @@ class BundleDownloadView(View):
 
 
 # Re-export for legacy import path compatibility
+from lacos.storage.views.script_download_views import BundlePackageDownloadView  # noqa: E402, F401
 from lacos.storage.views.script_download_views import BundleScriptDownloadView  # noqa: E402, F401

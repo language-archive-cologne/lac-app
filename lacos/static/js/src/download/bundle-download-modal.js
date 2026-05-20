@@ -2,8 +2,8 @@
  * BundleDownloadModal handles the multi-file download flow with ALTCHA verification.
  *
  * This module provides a modal interface for downloading multiple files from a bundle
- * with proof-of-work verification via ALTCHA. After verification, it generates
- * download scripts (Bash, PowerShell) and provides curl commands for individual files.
+ * with proof-of-work verification via ALTCHA. Users can download one package
+ * file or generate scripts (Bash, PowerShell) and curl commands.
  */
 
 export class BundleDownloadModal {
@@ -12,11 +12,13 @@ export class BundleDownloadModal {
      * @param {Object} options - Configuration
      * @param {string} options.challengeUrl - URL for ALTCHA challenges
      * @param {string} options.scriptsUrl - URL for script generation endpoint
+     * @param {string} options.packageUrl - URL for package generation endpoint
      */
     constructor(modalElement, options) {
         this.modal = modalElement;
         this.challengeUrl = options.challengeUrl;
         this.scriptsUrl = options.scriptsUrl;
+        this.packageUrl = options.packageUrl;
 
         // State
         this.bundleId = null;
@@ -25,6 +27,8 @@ export class BundleDownloadModal {
         this.resourceIds = [];
         this.bundleName = '';
         this.scriptsData = null;
+        this.selectedMethod = 'package';
+        this.selectedScriptTab = 'powershell';
 
         // Cache DOM elements
         this._cacheElements();
@@ -43,13 +47,24 @@ export class BundleDownloadModal {
             summary: this.modal.querySelector('#bundle-download-summary'),
             fileCount: this.modal.querySelector('#bundle-download-count'),
             bundleName: this.modal.querySelector('#bundle-download-name'),
+            methods: this.modal.querySelector('#bundle-download-methods'),
+            methodTabs: this.modal.querySelectorAll('[data-download-tab]'),
+            methodPanels: this.modal.querySelectorAll('[data-download-panel]'),
             altchaContainer: this.modal.querySelector('#bundle-altcha-container'),
+            altchaText: this.modal.querySelector('#bundle-altcha-text'),
             altchaWidget: this.modal.querySelector('#bundle-altcha-widget'),
             loading: this.modal.querySelector('#bundle-download-loading'),
             loadingMessage: this.modal.querySelector('#bundle-loading-message'),
             error: this.modal.querySelector('#bundle-download-error'),
             errorMessage: this.modal.querySelector('#bundle-error-message'),
+            btnStartPackage: this.modal.querySelector('#btn-start-package'),
+            packageResult: this.modal.querySelector('#bundle-package-result'),
+            packageMessage: this.modal.querySelector('#bundle-package-message'),
+            btnPackageUseScripts: this.modal.querySelector('#btn-package-use-scripts'),
+            btnStartScripts: this.modal.querySelector('#btn-start-scripts'),
             scriptOptions: this.modal.querySelector('#bundle-script-options'),
+            scriptTabs: this.modal.querySelectorAll('[data-script-tab]'),
+            scriptPanels: this.modal.querySelectorAll('[data-script-panel]'),
             skippedWarning: this.modal.querySelector('#bundle-skipped-warning'),
             skippedMessage: this.modal.querySelector('#bundle-skipped-message'),
             skippedReasons: this.modal.querySelector('#bundle-skipped-reasons'),
@@ -72,10 +87,27 @@ export class BundleDownloadModal {
         this.elements.altchaWidget.addEventListener('error', (e) => this._onAltchaError(e));
 
         // Download buttons
+        this.elements.btnStartPackage?.addEventListener('click', () => this._promptVerification('package'));
+        this.elements.btnStartScripts?.addEventListener('click', () => this._promptVerification('scripts'));
         this.elements.btnBash.addEventListener('click', () => this.downloadScript('bash'));
         this.elements.btnPowershell.addEventListener('click', () => this.downloadScript('powershell'));
         this.elements.btnManifest.addEventListener('click', () => this.downloadManifest());
         this.elements.btnCopyCurl.addEventListener('click', () => this.copyAllCurlCommands());
+        this.elements.btnPackageUseScripts?.addEventListener('click', () => {
+            this._reset({ method: 'scripts', preserveSelection: true });
+        });
+
+        this.elements.methodTabs.forEach((tab) => {
+            tab.addEventListener('click', () => {
+                this._setSelectedMethod(tab.dataset.downloadTab);
+            });
+        });
+
+        this.elements.scriptTabs.forEach((tab) => {
+            tab.addEventListener('click', () => {
+                this._setScriptTab(tab.dataset.scriptTab);
+            });
+        });
 
         // Reset on close
         this.modal.addEventListener('close', () => this._reset());
@@ -144,18 +176,23 @@ export class BundleDownloadModal {
      * Reset modal state for reuse.
      * @private
      */
-    _reset() {
-        this.bundleId = null;
-        this.collectionId = null;
-        this.bundles = null;
-        this.resourceIds = [];
-        this.bundleName = '';
+    _reset(options = {}) {
+        const nextMethod = options.method || 'package';
+        if (!options.preserveSelection) {
+            this.bundleId = null;
+            this.collectionId = null;
+            this.bundles = null;
+            this.resourceIds = [];
+            this.bundleName = '';
+        }
         this.scriptsData = null;
 
         // Reset visibility
+        this.elements.methods.classList.remove('hidden');
         this.elements.altchaContainer.classList.remove('hidden');
         this.elements.loading.classList.add('hidden');
         this.elements.error.classList.add('hidden');
+        this.elements.packageResult.classList.add('hidden');
         this.elements.scriptOptions.classList.add('hidden');
         this.elements.skippedWarning.classList.add('hidden');
 
@@ -166,6 +203,9 @@ export class BundleDownloadModal {
         if (this.elements.altchaWidget.reset) {
             this.elements.altchaWidget.reset();
         }
+
+        this._setSelectedMethod(nextMethod);
+        this._setScriptTab('powershell');
     }
 
     /**
@@ -174,8 +214,10 @@ export class BundleDownloadModal {
      * @private
      */
     _showLoading(message) {
+        this.elements.methods.classList.add('hidden');
         this.elements.altchaContainer.classList.add('hidden');
         this.elements.error.classList.add('hidden');
+        this.elements.packageResult.classList.add('hidden');
         this.elements.scriptOptions.classList.add('hidden');
         this.elements.loading.classList.remove('hidden');
         this.elements.loadingMessage.textContent = message;
@@ -188,9 +230,96 @@ export class BundleDownloadModal {
      */
     _showError(message) {
         this.elements.loading.classList.add('hidden');
+        this.elements.methods.classList.remove('hidden');
+        this.elements.altchaContainer.classList.remove('hidden');
+        this.elements.packageResult.classList.add('hidden');
         this.elements.scriptOptions.classList.add('hidden');
         this.elements.error.classList.remove('hidden');
         this.elements.errorMessage.textContent = message;
+        if (this.elements.altchaWidget.reset) {
+            this.elements.altchaWidget.reset();
+        }
+    }
+
+    /**
+     * Mark a download tab as selected.
+     * @param {'package' | 'scripts'} method - Selected method
+     * @private
+     */
+    _setSelectedMethod(method) {
+        this.selectedMethod = method === 'scripts' ? 'scripts' : 'package';
+
+        this.elements.methodTabs.forEach((tab) => {
+            const isSelected = tab.dataset.downloadTab === this.selectedMethod;
+            tab.classList.toggle('tab-active', isSelected);
+            tab.setAttribute('aria-selected', String(isSelected));
+        });
+
+        this.elements.methodPanels.forEach((panel) => {
+            panel.classList.toggle('hidden', panel.dataset.downloadPanel !== this.selectedMethod);
+        });
+
+        if (this.elements.altchaText) {
+            const textKey = this.selectedMethod === 'scripts' ? 'scriptsText' : 'packageText';
+            this.elements.altchaText.textContent = this.selectedMethod === 'scripts'
+                ? this.elements.altchaText.dataset[textKey] || 'Complete verification to generate scripts:'
+                : this.elements.altchaText.dataset[textKey] || 'Complete verification to start the package download:';
+        }
+    }
+
+    /**
+     * Mark a script output tab as selected.
+     * @param {'powershell' | 'bash' | 'manifest' | 'commands'} tabName - Selected script tab
+     * @private
+     */
+    _setScriptTab(tabName) {
+        const validTabs = new Set(['powershell', 'bash', 'manifest', 'commands']);
+        this.selectedScriptTab = validTabs.has(tabName) ? tabName : 'powershell';
+
+        this.elements.scriptTabs.forEach((tab) => {
+            const isSelected = tab.dataset.scriptTab === this.selectedScriptTab;
+            tab.classList.toggle('tab-active', isSelected);
+            tab.setAttribute('aria-selected', String(isSelected));
+        });
+
+        this.elements.scriptPanels.forEach((panel) => {
+            panel.classList.toggle('hidden', panel.dataset.scriptPanel !== this.selectedScriptTab);
+        });
+    }
+
+    /**
+     * Move attention to verification for the requested download method.
+     * @param {'package' | 'scripts'} method - Requested method
+     * @private
+     */
+    _promptVerification(method) {
+        this._setSelectedMethod(method);
+        this.elements.error.classList.add('hidden');
+
+        try {
+            this.elements.altchaWidget.verify?.();
+        } catch (error) {
+            // The widget can still be completed manually if programmatic verify is unavailable.
+        }
+        this.elements.altchaWidget.focus?.();
+    }
+
+    /**
+     * Show package download result.
+     * @param {string} filename - Downloaded package filename
+     * @param {number} skippedCount - Number of skipped files
+     * @private
+     */
+    _showPackageResult(filename, skippedCount = 0) {
+        this.elements.loading.classList.add('hidden');
+        this.elements.error.classList.add('hidden');
+        this.elements.methods.classList.add('hidden');
+        this.elements.altchaContainer.classList.add('hidden');
+        this.elements.scriptOptions.classList.add('hidden');
+        this.elements.packageResult.classList.remove('hidden');
+        this.elements.packageMessage.textContent = skippedCount > 0
+            ? `Package download started: ${filename}. ${skippedCount} file${skippedCount > 1 ? 's' : ''} could not be included; see manifest.json.`
+            : `Package download started: ${filename}`;
     }
 
     /**
@@ -201,7 +330,9 @@ export class BundleDownloadModal {
     _showScriptOptions(data) {
         this.elements.loading.classList.add('hidden');
         this.elements.error.classList.add('hidden');
+        this.elements.methods.classList.add('hidden');
         this.elements.altchaContainer.classList.add('hidden');
+        this.elements.packageResult.classList.add('hidden');
         this.elements.scriptOptions.classList.remove('hidden');
 
         // Update file count to match actual resolved count from backend
@@ -223,6 +354,7 @@ export class BundleDownloadModal {
         // Populate individual file commands from manifest
         const files = data.scripts?.manifest?.files || [];
         this._populateFileCommands(files);
+        this._setScriptTab(this.selectedScriptTab);
     }
 
     /**
@@ -297,7 +429,11 @@ export class BundleDownloadModal {
      */
     async _onAltchaVerified(event) {
         const payload = event.detail.payload;
-        await this._fetchScripts(payload);
+        if (this.selectedMethod === 'scripts') {
+            await this._fetchScripts(payload);
+        } else {
+            await this._fetchPackage(payload);
+        }
     }
 
     /**
@@ -318,33 +454,20 @@ export class BundleDownloadModal {
         this._showLoading('Generating download scripts...');
 
         try {
-            const payload = {
-                altcha: altchaPayload,
-            };
-
-            // Send bundles array, collection_id, or bundle_id
-            if (this.bundles) {
-                payload.bundles = this.bundles;
-                payload.entity_name = this.bundleName;
-            } else if (this.collectionId) {
-                payload.collection_id = this.collectionId;
-                payload.resource_ids = this.resourceIds;
-            } else {
-                payload.bundle_id = this.bundleId;
-                payload.resource_ids = this.resourceIds;
-            }
+            const payload = this._buildRequestPayload(altchaPayload);
 
             const response = await fetch(this.scriptsUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'X-CSRFToken': this._getCsrfToken(),
                 },
                 body: JSON.stringify(payload),
             });
 
             if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.detail || error.error || 'Failed to generate download scripts');
+                const error = await this._readErrorResponse(response);
+                throw new Error(error);
             }
 
             this.scriptsData = await response.json();
@@ -353,6 +476,66 @@ export class BundleDownloadModal {
         } catch (error) {
             this._showError(error.message);
         }
+    }
+
+    /**
+     * Fetch and download the package file from the API.
+     * @param {string} altchaPayload - Base64-encoded ALTCHA solution
+     * @private
+     */
+    async _fetchPackage(altchaPayload) {
+        this._showLoading('Preparing download package...');
+
+        try {
+            const payload = this._buildRequestPayload(altchaPayload);
+
+            const response = await fetch(this.packageUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': this._getCsrfToken(),
+                },
+                body: JSON.stringify(payload),
+            });
+
+            if (!response.ok) {
+                const error = await this._readErrorResponse(response);
+                throw new Error(error);
+            }
+
+            const blob = await response.blob();
+            const filename = this._filenameFromResponse(response, 'download.tar');
+            const skippedCount = Number.parseInt(response.headers.get('x-download-skipped-count') || '0', 10);
+            this._downloadBlob(blob, filename, 'application/x-tar');
+            this._showPackageResult(filename, Number.isNaN(skippedCount) ? 0 : skippedCount);
+        } catch (error) {
+            this._showError(error.message);
+        }
+    }
+
+    /**
+     * Build request body shared by package and script endpoints.
+     * @param {string} altchaPayload - Base64-encoded ALTCHA solution
+     * @returns {Object} Request payload
+     * @private
+     */
+    _buildRequestPayload(altchaPayload) {
+        const payload = {
+            altcha: altchaPayload,
+        };
+
+        if (this.bundles) {
+            payload.bundles = this.bundles;
+            payload.entity_name = this.bundleName;
+        } else if (this.collectionId) {
+            payload.collection_id = this.collectionId;
+            payload.resource_ids = this.resourceIds;
+        } else {
+            payload.bundle_id = this.bundleId;
+            payload.resource_ids = this.resourceIds;
+        }
+
+        return payload;
     }
 
     /**
@@ -398,13 +581,15 @@ export class BundleDownloadModal {
 
     /**
      * Create and trigger a blob download.
-     * @param {string} content - File content
+     * @param {string | Blob} content - File content
      * @param {string} filename - Download filename
      * @param {string} mimeType - MIME type for the blob
      * @private
      */
     _downloadBlob(content, filename, mimeType) {
-        const blob = new Blob([content], { type: mimeType });
+        const blob = content instanceof Blob
+            ? content
+            : new Blob([content], { type: mimeType });
         const url = URL.createObjectURL(blob);
 
         const link = document.createElement('a');
@@ -415,6 +600,76 @@ export class BundleDownloadModal {
         document.body.removeChild(link);
 
         URL.revokeObjectURL(url);
+    }
+
+    /**
+     * Read an API error response as JSON or text.
+     * @param {Response} response - Failed fetch response
+     * @returns {Promise<string>} Error message
+     * @private
+     */
+    async _readErrorResponse(response) {
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+            const error = await response.json();
+            return error.detail || error.error || 'Download failed';
+        }
+        const text = await response.text();
+        return text || 'Download failed';
+    }
+
+    /**
+     * Extract filename from Content-Disposition.
+     * @param {Response} response - Fetch response
+     * @param {string} fallback - Fallback filename
+     * @returns {string} Filename
+     * @private
+     */
+    _filenameFromResponse(response, fallback) {
+        const disposition = response.headers.get('content-disposition') || '';
+        const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+        if (encoded) {
+            try {
+                return decodeURIComponent(encoded[1]);
+            } catch (error) {
+                return fallback;
+            }
+        }
+
+        const plain = disposition.match(/filename="?([^";]+)"?/i);
+        return plain ? plain[1] : fallback;
+    }
+
+    /**
+     * Get the CSRF token rendered into the page.
+     * @returns {string} CSRF token
+     * @private
+     */
+    _getCsrfToken() {
+        return this.modal.querySelector('[name=csrfmiddlewaretoken]')?.value
+            || document.querySelector('[name=csrfmiddlewaretoken]')?.value
+            || document.querySelector('meta[name="csrf-token"]')?.content
+            || this._getCookie('csrftoken')
+            || this._getCookie('__Secure-csrftoken')
+            || '';
+    }
+
+    /**
+     * Read a cookie value when it is not HttpOnly.
+     * @param {string} name - Cookie name
+     * @returns {string} Cookie value
+     * @private
+     */
+    _getCookie(name) {
+        if (!document.cookie) return '';
+        const cookies = document.cookie.split(';');
+        for (const rawCookie of cookies) {
+            const cookie = rawCookie.trim();
+            if (cookie.startsWith(`${name}=`)) {
+                return decodeURIComponent(cookie.substring(name.length + 1));
+            }
+        }
+        return '';
     }
 
     /**

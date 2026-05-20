@@ -16,7 +16,7 @@ class DownloadInfo:
     url: str  # Presigned URL
     size: int  # File size in bytes
     checksum: str | None  # SHA-256 or None
-    original_key: str  # For debugging/manifest
+    original_key: str  # Internal trace only; never included in user-facing output
 
 
 # Windows reserved device names (case-insensitive)
@@ -286,7 +286,6 @@ class DownloadScriptService:
                     "size": dl.size,
                     "checksum": dl.checksum,
                     "checksum_algorithm": "sha256" if dl.checksum else None,
-                    "original_key": dl.original_key,
                 }
                 for dl in downloads
             ],

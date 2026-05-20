@@ -9,6 +9,7 @@ from .views.download_views import (
     ProtectedDownloadView,
     BundleDownloadView,
     BundleScriptDownloadView,
+    BundlePackageDownloadView,
 )
 
 app_name = "storage"
@@ -105,10 +106,12 @@ urlpatterns = [
     path("peaks/generate/<str:bucket_name>/<path:folder_path>/", views.GeneratePeaksView.as_view(), name="generate_peaks_folder"),
 
     # ALTCHA and protected downloads
-    # Note: CSRF exempt because these endpoints use ALTCHA proof-of-work for protection
-    # and only return presigned URLs (no state modification)
+    # Legacy direct-download endpoints remain CSRF exempt because they use ALTCHA
+    # proof-of-work and only return presigned URLs. Script/package endpoints are
+    # CSRF-protected because they can generate heavier multi-file responses.
     path("altcha/challenge/", AltchaChallengeView.as_view(), name="altcha_challenge"),
     path("download/", csrf_exempt(ProtectedDownloadView.as_view()), name="protected_download"),
     path("download/bundle/", csrf_exempt(BundleDownloadView.as_view()), name="bundle_download"),
-    path("download/scripts/", csrf_exempt(BundleScriptDownloadView.as_view()), name="bundle_script_download"),
+    path("download/scripts/", BundleScriptDownloadView.as_view(), name="bundle_script_download"),
+    path("download/package/", BundlePackageDownloadView.as_view(), name="bundle_package_download"),
 ] 

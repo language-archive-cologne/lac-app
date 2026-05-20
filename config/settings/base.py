@@ -416,6 +416,10 @@ STORAGE_DASHBOARD_PAGE_SIZE = env.int("STORAGE_DASHBOARD_PAGE_SIZE", default=200
 PRESIGNED_URL_EXPIRATION = env.int("PRESIGNED_URL_EXPIRATION", default=86400)
 # Buffer time to subtract from expiration when caching URLs (handles clock skew)
 PRESIGNED_URL_CACHE_BUFFER = env.int("PRESIGNED_URL_CACHE_BUFFER", default=300)
+# Maximum browser package download size in bytes.
+# Keep this conservative because package downloads are built by the app and
+# buffered by the browser; scripts remain available for larger downloads.
+DOWNLOAD_PACKAGE_MAX_BYTES = env.int("DOWNLOAD_PACKAGE_MAX_BYTES", default=500 * 1024 * 1024)
 # Require S3ResourceLocation record to exist for download authorization
 # When True (default), only resources tracked in the database can be downloaded
 # Set to False to allow downloads of unmapped resources (INSECURE - use with caution)

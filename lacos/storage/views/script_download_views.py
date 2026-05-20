@@ -5,11 +5,12 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from django.conf import settings
-from django.http import JsonResponse
+from django.http import FileResponse, JsonResponse
 from django.views import View
 
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.storage.services.altcha_service import get_altcha_service
+from lacos.storage.services.download_package_service import DownloadPackageService, DownloadPackageTooLarge
 from lacos.storage.services.resource_resolver_service import ResourceResolverService, ResolvedResource
 from lacos.storage.services.download_script_service import DownloadScriptService, DownloadInfo
 from lacos.storage.views.download_utils import check_rate_limit, get_client_ip
@@ -314,3 +315,213 @@ class BundleScriptDownloadView(View):
             'total_size': total_size,
             'errors': error_list,
         })
+
+
+class BundlePackageDownloadView(BundleScriptDownloadView):
+    """Generate a no-compression TAR package for selected resources."""
+
+    RATE_LIMIT_MAX = 3
+    PACKAGE_SIZE_LIMIT = 500 * 1024 * 1024
+    REQUEST_BODY_LIMIT = 64 * 1024
+    MAX_ID_LENGTH = 128
+
+    def post(self, request):
+        """Verify ALTCHA and return a TAR package for multiple resources."""
+        if not check_rate_limit(
+            request,
+            'bundle_package',
+            self.RATE_LIMIT_MAX,
+            self.RATE_LIMIT_WINDOW,
+        ):
+            logger.warning(
+                "Rate limit exceeded for package generation",
+                extra={"client_ip": get_client_ip(request)},
+            )
+            return JsonResponse(
+                {'error': 'Too many requests. Please try again later.'},
+                status=429,
+            )
+
+        request_size = self._request_body_size(request)
+        if request_size is not None and request_size > self.REQUEST_BODY_LIMIT:
+            return JsonResponse({'error': 'Request body is too large'}, status=413)
+
+        raw_body = request.body
+        if len(raw_body) > self.REQUEST_BODY_LIMIT:
+            return JsonResponse({'error': 'Request body is too large'}, status=413)
+
+        try:
+            data = json.loads(raw_body)
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+        if not isinstance(data, dict):
+            return JsonResponse({'error': 'Invalid JSON payload'}, status=400)
+
+        altcha_payload = data.get('altcha')
+        bundle_id = data.get('bundle_id')
+        collection_id = data.get('collection_id')
+        bundles = data.get('bundles')
+        resource_ids = data.get('resource_ids', [])
+
+        if not altcha_payload:
+            return JsonResponse({'error': 'Missing ALTCHA solution'}, status=400)
+
+        validation_error = self._validate_package_payload(
+            bundle_id,
+            collection_id,
+            bundles,
+            resource_ids,
+        )
+        if validation_error:
+            return validation_error
+
+        if bundles is not None:
+            total_resource_count = sum(len(bundle_entry.get('resource_ids', [])) for bundle_entry in bundles)
+        else:
+            total_resource_count = len(resource_ids)
+        if total_resource_count == 0:
+            return JsonResponse({'error': 'No resources specified'}, status=400)
+        if total_resource_count > self.MAX_RESOURCES:
+            return JsonResponse({
+                'error': f'Too many resources. Maximum is {self.MAX_RESOURCES}'
+            }, status=400)
+
+        altcha_service = get_altcha_service()
+        is_valid, error = altcha_service.verify_solution_base64(altcha_payload)
+        if not is_valid:
+            logger.warning("ALTCHA verification failed for package generation", extra={"error": error})
+            return JsonResponse({
+                'error': 'Verification failed',
+                'detail': 'Please complete the verification again'
+            }, status=403)
+
+        resolved, errors, entity_name = self._resolve_resources(
+            request, data, bundles, bundle_id, collection_id, resource_ids
+        )
+        error_response = self._check_resolution_errors(
+            errors, resolved, bundle_id, collection_id, bundles
+        )
+        if error_response:
+            return error_response
+
+        package_size_limit = self._package_size_limit()
+        total_size = sum(resource.size or 0 for resource in resolved)
+        if total_size > package_size_limit:
+            return JsonResponse({
+                'success': False,
+                'error': 'Package is too large. Please use the script download method.',
+                'detail': f'Maximum package size is {package_size_limit} bytes.',
+            }, status=413)
+
+        package_service = DownloadPackageService()
+        error_list = [
+            {'resource_id': e.resource_id, 'error': e.error, 'message': e.message}
+            for e in errors
+        ]
+
+        try:
+            archive_file = package_service.create_tar_file(
+                resolved,
+                entity_name,
+                errors=error_list,
+                max_total_size=package_size_limit,
+            )
+        except DownloadPackageTooLarge:
+            return JsonResponse({
+                'success': False,
+                'error': 'Package is too large. Please use the script download method.',
+                'detail': f'Maximum package size is {package_size_limit} bytes.',
+            }, status=413)
+        except Exception as exc:
+            logger.exception("Failed to build download package", extra={"error": str(exc)})
+            return JsonResponse({
+                'success': False,
+                'error': 'Failed to build package',
+                'detail': 'Please try the script download method.',
+            }, status=500)
+
+        response = FileResponse(
+            archive_file,
+            as_attachment=True,
+            filename=package_service.archive_filename(entity_name),
+            content_type='application/x-tar',
+        )
+        response['X-Download-Skipped-Count'] = str(len(errors))
+        response['X-Download-File-Count'] = str(len(resolved))
+        return response
+
+    def _request_body_size(self, request) -> int | None:
+        raw_size = request.META.get('CONTENT_LENGTH')
+        if not raw_size:
+            return None
+        try:
+            return int(raw_size)
+        except (TypeError, ValueError):
+            return None
+
+    def _package_size_limit(self) -> int:
+        try:
+            configured_limit = int(getattr(settings, 'DOWNLOAD_PACKAGE_MAX_BYTES', self.PACKAGE_SIZE_LIMIT))
+        except (TypeError, ValueError):
+            return self.PACKAGE_SIZE_LIMIT
+        return configured_limit if configured_limit > 0 else self.PACKAGE_SIZE_LIMIT
+
+    def _validate_package_payload(self, bundle_id, collection_id, bundles, resource_ids):
+        selector_count = sum([
+            bool(bundle_id),
+            bool(collection_id),
+            bundles is not None,
+        ])
+        if selector_count != 1:
+            return JsonResponse(
+                {'error': 'Specify exactly one of bundle_id, collection_id, or bundles'},
+                status=400,
+            )
+
+        if bundle_id and not self._is_safe_identifier(bundle_id):
+            return JsonResponse({'error': 'Invalid bundle_id'}, status=400)
+
+        if collection_id and not self._is_safe_identifier(collection_id):
+            return JsonResponse({'error': 'Invalid collection_id'}, status=400)
+
+        if bundles is not None:
+            return self._validate_bundles_payload(bundles)
+
+        if not isinstance(resource_ids, list):
+            return JsonResponse({'error': 'resource_ids must be a list'}, status=400)
+
+        return self._validate_resource_ids(resource_ids, 'resource_ids')
+
+    def _validate_bundles_payload(self, bundles):
+        if not isinstance(bundles, list):
+            return JsonResponse({'error': 'bundles must be a list'}, status=400)
+        if len(bundles) > self.MAX_RESOURCES:
+            return JsonResponse({
+                'error': f'Too many bundle entries. Maximum is {self.MAX_RESOURCES}'
+            }, status=400)
+
+        for i, bundle_entry in enumerate(bundles):
+            if not isinstance(bundle_entry, dict):
+                return JsonResponse({'error': f'bundles[{i}] must be an object'}, status=400)
+            if not self._is_safe_identifier(bundle_entry.get('bundle_id')):
+                return JsonResponse({'error': f'bundles[{i}] has invalid bundle_id'}, status=400)
+            resource_error = self._validate_resource_ids(
+                bundle_entry.get('resource_ids', []),
+                f'bundles[{i}].resource_ids',
+            )
+            if resource_error:
+                return resource_error
+
+        return None
+
+    def _validate_resource_ids(self, resource_ids, field_name):
+        if not isinstance(resource_ids, list):
+            return JsonResponse({'error': f'{field_name} must be a list'}, status=400)
+        for i, resource_id in enumerate(resource_ids):
+            if not self._is_safe_identifier(resource_id):
+                return JsonResponse({'error': f'{field_name}[{i}] is invalid'}, status=400)
+        return None
+
+    def _is_safe_identifier(self, value) -> bool:
+        return isinstance(value, str) and 0 < len(value) <= self.MAX_ID_LENGTH

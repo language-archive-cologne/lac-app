@@ -3,7 +3,7 @@
 {# Include this partial in bundle detail pages for multi-file download functionality #}
 
 <dialog id="bundle-download-modal" class="modal">
-  <div class="modal-box max-w-2xl relative">
+  <div class="modal-box max-w-3xl relative">
     {# Close button #}
     <form method="dialog">
       <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">X</button>
@@ -13,6 +13,7 @@
     <h3 class="font-bold text-lg mb-4" id="bundle-download-title">
       {% translate "Download Bundle Files" %}
     </h3>
+    {% csrf_token %}
 
     {# Summary section #}
     <div id="bundle-download-summary" class="mb-4 p-3 bg-base-200 rounded-lg">
@@ -20,9 +21,55 @@
       <p class="text-sm text-base-content/60" id="bundle-download-name"></p>
     </div>
 
+    {# Download method tabs #}
+    <div id="bundle-download-methods" class="mb-4">
+      <div role="tablist" class="tabs tabs-boxed w-full">
+        <button type="button" class="tab tab-active flex-1" role="tab" aria-selected="true" aria-controls="bundle-package-panel" data-download-tab="package">
+          {% translate "Package" %}
+        </button>
+        <button type="button" class="tab flex-1" role="tab" aria-selected="false" aria-controls="bundle-scripts-panel" data-download-tab="scripts">
+          {% translate "Scripts" %}
+        </button>
+      </div>
+
+      <div id="bundle-package-panel" role="tabpanel" data-download-panel="package" class="mt-3 rounded-lg border border-base-300 p-3">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div class="text-sm">
+            <p class="font-medium">{% translate "Download package (.tar)" %}</p>
+            <p class="text-base-content/70">{% translate "One file containing the selected files. No compression." %}</p>
+          </div>
+          <button id="btn-start-package" type="button" class="btn btn-primary btn-sm sm:flex-shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            {% translate "Download package" %}
+          </button>
+        </div>
+      </div>
+
+      <div id="bundle-scripts-panel" role="tabpanel" data-download-panel="scripts" class="hidden mt-3 rounded-lg border border-base-300 p-3">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div class="text-sm">
+            <p class="font-medium">{% translate "Download with scripts" %}</p>
+            <p class="text-base-content/70">{% translate "Best for large downloads, interrupted connections, and automation." %}</p>
+          </div>
+          <button id="btn-start-scripts" type="button" class="btn btn-outline btn-sm sm:flex-shrink-0">
+            {% translate "Generate scripts" %}
+          </button>
+        </div>
+      </div>
+    </div>
+
     {# ALTCHA widget container #}
     <div id="bundle-altcha-container" class="mb-4">
-      <p class="text-sm mb-2">{% translate "Complete verification to generate download scripts:" %}</p>
+      <p
+        id="bundle-altcha-text"
+        class="text-sm mb-2"
+        data-package-text="{% translate 'Complete verification to start the package download:' %}"
+        data-scripts-text="{% translate 'Complete verification to generate scripts:' %}"
+      >
+        {% translate "Complete verification to start the package download:" %}
+      </p>
       <altcha-widget
         id="bundle-altcha-widget"
         challengeurl="{% url 'storage:altcha_challenge' %}"
@@ -41,6 +88,19 @@
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       <span id="bundle-error-message"></span>
+    </div>
+
+    {# Package result #}
+    <div id="bundle-package-result" class="hidden space-y-4">
+      <div class="alert alert-success text-sm">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span id="bundle-package-message">{% translate "Package download started." %}</span>
+      </div>
+      <button id="btn-package-use-scripts" type="button" class="btn btn-outline btn-sm">
+        {% translate "Use scripts instead" %}
+      </button>
     </div>
 
     {# Script options (shown after verification) #}
@@ -71,7 +131,7 @@
       <details class="collapse collapse-arrow bg-base-200">
         <summary class="collapse-title text-sm font-medium">{% translate "How does this work?" %}</summary>
         <div class="collapse-content text-sm space-y-2">
-          <p>{% translate "Instead of downloading files directly in your browser, we provide scripts that download files using command-line tools. This allows for:" %}</p>
+          <p>{% translate "Scripts download each selected file directly with command-line tools. This allows for:" %}</p>
           <ul class="list-disc list-inside space-y-1 text-base-content/80">
             <li>{% translate "Resumable downloads if connection is interrupted" %}</li>
             <li>{% translate "Downloading multiple files automatically" %}</li>
@@ -80,72 +140,84 @@
         </div>
       </details>
 
-      {# Download buttons with descriptions #}
+      {# Script output tabs #}
       <div class="space-y-3">
-        <p class="text-sm font-medium">{% translate "Choose your download method:" %}</p>
+        <div id="bundle-script-output-tabs" role="tablist" class="tabs tabs-boxed">
+          <button type="button" class="tab tab-active" role="tab" aria-selected="true" aria-controls="bundle-script-panel-powershell" data-script-tab="powershell">
+            {% translate "Windows" %}
+          </button>
+          <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="bundle-script-panel-bash" data-script-tab="bash">
+            {% translate "macOS / Linux" %}
+          </button>
+          <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="bundle-script-panel-manifest" data-script-tab="manifest">
+            {% translate "Manifest" %}
+          </button>
+          <button type="button" class="tab" role="tab" aria-selected="false" aria-controls="bundle-script-panel-commands" data-script-tab="commands">
+            {% translate "curl" %}
+          </button>
+        </div>
 
-        <div class="grid gap-2">
-          {# Bash script #}
-          <div class="flex items-start gap-3 p-3 bg-base-200 rounded-lg">
-            <button id="btn-download-bash" class="btn btn-primary btn-sm flex-shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              download.sh
-            </button>
+        <div id="bundle-script-panel-powershell" role="tabpanel" data-script-panel="powershell" class="rounded-lg border border-base-300 p-3">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div class="text-sm">
-              <p class="font-medium">{% translate "Bash Script" %} <span class="badge badge-sm">Linux / macOS</span></p>
-              <p class="text-base-content/70">{% translate "Run in Terminal:" %} <code class="bg-base-300 px-1 rounded">bash download.sh</code></p>
+              <p class="font-medium">{% translate "PowerShell Script" %}</p>
+              <p class="text-base-content/70">{% translate "Run in PowerShell:" %} <code class="bg-base-300 px-1 rounded">.\download.ps1</code></p>
             </div>
-          </div>
-
-          {# PowerShell script #}
-          <div class="flex items-start gap-3 p-3 bg-base-200 rounded-lg">
-            <button id="btn-download-powershell" class="btn btn-secondary btn-sm flex-shrink-0">
+            <button id="btn-download-powershell" class="btn btn-secondary btn-sm sm:flex-shrink-0">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
               download.ps1
             </button>
-            <div class="text-sm">
-              <p class="font-medium">{% translate "PowerShell Script" %} <span class="badge badge-sm">Windows</span></p>
-              <p class="text-base-content/70">{% translate "Run in PowerShell:" %} <code class="bg-base-300 px-1 rounded">.\download.ps1</code></p>
-            </div>
           </div>
+        </div>
 
-          {# Manifest JSON #}
-          <div class="flex items-start gap-3 p-3 bg-base-200 rounded-lg">
-            <button id="btn-download-manifest" class="btn btn-outline btn-sm flex-shrink-0">
+        <div id="bundle-script-panel-bash" role="tabpanel" data-script-panel="bash" class="hidden rounded-lg border border-base-300 p-3">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div class="text-sm">
+              <p class="font-medium">{% translate "Bash Script" %}</p>
+              <p class="text-base-content/70">{% translate "Run in Terminal:" %} <code class="bg-base-300 px-1 rounded">bash download.sh</code></p>
+            </div>
+            <button id="btn-download-bash" class="btn btn-primary btn-sm sm:flex-shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              download.sh
+            </button>
+          </div>
+        </div>
+
+        <div id="bundle-script-panel-manifest" role="tabpanel" data-script-panel="manifest" class="hidden rounded-lg border border-base-300 p-3">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div class="text-sm">
+              <p class="font-medium">{% translate "JSON Manifest" %}</p>
+              <p class="text-base-content/70">{% translate "Machine-readable file list with URLs for custom tools" %}</p>
+            </div>
+            <button id="btn-download-manifest" class="btn btn-outline btn-sm sm:flex-shrink-0">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
               manifest.json
             </button>
-            <div class="text-sm">
-              <p class="font-medium">{% translate "JSON Manifest" %} <span class="badge badge-sm badge-ghost">{% translate "Advanced" %}</span></p>
-              <p class="text-base-content/70">{% translate "Machine-readable file list with URLs for custom tools" %}</p>
-            </div>
           </div>
         </div>
-      </div>
 
-      {# Copy curl commands #}
-      <div class="divider text-sm">{% translate "Or copy commands manually" %}</div>
-      <button id="btn-copy-curl" class="btn btn-outline btn-sm w-full">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-        </svg>
-        {% translate "Copy all curl commands" %}
-      </button>
+        <div id="bundle-script-panel-commands" role="tabpanel" data-script-panel="commands" class="hidden space-y-3 rounded-lg border border-base-300 p-3">
+          <button id="btn-copy-curl" class="btn btn-outline btn-sm w-full">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            {% translate "Copy all curl commands" %}
+          </button>
 
-      {# Individual file list with curl commands #}
-      <details class="collapse collapse-arrow bg-base-200">
-        <summary class="collapse-title text-sm font-medium">{% translate "Individual file commands" %}</summary>
-        <div class="collapse-content">
-          <p class="text-xs text-base-content/70 mb-2">{% translate "Copy and paste these commands in your terminal to download individual files:" %}</p>
-          <div id="bundle-file-commands" class="space-y-2 text-sm font-mono"></div>
+          <details class="collapse collapse-arrow bg-base-200">
+            <summary class="collapse-title text-sm font-medium">{% translate "Individual file commands" %}</summary>
+            <div class="collapse-content">
+              <div id="bundle-file-commands" class="space-y-2 text-sm font-mono"></div>
+            </div>
+          </details>
         </div>
-      </details>
+      </div>
     </div>
 
     {# Modal action buttons #}
@@ -170,7 +242,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (modal) {
     window.bundleDownloadModal = new BundleDownloadModal(modal, {
       challengeUrl: '{% url "storage:altcha_challenge" %}',
-      scriptsUrl: '{% url "storage:bundle_script_download" %}'
+      scriptsUrl: '{% url "storage:bundle_script_download" %}',
+      packageUrl: '{% url "storage:bundle_package_download" %}'
     });
   }
 });
