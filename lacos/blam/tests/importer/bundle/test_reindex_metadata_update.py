@@ -268,7 +268,7 @@ def _build_bundle_xml(
 
 
 @pytest.mark.django_db
-def test_bundle_creator_order_uses_xml_order_attribute():
+def test_bundle_creator_order_uses_xml_element_sequence():
     collection_link = "hdl:test/bundle-supporting-collection-order-attribute"
     CollectionImporter.import_from_xml(_build_supporting_collection_xml(collection_link))
     xml = _build_bundle_xml(
@@ -323,17 +323,17 @@ def test_bundle_creator_order_uses_xml_order_attribute():
         (link.order, link.bundlecreator.family_name)
         for link in ordered_links
     ] == [
-        (0, "OrderZero"),
-        (1, "OrderOne"),
-        (2, "ElementFirst"),
+        (0, "ElementFirst"),
+        (1, "OrderZero"),
+        (2, "OrderOne"),
     ]
 
     exported_xml = BundleExporter().export(bundle)
+    assert exported_xml.index("<CreatorFamilyName>ElementFirst</CreatorFamilyName>") < exported_xml.index(
+        "<CreatorFamilyName>OrderZero</CreatorFamilyName>"
+    )
     assert exported_xml.index("<CreatorFamilyName>OrderZero</CreatorFamilyName>") < exported_xml.index(
         "<CreatorFamilyName>OrderOne</CreatorFamilyName>"
-    )
-    assert exported_xml.index("<CreatorFamilyName>OrderOne</CreatorFamilyName>") < exported_xml.index(
-        "<CreatorFamilyName>ElementFirst</CreatorFamilyName>"
     )
 
 

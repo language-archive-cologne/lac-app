@@ -1,7 +1,5 @@
 """Helpers for keeping BLAM creator order consistent across import and export."""
 
-from typing import Any
-
 from django.db.models import F
 from django.db.models import QuerySet
 
@@ -18,18 +16,6 @@ from lacos.blam.models.collection.collection_publication_info import (
 
 PREFETCHED_COLLECTION_CREATOR_LINKS_ATTR = "ordered_collection_creator_links"
 PREFETCHED_BUNDLE_CREATOR_LINKS_ATTR = "ordered_bundle_creator_links"
-
-
-def get_schema_creator_order(creator_schema: Any, fallback_index: int) -> int:
-    """Return the BLAM XML creator Order value, or the element position fallback."""
-    order = getattr(creator_schema, "order", None)
-    if order is None:
-        return fallback_index
-
-    try:
-        return int(order)
-    except (TypeError, ValueError):
-        return fallback_index
 
 
 def order_creator_links(queryset: QuerySet) -> QuerySet:
