@@ -19,6 +19,7 @@ from lacos.blam.models.collection.collection_general_info import (
 from lacos.blam.models.collection.collection_publication_info import (
     CollectionCreator,
     CollectionPublicationInfo,
+    CollectionPublicationInfoCreator,
 )
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.explorer.map_utils import get_collection_map_markers
@@ -255,6 +256,50 @@ def test_collection_list_excludes_zero_bundle_collections(client):
     rendered_ids = {collection.pk for collection in response.context["collection_list"]}
     assert visible_collection.pk in rendered_ids
     assert empty_collection.pk not in rendered_ids
+
+
+@pytest.mark.django_db
+def test_collection_list_and_detail_display_creators_in_publication_order(client):
+    collection = _build_collection_graph(1)
+    publication_info = collection.publication_info.get()
+    publication_info.creators.clear()
+    creator_with_lower_pk = CollectionCreator.objects.create(
+        family_name="Alpha",
+        given_name="Ada",
+    )
+    creator_with_higher_pk = CollectionCreator.objects.create(
+        family_name="Zebra",
+        given_name="Zoe",
+    )
+    CollectionPublicationInfoCreator.objects.create(
+        collectionpublicationinfo=publication_info,
+        collectioncreator=creator_with_lower_pk,
+        order=1,
+    )
+    CollectionPublicationInfoCreator.objects.create(
+        collectionpublicationinfo=publication_info,
+        collectioncreator=creator_with_higher_pk,
+        order=0,
+    )
+
+    response = client.get(reverse("explorer:collection_list"))
+
+    assert response.status_code == 200
+    [rendered_collection] = response.context["collection_list"]
+    assert rendered_collection.list_creators_display == "Zoe Zebra, Ada Alpha"
+    assert "Zoe Zebra, Ada Alpha" in response.content.decode("utf-8")
+
+    detail_response = client.get(
+        reverse("explorer:collection_detail", kwargs={"pk": collection.pk})
+    )
+
+    assert detail_response.status_code == 200
+    detail_page = detail_response.content.decode("utf-8")
+    assert detail_response.context["publication_creators"] == [
+        creator_with_higher_pk,
+        creator_with_lower_pk,
+    ]
+    assert detail_page.index("Zoe Zebra") < detail_page.index("Ada Alpha")
 
 
 @pytest.mark.django_db

@@ -208,7 +208,7 @@
 
         <div>
           <h2 class="text-xl font-light text-base-content mb-4 tracking-tight">{% translate "Publication Information" %}</h2>
-          {% with publication=collection.publication_info.first %}
+          {% with publication=publication_info creators=publication_creators %}
           <dl class="space-y-4">
             {% if publication and publication.publication_year %}
               <div>
@@ -217,11 +217,11 @@
               </div>
             {% endif %}
 
-            {% if publication and publication.creators.all %}
+            {% if publication and creators %}
               <div>
                 <dt class="text-sm font-semibold text-base-content/70 mb-1.5">{% translate "Creators" %}</dt>
                 <dd class="text-sm text-base-content">
-                  {% for creator in publication.creators.all %}
+                  {% for creator in creators %}
                     <div class="{% if not forloop.first %}mt-3 pt-3 border-t border-base-200{% endif %}">
                       <div class="font-medium">
                         {% if creator.given_name %}{{ creator.given_name }} {% endif %}{{ creator.family_name }}
