@@ -24,7 +24,10 @@ from lacos.blam.models.collection.collection_general_info import (
     CollectionGeneralInfo,
     CollectionObjectLanguage,
 )
-from lacos.blam.models.collection.collection_publication_info import CollectionPublicationInfo
+from lacos.blam.models.collection.collection_publication_info import (
+    CollectionCreator,
+    CollectionPublicationInfo,
+)
 from lacos.blam.models.collection.collection_structural_info import (
     CollectionAdditionalMetadataFile,
 )
@@ -170,7 +173,9 @@ class CollectionListView(ListView):
             ),
             Prefetch(
                 'publication_info',
-                queryset=CollectionPublicationInfo.objects.prefetch_related('creators'),
+                queryset=CollectionPublicationInfo.objects.prefetch_related(
+                    Prefetch('creators', queryset=CollectionCreator.objects.order_by()),
+                ),
                 to_attr='prefetched_publication_info',
             ),
         ).annotate(
