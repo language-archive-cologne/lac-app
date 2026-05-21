@@ -499,6 +499,7 @@ UPLOAD_ALLOWED_CONTENT_TYPES = env.list(
         "application/octet-stream",
         "application/pdf",
         "application/vnd.ms-excel",
+        "application/vnd.ms-excel.sheet.macroenabled.12",
         "application/vnd.ms-powerpoint",
         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

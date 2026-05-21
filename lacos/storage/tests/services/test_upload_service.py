@@ -281,6 +281,17 @@ def test_generate_presigned_post_blocks_active_content_types(mock_upload_service
     assert "not allowed" in result["error"]
 
 
+def test_generate_presigned_post_accepts_macro_enabled_excel(mock_upload_service):
+    result = mock_upload_service.generate_presigned_post(
+        file_name="metadata_totoli.xlsm",
+        file_type="application/vnd.ms-excel.sheet.macroEnabled.12",
+        file_size=1024,
+    )
+
+    assert result["success"] is True
+    assert result["file_type"] == "application/vnd.ms-excel.sheet.macroenabled.12"
+
+
 def test_generate_batch_presigned_posts_rejects_traversal_paths(mock_upload_service):
     result = mock_upload_service.generate_batch_presigned_posts(
         files_metadata=[
@@ -379,6 +390,22 @@ def test_mark_upload_complete_rejects_invalid_pdf_signature(mock_s3, mock_upload
     assert result["success"] is False
     assert result["exists"] is True
     assert "does not match the uploaded content" in result["error"]
+
+
+def test_mark_upload_complete_accepts_macro_enabled_excel_zip_signature(mock_s3, mock_upload_service):
+    s3_key = f"{TEST_FOLDER_NAME}/metadata_totoli.xlsm"
+    mock_s3.put_object(
+        Bucket=TEST_BUCKET_NAME,
+        Key=s3_key,
+        Body=b"PK\x03\x04" + b"\x00" * 64,
+        ContentType="application/vnd.ms-excel.sheet.macroEnabled.12",
+    )
+
+    result = mock_upload_service.mark_upload_complete(s3_key)
+
+    assert result["success"] is True
+    assert result["content_type"] == "application/vnd.ms-excel.sheet.macroenabled.12"
+    assert result["detected_content_type"] == "application/vnd.ms-excel.sheet.macroenabled.12"
 
 
 def test_presigned_url_actual_upload(mock_s3, mock_upload_service):

@@ -29,6 +29,7 @@ STRICT_EXTENSION_CONTENT_TYPES = {
     ".tar": "application/x-tar",
     ".wav": "audio/wav",
     ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".xlsm": "application/vnd.ms-excel.sheet.macroenabled.12",
     ".xml": "application/xml",
     ".zip": "application/zip",
 }
@@ -47,6 +48,7 @@ SIGNATURE_REQUIRED_EXTENSIONS = {
     ".tar",
     ".wav",
     ".xlsx",
+    ".xlsm",
     ".zip",
 }
 
@@ -58,6 +60,7 @@ COMPATIBLE_CONTENT_TYPES = (
         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel.sheet.macroenabled.12",
     },
 )
 
