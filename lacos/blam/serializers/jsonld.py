@@ -7,6 +7,10 @@ using BLAM vocabulary terms rather than mapping to external vocabularies like Sc
 import json
 from typing import Any, Optional
 
+from lacos.blam.creator_ordering import (
+    ordered_bundle_creators,
+    ordered_collection_creators,
+)
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.collection.collection_repository import Collection
 
@@ -232,7 +236,7 @@ class CollectionJsonLdSerializer:
             data["DataProvider"] = info.data_provider
 
         # Creators
-        creators = info.creators.all()
+        creators = ordered_collection_creators(info)
         if creators:
             data["Creators"] = {
                 "Creator": [self._serialize_creator(c) for c in creators]
@@ -673,7 +677,7 @@ class BundleJsonLdSerializer:
             data["DataProvider"] = info.data_provider
 
         # Creators
-        creators = info.creators.all()
+        creators = ordered_bundle_creators(info)
         if creators:
             data["Creators"] = {
                 "Creator": [self._serialize_creator(c) for c in creators]

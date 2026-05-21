@@ -10,11 +10,13 @@ from blam_schemas.collection.blam_collection_repository_v1_2 import (
     CreatorNameIdentifierIdentifierType,
     ContributorNameIdentifierIdentifierType,
 )
+from lacos.blam.creator_ordering import ordered_collection_creator_links
 from lacos.blam.models.base_indentifiers import PersonIdentifierTypeChoices
 from lacos.blam.models.collection.collection_publication_info import (
     CollectionPublicationInfo,
     CollectionCreator,
     CollectionContributor,
+    CollectionPublicationInfoCreator,
 )
 
 # Type aliases
@@ -36,7 +38,9 @@ def export_publication_info(pub_info: CollectionPublicationInfo, repo) -> None:
     if pub_info.publication_year is not None:
         info.collection_publication_year = XmlPeriod(f"{pub_info.publication_year}")
     info.collection_data_provider = pub_info.data_provider
-    info.collection_creators = _export_creators(pub_info.creators.all())
+    info.collection_creators = _export_creators(
+        ordered_collection_creator_links(pub_info)
+    )
 
     if pub_info.contributors.exists():
         info.collection_contributors = _export_contributors(pub_info.contributors.all())
@@ -44,10 +48,16 @@ def export_publication_info(pub_info: CollectionPublicationInfo, repo) -> None:
     repo.collection_publication_info = info
 
 
-def _export_creators(creators: QuerySet[CollectionCreator]) -> CreatorsType:
+def _export_creators(
+    creator_links: list[CollectionPublicationInfoCreator],
+) -> CreatorsType:
     creators_data = CreatorsType()
     creators_data.collection_creator = [
-        _export_creator(creator, idx) for idx, creator in enumerate(creators)
+        _export_creator(
+            link.collectioncreator,
+            link.order if link.order is not None else idx,
+        )
+        for idx, link in enumerate(creator_links)
     ]
     return creators_data
 

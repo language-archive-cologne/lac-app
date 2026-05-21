@@ -114,7 +114,7 @@ def _create_public_collection(identifier: str) -> Collection:
     return collection
 
 
-def _add_publication_creators_with_distinct_xml_export_order(collection: Collection):
+def _add_publication_creators_with_distinct_metadata_order(collection: Collection):
     location = CollectionLocation.objects.create(
         geo_location="0, 0",
         location_name="Test Location",
@@ -174,23 +174,28 @@ def test_collection_detail_query_budget_with_resource_rich_bundles(client):
 
 
 @pytest.mark.django_db
-def test_collection_detail_creators_use_xml_export_order(client):
-    collection = _create_public_collection("hdl:11341/creator-xml-export-order")
-    publication_info, creators = _add_publication_creators_with_distinct_xml_export_order(
+def test_collection_detail_creators_use_metadata_order(client):
+    collection = _create_public_collection("hdl:11341/creator-metadata-order")
+    publication_info, creators = _add_publication_creators_with_distinct_metadata_order(
         collection
     )
 
     response = client.get(reverse("explorer:collection_detail", kwargs={"pk": collection.pk}))
 
     assert response.status_code == 200
-    expected_creators = list(publication_info.creators.all())
+    expected_creators = [
+        link.collectioncreator
+        for link in CollectionPublicationInfoCreator.objects.filter(
+            collectionpublicationinfo=publication_info
+        ).select_related("collectioncreator").order_by("order", "pk")
+    ]
     assert creators
     assert response.context["collection_creators"] == expected_creators
     page = response.content.decode("utf-8")
-    assert page.index("Christoph Bracks") < page.index("Nikolaus Himmelmann")
+    assert page.index("Nikolaus Himmelmann") < page.index("Christoph Bracks")
     assert response.context["citation"].startswith(
-        "Bracks, Christoph, Aleix Bardaji i Farre, Muhammad Hasan, "
-        "Sahlan Pogi & Nikolaus Himmelmann. 2024. Totoli."
+        "Himmelmann, Nikolaus, Sahlan Pogi, Muhammad Hasan, "
+        "Aleix Bardaji i Farre & Christoph Bracks. 2024. Totoli."
     )
 
 

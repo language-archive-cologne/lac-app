@@ -6,6 +6,8 @@ optional related data (publication info, admin info) without crashing.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from django.test import Client
 
@@ -20,6 +22,7 @@ from lacos.blam.models.bundle.bundle_header import BundleHeader
 from lacos.blam.models.bundle.bundle_publication_info import (
     BundleCreator,
     BundlePublicationInfo,
+    BundlePublicationInfoCreator,
 )
 from lacos.blam.models.collection.collection_general_info import (
     CollectionGeneralInfo,
@@ -30,6 +33,7 @@ from lacos.blam.models.collection.collection_header import CollectionHeader
 from lacos.blam.models.collection.collection_publication_info import (
     CollectionCreator,
     CollectionPublicationInfo,
+    CollectionPublicationInfoCreator,
 )
 
 
@@ -183,6 +187,40 @@ def test_bundle_jsonld_htmx_returns_html():
     assert b"metadata-content" in response.content
 
 
+@pytest.mark.django_db
+def test_bundle_jsonld_uses_metadata_creator_order():
+    bundle = _create_bundle(with_publication=False)
+    pub_info = BundlePublicationInfo.objects.create(
+        bundle=bundle,
+        publication_year=2024,
+        data_provider="LAC",
+        identifier="BID-001",
+        identifier_type="HANDLE",
+    )
+    first_element = BundleCreator.objects.create(family_name="ElementFirst")
+    order_zero = BundleCreator.objects.create(family_name="OrderZero")
+    BundlePublicationInfoCreator.objects.create(
+        bundlepublicationinfo=pub_info,
+        bundlecreator=first_element,
+        order=1,
+    )
+    BundlePublicationInfoCreator.objects.create(
+        bundlepublicationinfo=pub_info,
+        bundlecreator=order_zero,
+        order=0,
+    )
+
+    response = Client().get(f"/bundles/{bundle.identifier}/metadata.jsonld")
+
+    assert response.status_code == 200
+    data = json.loads(response.content)
+    creators = data["BundlePublicationInfo"]["Creators"]["Creator"]
+    assert [creator["CreatorFamilyName"] for creator in creators] == [
+        "OrderZero",
+        "ElementFirst",
+    ]
+
+
 # --- Collection XML export tests ---
 
 
@@ -235,3 +273,35 @@ def test_collection_jsonld_htmx_returns_html():
     )
     assert response.status_code == 200
     assert b"metadata-content" in response.content
+
+
+@pytest.mark.django_db
+def test_collection_jsonld_uses_metadata_creator_order():
+    collection = _create_collection(with_publication=False)
+    pub_info = CollectionPublicationInfo.objects.create(
+        collection=collection,
+        publication_year=2024,
+        data_provider="LAC",
+    )
+    first_element = CollectionCreator.objects.create(family_name="ElementFirst")
+    order_zero = CollectionCreator.objects.create(family_name="OrderZero")
+    CollectionPublicationInfoCreator.objects.create(
+        collectionpublicationinfo=pub_info,
+        collectioncreator=first_element,
+        order=1,
+    )
+    CollectionPublicationInfoCreator.objects.create(
+        collectionpublicationinfo=pub_info,
+        collectioncreator=order_zero,
+        order=0,
+    )
+
+    response = Client().get(f"/collections/{collection.identifier}/metadata.jsonld")
+
+    assert response.status_code == 200
+    data = json.loads(response.content)
+    creators = data["CollectionPublicationInfo"]["Creators"]["Creator"]
+    assert [creator["CreatorFamilyName"] for creator in creators] == [
+        "OrderZero",
+        "ElementFirst",
+    ]

@@ -5,6 +5,7 @@ from django.db.models import QuerySet
 from xsdata.models.datatype import XmlPeriod
 
 from lacos.blam.models.base_indentifiers import PersonIdentifierTypeChoices
+from lacos.blam.creator_ordering import ordered_bundle_creator_links
 from blam_schemas.bundle.blam_bundle_repository_v1_1 import (
     Cmd,
     CreatorNameIdentifierIdentifierType,
@@ -14,6 +15,7 @@ from lacos.blam.models.bundle.bundle_publication_info import (
     BundlePublicationInfo,
     BundleCreator,
     BundleContributor,
+    BundlePublicationInfoCreator,
 )
 
 # Type aliases for nested classes from the schema
@@ -35,7 +37,9 @@ def export_publication_info(publication_info: BundlePublicationInfo, cmd_data: C
     if publication_info.publication_year is not None:
         bundle_info.bundle_publication_year = XmlPeriod(str(publication_info.publication_year))
     bundle_info.bundle_data_provider = publication_info.data_provider
-    bundle_info.bundle_creators = export_creators(publication_info.creators.all())
+    bundle_info.bundle_creators = export_creators(
+        ordered_bundle_creator_links(publication_info)
+    )
 
     if publication_info.contributors.exists():
         bundle_info.bundle_contributors = export_contributors(publication_info.contributors.all())
@@ -43,10 +47,18 @@ def export_publication_info(publication_info: BundlePublicationInfo, cmd_data: C
     cmd_data.components.blam_bundle_repository_v1_1.bundle_publication_info = bundle_info
 
 
-def export_creators(creators: QuerySet) -> BundleCreatorsType:
+def export_creators(
+    creator_links: list[BundlePublicationInfoCreator],
+) -> BundleCreatorsType:
     """Export creators to schema format."""
     creators_data = BundleCreatorsType()
-    creators_data.bundle_creator = [export_creator(creator, idx) for idx, creator in enumerate(creators)]
+    creators_data.bundle_creator = [
+        export_creator(
+            link.bundlecreator,
+            link.order if link.order is not None else idx,
+        )
+        for idx, link in enumerate(creator_links)
+    ]
     return creators_data
 
 
