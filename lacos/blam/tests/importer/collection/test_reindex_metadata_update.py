@@ -190,7 +190,7 @@ def _build_collection_xml(
 
 
 @pytest.mark.django_db
-def test_collection_creator_order_uses_xml_element_sequence():
+def test_collection_creator_order_uses_xml_order_attribute():
     xml = _build_collection_xml(
         self_link="hdl:test/collection-creator-order-attribute",
         creator_affiliation="University Stable",
@@ -241,17 +241,17 @@ def test_collection_creator_order_uses_xml_element_sequence():
         (link.order, link.collectioncreator.family_name)
         for link in ordered_links
     ] == [
-        (0, "ElementFirst"),
-        (1, "OrderZero"),
-        (2, "OrderOne"),
+        (0, "OrderZero"),
+        (1, "OrderOne"),
+        (2, "ElementFirst"),
     ]
 
     exported_xml = CollectionExporter().export(collection)
-    assert exported_xml.index("<CreatorFamilyName>ElementFirst</CreatorFamilyName>") < exported_xml.index(
-        "<CreatorFamilyName>OrderZero</CreatorFamilyName>"
-    )
     assert exported_xml.index("<CreatorFamilyName>OrderZero</CreatorFamilyName>") < exported_xml.index(
         "<CreatorFamilyName>OrderOne</CreatorFamilyName>"
+    )
+    assert exported_xml.index("<CreatorFamilyName>OrderOne</CreatorFamilyName>") < exported_xml.index(
+        "<CreatorFamilyName>ElementFirst</CreatorFamilyName>"
     )
 
 

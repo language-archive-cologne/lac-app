@@ -1,5 +1,6 @@
 from typing import Any
 from django.db import transaction
+from lacos.blam.creator_ordering import get_schema_creator_order
 from lacos.blam.mappers.import_cleanup import detach_parent_m2m_children
 from lacos.blam.models.collection.collection_publication_info import (
     CollectionPublicationInfo,
@@ -162,7 +163,7 @@ def import_creators(publication_info: CollectionPublicationInfo, publication_inf
             CollectionPublicationInfoCreator.objects.create(
                 collectionpublicationinfo=publication_info,
                 collectioncreator=creator,
-                order=idx,
+                order=get_schema_creator_order(creator_schema, idx),
             )
 
 

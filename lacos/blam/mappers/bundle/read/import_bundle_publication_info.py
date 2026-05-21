@@ -1,5 +1,6 @@
 from typing import Optional, List
 from django.db import transaction
+from lacos.blam.creator_ordering import get_schema_creator_order
 from lacos.blam.mappers.import_cleanup import (
     delete_unreferenced_records,
     detach_parent_m2m_children,
@@ -181,7 +182,7 @@ def import_creators(bundle_pub_info: BundlePublicationInfo, creators_data: List)
         BundlePublicationInfoCreator.objects.create(
             bundlepublicationinfo=bundle_pub_info,
             bundlecreator=creator,
-            order=idx,
+            order=get_schema_creator_order(creator_data, idx),
         )
 
 
