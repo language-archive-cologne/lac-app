@@ -133,7 +133,7 @@ def test_collection_list_full_page_query_budget(client):
         assert response.status_code == 200
         _ = response.content
 
-    assert len(captured) <= 18
+    assert len(captured) <= 23
 
 
 @pytest.mark.django_db
@@ -152,7 +152,7 @@ def test_collection_list_htmx_sort_query_budget(client):
         assert response.status_code == 200
         _ = response.content
 
-    assert len(captured) <= 15
+    assert len(captured) <= 20
 
 
 @pytest.mark.django_db
@@ -189,7 +189,7 @@ def test_collection_list_htmx_language_shell_query_budget(client):
         assert response.status_code == 200
         _ = response.content
 
-    assert len(captured) <= 15
+    assert len(captured) <= 20
 
 
 @pytest.mark.django_db

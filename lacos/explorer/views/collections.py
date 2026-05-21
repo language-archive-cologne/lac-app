@@ -7,7 +7,6 @@ from urllib.parse import unquote
 from django.conf import settings
 from django.core.cache import cache
 from django.contrib.contenttypes.models import ContentType
-from django.db import connection
 from django.db.models import Count, Min, Prefetch, Q
 from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render
@@ -88,43 +87,6 @@ def _get_collection_creators_in_xml_export_order(publication_info):
         return []
 
     return list(publication_info.creators.all())
-
-
-def _get_collection_creator_display_by_publication_info_id(publication_info_ids):
-    publication_info_ids = [pub_id for pub_id in publication_info_ids if pub_id]
-    if not publication_info_ids:
-        return {}
-
-    placeholders = ", ".join(["%s"] * len(publication_info_ids))
-    with connection.cursor() as cursor:
-        cursor.execute(
-            f"""
-            SELECT
-                link.collectionpublicationinfo_id,
-                creator.given_name,
-                creator.family_name
-            FROM blam_collectioncreator creator
-            INNER JOIN blam_collectionpublicationinfo_creators link
-                ON creator.id = link.collectioncreator_id
-            WHERE link.collectionpublicationinfo_id IN ({placeholders})
-            """,
-            publication_info_ids,
-        )
-        rows = cursor.fetchall()
-
-    creator_display_by_publication_info_id = {
-        str(publication_info_id): []
-        for publication_info_id in publication_info_ids
-    }
-    for publication_info_id, given_name, family_name in rows:
-        display_name = " ".join(part for part in [given_name, family_name] if part)
-        if display_name:
-            creator_display_by_publication_info_id[str(publication_info_id)].append(display_name)
-
-    return {
-        publication_info_id: ", ".join(display_names)
-        for publication_info_id, display_names in creator_display_by_publication_info_id.items()
-    }
 
 
 def _get_first_collection_publication_info(collection):
@@ -274,7 +236,6 @@ class CollectionListView(ListView):
         collection_list = list(context['collection_list'])
         context['collection_list'] = collection_list
         collection_ids: list[str] = []
-        publication_info_by_collection_id = {}
         for collection in collection_list:
             # Use prefetched data to avoid N+1 queries
             general_info_list = getattr(collection, 'prefetched_general_info', None)
@@ -316,27 +277,21 @@ class CollectionListView(ListView):
             publication_info = (
                 publication_info_list[0] if publication_info_list else collection.get_publication_info
             )
-            publication_info_by_collection_id[str(collection.pk)] = publication_info
             collection.list_publication_year = (
                 publication_info.publication_year if publication_info else None
             )
             collection_ids.append(str(collection.pk))
-
-        creator_display_by_publication_info_id = (
-            _get_collection_creator_display_by_publication_info_id(
-                [
-                    publication_info.pk
-                    for publication_info in publication_info_by_collection_id.values()
-                    if publication_info
-                ]
-            )
-        )
-        for collection in collection_list:
-            publication_info = publication_info_by_collection_id.get(str(collection.pk))
+            creators = _get_collection_creators_in_xml_export_order(publication_info)
             collection.list_creators_display = (
-                creator_display_by_publication_info_id.get(str(publication_info.pk), "")
-                if publication_info
-                else ""
+                ", ".join(
+                    " ".join(
+                        part
+                        for part in [creator.given_name, creator.family_name]
+                        if part
+                    )
+                    for creator in creators
+                    if creator.given_name or creator.family_name
+                )
             )
 
         bundle_access_summaries = summarize_bundle_access_levels_by_collection_ids(collection_ids)
