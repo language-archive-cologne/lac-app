@@ -28,9 +28,9 @@
       "latitude": {{ collection.geo_location.y|unlocalize }},
       "longitude": {{ collection.geo_location.x|unlocalize }}
     }{% endif %}
-  }{% endif %}{% if collection.publication_info.first %},
-  {% if collection.publication_info.first.publication_year %}"datePublished": "{{ collection.publication_info.first.publication_year }}",{% endif %}
-  {% if collection.publication_info.first.creators.all %}"creator": [{% for creator in collection.publication_info.first.creators.all %}{
+  }{% endif %}{% if collection_publication %},
+  {% if collection_publication.publication_year %}"datePublished": "{{ collection_publication.publication_year }}",{% endif %}
+  {% if collection_creators %}"creator": [{% for creator in collection_creators %}{
     "@type": "Person",
     "name": "{{ creator.given_name|escapejs }} {{ creator.family_name|escapejs }}"{% if creator.affiliation %},
     "affiliation": {

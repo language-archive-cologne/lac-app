@@ -24,7 +24,10 @@ from lacos.blam.models.collection.collection_general_info import (
     CollectionGeneralInfo,
     CollectionObjectLanguage,
 )
-from lacos.blam.models.collection.collection_publication_info import CollectionPublicationInfo
+from lacos.blam.models.collection.collection_publication_info import (
+    CollectionPublicationInfo,
+    CollectionPublicationInfoCreator,
+)
 from lacos.blam.models.collection.collection_structural_info import (
     CollectionAdditionalMetadataFile,
 )
@@ -69,6 +72,7 @@ COLLECTION_PERMISSION_DENIED_MESSAGE = _(
     "This collection is restricted. If you believe you should have access, "
     "please contact lac-helpdesk@uni-koeln.de."
 )
+RELATION_ORDERED_CREATOR_LINKS_ATTR = "relation_ordered_creator_links"
 
 
 def _get_collection_by_pk_or_handle(queryset, pk=None, handle=None):
@@ -80,6 +84,32 @@ def _get_collection_by_pk_or_handle(queryset, pk=None, handle=None):
             collection = queryset.filter(identifier=f"hdl:{handle}").first()
         return collection
     raise Http404("No collection identifier provided")
+
+
+def _relation_ordered_creator_links_prefetch() -> Prefetch:
+    return Prefetch(
+        "collectionpublicationinfocreator_set",
+        queryset=CollectionPublicationInfoCreator.objects.select_related(
+            "collectioncreator",
+        ).order_by("pk"),
+        to_attr=RELATION_ORDERED_CREATOR_LINKS_ATTR,
+    )
+
+
+def _get_collection_creators_in_relation_order(publication_info):
+    if not publication_info:
+        return []
+
+    creator_links = getattr(publication_info, RELATION_ORDERED_CREATOR_LINKS_ATTR, None)
+    if creator_links is not None:
+        return [creator_link.collectioncreator for creator_link in creator_links]
+
+    return list(publication_info.creators.order_by("collectionpublicationinfocreator__pk", "pk"))
+
+
+def _get_first_collection_publication_info(collection):
+    publication_infos = list(collection.publication_info.all())
+    return publication_infos[0] if publication_infos else None
 
 
 class CollectionLookupPermissionMixin(ACLPermissionMixin):
@@ -160,7 +190,9 @@ class CollectionListView(ListView):
             ),
             Prefetch(
                 'publication_info',
-                queryset=CollectionPublicationInfo.objects.prefetch_related('creators'),
+                queryset=CollectionPublicationInfo.objects.prefetch_related(
+                    _relation_ordered_creator_links_prefetch(),
+                ),
                 to_attr='prefetched_publication_info',
             ),
         ).annotate(
@@ -268,7 +300,7 @@ class CollectionListView(ListView):
             collection.list_publication_year = (
                 publication_info.publication_year if publication_info else None
             )
-            creators = list(publication_info.creators.all()) if publication_info else []
+            creators = _get_collection_creators_in_relation_order(publication_info)
             collection.list_creators_display = ", ".join(
                 " ".join(
                     part
@@ -494,9 +526,13 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
             "general_info",
             "general_info__object_languages",
             "general_info__keywords",
-            "publication_info",
-            "publication_info__creators",
-            "publication_info__contributors",
+            Prefetch(
+                "publication_info",
+                queryset=CollectionPublicationInfo.objects.prefetch_related(
+                    _relation_ordered_creator_links_prefetch(),
+                    "contributors",
+                ),
+            ),
             "structural_info",
             "structural_info__additional_metadata_files",
             "administrative_info",
@@ -505,6 +541,10 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        publication_info = _get_first_collection_publication_info(self.object)
+        collection_creators = _get_collection_creators_in_relation_order(publication_info)
+        context["collection_publication"] = publication_info
+        context["collection_creators"] = collection_creators
 
         if self.object.get_general_info and self.object.get_general_info.location:
             location = self.object.get_general_info.location
@@ -642,11 +682,11 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
             context["content_licenses"] = self.object.administrative_info.first().licenses.all()
 
         # Citation
-        context['citation'] = self._format_citation()
+        context['citation'] = self._format_citation(publication_info, collection_creators)
 
         return context
 
-    def _format_citation(self) -> str:
+    def _format_citation(self, pub_info=None, creators=None) -> str:
         """
         Format citation for the collection.
 
@@ -655,10 +695,9 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
         """
         parts = []
 
-        # Get creators from publication info
-        pub_info = self.object.publication_info.first()
         if pub_info:
-            creators = list(pub_info.creators.all())
+            if creators is None:
+                creators = _get_collection_creators_in_relation_order(pub_info)
 
             if creators:
                 creator_names = []

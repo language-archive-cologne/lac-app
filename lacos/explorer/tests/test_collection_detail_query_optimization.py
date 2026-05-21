@@ -13,6 +13,15 @@ from lacos.blam.models.bundle.bundle_structural_info import (
     WrittenResource,
 )
 from lacos.blam.models.collection.collection_repository import Collection
+from lacos.blam.models.collection.collection_general_info import (
+    CollectionGeneralInfo,
+    CollectionLocation,
+)
+from lacos.blam.models.collection.collection_publication_info import (
+    CollectionCreator,
+    CollectionPublicationInfo,
+    CollectionPublicationInfoCreator,
+)
 from lacos.storage.constants import ACL_LEVEL_PUBLIC
 from lacos.storage.models.acl_permissions import ACLPermissions
 from lacos.storage.models.s3_resource_location import S3ResourceLocation
@@ -93,6 +102,54 @@ def _create_resource_rich_bundle(collection: Collection, resource_count: int) ->
     return bundle
 
 
+def _create_public_collection(identifier: str) -> Collection:
+    collection = Collection.objects.create(identifier=identifier)
+    collection_ct = ContentType.objects.get_for_model(Collection)
+    ACLPermissions.objects.create(
+        content_type=collection_ct,
+        object_id=str(collection.pk),
+        access_level=ACL_LEVEL_PUBLIC,
+        permissions_data=[{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}],
+    )
+    return collection
+
+
+def _add_publication_creators_with_wrong_through_order(collection: Collection):
+    location = CollectionLocation.objects.create(
+        geo_location="0, 0",
+        location_name="Test Location",
+        region_name="Test Region",
+        country_name="Test Country",
+        country_code="TC",
+    )
+    CollectionGeneralInfo.objects.create(
+        collection=collection,
+        display_title="Totoli",
+        description="Totoli test collection",
+        version="1.0",
+        location=location,
+    )
+    publication_info = CollectionPublicationInfo.objects.create(
+        collection=collection,
+        publication_year=2024,
+        data_provider="LAC",
+    )
+    creators = [
+        CollectionCreator.objects.create(family_name="Bracks", given_name="Christoph"),
+        CollectionCreator.objects.create(family_name="Bardaji i Farre", given_name="Aleix"),
+        CollectionCreator.objects.create(family_name="Hasan", given_name="Muhammad"),
+        CollectionCreator.objects.create(family_name="Pogi", given_name="Sahlan"),
+        CollectionCreator.objects.create(family_name="Himmelmann", given_name="Nikolaus"),
+    ]
+    for order, creator in zip([4, 3, 2, 1, 0], creators, strict=True):
+        CollectionPublicationInfoCreator.objects.create(
+            collectionpublicationinfo=publication_info,
+            collectioncreator=creator,
+            order=order,
+        )
+    return publication_info, creators
+
+
 @pytest.mark.django_db
 def test_collection_detail_query_budget_with_resource_rich_bundles(client):
     collection = Collection.objects.create(identifier="hdl:11341/detail-query-budget")
@@ -114,6 +171,32 @@ def test_collection_detail_query_budget_with_resource_rich_bundles(client):
         _ = response.content
 
     assert len(captured) <= 40
+
+
+@pytest.mark.django_db
+def test_collection_detail_creators_use_relation_row_order(client):
+    collection = _create_public_collection("hdl:11341/creator-relation-order")
+    _add_publication_creators_with_wrong_through_order(collection)
+
+    response = client.get(reverse("explorer:collection_detail", kwargs={"pk": collection.pk}))
+
+    assert response.status_code == 200
+    assert [
+        f"{creator.given_name} {creator.family_name}"
+        for creator in response.context["collection_creators"]
+    ] == [
+        "Christoph Bracks",
+        "Aleix Bardaji i Farre",
+        "Muhammad Hasan",
+        "Sahlan Pogi",
+        "Nikolaus Himmelmann",
+    ]
+    page = response.content.decode("utf-8")
+    assert page.index("Christoph Bracks") < page.index("Nikolaus Himmelmann")
+    assert response.context["citation"].startswith(
+        "Bracks, Christoph, Aleix Bardaji i Farre, Muhammad Hasan, "
+        "Sahlan Pogi & Nikolaus Himmelmann. 2024. Totoli."
+    )
 
 
 @pytest.mark.django_db
