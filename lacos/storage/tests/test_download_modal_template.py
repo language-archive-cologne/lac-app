@@ -21,5 +21,25 @@ def test_bundle_download_modal_warns_about_package_size_limit(rf):
     )
 
     assert "Packages larger than 25 MB cannot be created" in html
-    assert "run the generated script for larger downloads" in html
+    assert "Use Scripts for larger downloads" in html
+    assert "Switch to scripts" in html
+    assert 'id="btn-package-limit-use-scripts"' in html
+    assert 'data-package-max-bytes="26214400"' in html
+    assert "This selection is larger than 25 MB" in html
     assert 'id="bundle-download-total-size"' in html
+
+
+def test_bundle_download_modal_explains_scripts_for_nontechnical_users(rf):
+    request = rf.get("/")
+    request.user = AnonymousUser()
+
+    html = render_to_string(
+        "dashboard/partials/bundle_download_modal.html",
+        request=request,
+    )
+
+    assert "This creates a small helper file" in html
+    assert "Choose Windows or macOS / Linux below" in html
+    assert "Download the helper file" in html
+    assert "paste the run command" in html
+    assert "command-line tools" not in html

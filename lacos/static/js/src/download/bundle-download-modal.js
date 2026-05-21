@@ -21,6 +21,9 @@ export class BundleDownloadModal {
         this.challengeUrl = options.challengeUrl;
         this.scriptsUrl = options.scriptsUrl;
         this.packageUrl = options.packageUrl;
+        this.packageMaxBytes = this._normalizeSize(
+            options.packageMaxBytes ?? modalElement.dataset.packageMaxBytes,
+        );
 
         // State
         this.bundleId = null;
@@ -32,6 +35,7 @@ export class BundleDownloadModal {
         this.scriptsData = null;
         this.selectedMethod = 'package';
         this.selectedScriptTab = 'powershell';
+        this.isPackageAvailable = true;
 
         // Cache DOM elements
         this._cacheElements();
@@ -62,6 +66,8 @@ export class BundleDownloadModal {
             error: this.modal.querySelector('#bundle-download-error'),
             errorMessage: this.modal.querySelector('#bundle-error-message'),
             btnStartPackage: this.modal.querySelector('#btn-start-package'),
+            btnPackageLimitUseScripts: this.modal.querySelector('#btn-package-limit-use-scripts'),
+            packageDisabledNote: this.modal.querySelector('#bundle-package-disabled-note'),
             packageResult: this.modal.querySelector('#bundle-package-result'),
             packageMessage: this.modal.querySelector('#bundle-package-message'),
             btnPackageUseScripts: this.modal.querySelector('#btn-package-use-scripts'),
@@ -104,6 +110,10 @@ export class BundleDownloadModal {
         this.elements.btnPackageUseScripts?.addEventListener('click', () => {
             this._reset({ method: 'scripts', preserveSelection: true });
         });
+        this.elements.btnPackageLimitUseScripts?.addEventListener('click', () => {
+            this._setSelectedMethod('scripts');
+            this.elements.btnStartScripts?.focus();
+        });
 
         this.elements.methodTabs.forEach((tab) => {
             tab.addEventListener('click', () => {
@@ -145,6 +155,7 @@ export class BundleDownloadModal {
         this.totalSizeBytes = this._normalizeSize(options.totalSizeBytes);
 
         this._updateSummary(resourceIds.length, this.totalSizeBytes, entityName);
+        this._syncPackageAvailability();
 
         this.modal.showModal();
     }
@@ -170,6 +181,7 @@ export class BundleDownloadModal {
         this.totalSizeBytes = this._normalizeSize(options.totalSizeBytes);
 
         this._updateSummary(totalCount, this.totalSizeBytes, entityName);
+        this._syncPackageAvailability();
 
         this.modal.showModal();
     }
@@ -214,6 +226,7 @@ export class BundleDownloadModal {
             this.elements.altchaWidget.reset();
         }
 
+        this._syncPackageAvailability();
         this._setSelectedMethod(nextMethod);
         this._setScriptTab('powershell');
     }
@@ -257,12 +270,26 @@ export class BundleDownloadModal {
      * @private
      */
     _setSelectedMethod(method) {
-        this.selectedMethod = method === 'scripts' ? 'scripts' : 'package';
+        const requestedMethod = method === 'scripts' ? 'scripts' : 'package';
+        this.selectedMethod = requestedMethod === 'package' && !this.isPackageAvailable
+            ? 'scripts'
+            : requestedMethod;
 
         this.elements.methodTabs.forEach((tab) => {
             const isSelected = tab.dataset.downloadTab === this.selectedMethod;
+            const isDisabled = tab.dataset.downloadTab === 'package' && !this.isPackageAvailable;
             tab.classList.toggle('tab-active', isSelected);
+            tab.classList.toggle('border-primary', isSelected);
+            tab.classList.toggle('bg-primary', isSelected);
+            tab.classList.toggle('text-primary-content', isSelected);
+            tab.classList.toggle('border-base-300', !isSelected);
+            tab.classList.toggle('bg-base-100', !isSelected);
+            tab.classList.toggle('text-base-content', !isSelected);
+            tab.classList.toggle('opacity-60', isDisabled);
+            tab.classList.toggle('cursor-not-allowed', isDisabled);
+            tab.disabled = isDisabled;
             tab.setAttribute('aria-selected', String(isSelected));
+            tab.setAttribute('aria-disabled', String(isDisabled));
         });
 
         this.elements.methodPanels.forEach((panel) => {
@@ -274,6 +301,23 @@ export class BundleDownloadModal {
             this.elements.altchaText.textContent = this.selectedMethod === 'scripts'
                 ? this.elements.altchaText.dataset[textKey] || 'Complete verification to generate scripts:'
                 : this.elements.altchaText.dataset[textKey] || 'Complete verification to start the package download:';
+        }
+    }
+
+    /**
+     * Enable or disable package downloads for the current selection size.
+     * @private
+     */
+    _syncPackageAvailability() {
+        this.isPackageAvailable = !this.packageMaxBytes || this.totalSizeBytes <= this.packageMaxBytes;
+        if (this.elements.btnStartPackage) {
+            this.elements.btnStartPackage.disabled = !this.isPackageAvailable;
+        }
+        this.elements.btnPackageLimitUseScripts?.classList.toggle('hidden', this.isPackageAvailable);
+        this.elements.packageDisabledNote?.classList.toggle('hidden', this.isPackageAvailable);
+
+        if (!this.isPackageAvailable && this.selectedMethod === 'package') {
+            this._setSelectedMethod('scripts');
         }
     }
 

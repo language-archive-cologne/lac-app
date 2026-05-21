@@ -2,9 +2,9 @@
 
 import { BundleDownloadModal } from '../src/download/bundle-download-modal.js';
 
-function modalMarkup() {
+function modalMarkup({ packageMaxBytes = 524288000 } = {}) {
     return `
-        <dialog id="bundle-download-modal">
+        <dialog id="bundle-download-modal" data-package-max-bytes="${packageMaxBytes}">
             <h3 id="bundle-download-title"></h3>
             <input type="hidden" name="csrfmiddlewaretoken" value="csrf-token">
             <div id="bundle-download-summary"></div>
@@ -16,8 +16,10 @@ function modalMarkup() {
                 <button type="button" class="tab" data-download-tab="scripts"></button>
                 <div id="bundle-package-panel" data-download-panel="package">
                     <button id="btn-start-package" type="button"></button>
+                    <button id="btn-package-limit-use-scripts" type="button"></button>
                 </div>
                 <div id="bundle-scripts-panel" data-download-panel="scripts" class="hidden">
+                    <div id="bundle-package-disabled-note" class="hidden"></div>
                     <button id="btn-start-scripts" type="button"></button>
                 </div>
             </div>
@@ -67,8 +69,8 @@ function modalMarkup() {
     `;
 }
 
-function makeModal() {
-    document.body.innerHTML = modalMarkup();
+function makeModal(markupOptions = {}) {
+    document.body.innerHTML = modalMarkup(markupOptions);
     const modal = document.getElementById('bundle-download-modal');
     modal.showModal = jest.fn();
     modal.close = jest.fn();
@@ -170,6 +172,48 @@ describe('BundleDownloadModal', () => {
         });
         expect(document.getElementById('bundle-script-options').classList.contains('hidden')).toBe(false);
         expect(document.getElementById('bundle-download-total-size').textContent).toBe('2 KB');
+    });
+
+    test('package size warning button switches directly to scripts', () => {
+        const modal = makeModal();
+        modal.open('bundle-1', ['res-1'], 'Bundle');
+
+        document.getElementById('btn-package-limit-use-scripts').click();
+
+        expect(modal.selectedMethod).toBe('scripts');
+        expect(document.querySelector('[data-download-tab="scripts"]').classList.contains('tab-active')).toBe(true);
+        expect(document.querySelector('[data-download-tab="scripts"]').classList.contains('bg-primary')).toBe(true);
+        expect(document.querySelector('[data-download-tab="package"]').classList.contains('bg-base-100')).toBe(true);
+        expect(document.getElementById('bundle-scripts-panel').classList.contains('hidden')).toBe(false);
+        expect(document.getElementById('bundle-package-panel').classList.contains('hidden')).toBe(true);
+    });
+
+    test('oversized selections disable package downloads and default to scripts', async () => {
+        const modal = makeModal({ packageMaxBytes: 1024 });
+        fetch.mockResolvedValue({
+            ok: true,
+            json: jest.fn().mockResolvedValue({
+                expires_at: '2026-05-20T12:00:00Z',
+                file_count: 1,
+                scripts: { manifest: { files: [] } },
+                errors: [],
+            }),
+        });
+
+        modal.open('bundle-1', ['res-1'], 'Bundle', { totalSizeBytes: 2048 });
+
+        expect(modal.selectedMethod).toBe('scripts');
+        expect(document.querySelector('[data-download-tab="package"]').disabled).toBe(true);
+        expect(document.getElementById('btn-start-package').disabled).toBe(true);
+        expect(document.getElementById('bundle-package-disabled-note').classList.contains('hidden')).toBe(false);
+        expect(document.getElementById('bundle-scripts-panel').classList.contains('hidden')).toBe(false);
+
+        dispatchVerified();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(fetch).toHaveBeenCalledWith('/scripts/', expect.objectContaining({ method: 'POST' }));
+        expect(fetch).not.toHaveBeenCalledWith('/package/', expect.anything());
     });
 
     test('shows selected total size in the modal summary', () => {

@@ -2,7 +2,11 @@
 {# Bundle Download Modal with ALTCHA Protection #}
 {# Include this partial in bundle detail pages for multi-file download functionality #}
 
-<dialog id="bundle-download-modal" class="modal">
+<dialog
+  id="bundle-download-modal"
+  class="modal"
+  data-package-max-bytes="{{ DOWNLOAD_CLIENT_CONFIG.package_max_bytes|default:524288000 }}"
+>
   <div class="modal-box max-w-3xl relative">
     {# Close button #}
     <form method="dialog">
@@ -28,12 +32,14 @@
 
     {# Download method tabs #}
     <div id="bundle-download-methods" class="mb-4">
-      <div role="tablist" class="tabs tabs-boxed w-full">
-        <button type="button" class="tab tab-active flex-1" role="tab" aria-selected="true" aria-controls="bundle-package-panel" data-download-tab="package">
-          {% translate "Package" %}
+      <div role="tablist" class="grid grid-cols-1 gap-2 sm:grid-cols-2" aria-label="{% translate 'Download method' %}">
+        <button type="button" class="tab tab-active flex h-auto min-h-16 flex-col items-start justify-center rounded-lg border border-primary bg-primary px-4 py-3 text-left text-primary-content" role="tab" aria-selected="true" aria-controls="bundle-package-panel" data-download-tab="package">
+          <span class="font-semibold">{% translate "Package" %}</span>
+          <span class="text-xs opacity-80">{% translate "One TAR file, up to the size limit" %}</span>
         </button>
-        <button type="button" class="tab flex-1" role="tab" aria-selected="false" aria-controls="bundle-scripts-panel" data-download-tab="scripts">
-          {% translate "Scripts" %}
+        <button type="button" class="tab flex h-auto min-h-16 flex-col items-start justify-center rounded-lg border border-base-300 bg-base-100 px-4 py-3 text-left text-base-content" role="tab" aria-selected="false" aria-controls="bundle-scripts-panel" data-download-tab="scripts">
+          <span class="font-semibold">{% translate "Scripts" %}</span>
+          <span class="text-xs opacity-70">{% translate "Recommended for large downloads" %}</span>
         </button>
       </div>
 
@@ -50,19 +56,34 @@
             {% translate "Download package" %}
           </button>
         </div>
-        <div class="alert alert-warning mt-3 text-sm">
+        <div class="alert alert-warning mt-3 text-sm sm:items-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+          </svg>
+          <div class="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              {% blocktranslate with limit=DOWNLOAD_CLIENT_CONFIG.package_max_bytes_label|default:"500 MB" trimmed %}
+                Packages larger than {{ limit }} cannot be created. Use Scripts for larger downloads.
+              {% endblocktranslate %}
+            </span>
+            <button id="btn-package-limit-use-scripts" type="button" class="btn btn-warning btn-sm whitespace-nowrap">
+              {% translate "Switch to scripts" %}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="bundle-scripts-panel" role="tabpanel" data-download-panel="scripts" class="hidden mt-3 rounded-lg border border-base-300 p-3">
+        <div id="bundle-package-disabled-note" class="hidden alert alert-warning mb-3 text-sm">
           <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
           </svg>
           <span>
             {% blocktranslate with limit=DOWNLOAD_CLIENT_CONFIG.package_max_bytes_label|default:"500 MB" trimmed %}
-              Packages larger than {{ limit }} cannot be created. Use Scripts and run the generated script for larger downloads.
+              This selection is larger than {{ limit }}, so package download is disabled. Use scripts to download these files.
             {% endblocktranslate %}
           </span>
         </div>
-      </div>
-
-      <div id="bundle-scripts-panel" role="tabpanel" data-download-panel="scripts" class="hidden mt-3 rounded-lg border border-base-300 p-3">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div class="text-sm">
             <p class="font-medium">{% translate "Download with scripts" %}</p>
@@ -146,12 +167,13 @@
       <details class="collapse collapse-arrow bg-base-200">
         <summary class="collapse-title text-sm font-medium">{% translate "How does this work?" %}</summary>
         <div class="collapse-content text-sm space-y-2">
-          <p>{% translate "Scripts download each selected file directly with command-line tools. This allows for:" %}</p>
-          <ul class="list-disc list-inside space-y-1 text-base-content/80">
-            <li>{% translate "Resumable downloads if connection is interrupted" %}</li>
-            <li>{% translate "Downloading multiple files automatically" %}</li>
-            <li>{% translate "Better handling of large files" %}</li>
+          <p>{% translate "This creates a small helper file that downloads all selected files for you." %}</p>
+          <ul class="list-decimal list-inside space-y-1 text-base-content/80">
+            <li>{% translate "Choose Windows or macOS / Linux below." %}</li>
+            <li>{% translate "Download the helper file." %}</li>
+            <li>{% translate "Open PowerShell or Terminal in the download folder and paste the run command." %}</li>
           </ul>
+          <p class="text-base-content/70">{% translate "If the connection stops, you can run the same helper file again and it will continue with the remaining files." %}</p>
         </div>
       </details>
 
