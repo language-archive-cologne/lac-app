@@ -102,7 +102,7 @@ def _build_empty_collection(index: int) -> Collection:
     return collection
 
 
-def _replace_creators_with_wrong_through_order(
+def _replace_creators_with_metadata_order(
     publication_info: CollectionPublicationInfo,
 ) -> list[CollectionCreator]:
     publication_info.creators.clear()
@@ -156,18 +156,18 @@ def test_collection_list_htmx_sort_query_budget(client):
 
 
 @pytest.mark.django_db
-def test_collection_list_creator_display_uses_relation_row_order(client):
+def test_collection_list_creator_display_uses_metadata_order(client):
     collection = _build_collection_graph(1)
     publication_info = collection.publication_info.get()
-    _replace_creators_with_wrong_through_order(publication_info)
+    _replace_creators_with_metadata_order(publication_info)
 
     response = client.get(reverse("explorer:collection_list"))
 
     assert response.status_code == 200
     rendered_collection = response.context["collection_list"][0]
     assert rendered_collection.list_creators_display == (
-        "Christoph Bracks, Aleix Bardaji i Farre, Muhammad Hasan, "
-        "Sahlan Pogi, Nikolaus Himmelmann"
+        "Nikolaus Himmelmann, Sahlan Pogi, Muhammad Hasan, "
+        "Aleix Bardaji i Farre, Christoph Bracks"
     )
 
 

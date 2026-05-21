@@ -72,7 +72,7 @@ COLLECTION_PERMISSION_DENIED_MESSAGE = _(
     "This collection is restricted. If you believe you should have access, "
     "please contact lac-helpdesk@uni-koeln.de."
 )
-RELATION_ORDERED_CREATOR_LINKS_ATTR = "relation_ordered_creator_links"
+METADATA_ORDERED_CREATOR_LINKS_ATTR = "metadata_ordered_creator_links"
 
 
 def _get_collection_by_pk_or_handle(queryset, pk=None, handle=None):
@@ -86,25 +86,31 @@ def _get_collection_by_pk_or_handle(queryset, pk=None, handle=None):
     raise Http404("No collection identifier provided")
 
 
-def _relation_ordered_creator_links_prefetch() -> Prefetch:
+def _metadata_ordered_creator_links_prefetch() -> Prefetch:
     return Prefetch(
         "collectionpublicationinfocreator_set",
         queryset=CollectionPublicationInfoCreator.objects.select_related(
             "collectioncreator",
-        ).order_by("pk"),
-        to_attr=RELATION_ORDERED_CREATOR_LINKS_ATTR,
+        ).order_by("order", "pk"),
+        to_attr=METADATA_ORDERED_CREATOR_LINKS_ATTR,
     )
 
 
-def _get_collection_creators_in_relation_order(publication_info):
+def _get_collection_creators_in_metadata_order(publication_info):
     if not publication_info:
         return []
 
-    creator_links = getattr(publication_info, RELATION_ORDERED_CREATOR_LINKS_ATTR, None)
+    creator_links = getattr(publication_info, METADATA_ORDERED_CREATOR_LINKS_ATTR, None)
     if creator_links is not None:
         return [creator_link.collectioncreator for creator_link in creator_links]
 
-    return list(publication_info.creators.order_by("collectionpublicationinfocreator__pk", "pk"))
+    return list(
+        publication_info.creators.order_by(
+            "collectionpublicationinfocreator__order",
+            "collectionpublicationinfocreator__pk",
+            "pk",
+        )
+    )
 
 
 def _get_first_collection_publication_info(collection):
@@ -191,7 +197,7 @@ class CollectionListView(ListView):
             Prefetch(
                 'publication_info',
                 queryset=CollectionPublicationInfo.objects.prefetch_related(
-                    _relation_ordered_creator_links_prefetch(),
+                    _metadata_ordered_creator_links_prefetch(),
                 ),
                 to_attr='prefetched_publication_info',
             ),
@@ -300,7 +306,7 @@ class CollectionListView(ListView):
             collection.list_publication_year = (
                 publication_info.publication_year if publication_info else None
             )
-            creators = _get_collection_creators_in_relation_order(publication_info)
+            creators = _get_collection_creators_in_metadata_order(publication_info)
             collection.list_creators_display = ", ".join(
                 " ".join(
                     part
@@ -529,7 +535,7 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
             Prefetch(
                 "publication_info",
                 queryset=CollectionPublicationInfo.objects.prefetch_related(
-                    _relation_ordered_creator_links_prefetch(),
+                    _metadata_ordered_creator_links_prefetch(),
                     "contributors",
                 ),
             ),
@@ -542,7 +548,7 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         publication_info = _get_first_collection_publication_info(self.object)
-        collection_creators = _get_collection_creators_in_relation_order(publication_info)
+        collection_creators = _get_collection_creators_in_metadata_order(publication_info)
         context["collection_publication"] = publication_info
         context["collection_creators"] = collection_creators
 
@@ -697,7 +703,7 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
 
         if pub_info:
             if creators is None:
-                creators = _get_collection_creators_in_relation_order(pub_info)
+                creators = _get_collection_creators_in_metadata_order(pub_info)
 
             if creators:
                 creator_names = []
