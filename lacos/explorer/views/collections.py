@@ -24,10 +24,7 @@ from lacos.blam.models.collection.collection_general_info import (
     CollectionGeneralInfo,
     CollectionObjectLanguage,
 )
-from lacos.blam.models.collection.collection_publication_info import (
-    CollectionPublicationInfo,
-    CollectionPublicationInfoCreator,
-)
+from lacos.blam.models.collection.collection_publication_info import CollectionPublicationInfo
 from lacos.blam.models.collection.collection_structural_info import (
     CollectionAdditionalMetadataFile,
 )
@@ -72,9 +69,6 @@ COLLECTION_PERMISSION_DENIED_MESSAGE = _(
     "This collection is restricted. If you believe you should have access, "
     "please contact lac-helpdesk@uni-koeln.de."
 )
-METADATA_ORDERED_CREATOR_LINKS_ATTR = "metadata_ordered_creator_links"
-
-
 def _get_collection_by_pk_or_handle(queryset, pk=None, handle=None):
     if pk is not None:
         return queryset.filter(pk=pk).first()
@@ -86,31 +80,11 @@ def _get_collection_by_pk_or_handle(queryset, pk=None, handle=None):
     raise Http404("No collection identifier provided")
 
 
-def _metadata_ordered_creator_links_prefetch() -> Prefetch:
-    return Prefetch(
-        "collectionpublicationinfocreator_set",
-        queryset=CollectionPublicationInfoCreator.objects.select_related(
-            "collectioncreator",
-        ).order_by("order", "pk"),
-        to_attr=METADATA_ORDERED_CREATOR_LINKS_ATTR,
-    )
-
-
-def _get_collection_creators_in_metadata_order(publication_info):
+def _get_collection_creators_in_xml_export_order(publication_info):
     if not publication_info:
         return []
 
-    creator_links = getattr(publication_info, METADATA_ORDERED_CREATOR_LINKS_ATTR, None)
-    if creator_links is not None:
-        return [creator_link.collectioncreator for creator_link in creator_links]
-
-    return list(
-        publication_info.creators.order_by(
-            "collectionpublicationinfocreator__order",
-            "collectionpublicationinfocreator__pk",
-            "pk",
-        )
-    )
+    return list(publication_info.creators.all())
 
 
 def _get_first_collection_publication_info(collection):
@@ -196,9 +170,7 @@ class CollectionListView(ListView):
             ),
             Prefetch(
                 'publication_info',
-                queryset=CollectionPublicationInfo.objects.prefetch_related(
-                    _metadata_ordered_creator_links_prefetch(),
-                ),
+                queryset=CollectionPublicationInfo.objects.prefetch_related('creators'),
                 to_attr='prefetched_publication_info',
             ),
         ).annotate(
@@ -306,7 +278,7 @@ class CollectionListView(ListView):
             collection.list_publication_year = (
                 publication_info.publication_year if publication_info else None
             )
-            creators = _get_collection_creators_in_metadata_order(publication_info)
+            creators = _get_collection_creators_in_xml_export_order(publication_info)
             collection.list_creators_display = ", ".join(
                 " ".join(
                     part
@@ -535,7 +507,7 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
             Prefetch(
                 "publication_info",
                 queryset=CollectionPublicationInfo.objects.prefetch_related(
-                    _metadata_ordered_creator_links_prefetch(),
+                    "creators",
                     "contributors",
                 ),
             ),
@@ -548,7 +520,7 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         publication_info = _get_first_collection_publication_info(self.object)
-        collection_creators = _get_collection_creators_in_metadata_order(publication_info)
+        collection_creators = _get_collection_creators_in_xml_export_order(publication_info)
         context["collection_publication"] = publication_info
         context["collection_creators"] = collection_creators
 
@@ -703,7 +675,7 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
 
         if pub_info:
             if creators is None:
-                creators = _get_collection_creators_in_metadata_order(pub_info)
+                creators = _get_collection_creators_in_xml_export_order(pub_info)
 
             if creators:
                 creator_names = []

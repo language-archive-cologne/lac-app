@@ -102,7 +102,7 @@ def _build_empty_collection(index: int) -> Collection:
     return collection
 
 
-def _replace_creators_with_metadata_order(
+def _replace_creators_with_distinct_xml_export_order(
     publication_info: CollectionPublicationInfo,
 ) -> list[CollectionCreator]:
     publication_info.creators.clear()
@@ -156,19 +156,21 @@ def test_collection_list_htmx_sort_query_budget(client):
 
 
 @pytest.mark.django_db
-def test_collection_list_creator_display_uses_metadata_order(client):
+def test_collection_list_creator_display_uses_xml_export_order(client):
     collection = _build_collection_graph(1)
     publication_info = collection.publication_info.get()
-    _replace_creators_with_metadata_order(publication_info)
+    creators = _replace_creators_with_distinct_xml_export_order(publication_info)
 
     response = client.get(reverse("explorer:collection_list"))
 
     assert response.status_code == 200
     rendered_collection = response.context["collection_list"][0]
-    assert rendered_collection.list_creators_display == (
-        "Nikolaus Himmelmann, Sahlan Pogi, Muhammad Hasan, "
-        "Aleix Bardaji i Farre, Christoph Bracks"
+    expected_display = ", ".join(
+        f"{creator.given_name} {creator.family_name}"
+        for creator in publication_info.creators.all()
     )
+    assert creators
+    assert rendered_collection.list_creators_display == expected_display
 
 
 @pytest.mark.django_db
