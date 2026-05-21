@@ -46,10 +46,11 @@ def reindex_collection_xml(
     s3_key: str,
     update_existing: bool = True,
     discovery_service: Optional[FileDiscoveryService] = None,
+    force: bool = False,
 ) -> Optional[UUID]:
     """Reindex a collection XML stored in S3.
 
-    Skips reindex if the S3 ETag matches the stored value (unchanged XML).
+    Skips reindex if the S3 ETag matches the stored value unless force=True.
     """
     from lacos.blam.models.collection.collection_repository import Collection
 
@@ -58,10 +59,12 @@ def reindex_collection_xml(
     # ETag skip check — find stored etag from existing collection
     existing = Collection.objects.filter(import_object_key=s3_key).first()
     stored_etag = getattr(existing, "import_etag", None) if existing else None
-    skip, current_etag = _check_etag_unchanged(service, bucket, s3_key, stored_etag)
-    if skip:
-        logger.info("Collection unchanged (ETag match), skipping %s", s3_key)
-        return existing.id
+    current_etag = None
+    if not force:
+        skip, current_etag = _check_etag_unchanged(service, bucket, s3_key, stored_etag)
+        if skip:
+            logger.info("Collection unchanged (ETag match), skipping %s", s3_key)
+            return existing.id
 
     try:
         xml_content_bytes = service.read_s3_object(bucket, s3_key)
@@ -127,10 +130,11 @@ def reindex_bundle_xml(
     s3_key: str,
     update_existing: bool = True,
     discovery_service: Optional[FileDiscoveryService] = None,
+    force: bool = False,
 ) -> Optional[Tuple[UUID, UUID]]:
     """Reindex a bundle XML stored in S3.
 
-    Skips reindex if the S3 ETag matches the stored value (unchanged XML).
+    Skips reindex if the S3 ETag matches the stored value unless force=True.
     """
     from lacos.blam.models.bundle.bundle_repository import Bundle
 
@@ -139,11 +143,13 @@ def reindex_bundle_xml(
     # ETag skip check
     existing = Bundle.objects.filter(import_object_key=s3_key).first()
     stored_etag = getattr(existing, "import_etag", None) if existing else None
-    skip, current_etag = _check_etag_unchanged(service, bucket, s3_key, stored_etag)
-    if skip:
-        logger.info("Bundle unchanged (ETag match), skipping %s", s3_key)
-        resources = existing.resources.first()
-        return (existing.id, resources.id if resources else None)
+    current_etag = None
+    if not force:
+        skip, current_etag = _check_etag_unchanged(service, bucket, s3_key, stored_etag)
+        if skip:
+            logger.info("Bundle unchanged (ETag match), skipping %s", s3_key)
+            resources = existing.resources.first()
+            return (existing.id, resources.id if resources else None)
 
     try:
         xml_content_bytes = service.read_s3_object(bucket, s3_key)

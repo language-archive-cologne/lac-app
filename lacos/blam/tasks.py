@@ -103,6 +103,7 @@ def reindex_collections_task(tracking_id: str) -> dict:
             "reindex_collection",
             "--all",
             "--update-bundles",
+            "--force",
             stdout=command_output,
         )
         output = command_output.getvalue()

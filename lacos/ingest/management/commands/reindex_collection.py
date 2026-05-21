@@ -50,12 +50,18 @@ class Command(BaseCommand):
             action="store_true",
             help="Report what would be reindexed without changing data",
         )
+        parser.add_argument(
+            "--force",
+            action="store_true",
+            help="Reparse XML even when the stored S3 ETag is unchanged",
+        )
 
     def handle(self, *args, **options):
         identifier = options.get("identifier")
         prefix = options.get("prefix")
         update_bundles = options.get("update_bundles")
         dry_run = options.get("dry_run")
+        force = bool(options.get("force"))
 
         discovery_service = FileDiscoveryService()
         bucket = options.get("bucket") or discovery_service.production_bucket
@@ -88,6 +94,7 @@ class Command(BaseCommand):
                 bucket_to_use,
                 s3_key,
                 dry_run=dry_run,
+                force=force,
                 discovery_service=discovery_service,
             )
 
@@ -97,6 +104,7 @@ class Command(BaseCommand):
                     collection,
                     bucket_to_use,
                     dry_run=dry_run,
+                    force=force,
                     discovery_service=discovery_service,
                 )
 
@@ -126,6 +134,7 @@ class Command(BaseCommand):
                     bucket,
                     collection_key,
                     dry_run=dry_run,
+                    force=force,
                     discovery_service=discovery_service,
                 )
                 bundle_results = []
@@ -141,6 +150,7 @@ class Command(BaseCommand):
                         bucket,
                         scoped_bundle_keys,
                         dry_run=dry_run,
+                        force=force,
                         discovery_service=discovery_service,
                     )
                 # Update S3 resource locations
@@ -168,6 +178,7 @@ class Command(BaseCommand):
                     bucket_to_use,
                     s3_key,
                     dry_run=dry_run,
+                    force=force,
                     discovery_service=discovery_service,
                 )
                 bundle_results = []
@@ -176,6 +187,7 @@ class Command(BaseCommand):
                         collection,
                         bucket_to_use,
                         dry_run=dry_run,
+                        force=force,
                         discovery_service=discovery_service,
                     )
                 # Update S3 resource locations
@@ -258,6 +270,7 @@ class Command(BaseCommand):
         bucket: str,
         s3_key: str,
         dry_run: bool = False,
+        force: bool = False,
         discovery_service: Optional[FileDiscoveryService] = None,
     ):
         if dry_run:
@@ -266,6 +279,7 @@ class Command(BaseCommand):
         collection_id = reindex_collection_xml(
             bucket=bucket,
             s3_key=s3_key,
+            force=force,
             discovery_service=discovery_service,
         )
         if collection_id:
@@ -323,6 +337,7 @@ class Command(BaseCommand):
         collection: Collection,
         bucket: str,
         dry_run: bool = False,
+        force: bool = False,
         discovery_service: Optional[FileDiscoveryService] = None,
     ) -> list:
         """Reindex bundles for collection and return results.
@@ -356,6 +371,7 @@ class Command(BaseCommand):
             bucket,
             s3_bundle_keys,
             dry_run=dry_run,
+            force=force,
             discovery_service=service,
         )
 
@@ -386,6 +402,7 @@ class Command(BaseCommand):
         bucket: str,
         bundle_keys: List[str],
         dry_run: bool = False,
+        force: bool = False,
         discovery_service: Optional[FileDiscoveryService] = None,
     ) -> list:
         """Reindex bundles and return list of (bundle_id, bundle_resources_id) tuples."""
@@ -407,6 +424,7 @@ class Command(BaseCommand):
             result = reindex_bundle_xml(
                 bucket=bucket,
                 s3_key=bundle_key,
+                force=force,
                 discovery_service=discovery_service,
             )
             if result:

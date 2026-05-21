@@ -57,11 +57,40 @@ def test_reindex_bundle_keys_deduplicates_inputs(
     mock_reindex_bundle_xml.assert_any_call(
         bucket="lacos-production",
         s3_key="col-a/bundle-1/v1/content/bundle-1.xml",
+        force=False,
         discovery_service=discovery_service,
     )
     mock_reindex_bundle_xml.assert_any_call(
         bucket="lacos-production",
         s3_key="col-a/bundle-2/v1/content/bundle-2.xml",
+        force=False,
+        discovery_service=discovery_service,
+    )
+
+
+@patch("lacos.ingest.management.commands.reindex_collection.close_old_connections")
+@patch("lacos.ingest.management.commands.reindex_collection.reindex_bundle_xml")
+def test_reindex_bundle_keys_forwards_force(
+    mock_reindex_bundle_xml,
+    _mock_close_old_connections,
+):
+    command = Command()
+    discovery_service = MagicMock()
+    bundle_id = uuid.uuid4()
+    bundle_resources_id = uuid.uuid4()
+    mock_reindex_bundle_xml.return_value = (bundle_id, bundle_resources_id)
+
+    command._reindex_bundle_keys(
+        bucket="lacos-production",
+        bundle_keys=["col-a/bundle-1/v1/content/bundle-1.xml"],
+        force=True,
+        discovery_service=discovery_service,
+    )
+
+    mock_reindex_bundle_xml.assert_called_once_with(
+        bucket="lacos-production",
+        s3_key="col-a/bundle-1/v1/content/bundle-1.xml",
+        force=True,
         discovery_service=discovery_service,
     )
 
@@ -95,6 +124,7 @@ def test_handle_prefix_reindexes_only_associated_bundles(mock_discovery_service_
         all=False,
         update_bundles=True,
         dry_run=False,
+        force=False,
     )
 
     assert result == 0
@@ -108,6 +138,36 @@ def test_handle_prefix_reindexes_only_associated_bundles(mock_discovery_service_
         "col-b/bundle-2/v1/content/bundle-2.xml",
         "col-b/bundle-3/v1/content/bundle-3.xml",
     ]
+
+
+@patch("lacos.ingest.management.commands.reindex_collection.FileDiscoveryService")
+def test_handle_prefix_forwards_force_to_collections_and_bundles(mock_discovery_service_cls):
+    discovery_service = MagicMock()
+    discovery_service.production_bucket = "lacos-production"
+    discovery_service.find_collection_and_bundle_xmls_s3.return_value = {
+        "potential_collection_xmls": ["col-a/col-a/v1/content/col-a.xml"],
+        "potential_bundle_xmls": ["col-a/bundle-1/v1/content/bundle-1.xml"],
+    }
+    mock_discovery_service_cls.return_value = discovery_service
+
+    command = Command()
+    command._reindex_collection = MagicMock(return_value=uuid.uuid4())
+    command._reindex_bundle_keys = MagicMock(return_value=[])
+    command._update_s3_resource_locations = MagicMock()
+
+    result = command.handle(
+        identifier=None,
+        prefix="root/",
+        bucket="lacos-production",
+        all=False,
+        update_bundles=True,
+        dry_run=False,
+        force=True,
+    )
+
+    assert result == 0
+    assert command._reindex_collection.call_args.kwargs["force"] is True
+    assert command._reindex_bundle_keys.call_args.kwargs["force"] is True
 
 
 @pytest.mark.django_db
@@ -154,6 +214,7 @@ def test_handle_all_removes_collection_missing_from_storage(
         all=True,
         update_bundles=True,
         dry_run=False,
+        force=False,
     )
 
     assert result == 0

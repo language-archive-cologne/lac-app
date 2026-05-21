@@ -104,6 +104,10 @@ def test_reindex_collections_task_marks_success(mock_call_command):
     assert result["collection_failures"] == 0
     assert result["bundle_failures"] == 0
     assert task_record.status == BackgroundTask.Status.SUCCESS
+    mock_call_command.assert_called_once()
+    args, kwargs = mock_call_command.call_args
+    assert args == ("reindex_collection", "--all", "--update-bundles", "--force")
+    assert "stdout" in kwargs
 
 
 @pytest.mark.django_db

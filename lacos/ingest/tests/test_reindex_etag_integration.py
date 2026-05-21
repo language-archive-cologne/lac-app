@@ -73,6 +73,29 @@ class TestCollectionEtagSkip:
         # Skipped: read_s3_object was NOT called
         discovery_service.read_s3_object.assert_not_called()
 
+    def test_force_reindex_runs_when_etag_matches(self, discovery_service):
+        """Forced reindex: ETag matches but XML is downloaded and parsed."""
+        collection = Collection.objects.create(
+            identifier=f"test-{uuid4()}",
+            import_object_key="coll/coll/v1/metadata/coll.xml",
+            import_etag="etag-abc123",
+        )
+
+        with patch(
+            "lacos.ingest.services.reindex_service.CollectionImporter.import_from_xml",
+            return_value=collection,
+        ) as mock_import:
+            result = reindex_collection_xml(
+                bucket="bucket",
+                s3_key="coll/coll/v1/metadata/coll.xml",
+                discovery_service=discovery_service,
+                force=True,
+            )
+
+        assert result == collection.id
+        discovery_service.read_s3_object.assert_called_once()
+        mock_import.assert_called_once_with("<xml>content</xml>", update_existing=True)
+
     def test_reindex_runs_when_etag_differs(self, discovery_service):
         """ETag changed in S3: full reindex runs."""
         discovery_service.head_s3_object.return_value = {"ETag": "new-etag-xyz"}
@@ -150,6 +173,28 @@ class TestBundleEtagSkip:
 
         assert result == (bundle.id, resources.id)
         discovery_service.read_s3_object.assert_not_called()
+
+    def test_force_reindex_runs_when_etag_matches(self, discovery_service):
+        """Forced bundle reindex downloads and parses despite matching ETag."""
+        collection = Collection.objects.create(identifier=f"coll-{uuid4()}")
+        bundle, resources = self._make_bundle_with_resources(
+            collection, etag="etag-abc123"
+        )
+
+        with patch(
+            "lacos.ingest.services.reindex_service.BundleImporter.import_from_xml",
+            return_value=(bundle, resources.id),
+        ) as mock_import:
+            result = reindex_bundle_xml(
+                bucket="bucket",
+                s3_key="coll/bundle/v1/metadata/bundle.xml",
+                discovery_service=discovery_service,
+                force=True,
+            )
+
+        assert result == (bundle.id, resources.id)
+        discovery_service.read_s3_object.assert_called_once()
+        mock_import.assert_called_once_with("<xml>content</xml>", update_existing=True)
 
     def test_reindex_runs_when_etag_differs(self, discovery_service):
         """Bundle ETag changed: full reindex runs."""
