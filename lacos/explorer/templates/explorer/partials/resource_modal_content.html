@@ -343,15 +343,15 @@
                 <tbody class="divide-y divide-slate-200">
                   {% for annotation in elan_context.annotations %}
                     <tr class="hover:bg-blue-50 transition-colors"
-                        {% if annotation.start is not None %}data-annotation-start="{{ annotation.start|floatformat:3 }}"{% endif %}
-                        {% if annotation.end is not None %}data-annotation-end="{{ annotation.end|floatformat:3 }}"{% endif %}>
+                        {% if annotation.start is not None %}data-annotation-start="{{ annotation.start|stringformat:'.3f' }}"{% endif %}
+                        {% if annotation.end is not None %}data-annotation-end="{{ annotation.end|stringformat:'.3f' }}"{% endif %}>
                       {% if elan_context and elan_context.audio_url %}
                         <td class="px-3 py-2 text-center">
                           {% if annotation.start is not None %}
                             <button type="button"
                                     class="btn btn-xs btn-circle btn-primary"
-                                    data-annotation-start="{{ annotation.start|floatformat:3 }}"
-                                    {% if annotation.end is not None %}data-annotation-end="{{ annotation.end|floatformat:3 }}"{% endif %}
+                                    data-annotation-start="{{ annotation.start|stringformat:'.3f' }}"
+                                    {% if annotation.end is not None %}data-annotation-end="{{ annotation.end|stringformat:'.3f' }}"{% endif %}
                                     title="{% translate 'Play segment' %}">
                               <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
                                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />

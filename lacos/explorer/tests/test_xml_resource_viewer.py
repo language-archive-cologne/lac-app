@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import pytest
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils import translation
 
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import (
@@ -64,6 +65,44 @@ def test_resource_modal_htmx_fragments_do_not_include_inline_scripts():
     assert "<script" not in video_page.lower()
     assert 'id="resource-xml-content"' in xml_page
     assert 'data-subtitle-url="https://example.test/interview.srt"' in video_page
+
+
+def test_elan_annotation_data_times_are_not_localized():
+    context = {
+        "resource_name": "session.eaf",
+        "media_type": "elan",
+        "mime_type": "text/x-eaf+xml",
+        "source_mime_type": "text/x-eaf+xml",
+        "download_url": "https://example.test/download",
+        "peaks_url": None,
+        "player_mode": "simple",
+        "elan_context": {
+            "audio_url": "https://example.test/session.wav",
+            "audio_file_name": "session.wav",
+            "tier_headers": ["Transcription"],
+            "annotations": [
+                {
+                    "start": 153.74,
+                    "end": 154.67,
+                    "value": "bur mina",
+                    "ordered_tiers": [
+                        {"name": "Transcription", "value": "bur mina"},
+                    ],
+                },
+            ],
+        },
+    }
+
+    with translation.override("de"):
+        page = render_to_string(
+            "explorer/partials/resource_modal_content.html",
+            context,
+        )
+
+    assert 'data-annotation-start="153.740"' in page
+    assert 'data-annotation-end="154.670"' in page
+    assert 'data-annotation-start="153,740"' not in page
+    assert 'data-annotation-end="154,670"' not in page
 
 
 @pytest.mark.django_db
