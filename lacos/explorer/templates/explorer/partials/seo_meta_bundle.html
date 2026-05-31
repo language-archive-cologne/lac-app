@@ -9,6 +9,9 @@
 <meta property="og:title" content="{% if bundle.get_general_info.display_title %}{{ bundle.get_general_info.display_title }}{% elif bundle.get_general_info.title %}{{ bundle.get_general_info.title }}{% else %}{{ bundle.identifier }}{% endif %}" />
 <meta property="og:description" content="{% if bundle.get_general_info.description %}{{ bundle.get_general_info.description|truncatewords:30 }}{% else %}Language documentation bundle from the Language Archive Cologne.{% endif %}" />
 <meta property="og:image" content="{{ PUBLIC_BASE_URL }}{% static 'images/og-image.png' %}" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
 <meta property="og:site_name" content="Language Archive Cologne" />
 <meta property="og:locale" content="{{ LANGUAGE_CODE }}" />
 
