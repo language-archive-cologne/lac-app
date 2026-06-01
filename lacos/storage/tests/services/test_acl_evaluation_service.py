@@ -290,6 +290,26 @@ def test_bundle_acl_takes_precedence_over_collection_acl():
 
 
 @pytest.mark.django_db
+def test_empty_bundle_acl_takes_precedence_over_collection_acl():
+    collection = _create_collection("empty-bundle-acl-collection")
+    bundle = _create_bundle(collection, "empty-bundle-acl")
+
+    _store_acl(collection, [{"agentClass": WAC_AUTHENTICATED_AGENT, "mode": ["acl:Read"]}])
+    _store_acl(bundle, [])
+
+    user = get_user_model().objects.create_user(username="logged-in", password="pass")
+
+    service = ACLEvaluationService()
+    result = service.evaluate(user, bundle)
+
+    assert result.allowed is False
+    assert result.source == bundle
+    assert result.default_applied is True
+    assert result.reason == "No ACL rule matched on object; default deny"
+    assert result.access_level == ACL_LEVEL_RESTRICTED
+
+
+@pytest.mark.django_db
 def test_default_deny_when_no_rules_match():
     collection = _create_collection()
     bundle = _create_bundle(collection)

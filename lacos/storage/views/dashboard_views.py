@@ -983,7 +983,7 @@ def acl_update_permission(request):
 
     # Update the record
     perm.access_level = access_level
-    perm.permissions_data = permissions_data if permissions_data else None
+    perm.permissions_data = permissions_data if permissions_data or access_level == ACL_LEVEL_RESTRICTED else None
     perm.read_agents = read_agents if read_agents else None
     perm.last_synced = timezone.now()
     perm.save(update_fields=["access_level", "permissions_data", "read_agents", "last_synced"])

@@ -85,6 +85,7 @@ def test_acl_update_permission_updates_existing_record(client, django_user_model
     assert response.status_code == 302
     record.refresh_from_db()
     assert record.access_level == ACL_LEVEL_RESTRICTED
+    assert record.permissions_data == []
 
 
 @pytest.mark.django_db

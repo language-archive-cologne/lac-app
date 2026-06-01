@@ -119,7 +119,7 @@ class ACLEvaluationService:
         for source in self._iter_acl_chain(obj):
             last_source = source
             permissions = self._get_permissions(source)
-            if not permissions or not permissions.permissions_data:
+            if not permissions or permissions.permissions_data is None:
                 continue
             last_access_level = determine_access_level(permissions.permissions_data)
 
