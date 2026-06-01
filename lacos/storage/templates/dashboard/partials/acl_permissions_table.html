@@ -65,7 +65,8 @@
       hx-target="#acl-records-table"
       hx-swap="outerHTML"
       hx-push-url="false"
-      hx-trigger="change, keyup delay:400ms from:#acl-records-search-{{ scope }}"
+      hx-trigger="change, input changed delay:400ms from:#acl-records-search-{{ scope }}"
+      hx-sync="this:replace"
     >
       <input type="hidden" name="sort" value="{{ sort }}">
       <input type="hidden" name="dir" value="{{ direction }}">
@@ -388,7 +389,7 @@
                 hx-get="{% url 'storage:acl_edit_permission_form' scope row.object_id %}"
                 hx-target="#acl-edit-modal-content"
                 hx-swap="innerHTML"
-                onclick="document.getElementById('acl-edit-modal').showModal()"
+                data-acl-edit-open
                 {% else %}
                 disabled
                 {% endif %}

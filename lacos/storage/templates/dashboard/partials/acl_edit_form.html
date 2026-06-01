@@ -5,6 +5,7 @@
   hx-target="#acl-records-table"
   hx-swap="outerHTML"
   class="space-y-4"
+  data-acl-edit-form
 >
   {% csrf_token %}
   <input type="hidden" name="object_type" value="{{ object_type }}">
@@ -117,8 +118,8 @@
   </div>
 
   <div class="modal-action">
-    <button type="button" class="btn" onclick="document.getElementById('acl-edit-modal').close()">Cancel</button>
-    <button type="submit" class="btn btn-primary" onclick="document.getElementById('acl-edit-modal').close()">Save</button>
+    <button type="button" class="btn" data-acl-edit-close>Cancel</button>
+    <button type="submit" class="btn btn-primary">Save</button>
   </div>
 </form>
 

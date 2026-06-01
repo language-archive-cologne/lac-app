@@ -126,6 +126,61 @@ def test_acl_records_panel_renders(client, django_user_model):
 
 
 @pytest.mark.django_db
+def test_acl_records_table_uses_synced_search_and_delegated_edit_modal(
+    client, django_user_model
+):
+    user = django_user_model.objects.create_user("acl-ui", "acl-ui@example.com", "pass")
+    _make_archivist(user)
+    client.force_login(user)
+    Bundle.objects.create(identifier="bundle-ui")
+
+    response = client.get(reverse("storage:acl_records_table", args=["bundle"]))
+
+    assert response.status_code == 200
+    html = response.content.decode()
+    assert 'hx-trigger="change, input changed delay:400ms from:#acl-records-search-bundle"' in html
+    assert 'hx-sync="this:replace"' in html
+    assert "data-acl-edit-open" in html
+    assert "showModal()" not in html
+
+
+@pytest.mark.django_db
+def test_acl_edit_form_uses_modal_controller_hooks(client, django_user_model):
+    user = django_user_model.objects.create_user("acl-form", "acl-form@example.com", "pass")
+    _make_archivist(user)
+    client.force_login(user)
+    bundle = Bundle.objects.create(identifier="bundle-form")
+
+    response = client.get(
+        reverse("storage:acl_edit_permission_form", args=["bundle", str(bundle.pk)])
+    )
+
+    assert response.status_code == 200
+    html = response.content.decode()
+    assert "data-acl-edit-form" in html
+    assert "data-acl-edit-close" in html
+    assert "onclick=" not in html
+
+
+@pytest.mark.django_db
+def test_acl_admin_dashboard_includes_acl_edit_modal_controller(
+    client, django_user_model
+):
+    user = django_user_model.objects.create_user("acl-controller", "acl-controller@example.com", "pass")
+    _make_archivist(user)
+    client.force_login(user)
+
+    response = client.get(f"{reverse('storage:acl_admin_dashboard')}?tab=records&scope=bundle")
+
+    assert response.status_code == 200
+    html = response.content.decode()
+    assert "function openAclEditModal()" in html
+    assert "function closeAclEditModal()" in html
+    assert "htmx:afterRequest" in html
+    assert "[data-acl-edit-form]" in html
+
+
+@pytest.mark.django_db
 def test_acl_records_table_collection_rows_render_bundle_bulk_load_actions(
     client, django_user_model
 ):

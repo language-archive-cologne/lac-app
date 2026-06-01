@@ -112,6 +112,24 @@
       updateSelectionInputs(scope);
     }
 
+    function getAclEditModal() {
+      return document.getElementById('acl-edit-modal');
+    }
+
+    function openAclEditModal() {
+      const modal = getAclEditModal();
+      if (modal && typeof modal.showModal === 'function' && !modal.open) {
+        modal.showModal();
+      }
+    }
+
+    function closeAclEditModal() {
+      const modal = getAclEditModal();
+      if (modal && typeof modal.close === 'function' && modal.open) {
+        modal.close();
+      }
+    }
+
     document.addEventListener('change', event => {
       const target = event.target;
       if (target.matches('input[data-acl-select]')) {
@@ -145,6 +163,17 @@
       }
     });
 
+    document.addEventListener('click', event => {
+      const target = event.target;
+      if (target.closest('[data-acl-edit-open]')) {
+        openAclEditModal();
+        return;
+      }
+      if (target.closest('[data-acl-edit-close]')) {
+        closeAclEditModal();
+      }
+    });
+
     document.addEventListener('submit', event => {
       const form = event.target;
       if (!form.matches('[data-acl-selection-form]')) {
@@ -169,6 +198,16 @@
       const scope = table.dataset.aclScope || table.querySelector('[data-acl-scope]')?.dataset.aclScope;
       if (scope) {
         syncCheckboxes(scope);
+      }
+    });
+
+    document.addEventListener('htmx:afterRequest', event => {
+      const source = event.detail && event.detail.elt;
+      if (!source || !source.matches || !source.matches('[data-acl-edit-form]')) {
+        return;
+      }
+      if (event.detail.successful) {
+        closeAclEditModal();
       }
     });
 
