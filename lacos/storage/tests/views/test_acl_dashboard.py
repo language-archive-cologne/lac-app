@@ -140,6 +140,7 @@ def test_acl_records_table_uses_synced_search_and_delegated_edit_modal(
     html = response.content.decode()
     assert 'hx-trigger="change, input changed delay:400ms from:#acl-records-search-bundle"' in html
     assert 'hx-sync="this:replace"' in html
+    assert "hx-preserve" in html
     assert "data-acl-edit-open" in html
     assert "showModal()" not in html
 
