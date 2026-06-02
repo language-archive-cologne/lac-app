@@ -100,6 +100,29 @@ def fetch_collection_records(
     return results, has_more
 
 
+def fetch_collection_record_by_identifier(
+    identifier: str,
+    *,
+    user=None,
+) -> OAIPMHCollectionResult | None:
+    """Return one collection record for a local collection identifier."""
+
+    collection = _base_queryset().filter(identifier=identifier).first()
+    if collection is None:
+        return None
+
+    policy = ExposurePolicyService()
+    harvest_user = user or policy.anonymous_user()
+    if not policy.can_harvest_via_oai(harvest_user, collection):
+        return None
+
+    return OAIPMHCollectionResult(
+        identifier=_build_oai_identifier(collection),
+        datestamp=_collection_datestamp(collection),
+        metadata=_build_metadata(collection),
+    )
+
+
 def _base_queryset() -> QuerySet[Collection]:
     return Collection.objects.prefetch_related(
         GeneralInfoPrefetch,

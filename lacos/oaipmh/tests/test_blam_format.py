@@ -170,6 +170,24 @@ def test_list_records_with_blam_format(client, sample_collection):
 
 
 @pytest.mark.django_db
+def test_get_record_with_blam_format(client, sample_collection):
+    """Test GetRecord with BLAM metadataPrefix returns one collection."""
+    response = client.get(
+        reverse("oaipmh:endpoint"),
+        {
+            "verb": "GetRecord",
+            "metadataPrefix": "blam",
+            "identifier": f"oai:lacos:{sample_collection.identifier}",
+        },
+    )
+    assert response.status_code == 200
+    body = response.content.decode("utf-8")
+    assert "<GetRecord>" in body
+    assert f"<identifier>oai:lacos:{sample_collection.identifier}</identifier>" in body
+    assert "CMD" in body
+
+
+@pytest.mark.django_db
 def test_unsupported_metadata_prefix_error(client):
     """Test that unsupported prefix returns proper error."""
     response = client.get(

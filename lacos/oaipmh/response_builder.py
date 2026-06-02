@@ -143,6 +143,56 @@ def render_list_records(
     return _as_http_response(envelope)
 
 
+def render_get_record(request: HttpRequest, record: dict) -> HttpResponse:
+    metadata = record["metadata"]
+    if isinstance(metadata, str):
+        return _render_get_record_with_string_metadata(request, record)
+
+    envelope = _build_envelope(request, "GetRecord")
+    container = ET.SubElement(envelope, "GetRecord")
+    record_el = ET.SubElement(container, "record")
+    header_el = ET.SubElement(record_el, "header")
+    ET.SubElement(header_el, "identifier").text = record["identifier"]
+    ET.SubElement(header_el, "datestamp").text = record["datestamp"]
+    for set_spec in record.get("sets", []):
+        ET.SubElement(header_el, "setSpec").text = set_spec
+    metadata_el = ET.SubElement(record_el, "metadata")
+    metadata_el.append(metadata)
+    return _as_http_response(envelope)
+
+
+def _render_get_record_with_string_metadata(
+    request: HttpRequest,
+    record: dict,
+) -> HttpResponse:
+    """Build GetRecord response preserving metadata XML namespace declarations."""
+
+    base_uri = request.build_absolute_uri(REPO_BASE_ENDPOINT)
+    response_date = _now_utc()
+    set_specs = "".join(
+        f"<setSpec>{_escape_xml(s)}</setSpec>"
+        for s in record.get("sets", [])
+    )
+    metadata = record["metadata"]
+    if isinstance(metadata, ET.Element):
+        metadata = ET.tostring(metadata, encoding="unicode")
+
+    xml = (
+        f'<?xml version="1.0" encoding="UTF-8"?>'
+        f'<OAI-PMH xmlns="{OAI_NS}" xmlns:xsi="{XSI_NS}" '
+        f'xsi:schemaLocation="{DEFAULT_SCHEMA_LOCATION}">'
+        f'<responseDate>{response_date}</responseDate>'
+        f'<request verb="GetRecord">{_escape_xml(base_uri)}</request>'
+        f'<GetRecord><record><header>'
+        f'<identifier>{_escape_xml(record["identifier"])}</identifier>'
+        f'<datestamp>{record["datestamp"]}</datestamp>'
+        f'{set_specs}'
+        f'</header><metadata>{metadata}</metadata></record></GetRecord>'
+        f'</OAI-PMH>'
+    )
+    return HttpResponse(xml.encode("utf-8"), content_type="text/xml; charset=utf-8")
+
+
 def _render_list_records_with_string_metadata(
     request: HttpRequest,
     records: list[dict],

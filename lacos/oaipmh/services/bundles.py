@@ -96,6 +96,29 @@ def fetch_bundle_records(
     return results, has_more
 
 
+def fetch_bundle_record_by_identifier(
+    identifier: str,
+    *,
+    user=None,
+) -> OAIPMHBundlesResult | None:
+    """Return one bundle record for a local bundle identifier."""
+
+    bundle = _base_queryset().filter(identifier=identifier).first()
+    if bundle is None:
+        return None
+
+    policy = ExposurePolicyService()
+    harvest_user = user or policy.anonymous_user()
+    if not policy.can_harvest_via_oai(harvest_user, bundle):
+        return None
+
+    return OAIPMHBundlesResult(
+        identifier=_build_oai_identifier(bundle),
+        datestamp=_bundle_datestamp(bundle),
+        metadata=_build_metadata(bundle),
+    )
+
+
 def _base_queryset() -> QuerySet[Bundle]:
     return Bundle.objects.prefetch_related(
         GeneralInfoPrefetch,

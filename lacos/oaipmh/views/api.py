@@ -13,18 +13,25 @@ from django.utils.dateparse import parse_date, parse_datetime
 
 from ..constants import SUPPORTED_METADATA_FORMATS, SUPPORTED_SETS, DEFAULT_PAGE_SIZE
 from ..errors import OAIPMHError
+from ..formats import serialize as serialize_metadata
+from ..identifiers import parse_oai_identifier
 from ..request_parser import OAIRequestParser
 from ..resumption import ResumptionTokenService
 from ..response_builder import (
     render_error_response,
+    render_get_record,
     render_identify,
     render_metadata_formats,
     render_list_identifiers,
     render_list_records,
     render_list_sets,
 )
-from ..services import fetch_collection_records, fetch_bundle_records
-from ..formats import serialize as serialize_metadata
+from ..services import (
+    fetch_bundle_record_by_identifier,
+    fetch_bundle_records,
+    fetch_collection_record_by_identifier,
+    fetch_collection_records,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -56,9 +63,79 @@ def oai_endpoint(request: HttpRequest) -> HttpResponse:
         ]
         return render_list_sets(request, set_items)
     if verb == "GetRecord":
-        return render_error_response(request, verb, [OAIPMHError("idDoesNotExist", "Record retrieval is not yet available")])
+        return _handle_get_record(request, oai_request)
 
-    return render_error_response(request, verb, [OAIPMHError("badVerb", f"Unsupported verb: {verb}")])
+    return render_error_response(
+        request,
+        verb,
+        [OAIPMHError("badVerb", f"Unsupported verb: {verb}")],
+    )
+
+
+def _handle_get_record(request: HttpRequest, oai_request) -> HttpResponse:
+    metadata_prefix = oai_request.metadata_prefix
+    identifier = oai_request.identifier
+
+    if not metadata_prefix:
+        return render_error_response(
+            request,
+            "GetRecord",
+            [OAIPMHError("badArgument", "metadataPrefix is required")],
+        )
+
+    if metadata_prefix not in SUPPORTED_PREFIXES:
+        return render_error_response(
+            request,
+            "GetRecord",
+            [
+                OAIPMHError(
+                    "cannotDisseminateFormat",
+                    f"Unsupported metadataPrefix '{metadata_prefix}'",
+                )
+            ],
+        )
+
+    if not identifier:
+        return render_error_response(
+            request,
+            "GetRecord",
+            [OAIPMHError("badArgument", "identifier is required")],
+        )
+
+    parsed_identifier = parse_oai_identifier(identifier)
+    if parsed_identifier is None:
+        return render_error_response(
+            request,
+            "GetRecord",
+            [OAIPMHError("idDoesNotExist", "Unknown identifier")],
+        )
+
+    fetch_fn = (
+        fetch_bundle_record_by_identifier
+        if parsed_identifier.kind == "bundle"
+        else fetch_collection_record_by_identifier
+    )
+    record = fetch_fn(
+        parsed_identifier.local_identifier,
+        user=getattr(request, "user", None),
+    )
+    if record is None:
+        return render_error_response(
+            request,
+            "GetRecord",
+            [OAIPMHError("idDoesNotExist", "Unknown identifier")],
+        )
+
+    metadata_element = serialize_metadata(metadata_prefix, record.metadata)
+    return render_get_record(
+        request,
+        {
+            "identifier": record.identifier,
+            "datestamp": record.datestamp,
+            "sets": record.sets,
+            "metadata": metadata_element,
+        },
+    )
 
 
 def _handle_list_verbs(request: HttpRequest, verb: str, oai_request) -> HttpResponse:
