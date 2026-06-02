@@ -107,3 +107,27 @@ def test_file_viewer_partials_have_no_inline_script_execution():
     assert "<script>" not in modal_html
     assert "data-close-file-viewer" in modal_html
     assert "data-close-file-viewer" in error_html
+
+
+def test_acl_action_overview_uses_csp_safe_htmx_controls():
+    html = Path(
+        "lacos/storage/templates/dashboard/partials/acl_dashboard_overview.html",
+    ).read_text()
+
+    _assert_no_inline_handlers(html)
+    assert "<script>" not in html
+    assert 'hx-post="{% url \'storage:acl_load_all\' %}"' in html
+    assert 'hx-target="#acl-load-summary"' in html
+    assert 'hx-post="{% url \'storage:acl_save_all\' %}"' in html
+    assert 'hx-target="#acl-save-summary"' in html
+
+
+def test_acl_edit_form_fragment_has_no_inline_script_execution():
+    html = Path(
+        "lacos/storage/templates/dashboard/partials/acl_edit_form.html",
+    ).read_text()
+
+    _assert_no_inline_handlers(html)
+    assert "<script>" not in html
+    assert "data-acl-access-level" in html
+    assert "data-acl-agent-fields" in html

@@ -123,6 +123,7 @@ def test_acl_records_panel_renders(client, django_user_model):
     assert response.status_code == 200
     html = response.content.decode()
     assert "id=\"acl-records-table\"" in html
+    assert "id=\"acl-records-action-status\"" in html
 
 
 @pytest.mark.django_db
@@ -141,6 +142,7 @@ def test_acl_records_table_uses_synced_search_and_delegated_edit_modal(
     assert 'hx-trigger="change, input changed delay:400ms from:#acl-records-search-bundle"' in html
     assert 'hx-sync="this:replace"' in html
     assert "hx-preserve" in html
+    assert 'hx-target="#acl-records-action-status"' in html
     assert "data-acl-edit-open" in html
     assert "showModal()" not in html
 
@@ -160,7 +162,11 @@ def test_acl_edit_form_uses_modal_controller_hooks(client, django_user_model):
     html = response.content.decode()
     assert "data-acl-edit-form" in html
     assert "data-acl-edit-close" in html
+    assert "data-acl-access-level" in html
+    assert "data-acl-agent-fields" in html
     assert "onclick=" not in html
+    assert "onchange=" not in html
+    assert "<script>" not in html
 
 
 @pytest.mark.django_db
@@ -177,6 +183,7 @@ def test_acl_admin_dashboard_includes_acl_edit_modal_controller(
     html = response.content.decode()
     assert "function openAclEditModal()" in html
     assert "function closeAclEditModal()" in html
+    assert "function toggleAclAgentFields(" in html
     assert "htmx:afterRequest" in html
     assert "[data-acl-edit-form]" in html
 

@@ -341,7 +341,7 @@
                 method="post"
                 action="{% url 'storage:acl_load_single' scope row.object_id %}"
                 hx-post="{% url 'storage:acl_load_single' scope row.object_id %}"
-                hx-target="#acl-action-status-{{ row.object_id }}"
+                hx-target="#acl-records-action-status"
                 hx-swap="innerHTML"
                 hx-confirm="Load ACL from S3? This will overwrite the database record."
               >
@@ -364,7 +364,7 @@
                 method="post"
                 action="{% url 'storage:acl_save_single' scope row.object_id %}"
                 hx-post="{% url 'storage:acl_save_single' scope row.object_id %}"
-                hx-target="#acl-action-status-{{ row.object_id }}"
+                hx-target="#acl-records-action-status"
                 hx-swap="innerHTML"
                 hx-confirm="Save ACL to S3? This will overwrite the S3 file."
               >

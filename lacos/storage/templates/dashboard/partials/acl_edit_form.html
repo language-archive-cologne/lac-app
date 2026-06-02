@@ -31,7 +31,7 @@
       name="access_level"
       class="select select-bordered w-full"
       required
-      onchange="toggleAgentFields(this.value)"
+      data-acl-access-level
     >
       {% for value, label in access_level_choices %}
       <option value="{{ value }}" {% if value == current_access_level %}selected{% endif %}>{{ label }}</option>
@@ -44,7 +44,7 @@
     </label>
   </div>
 
-  <div id="agent-fields" class="space-y-4 {% if current_access_level != 'restricted' %}hidden{% endif %}">
+  <div id="agent-fields" data-acl-agent-fields class="space-y-4 {% if current_access_level != 'restricted' %}hidden{% endif %}">
     <div class="form-control">
       <label class="label">
         <span class="label-text font-medium">Users with access</span>
@@ -122,14 +122,3 @@
     <button type="submit" class="btn btn-primary">Save</button>
   </div>
 </form>
-
-<script>
-function toggleAgentFields(level) {
-  const fields = document.getElementById('agent-fields');
-  if (level === 'restricted') {
-    fields.classList.remove('hidden');
-  } else {
-    fields.classList.add('hidden');
-  }
-}
-</script>

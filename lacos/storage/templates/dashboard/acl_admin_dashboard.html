@@ -130,8 +130,22 @@
       }
     }
 
+    function toggleAclAgentFields(select) {
+      const form = select.closest('[data-acl-edit-form]');
+      const fields = form ? form.querySelector('[data-acl-agent-fields]') : null;
+      if (!fields) {
+        return;
+      }
+      fields.classList.toggle('hidden', select.value !== 'restricted');
+    }
+
     document.addEventListener('change', event => {
       const target = event.target;
+      if (target.matches('[data-acl-access-level]')) {
+        toggleAclAgentFields(target);
+        return;
+      }
+
       if (target.matches('input[data-acl-select]')) {
         const scope = target.dataset.aclScope || getScopeFromElement(target);
         if (!scope || !selectionStore[scope]) {
