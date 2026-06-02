@@ -11,13 +11,14 @@
       {% endif %}
     </span>
   </summary>
-  <div class="collapse-content px-0 pb-0">
+  <div class="collapse-content px-0 pb-0" data-facet-filter-scope>
     {% if facet.filterable %}
       <div class="px-4 py-2 border-b border-base-200">
         <input type="text"
                placeholder="{% translate 'Filter' %}…"
                class="input input-xs input-bordered w-full"
-               hx-on:input="let q = this.value.toLowerCase(); this.closest('.collapse-content').querySelectorAll('[data-facet-label]').forEach(el => { el.style.display = el.dataset.facetLabel.toLowerCase().includes(q) ? '' : 'none'; })">
+               aria-label="{% blocktranslate with facet_label=facet.label %}Filter {{ facet_label }} values{% endblocktranslate %}"
+               data-facet-filter-input>
       </div>
     {% endif %}
     <div class="overflow-y-auto max-h-48 divide-y divide-base-200">

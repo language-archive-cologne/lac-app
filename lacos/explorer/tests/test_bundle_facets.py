@@ -280,6 +280,18 @@ def test_bundle_faceted_search_page_loads(client):
 
 
 @pytest.mark.django_db
+def test_bundle_faceted_search_uses_csp_safe_facet_filter(client):
+    response = client.get("/search/bundles/")
+    assert response.status_code == 200
+    page = response.content.decode("utf-8")
+
+    assert 'src="/static/js/src/facet-filter.js"' in page
+    assert "data-facet-filter-input" in page
+    assert "data-facet-filter-scope" in page
+    assert "hx-on:input" not in page
+
+
+@pytest.mark.django_db
 def test_scope_switch_button_does_not_become_default_search_submitter(client):
     response = client.get("/search/bundles/")
     assert response.status_code == 200
