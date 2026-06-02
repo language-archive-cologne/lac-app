@@ -45,19 +45,30 @@
     <!-- Core Verbs Content -->
     <div class="hidden group-has-[#tab-core:checked]:block p-6">
       <p class="text-sm text-base-content/70 mb-6">{% translate "Quick links to the repository discovery verbs." %}</p>
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {% for verb in core_verbs %}
-        <a href="{{ verb.href }}" target="_blank" rel="noopener noreferrer"
-           class="group block p-5 rounded-lg border border-base-300 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 transition-[border-color,box-shadow,transform] duration-200 ease-out active:scale-[0.98]">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="font-semibold text-base-content group-hover:text-primary transition-colors duration-150">{{ verb.verb }}</h3>
-            <svg class="w-4 h-4 text-base-content/40 group-hover:text-primary transition-colors duration-150" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
-            </svg>
-          </div>
-          <p class="text-sm text-base-content/60">{{ verb.description }}</p>
-        </a>
-        {% endfor %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-base-content/60">
+              <th class="py-2 text-left font-medium">{% translate "Verb" %}</th>
+              <th class="py-2 text-left font-medium">{% translate "Description" %}</th>
+              <th class="py-2 text-right font-medium">{% translate "Request" %}</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-base-300">
+            {% for verb in core_verbs %}
+            <tr>
+              <td class="py-3 font-mono font-medium text-base-content">{{ verb.verb }}</td>
+              <td class="py-3 text-base-content/70">{{ verb.description }}</td>
+              <td class="py-3 text-right">
+                <a href="{{ verb.href }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-primary hover:underline">
+                  {% translate "View" %}
+                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                </a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
     </div>
 
@@ -122,6 +133,7 @@
         </table>
       </div>
     </div>
+
   </div>
 </div>
 {% endblock content %}

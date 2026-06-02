@@ -79,6 +79,17 @@ def test_list_sets(client):
 
 
 @pytest.mark.django_db
+def test_overview_includes_get_record_examples(client):
+    response = client.get(reverse("oai-pmh"))
+    assert response.status_code == 200
+    body = response.content.decode("utf-8")
+    assert "GetRecord" in body
+    assert "metadataPrefix=oai_dc" in body
+    assert "identifier=oai:lacos:hdl:11341/00-0000-0000-0000-0D92-9" in body
+    assert 'id="tab-get-record"' not in body
+
+
+@pytest.mark.django_db
 def test_list_records_without_data_returns_error(client):
     response = client.get(
         reverse("oaipmh:endpoint"),

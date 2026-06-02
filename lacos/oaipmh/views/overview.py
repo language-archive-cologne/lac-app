@@ -13,6 +13,8 @@ class OAIPMHOverviewView(TemplateView):
         context = super().get_context_data(**kwargs)
         endpoint_path = reverse("oaipmh:endpoint")
         absolute_endpoint = self.request.build_absolute_uri(endpoint_path)
+        collection_example_identifier = "oai:lacos:hdl:11341/00-0000-0000-0000-0D92-9"
+        bundle_example_identifier = "oai:lacos:bundle:hdl:11341/00-0000-0000-0000-0D93-7"
 
         metadata_formats = [
             {
@@ -72,9 +74,20 @@ class OAIPMHOverviewView(TemplateView):
                         "description": "Available set filters",
                         "href": f"{endpoint_path}?verb=ListSets",
                     },
+                    {
+                        "verb": "GetRecord",
+                        "description": "Single metadata record by OAI identifier",
+                        "href": (
+                            f"{endpoint_path}?verb=GetRecord"
+                            "&metadataPrefix=oai_dc"
+                            f"&identifier={collection_example_identifier}"
+                        ),
+                    },
                 ],
                 "list_identifiers_links": _list_links("ListIdentifiers"),
                 "list_records_links": _list_links("ListRecords"),
+                "get_record_example_identifier": collection_example_identifier,
+                "get_record_bundle_example_identifier": bundle_example_identifier,
             }
         )
         return context
