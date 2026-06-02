@@ -167,6 +167,20 @@ def _build_bundle_access_overview():
     }
 
     grouped: dict[str, dict[str, object]] = {}
+    for collection in _get_acl_queryset(Collection).order_by("identifier"):
+        collection_id = str(collection.pk)
+        collection_identifier = getattr(collection, "identifier", collection_id) or collection_id
+        grouped[collection_id] = {
+            "collection_id": collection_id,
+            "collection_identifier": collection_identifier,
+            "collection_name": _resolve_acl_display_name(collection),
+            "total_bundles": 0,
+            "public_count": 0,
+            "academic_count": 0,
+            "restricted_count": 0,
+            "missing_acl_count": 0,
+        }
+
     for bundle in _get_acl_queryset(Bundle).order_by("identifier"):
         structural_info = next(iter(bundle.structural_info.all()), None)
         collection = structural_info.is_member_of_collection if structural_info else None
@@ -212,8 +226,11 @@ def _build_bundle_access_overview():
             str(row["collection_identifier"]).lower(),
         ),
     )
+    collection_rows = [
+        row for row in rows if row["collection_id"] != "__unassigned__"
+    ]
     totals = {
-        "collections": len(rows),
+        "collections": len(collection_rows),
         "bundles": sum(int(row["total_bundles"]) for row in rows),
         "public": sum(int(row["public_count"]) for row in rows),
         "academic": sum(int(row["academic_count"]) for row in rows),

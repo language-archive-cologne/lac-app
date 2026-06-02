@@ -492,6 +492,7 @@ def test_acl_dashboard_panel_groups_bundle_access_by_collection(client, django_u
 
     col_a = Collection.objects.create(identifier="col-a")
     col_b = Collection.objects.create(identifier="col-b")
+    Collection.objects.create(identifier="col-empty")
     bundle_a1 = Bundle.objects.create(identifier="bundle-a1")
     bundle_a2 = Bundle.objects.create(identifier="bundle-a2")
     bundle_b1 = Bundle.objects.create(identifier="bundle-b1")
@@ -532,8 +533,14 @@ def test_acl_dashboard_panel_groups_bundle_access_by_collection(client, django_u
     assert rows["col-b"]["academic_count"] == 1
     assert rows["col-b"]["missing_acl_count"] == 0
 
+    assert rows["col-empty"]["total_bundles"] == 0
+    assert rows["col-empty"]["public_count"] == 0
+    assert rows["col-empty"]["restricted_count"] == 0
+    assert rows["col-empty"]["academic_count"] == 0
+    assert rows["col-empty"]["missing_acl_count"] == 0
+
     totals = response.context["bundle_access_totals"]
-    assert totals["collections"] == 2
+    assert totals["collections"] == 3
     assert totals["bundles"] == 3
     assert totals["public"] == 1
     assert totals["academic"] == 1
@@ -573,7 +580,7 @@ def test_acl_dashboard_panel_includes_unassigned_and_missing_acl_bundles(
     assert rows["Unassigned"]["missing_acl_count"] == 0
 
     totals = response.context["bundle_access_totals"]
-    assert totals["collections"] == 2
+    assert totals["collections"] == 1
     assert totals["bundles"] == 2
     assert totals["public"] == 1
     assert totals["academic"] == 0

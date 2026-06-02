@@ -193,8 +193,6 @@ class CollectionListView(ListView):
             ),
         ).annotate(
             bundles_count=Count('bundle_collection', distinct=True)
-        ).filter(
-            bundles_count__gt=0,
         )
 
         language_filter = self.request.GET.get("language", "").strip()

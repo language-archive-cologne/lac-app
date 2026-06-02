@@ -290,7 +290,7 @@ def test_language_index_component_styles_define_lighter_neutral_palette():
 
 
 @pytest.mark.django_db
-def test_collection_list_excludes_zero_bundle_collections(client):
+def test_collection_list_includes_zero_bundle_collections(client):
     empty_collection = _build_empty_collection(1)
     visible_collection = _build_collection_graph(1)
 
@@ -299,11 +299,11 @@ def test_collection_list_excludes_zero_bundle_collections(client):
     assert response.status_code == 200
     rendered_ids = {collection.pk for collection in response.context["collection_list"]}
     assert visible_collection.pk in rendered_ids
-    assert empty_collection.pk not in rendered_ids
+    assert empty_collection.pk in rendered_ids
 
 
 @pytest.mark.django_db
-def test_collection_map_markers_exclude_zero_bundle_collections():
+def test_collection_map_markers_include_zero_bundle_collections():
     cache.clear()
     empty_collection = _build_empty_collection(2)
     visible_collection = _build_collection_graph(2)
@@ -312,4 +312,4 @@ def test_collection_map_markers_exclude_zero_bundle_collections():
     marker_urls = {marker["url"] for marker in markers}
 
     assert f"/collections/{visible_collection.pk}/" in marker_urls
-    assert f"/collections/{empty_collection.pk}/" not in marker_urls
+    assert f"/collections/{empty_collection.pk}/" in marker_urls

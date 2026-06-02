@@ -6,7 +6,7 @@ from django.db.models import Count, Prefetch
 from django.urls import reverse
 
 
-MAP_MARKERS_CACHE_KEY = "explorer:map_markers:v4"
+MAP_MARKERS_CACHE_KEY = "explorer:map_markers:v5"
 MAP_MARKERS_CACHE_TIMEOUT = 86400  # 24 hours (invalidated on collection changes)
 
 
@@ -31,8 +31,6 @@ def _all_map_collections():
         ),
     ).annotate(
         bundles_count=Count('bundle_collection', distinct=True)
-    ).filter(
-        bundles_count__gt=0,
     )
 
 
