@@ -10,6 +10,7 @@ from urllib.parse import parse_qs, urlparse
 from django.contrib.contenttypes.models import ContentType
 from django.urls import reverse
 from django.contrib.auth.models import Group
+from django.utils import timezone
 
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
@@ -31,7 +32,8 @@ def _make_archivist(user):
 
 
 @pytest.mark.django_db
-def test_acl_update_permission_creates_record(client, django_user_model):
+@patch("lacos.storage.services.acl_service.ACLService.save_permission")
+def test_acl_update_permission_creates_record_without_saving_to_s3(mock_save, client, django_user_model):
     user = django_user_model.objects.create_user("owner", "owner@example.com", "pass")
     _make_archivist(user)
     client.force_login(user)
@@ -50,11 +52,14 @@ def test_acl_update_permission_creates_record(client, django_user_model):
 
     assert response.status_code == 302
     assert "message=" in response.url
+    query = parse_qs(urlparse(response.url).query)
+    assert query["message"] == ["Updated collection col-1 in database as Public"]
 
     ct = ContentType.objects.get_for_model(Collection)
     record = ACLPermissions.objects.get(content_type=ct, object_id=str(collection.pk))
     assert record.access_level == ACL_LEVEL_PUBLIC
-    assert record.last_synced is not None
+    assert record.last_synced is None
+    mock_save.assert_not_called()
 
 
 @pytest.mark.django_db
@@ -65,10 +70,12 @@ def test_acl_update_permission_updates_existing_record(client, django_user_model
 
     bundle = Bundle.objects.create(identifier="bundle-1")
     ct = ContentType.objects.get_for_model(Bundle)
+    original_last_synced = timezone.now()
     record = ACLPermissions.objects.create(
         content_type=ct,
         object_id=str(bundle.pk),
         access_level=ACL_LEVEL_PUBLIC,
+        last_synced=original_last_synced,
     )
 
     response = client.post(
@@ -86,6 +93,7 @@ def test_acl_update_permission_updates_existing_record(client, django_user_model
     record.refresh_from_db()
     assert record.access_level == ACL_LEVEL_RESTRICTED
     assert record.permissions_data == []
+    assert record.last_synced == original_last_synced
 
 
 @pytest.mark.django_db
@@ -764,30 +772,12 @@ def test_acl_load_single_htmx_failure_keeps_table_refresh_and_escapes_error(
 
 
 # ---------------------------------------------------------------------------
-# Integration tests: ACL save pipeline normalization
+# Integration tests: ACL edit normalization
 # ---------------------------------------------------------------------------
 
 
-def _mock_save_permission(perm):
-    """Return a successful ACLResult without touching S3."""
-    from lacos.storage.services.acl_service import ACLResult
-
-    return ACLResult(
-        obj=perm.content_object,
-        bucket="mock-bucket",
-        key="mock-key",
-        success=True,
-    )
-
-
 @pytest.mark.django_db
-@patch(
-    "lacos.storage.services.acl_service.ACLService.save_permission",
-    side_effect=_mock_save_permission,
-)
-def test_acl_update_permission_normalizes_bare_email(
-    _mock_save, client, django_user_model
-):
+def test_acl_update_permission_normalizes_bare_email(client, django_user_model):
     """A bare email in extra_user_agents is stored as urn:lacos:eppn:<email>."""
     user = django_user_model.objects.create_user("norm1", "norm1@example.com", "pass")
     _make_archivist(user)
@@ -822,13 +812,7 @@ def test_acl_update_permission_normalizes_bare_email(
 
 
 @pytest.mark.django_db
-@patch(
-    "lacos.storage.services.acl_service.ACLService.save_permission",
-    side_effect=_mock_save_permission,
-)
-def test_acl_update_permission_preserves_full_uri(
-    _mock_save, client, django_user_model
-):
+def test_acl_update_permission_preserves_full_uri(client, django_user_model):
     """A URI already in urn:lacos:eppn: form is preserved, not double-normalized."""
     user = django_user_model.objects.create_user("norm2", "norm2@example.com", "pass")
     _make_archivist(user)
@@ -864,13 +848,7 @@ def test_acl_update_permission_preserves_full_uri(
 
 
 @pytest.mark.django_db
-@patch(
-    "lacos.storage.services.acl_service.ACLService.save_permission",
-    side_effect=_mock_save_permission,
-)
-def test_acl_update_permission_generates_missing_selected_user_acl_uri(
-    _mock_save, client, django_user_model
-):
+def test_acl_update_permission_generates_missing_selected_user_acl_uri(client, django_user_model):
     archivist = django_user_model.objects.create_user("norm3", "norm3@example.com", "pass")
     _make_archivist(archivist)
     client.force_login(archivist)
@@ -959,6 +937,7 @@ def test_acl_edit_form_lists_and_selects_saml_user_with_generated_acl_uri(
     assert "fmondac1@uni-koeln.de" in html
     assert "urn:lacos:eppn:fmondac1@uni-koeln.de" in html
     assert "checked" in current_users_html
+    assert ">Update<" in html
     assert "unlisted@uni-koeln.de" not in current_users_html
     assert 'value="%s"' % unselected_user.pk in add_users_html
     assert "unlisted@uni-koeln.de" in add_users_html

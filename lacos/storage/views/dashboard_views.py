@@ -15,7 +15,6 @@ from django.middleware.csrf import get_token
 from django.shortcuts import render, redirect
 from django.template.loader import render_to_string
 from django.urls import reverse
-from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.text import slugify
 from django.views import View
@@ -1002,8 +1001,7 @@ def acl_update_permission(request):
     perm.access_level = access_level
     perm.permissions_data = permissions_data if permissions_data or access_level == ACL_LEVEL_RESTRICTED else None
     perm.read_agents = read_agents if read_agents else None
-    perm.last_synced = timezone.now()
-    perm.save(update_fields=["access_level", "permissions_data", "read_agents", "last_synced"])
+    perm.save(update_fields=["access_level", "permissions_data", "read_agents"])
 
     label = dict(ACLPermissions.ACCESS_LEVEL_CHOICES).get(access_level, access_level)
     identifier = object_id
@@ -1015,7 +1013,7 @@ def acl_update_permission(request):
 
     return _redirect_with_message(
         next_url,
-        f"Updated {object_type} {identifier} to {label}.",
+        f"Updated {object_type} {identifier} in database as {label}.",
     )
 
 

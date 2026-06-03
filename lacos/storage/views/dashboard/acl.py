@@ -18,7 +18,6 @@ from django.shortcuts import get_object_or_404, render, redirect
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.html import escape
-from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from lacos.blam.models.collection.collection_repository import Collection
@@ -911,23 +910,14 @@ def acl_update_permission(request):
     perm.access_level = access_level
     perm.permissions_data = permissions_data if permissions_data or access_level == ACL_LEVEL_RESTRICTED else None
     perm.read_agents = read_agents if read_agents else None
-    perm.last_synced = timezone.now()
-    perm.save(update_fields=["access_level", "permissions_data", "read_agents", "last_synced"])
-
-    # Save to S3
-    from lacos.storage.services.acl_service import ACLService
-    acl_service = ACLService(skip_bucket_check=True)
-    save_result = acl_service.save_permission(perm)
+    perm.save(update_fields=["access_level", "permissions_data", "read_agents"])
 
     label = dict(ACLPermissions.ACCESS_LEVEL_CHOICES).get(access_level, access_level)
     identifier = object_id
     if obj is not None:
         identifier = getattr(obj, "identifier", str(obj.pk)) or str(obj.pk)
 
-    if save_result.success:
-        message = f"Saved {object_type} {identifier} as {label}"
-    else:
-        message = f"Updated DB but failed to save to S3: {save_result.error}"
+    message = f"Updated {object_type} {identifier} in database as {label}"
 
     # Handle HTMX partial return
     if request.POST.get("return_partial") == "true" and request.headers.get("HX-Request"):
