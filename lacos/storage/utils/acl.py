@@ -81,9 +81,14 @@ def extract_read_agents(entries: Iterable[Mapping[str, object]] | None) -> list[
         agent = entry.get("agent")
         agent_class = entry.get("agentClass")
 
+        # A concrete agent takes precedence: when an entry names a specific
+        # agent, its agentClass (e.g. foaf:Person/foaf:Group) is only a type
+        # annotation and must not be listed as a separate read agent. The
+        # agentClass is the agent identifier only for class-based rules with no
+        # concrete agent (foaf:Agent, acl:AuthenticatedAgent).
         if isinstance(agent, str) and agent:
             agents.append(agent)
-        if isinstance(agent_class, str) and agent_class:
+        elif isinstance(agent_class, str) and agent_class:
             agents.append(agent_class)
 
     # Preserve order while deduplicating

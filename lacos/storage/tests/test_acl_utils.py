@@ -49,6 +49,25 @@ def test_extract_read_agents_deduplicates_and_orders():
     assert agents == ["user1", WAC_AUTHENTICATED_AGENT, WAC_AGENT]
 
 
+def test_extract_read_agents_ignores_agent_class_when_agent_present():
+    """A typed person/group entry must not leak its agentClass as a read agent."""
+    entries = [
+        {"agentClass": "foaf:Person", "agent": "urn:lacos:eppn:adebbel1@uni-koeln.de", "mode": [WAC_READ]},
+        {"agentClass": "foaf:Person", "agent": "urn:lacos:eppn:fmondac1@uni-koeln.de", "mode": [WAC_READ]},
+        {"agentClass": "foaf:Group", "agent": "urn:lacos:group:curators", "mode": [WAC_READ]},
+    ]
+
+    agents = extract_read_agents(entries)
+
+    assert agents == [
+        "urn:lacos:eppn:adebbel1@uni-koeln.de",
+        "urn:lacos:eppn:fmondac1@uni-koeln.de",
+        "urn:lacos:group:curators",
+    ]
+    assert "foaf:Person" not in agents
+    assert "foaf:Group" not in agents
+
+
 # =============================================================================
 # Tests for normalize_agent_uri
 # =============================================================================
