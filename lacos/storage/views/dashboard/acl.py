@@ -91,6 +91,19 @@ def _get_acl_options(model):
     return options
 
 
+def _split_acl_user_options(users, selected_user_ids):
+    """Return selected users first and addable users separately for the ACL edit UI."""
+    selected_ids = {int(user_id) for user_id in selected_user_ids}
+    selected_users = []
+    addable_users = []
+    for user in users:
+        if user.id in selected_ids:
+            selected_users.append(user)
+        else:
+            addable_users.append(user)
+    return selected_users, addable_users
+
+
 def _render_load_summary_partial(request, summary=None, error_message=None):
     """Render load summary partial template."""
     html = render_to_string(
@@ -1016,6 +1029,10 @@ def acl_edit_permission_form(request, object_type, object_id):
 
     external_user_agents = set(_normalize_agent_values(external_user_agents))
     external_group_agents = set(_normalize_agent_values(external_group_agents))
+    selected_users, addable_users = _split_acl_user_options(
+        available_users,
+        selected_user_ids,
+    )
 
     current_access_level = perm.access_level if perm else ACL_LEVEL_RESTRICTED
     if current_access_level not in {ACL_LEVEL_PUBLIC, ACL_LEVEL_ACADEMIC, ACL_LEVEL_RESTRICTED}:
@@ -1030,6 +1047,8 @@ def acl_edit_permission_form(request, object_type, object_id):
         "current_access_level": current_access_level,
         "access_level_choices": ACLPermissions.ACCESS_LEVEL_CHOICES,
         "available_users": available_users,
+        "selected_users": selected_users,
+        "addable_users": addable_users,
         "available_groups": GroupACL.objects.exclude(acl_agent_uri__isnull=True).exclude(acl_agent_uri="").select_related("group").order_by("group__name"),
         "selected_user_ids": selected_user_ids,
         "selected_group_ids": selected_group_ids,

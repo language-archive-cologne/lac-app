@@ -126,8 +126,19 @@ def test_acl_edit_form_fragment_has_no_inline_script_execution():
     html = Path(
         "lacos/storage/templates/dashboard/partials/acl_edit_form.html",
     ).read_text()
+    modal_html = Path(
+        "lacos/storage/templates/dashboard/partials/acl_edit_modal.html",
+    ).read_text()
 
     _assert_no_inline_handlers(html)
+    _assert_no_inline_handlers(modal_html)
     assert "<script>" not in html
+    assert "<script>" not in modal_html
+    assert "modal-box w-11/12 max-w-2xl" in modal_html
     assert "data-acl-access-level" in html
     assert "data-acl-agent-fields" in html
+    assert "data-acl-current-users" in html
+    assert "data-acl-add-users-widget" in html
+    assert "data-acl-user-filter" in html
+    assert "whitespace-normal break-words" in html
+    assert "leading-relaxed" in html

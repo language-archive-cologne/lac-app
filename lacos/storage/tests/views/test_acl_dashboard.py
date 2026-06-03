@@ -164,6 +164,9 @@ def test_acl_edit_form_uses_modal_controller_hooks(client, django_user_model):
     assert "data-acl-edit-close" in html
     assert "data-acl-access-level" in html
     assert "data-acl-agent-fields" in html
+    assert "data-acl-current-users" in html
+    assert "data-acl-add-users-widget" in html
+    assert "data-acl-user-filter" in html
     assert "onclick=" not in html
     assert "onchange=" not in html
     assert "<script>" not in html
@@ -184,7 +187,9 @@ def test_acl_admin_dashboard_includes_acl_edit_modal_controller(
     assert "function openAclEditModal()" in html
     assert "function closeAclEditModal()" in html
     assert "function toggleAclAgentFields(" in html
+    assert "function filterAclUserCandidates(" in html
     assert "htmx:afterRequest" in html
+    assert "[data-acl-user-filter]" in html
     assert "[data-acl-edit-form]" in html
 
 
@@ -908,6 +913,12 @@ def test_acl_edit_form_lists_and_selects_saml_user_with_generated_acl_uri(
         saml_persistent_id="persistent-id-4",
         acl_agent_uri=None,
     )
+    unselected_user = django_user_model.objects.create_user(
+        "unlisted@uni-koeln.de",
+        password="pass",
+        saml_persistent_id="persistent-id-4b",
+        acl_agent_uri=None,
+    )
     collection = Collection.objects.create(identifier="norm-col-4")
     ct = ContentType.objects.get_for_model(Collection)
     ACLPermissions.objects.create(
@@ -930,10 +941,20 @@ def test_acl_edit_form_lists_and_selects_saml_user_with_generated_acl_uri(
 
     assert response.status_code == 200
     html = response.content.decode()
-    assert 'value="%s"' % selected_user.pk in html
+    current_users_html = html.split("data-acl-current-users", 1)[1].split(
+        "data-acl-add-users-widget",
+        1,
+    )[0]
+    add_users_html = html.split("data-acl-add-users-widget", 1)[1]
+
+    assert 'value="%s"' % selected_user.pk in current_users_html
     assert "fmondac1@uni-koeln.de" in html
     assert "urn:lacos:eppn:fmondac1@uni-koeln.de" in html
-    assert f'value="{selected_user.pk}" selected' in html
+    assert "checked" in current_users_html
+    assert "unlisted@uni-koeln.de" not in current_users_html
+    assert 'value="%s"' % unselected_user.pk in add_users_html
+    assert "unlisted@uni-koeln.de" in add_users_html
+    assert "data-acl-user-filter" in add_users_html
 
 
 @pytest.mark.django_db
@@ -971,4 +992,9 @@ def test_acl_edit_form_maps_legacy_agent_only_entry_to_selected_user(
 
     assert response.status_code == 200
     html = response.content.decode()
-    assert f'value="{selected_user.pk}" selected' in html
+    current_users_html = html.split("data-acl-current-users", 1)[1].split(
+        "data-acl-add-users-widget",
+        1,
+    )[0]
+    assert f'value="{selected_user.pk}"' in current_users_html
+    assert "checked" in current_users_html

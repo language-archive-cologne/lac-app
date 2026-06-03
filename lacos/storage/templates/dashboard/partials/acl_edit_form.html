@@ -1,3 +1,5 @@
+{% load acl_extras %}
+
 <form
   method="post"
   action="{% url 'storage:acl_update_permission' %}"
@@ -16,10 +18,10 @@
   <input type="hidden" name="next" value="{{ next_url }}">
   <input type="hidden" name="return_partial" value="true">
 
-  <div class="space-y-1">
-    <div class="font-medium">{{ identifier }}</div>
+  <div class="min-w-0 space-y-1">
+    <div class="break-words font-medium">{{ identifier }}</div>
     {% if name %}
-    <div class="text-sm text-base-content/60">{{ name }}</div>
+    <div class="break-words text-sm text-base-content/60">{{ name }}</div>
     {% endif %}
   </div>
 
@@ -37,36 +39,96 @@
       <option value="{{ value }}" {% if value == current_access_level %}selected{% endif %}>{{ label }}</option>
       {% endfor %}
     </select>
-    <label class="label">
-      <span class="label-text-alt text-base-content/60">
+    <label class="label px-0">
+      <span class="label-text-alt w-full whitespace-normal break-words text-base-content/60 leading-relaxed">
         Public: anyone, Academic: logged-in users, Restricted: specific users/groups
       </span>
     </label>
   </div>
 
   <div id="agent-fields" data-acl-agent-fields class="space-y-4 {% if current_access_level != 'restricted' %}hidden{% endif %}">
-    <div class="form-control">
+    <div class="form-control" data-acl-current-users>
       <label class="label">
         <span class="label-text font-medium">Users with access</span>
       </label>
-      <select
-        name="user_ids"
-        class="select select-bordered w-full"
-        multiple
-        size="4"
-      >
-        {% for user in available_users %}
-        <option value="{{ user.id }}" {% if user.id in selected_user_ids %}selected{% endif %} title="{{ user.effective_acl_agent_uri|default:user.acl_agent_uri }}">
-          {{ user.username }}{% if user.name %} ({{ user.name }}){% endif %}
-        </option>
+      <div class="space-y-2 rounded-md border border-base-300 bg-base-100 p-3">
+        {% for user in selected_users %}
+        <label class="flex items-start gap-3 rounded-md px-2 py-1.5 hover:bg-base-200">
+          <input
+            type="checkbox"
+            name="user_ids"
+            value="{{ user.id }}"
+            class="checkbox checkbox-sm mt-1"
+            checked
+          >
+          <span class="min-w-0">
+            <span class="block text-sm font-medium text-base-content">
+              {{ user.username }}{% if user.name %} ({{ user.name }}){% endif %}
+            </span>
+            <span class="block truncate text-xs text-base-content/60" title="{{ user.effective_acl_agent_uri|default:user.acl_agent_uri }}">
+              {{ user.effective_acl_agent_uri|default:user.acl_agent_uri|acl_agent_display }}
+            </span>
+          </span>
+        </label>
         {% empty %}
-        <option disabled>No users with ACL URIs configured</option>
+        <div class="rounded-md bg-base-200 px-3 py-2 text-sm text-base-content/60">
+          No local users currently have access.
+        </div>
         {% endfor %}
-      </select>
-      <label class="label">
-        <span class="label-text-alt text-base-content/60">Hold Ctrl/Cmd to select multiple. URIs shown will be stored in acl.json</span>
+      </div>
+      <label class="label px-0">
+        <span class="label-text-alt w-full whitespace-normal break-words text-base-content/60 leading-relaxed">Uncheck a user to remove access.</span>
       </label>
     </div>
+
+    <details class="rounded-md border border-base-300 bg-base-100" data-acl-add-users-widget>
+      <summary class="cursor-pointer select-none px-3 py-2 text-sm font-medium text-base-content">
+        Add local users
+      </summary>
+      <div class="space-y-3 border-t border-base-300 p-3">
+        <label class="flex flex-col gap-1">
+          <span class="text-xs font-medium uppercase tracking-widest text-base-content/50">Filter users</span>
+          <input
+            type="search"
+            class="input input-bordered input-sm w-full"
+            placeholder="Username, name, email, or ACL URI"
+            data-acl-user-filter
+          >
+        </label>
+        <div class="max-h-44 space-y-1 overflow-y-auto" data-acl-user-candidates>
+          {% for user in addable_users %}
+          <label
+            class="flex items-start gap-3 rounded-md px-2 py-1.5 hover:bg-base-200"
+            data-acl-user-candidate
+            data-acl-user-search="{{ user.username|default_if_none:''|lower }} {{ user.name|default_if_none:''|lower }} {{ user.email|default_if_none:''|lower }} {{ user.effective_acl_agent_uri|default_if_none:''|lower }}"
+          >
+            <input
+              type="checkbox"
+              name="user_ids"
+              value="{{ user.id }}"
+              class="checkbox checkbox-sm mt-1"
+            >
+            <span class="min-w-0">
+              <span class="block text-sm font-medium text-base-content">
+                {{ user.username }}{% if user.name %} ({{ user.name }}){% endif %}
+              </span>
+              <span class="block truncate text-xs text-base-content/60" title="{{ user.effective_acl_agent_uri|default:user.acl_agent_uri }}">
+                {{ user.effective_acl_agent_uri|default:user.acl_agent_uri|acl_agent_display }}
+              </span>
+            </span>
+          </label>
+          {% empty %}
+          <div class="rounded-md bg-base-200 px-3 py-2 text-sm text-base-content/60">
+            No additional local users available.
+          </div>
+          {% endfor %}
+        </div>
+        <div class="hidden rounded-md bg-base-200 px-3 py-2 text-sm text-base-content/60" data-acl-user-filter-empty>
+          No matching users.
+        </div>
+      </div>
+    </details>
+
     <div class="form-control">
       <label class="label">
         <span class="label-text font-medium">Additional user URIs</span>
@@ -77,8 +139,8 @@
         rows="3"
         placeholder="user@example.org"
       >{{ external_user_agents }}</textarea>
-      <label class="label">
-        <span class="label-text-alt text-base-content/60">One per line. Enter email addresses or full URIs — they will be normalized automatically.</span>
+      <label class="label px-0">
+        <span class="label-text-alt w-full whitespace-normal break-words text-base-content/60 leading-relaxed">One per line. Enter email addresses or full URIs — they will be normalized automatically.</span>
       </label>
     </div>
 
@@ -111,8 +173,8 @@
         rows="2"
         placeholder="urn:lacos:group:example"
       >{{ external_group_agents }}</textarea>
-      <label class="label">
-        <span class="label-text-alt text-base-content/60">One URI per line. These will be preserved.</span>
+      <label class="label px-0">
+        <span class="label-text-alt w-full whitespace-normal break-words text-base-content/60 leading-relaxed">One URI per line. These will be preserved.</span>
       </label>
     </div>
   </div>

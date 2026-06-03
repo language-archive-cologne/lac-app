@@ -139,6 +139,35 @@
       fields.classList.toggle('hidden', select.value !== 'restricted');
     }
 
+    function filterAclUserCandidates(input) {
+      const widget = input.closest('[data-acl-add-users-widget]');
+      if (!widget) {
+        return;
+      }
+      const query = input.value.trim().toLowerCase();
+      let visibleCount = 0;
+      const candidates = Array.from(widget.querySelectorAll('[data-acl-user-candidate]'));
+      candidates.forEach(candidate => {
+        const haystack = candidate.dataset.aclUserSearch || '';
+        const isVisible = !query || haystack.includes(query);
+        candidate.classList.toggle('hidden', !isVisible);
+        if (isVisible) {
+          visibleCount += 1;
+        }
+      });
+      const emptyState = widget.querySelector('[data-acl-user-filter-empty]');
+      if (emptyState) {
+        emptyState.classList.toggle('hidden', candidates.length === 0 || visibleCount !== 0);
+      }
+    }
+
+    document.addEventListener('input', event => {
+      const target = event.target;
+      if (target.matches('[data-acl-user-filter]')) {
+        filterAclUserCandidates(target);
+      }
+    });
+
     document.addEventListener('change', event => {
       const target = event.target;
       if (target.matches('[data-acl-access-level]')) {
