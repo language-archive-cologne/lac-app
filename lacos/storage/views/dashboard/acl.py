@@ -154,19 +154,15 @@ def _render_acl_single_action_htmx_response(
     message: str,
     success: bool,
 ) -> HttpResponse:
-    """Return status text plus OOB table replacement for single ACL actions."""
-    status_class = "text-success" if success else "text-error"
-    status_html = f'<span class="text-xs {status_class}">{escape(message)}</span>'
-
+    """Return a refreshed ACL records table with action status embedded."""
     table_context = _build_acl_table_context_from_post_state(request, scope)
-    table_context["hx_oob"] = True
-    table_html = render_to_string(
+    table_context["action_status_message"] = message
+    table_context["action_status_success"] = success
+    return HttpResponse(render_to_string(
         "dashboard/partials/acl_records_table_wrapper.html",
         table_context,
         request=request,
-    )
-
-    return HttpResponse(f"{status_html}{table_html}")
+    ))
 
 
 def _build_bundle_access_overview():

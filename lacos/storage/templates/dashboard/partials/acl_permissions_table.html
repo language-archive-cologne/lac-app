@@ -65,7 +65,7 @@
       hx-target="#acl-records-table"
       hx-swap="outerHTML"
       hx-push-url="false"
-      hx-trigger="change, input changed delay:400ms from:#acl-records-search-{{ scope }}"
+      hx-trigger="change from:#acl-records-access-{{ scope }}, input changed delay:400ms from:#acl-records-search-{{ scope }}"
       hx-sync="this:replace"
     >
       <input type="hidden" name="sort" value="{{ sort }}">
@@ -85,7 +85,7 @@
       </label>
       <label class="flex flex-col gap-1">
         <span class="text-[11px] font-semibold uppercase tracking-widest text-base-content/50">Access</span>
-        <select name="access" class="select select-bordered select-sm w-40">
+        <select id="acl-records-access-{{ scope }}" name="access" class="select select-bordered select-sm w-40">
           <option value="all" {% if access_filter == 'all' %}selected{% endif %}>All</option>
           {% for value, label in access_level_choices %}
           <option value="{{ value }}" {% if access_filter == value %}selected{% endif %}>{{ label }}</option>
@@ -127,7 +127,11 @@
     </div>
   </div>
 
-  <div id="acl-records-status" class="px-4 pt-3 empty:hidden"></div>
+  <div id="acl-records-status" class="px-4 pt-3 empty:hidden">
+    {% if action_status_message %}
+      <span class="text-xs {% if action_status_success %}text-success{% else %}text-error{% endif %}">{{ action_status_message }}</span>
+    {% endif %}
+  </div>
 
   <div id="acl-records-selection" class="overflow-x-auto" data-acl-scope="{{ scope }}">
     <table class="table">
@@ -341,8 +345,8 @@
                 method="post"
                 action="{% url 'storage:acl_load_single' scope row.object_id %}"
                 hx-post="{% url 'storage:acl_load_single' scope row.object_id %}"
-                hx-target="#acl-records-action-status"
-                hx-swap="innerHTML"
+                hx-target="#acl-records-table"
+                hx-swap="outerHTML"
                 hx-confirm="Load ACL from S3? This will overwrite the database record."
               >
                 {% csrf_token %}
@@ -364,8 +368,8 @@
                 method="post"
                 action="{% url 'storage:acl_save_single' scope row.object_id %}"
                 hx-post="{% url 'storage:acl_save_single' scope row.object_id %}"
-                hx-target="#acl-records-action-status"
-                hx-swap="innerHTML"
+                hx-target="#acl-records-table"
+                hx-swap="outerHTML"
                 hx-confirm="Save ACL to S3? This will overwrite the S3 file."
               >
                 {% csrf_token %}

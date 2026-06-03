@@ -123,7 +123,7 @@ def test_acl_records_panel_renders(client, django_user_model):
     assert response.status_code == 200
     html = response.content.decode()
     assert "id=\"acl-records-table\"" in html
-    assert "id=\"acl-records-action-status\"" in html
+    assert "id=\"acl-records-status\"" in html
 
 
 @pytest.mark.django_db
@@ -139,10 +139,13 @@ def test_acl_records_table_uses_synced_search_and_delegated_edit_modal(
 
     assert response.status_code == 200
     html = response.content.decode()
-    assert 'hx-trigger="change, input changed delay:400ms from:#acl-records-search-bundle"' in html
+    assert (
+        'hx-trigger="change from:#acl-records-access-bundle, '
+        'input changed delay:400ms from:#acl-records-search-bundle"'
+    ) in html
     assert 'hx-sync="this:replace"' in html
     assert "hx-preserve" in html
-    assert 'hx-target="#acl-records-action-status"' in html
+    assert 'hx-target="#acl-records-table"' in html
     assert "data-acl-edit-open" in html
     assert "showModal()" not in html
 
@@ -623,7 +626,7 @@ def test_acl_admin_dashboard_tab_dashboard_has_bundle_access_overview(
 
 @pytest.mark.django_db
 @patch("lacos.storage.services.acl_service.ACLService.load_collection")
-def test_acl_load_single_htmx_returns_oob_table_and_status(
+def test_acl_load_single_htmx_returns_table_and_status(
     mock_load_collection, client, django_user_model
 ):
     from lacos.storage.services.acl_service import ACLResult
@@ -663,14 +666,16 @@ def test_acl_load_single_htmx_returns_oob_table_and_status(
     html = response.content.decode()
     assert "Loaded ACL for collection" in html
     assert 'id="acl-records-table"' in html
-    assert 'hx-swap-oob="outerHTML"' in html
+    assert 'hx-swap-oob="outerHTML"' not in html
+    assert 'id="acl-records-status"' in html
+    assert "text-success" in html
     assert 'value="alpha"' in html
     mock_load_collection.assert_called_once_with(collection, force_refresh=True)
 
 
 @pytest.mark.django_db
 @patch("lacos.storage.services.acl_service.ACLService.save_bundle")
-def test_acl_save_single_htmx_returns_oob_table_with_multiple_rows(
+def test_acl_save_single_htmx_returns_table_with_multiple_rows(
     mock_save_bundle, client, django_user_model
 ):
     from lacos.storage.services.acl_service import ACLResult
@@ -715,14 +720,16 @@ def test_acl_save_single_htmx_returns_oob_table_with_multiple_rows(
     html = response.content.decode()
     assert "Saved ACL for bundle" in html
     assert 'id="acl-records-table"' in html
-    assert 'hx-swap-oob="outerHTML"' in html
+    assert 'hx-swap-oob="outerHTML"' not in html
+    assert 'id="acl-records-status"' in html
+    assert "text-success" in html
     assert "vera-one" in html
     assert "vera-two" in html
 
 
 @pytest.mark.django_db
 @patch("lacos.storage.services.acl_service.ACLService.load_collection")
-def test_acl_load_single_htmx_failure_keeps_oob_refresh_and_escapes_error(
+def test_acl_load_single_htmx_failure_keeps_table_refresh_and_escapes_error(
     mock_load_collection, client, django_user_model
 ):
     from lacos.storage.services.acl_service import ACLResult
@@ -748,7 +755,8 @@ def test_acl_load_single_htmx_failure_keeps_oob_refresh_and_escapes_error(
 
     assert response.status_code == 200
     html = response.content.decode()
-    assert 'hx-swap-oob="outerHTML"' in html
+    assert 'id="acl-records-table"' in html
+    assert 'hx-swap-oob="outerHTML"' not in html
     assert "text-error" in html
     assert "Failed to load: &lt;bad&gt;" in html
     assert "Failed to load: <bad>" not in html
