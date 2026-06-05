@@ -26,7 +26,6 @@
         hx-post="{% url 'storage:acl_load_selected' %}"
         hx-target="#acl-records-status"
         hx-swap="innerHTML"
-        hx-include="[data-acl-selected-inputs]"
         hx-confirm="Load ACLs for selected {{ scope }}s? This will overwrite the database records."
         data-acl-selection-form
         data-acl-scope="{{ scope }}"
@@ -39,6 +38,83 @@
       <span class="text-[11px] uppercase tracking-widest text-base-content/50">
         Selected <span class="font-mono text-base-content/80" data-acl-selected-count="{{ scope }}">0</span>
       </span>
+      {% if scope == 'bundle' %}
+      <details class="dropdown dropdown-end">
+        <summary class="btn btn-ghost btn-xs uppercase tracking-widest">Bulk add readers</summary>
+        <div class="dropdown-content z-[1] mt-2 w-80 rounded-xl border border-base-300 bg-base-100 p-4 shadow-lg">
+          <form
+            method="post"
+            action="{% url 'storage:acl_bulk_update_bundle_readers' %}"
+            hx-post="{% url 'storage:acl_bulk_update_bundle_readers' %}"
+            hx-target="#acl-records-table"
+            hx-swap="outerHTML"
+            class="space-y-3"
+            data-acl-selection-form
+            data-acl-scope="{{ scope }}"
+          >
+            {% csrf_token %}
+            <input type="hidden" name="sort" value="{{ sort }}">
+            <input type="hidden" name="dir" value="{{ direction }}">
+            <input type="hidden" name="page" value="{{ page_obj.number }}">
+            <input type="hidden" name="q" value="{{ search_term }}">
+            <input type="hidden" name="status" value="{{ status_filter }}">
+            <input type="hidden" name="access" value="{{ access_filter }}">
+            <input type="hidden" name="collection" value="{{ collection_filter }}">
+            <div data-acl-selected-inputs></div>
+
+            <div class="space-y-1">
+              <label for="acl-bulk-users-{{ scope }}" class="text-[11px] font-semibold uppercase tracking-widest text-base-content/50">Local users</label>
+              <select id="acl-bulk-users-{{ scope }}" name="user_ids" class="select select-bordered select-sm w-full" multiple size="4">
+                {% for user in bulk_user_options %}
+                <option value="{{ user.id }}" title="{{ user.acl_agent_uri }}">{{ user.label }}</option>
+                {% empty %}
+                <option disabled>No local users available</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="space-y-1">
+              <label for="acl-bulk-extra-users-{{ scope }}" class="text-[11px] font-semibold uppercase tracking-widest text-base-content/50">Additional user URIs</label>
+              <textarea
+                id="acl-bulk-extra-users-{{ scope }}"
+                name="extra_user_agents"
+                class="textarea textarea-bordered textarea-sm w-full text-xs font-mono"
+                rows="3"
+                placeholder="maria@example.org"
+              ></textarea>
+              <p class="text-[11px] leading-relaxed text-base-content/60">One email address or URI per line. Only restricted bundle ACL records are changed.</p>
+            </div>
+
+            <div class="flex flex-col gap-2">
+              <button
+                type="submit"
+                name="target"
+                value="selected"
+                class="btn btn-primary btn-sm"
+                hx-confirm="Add these readers to selected bundle ACLs on the current selection?"
+              >Apply to selected</button>
+              <button
+                type="submit"
+                name="target"
+                value="filtered"
+                class="btn btn-outline btn-sm"
+                {% if bulk_restricted_matching_count %}
+                hx-confirm="Add these readers to all {{ bulk_restricted_matching_count }} restricted bundle ACLs matching the current filters across all pages?"
+                {% else %}
+                disabled
+                title="No restricted bundle ACLs match the current filters."
+                {% endif %}
+              >Apply to all {{ bulk_restricted_matching_count }} restricted matching</button>
+              {% if not bulk_restricted_matching_count %}
+              <p class="text-[11px] leading-relaxed text-base-content/60">
+                No restricted bundle ACLs match the current filters.
+              </p>
+              {% endif %}
+            </div>
+          </form>
+        </div>
+      </details>
+      {% endif %}
       {% if orphan_count %}
       <form
         method="post"
@@ -65,13 +141,25 @@
       hx-target="#acl-records-table"
       hx-swap="outerHTML"
       hx-push-url="false"
-      hx-trigger="change from:#acl-records-access-{{ scope }}, input changed delay:400ms from:#acl-records-search-{{ scope }}"
+      hx-trigger="change from:#acl-records-access-{{ scope }}, change from:#acl-records-collection-{{ scope }}, input changed delay:400ms from:#acl-records-search-{{ scope }}"
       hx-sync="this:replace"
+      data-acl-clear-selection-scope="{{ scope }}"
     >
       <input type="hidden" name="sort" value="{{ sort }}">
       <input type="hidden" name="dir" value="{{ direction }}">
       <input type="hidden" name="page" value="1">
       <input type="hidden" name="status" value="{{ status_filter }}">
+      {% if scope == 'bundle' %}
+      <label class="flex flex-col gap-1">
+        <span class="text-[11px] font-semibold uppercase tracking-widest text-base-content/50">Collection</span>
+        <select id="acl-records-collection-{{ scope }}" name="collection" class="select select-bordered select-sm w-56">
+          <option value="all" {% if collection_filter == 'all' %}selected{% endif %}>All collections</option>
+          {% for collection in collection_options %}
+          <option value="{{ collection.id }}" {% if collection_filter == collection.id %}selected{% endif %}>{{ collection.label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {% endif %}
       <label class="flex flex-col gap-1 min-w-[16rem] flex-1">
         <span class="text-[11px] font-semibold uppercase tracking-widest text-base-content/50">Search</span>
         <input
@@ -105,10 +193,11 @@
               type="button"
               aria-pressed="false"
               class="btn btn-sm join-item bg-base-100 border border-base-300 text-base-content/70 hover:bg-base-200"
-              hx-get="{{ endpoint }}?sort={{ sort }}&dir={{ direction }}&page=1&q={{ search_term|urlencode }}&access={{ access_filter|urlencode }}&status={{ value|urlencode }}"
+              hx-get="{{ endpoint }}?sort={{ sort }}&dir={{ direction }}&page=1&q={{ search_term|urlencode }}&access={{ access_filter|urlencode }}&status={{ value|urlencode }}{% if scope == 'bundle' and collection_filter != 'all' %}&collection={{ collection_filter|urlencode }}{% endif %}"
               hx-target="#acl-records-table"
               hx-swap="outerHTML"
               hx-push-url="false"
+              data-acl-clear-selection-scope="{{ scope }}"
             >{{ label }}</button>
           {% endif %}
         {% endfor %}
@@ -123,6 +212,7 @@
         hx-target="#acl-records-table"
         hx-swap="outerHTML"
         hx-push-url="false"
+        data-acl-clear-selection-scope="{{ scope }}"
       >Clear</button>
     </div>
   </div>
@@ -223,6 +313,11 @@
               <div class="font-semibold leading-snug">{{ row.name }}</div>
               {% endif %}
               <div class="text-xs font-mono text-base-content/55">{{ row.identifier }}</div>
+              {% if row.collection_identifier %}
+              <div class="text-[11px] text-base-content/50">
+                Collection: {{ row.collection_identifier }}{% if row.collection_name and row.collection_name != row.collection_identifier %} — {{ row.collection_name }}{% endif %}
+              </div>
+              {% endif %}
             {% endif %}
             {% if not row.object_exists %}
             <span class="inline-flex items-center rounded-full border border-error/40 bg-error/10 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-error">Object missing</span>

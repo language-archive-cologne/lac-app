@@ -149,6 +149,7 @@ def test_acl_records_table_uses_synced_search_and_delegated_edit_modal(
     html = response.content.decode()
     assert (
         'hx-trigger="change from:#acl-records-access-bundle, '
+        'change from:#acl-records-collection-bundle, '
         'input changed delay:400ms from:#acl-records-search-bundle"'
     ) in html
     assert 'hx-sync="this:replace"' in html
@@ -156,6 +157,53 @@ def test_acl_records_table_uses_synced_search_and_delegated_edit_modal(
     assert 'hx-target="#acl-records-table"' in html
     assert "data-acl-edit-open" in html
     assert "showModal()" not in html
+
+
+@pytest.mark.django_db
+def test_acl_records_table_filters_bundles_by_collection(client, django_user_model):
+    user = django_user_model.objects.create_user("bundle-filter", "filter@example.com", "pass")
+    _make_archivist(user)
+    client.force_login(user)
+
+    target_collection = Collection.objects.create(identifier="totoli")
+    other_collection = Collection.objects.create(identifier="other")
+    target_bundle = Bundle.objects.create(identifier="totoli-bundle")
+    other_bundle = Bundle.objects.create(identifier="other-bundle")
+    BundleStructuralInfo.objects.create(
+        bundle=target_bundle,
+        is_member_of_collection=target_collection,
+    )
+    BundleStructuralInfo.objects.create(
+        bundle=other_bundle,
+        is_member_of_collection=other_collection,
+    )
+    bundle_ct = ContentType.objects.get_for_model(Bundle)
+    ACLPermissions.objects.create(
+        content_type=bundle_ct,
+        object_id=str(target_bundle.pk),
+        access_level=ACL_LEVEL_RESTRICTED,
+    )
+    ACLPermissions.objects.create(
+        content_type=bundle_ct,
+        object_id=str(other_bundle.pk),
+        access_level=ACL_LEVEL_RESTRICTED,
+    )
+
+    response = client.get(
+        reverse("storage:acl_records_table", args=["bundle"]),
+        {"collection": str(target_collection.pk)},
+    )
+
+    assert response.status_code == 200
+    html = response.content.decode()
+    assert "totoli-bundle" in html
+    assert "other-bundle" not in html
+    assert "Bulk add readers" in html
+    assert "Apply to selected" in html
+    assert "Apply to all 1 restricted matching" in html
+    assert f'value="{target_collection.pk}" selected' in html
+    assert response.context["collection_filter"] == str(target_collection.pk)
+    assert response.context["bulk_restricted_matching_count"] == 1
 
 
 @pytest.mark.django_db
@@ -199,6 +247,9 @@ def test_acl_admin_dashboard_includes_acl_edit_modal_controller(
     assert "function closeAclEditModal()" in html
     assert "function toggleAclAgentFields(" in html
     assert "function filterAclUserCandidates(" in html
+    assert "function clearSelection(scope)" in html
+    assert "data-acl-clear-selection-scope" in html
+    assert "htmx:beforeRequest" in html
     assert "htmx:afterRequest" in html
     assert "[data-acl-user-filter]" in html
     assert "[data-acl-edit-form]" in html
@@ -222,6 +273,189 @@ def test_acl_records_table_collection_rows_render_bundle_bulk_load_actions(
     html = response.content.decode()
     assert "Load missing" in html
     assert "Re-load all" in html
+
+
+def _permission_agents(record):
+    return [
+        entry["agent"]
+        for entry in record.permissions_data or []
+        if entry.get("agentClass") == "foaf:Person" and entry.get("agent")
+    ]
+
+
+@pytest.mark.django_db
+def test_acl_bulk_update_bundle_readers_updates_selected_restricted_records(
+    client, django_user_model
+):
+    archivist = django_user_model.objects.create_user("bulk-selected", "bulk@example.com", "pass")
+    _make_archivist(archivist)
+    client.force_login(archivist)
+
+    reader = django_user_model.objects.create_user(
+        "maria@uni-koeln.de",
+        password="pass",
+        saml_persistent_id="bulk-selected-reader",
+        acl_agent_uri=None,
+    )
+    selected_bundle = Bundle.objects.create(identifier="selected-bundle")
+    unselected_bundle = Bundle.objects.create(identifier="unselected-bundle")
+    bundle_ct = ContentType.objects.get_for_model(Bundle)
+    selected_record = ACLPermissions.objects.create(
+        content_type=bundle_ct,
+        object_id=str(selected_bundle.pk),
+        access_level=ACL_LEVEL_RESTRICTED,
+        permissions_data=[],
+        read_agents=[],
+    )
+    unselected_record = ACLPermissions.objects.create(
+        content_type=bundle_ct,
+        object_id=str(unselected_bundle.pk),
+        access_level=ACL_LEVEL_RESTRICTED,
+        permissions_data=[],
+        read_agents=[],
+    )
+
+    response = client.post(
+        reverse("storage:acl_bulk_update_bundle_readers"),
+        data={
+            "target": "selected",
+            "bundle_ids": [str(selected_bundle.pk)],
+            "user_ids": [str(reader.pk)],
+            "sort": "identifier",
+            "dir": "asc",
+            "page": "1",
+            "status": "all",
+            "access": "all",
+            "collection": "all",
+        },
+        HTTP_HX_REQUEST="true",
+    )
+
+    assert response.status_code == 200
+    selected_record.refresh_from_db()
+    unselected_record.refresh_from_db()
+    reader.refresh_from_db()
+
+    assert reader.acl_agent_uri == "urn:lacos:eppn:maria@uni-koeln.de"
+    assert "urn:lacos:eppn:maria@uni-koeln.de" in _permission_agents(selected_record)
+    assert "urn:lacos:eppn:maria@uni-koeln.de" not in _permission_agents(unselected_record)
+    assert "Added 1 reader(s) to 1 restricted bundle ACL record(s)." in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_acl_bulk_update_bundle_readers_updates_all_matching_filters_across_pages(
+    client, django_user_model, settings
+):
+    settings.STORAGE_ACL_TABLE_PAGE_SIZE = 1
+    archivist = django_user_model.objects.create_user("bulk-filtered", "filtered@example.com", "pass")
+    _make_archivist(archivist)
+    client.force_login(archivist)
+
+    target_collection = Collection.objects.create(identifier="totoli-bulk")
+    other_collection = Collection.objects.create(identifier="other-bulk")
+    first = Bundle.objects.create(identifier="totoli-001")
+    second = Bundle.objects.create(identifier="totoli-002")
+    academic = Bundle.objects.create(identifier="totoli-academic")
+    other = Bundle.objects.create(identifier="other-001")
+    for bundle in (first, second, academic):
+        BundleStructuralInfo.objects.create(
+            bundle=bundle,
+            is_member_of_collection=target_collection,
+        )
+    BundleStructuralInfo.objects.create(bundle=other, is_member_of_collection=other_collection)
+
+    bundle_ct = ContentType.objects.get_for_model(Bundle)
+    first_record = ACLPermissions.objects.create(
+        content_type=bundle_ct,
+        object_id=str(first.pk),
+        access_level=ACL_LEVEL_RESTRICTED,
+        permissions_data=[],
+        read_agents=[],
+    )
+    second_record = ACLPermissions.objects.create(
+        content_type=bundle_ct,
+        object_id=str(second.pk),
+        access_level=ACL_LEVEL_RESTRICTED,
+        permissions_data=[],
+        read_agents=[],
+    )
+    academic_record = ACLPermissions.objects.create(
+        content_type=bundle_ct,
+        object_id=str(academic.pk),
+        access_level=ACL_LEVEL_ACADEMIC,
+    )
+    other_record = ACLPermissions.objects.create(
+        content_type=bundle_ct,
+        object_id=str(other.pk),
+        access_level=ACL_LEVEL_RESTRICTED,
+        permissions_data=[],
+        read_agents=[],
+    )
+
+    response = client.post(
+        reverse("storage:acl_bulk_update_bundle_readers"),
+        data={
+            "target": "filtered",
+            "extra_user_agents": "maria@example.org",
+            "sort": "identifier",
+            "dir": "asc",
+            "page": "1",
+            "q": "",
+            "status": "has_acl",
+            "access": "all",
+            "collection": str(target_collection.pk),
+        },
+        HTTP_HX_REQUEST="true",
+    )
+
+    assert response.status_code == 200
+    for record in (first_record, second_record, academic_record, other_record):
+        record.refresh_from_db()
+
+    assert "urn:lacos:eppn:maria@example.org" in _permission_agents(first_record)
+    assert "urn:lacos:eppn:maria@example.org" in _permission_agents(second_record)
+    assert "urn:lacos:eppn:maria@example.org" not in _permission_agents(academic_record)
+    assert "urn:lacos:eppn:maria@example.org" not in _permission_agents(other_record)
+    assert "Added 1 reader(s) to 2 restricted bundle ACL record(s)." in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_acl_bulk_update_bundle_readers_ignores_missing_object_status_for_all_matching(
+    client, django_user_model
+):
+    archivist = django_user_model.objects.create_user("bulk-guard", "guard@example.com", "pass")
+    _make_archivist(archivist)
+    client.force_login(archivist)
+
+    bundle = Bundle.objects.create(identifier="guard-bundle")
+    bundle_ct = ContentType.objects.get_for_model(Bundle)
+    record = ACLPermissions.objects.create(
+        content_type=bundle_ct,
+        object_id=str(bundle.pk),
+        access_level=ACL_LEVEL_RESTRICTED,
+        permissions_data=[],
+        read_agents=[],
+    )
+
+    response = client.post(
+        reverse("storage:acl_bulk_update_bundle_readers"),
+        data={
+            "target": "filtered",
+            "extra_user_agents": "maria@example.org",
+            "sort": "identifier",
+            "dir": "asc",
+            "page": "1",
+            "status": "missing_object",
+            "access": "all",
+            "collection": "all",
+        },
+        HTTP_HX_REQUEST="true",
+    )
+
+    assert response.status_code == 200
+    record.refresh_from_db()
+    assert record.permissions_data == []
+    assert "No bundle ACLs matched this bulk update." in response.content.decode()
 
 
 @pytest.mark.django_db

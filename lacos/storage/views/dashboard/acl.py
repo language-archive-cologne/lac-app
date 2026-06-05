@@ -12,7 +12,8 @@ from urllib.parse import quote_plus
 from django.conf import settings
 from lacos.storage.permissions import archivist_required
 from django.contrib.contenttypes.models import ContentType
-from django.db import models
+from django.core.exceptions import ValidationError
+from django.db import models, transaction
 from django.http import HttpResponse, QueryDict
 from django.shortcuts import get_object_or_404, render, redirect
 from django.template.loader import render_to_string
@@ -137,7 +138,7 @@ def _build_acl_table_context_from_post_state(request, scope: str) -> dict[str, o
     from lacos.storage.views.dashboard_views import _build_acl_table_context
 
     table_query = QueryDict("", mutable=True)
-    for field_name in ("sort", "dir", "page", "q", "status", "access"):
+    for field_name in ("sort", "dir", "page", "q", "status", "access", "collection"):
         field_value = request.POST.get(field_name)
         if field_value not in (None, ""):
             table_query[field_name] = field_value
@@ -162,6 +163,63 @@ def _render_acl_single_action_htmx_response(
         table_context,
         request=request,
     ))
+
+
+def _parse_acl_agent_list(raw_value: str) -> list[str]:
+    if not raw_value:
+        return []
+    items: list[str] = []
+    normalized = re.sub(r"\\+n", "\n", raw_value)
+    for line in normalized.splitlines():
+        parts = [part.strip() for part in line.split(",") if part.strip()]
+        items.extend(parts)
+    return [value for value in items if value]
+
+
+def _collect_bulk_person_agents(request) -> set[str]:
+    from lacos.users.models import User
+
+    person_agents: set[str] = set()
+    user_ids = [user_id for user_id in request.POST.getlist("user_ids") if user_id]
+    for user in User.objects.filter(pk__in=user_ids):
+        ensure_acl_agent_uri(user, save=True)
+        if user.acl_agent_uri:
+            person_agents.add(user.acl_agent_uri)
+
+    for agent in _parse_acl_agent_list(request.POST.get("extra_user_agents", "")):
+        normalized = normalize_agent_uri(agent)
+        if normalized:
+            person_agents.add(normalized)
+
+    return person_agents
+
+
+def _add_person_agents_to_permission(perm: ACLPermissions, person_agents: set[str]) -> bool:
+    permissions_data = list(perm.permissions_data or [])
+    read_agents = list(perm.read_agents or [])
+    existing_agents = {
+        rule.get("agent")
+        for rule in permissions_data
+        if rule.get("agentClass") == "foaf:Person" and rule.get("agent")
+    }
+    existing_agents.update(read_agents)
+
+    agents_to_add = sorted(agent for agent in person_agents if agent not in existing_agents)
+    if not agents_to_add:
+        return False
+
+    for agent in agents_to_add:
+        permissions_data.append({
+            "agentClass": "foaf:Person",
+            "agent": agent,
+            "mode": ["acl:Read"],
+        })
+        read_agents.append(agent)
+
+    perm.permissions_data = permissions_data
+    perm.read_agents = list(dict.fromkeys(read_agents))
+    perm.save(update_fields=["permissions_data", "read_agents"])
+    return True
 
 
 def _build_bundle_access_overview():
@@ -850,16 +908,6 @@ def acl_update_permission(request):
         extra_user_agents_raw = request.POST.get("extra_user_agents", "")
         extra_group_agents_raw = request.POST.get("extra_group_agents", "")
 
-        def _parse_agent_list(raw_value: str) -> list[str]:
-            if not raw_value:
-                return []
-            items: list[str] = []
-            normalized = re.sub(r"\\+n", "\n", raw_value)
-            for line in normalized.splitlines():
-                parts = [part.strip() for part in line.split(",") if part.strip()]
-                items.extend(parts)
-            return [value for value in items if value]
-
         person_agents: set[str] = set()
         group_agents: set[str] = set()
 
@@ -880,12 +928,12 @@ def acl_update_permission(request):
             except GroupACL.DoesNotExist:
                 pass
 
-        for agent in _parse_agent_list(extra_user_agents_raw):
+        for agent in _parse_acl_agent_list(extra_user_agents_raw):
             normalized = normalize_agent_uri(agent)
             if normalized:
                 person_agents.add(normalized)
 
-        for agent in _parse_agent_list(extra_group_agents_raw):
+        for agent in _parse_acl_agent_list(extra_group_agents_raw):
             normalized = normalize_agent_uri(agent)
             if normalized:
                 group_agents.add(normalized)
@@ -924,6 +972,100 @@ def acl_update_permission(request):
         return redirect(reverse("storage:acl_records_table", args=[object_type]))
 
     return _redirect_with_message(next_url, message)
+
+
+@archivist_required
+@require_http_methods(["POST"])
+def acl_bulk_update_bundle_readers(request):
+    """Add person read agents to selected or filtered restricted bundle ACLs."""
+    target = request.POST.get("target")
+    if target not in {"selected", "filtered"}:
+        return _render_acl_single_action_htmx_response(
+            request,
+            scope="bundle",
+            message="Choose whether to update selected bundles or all matching filters.",
+            success=False,
+        )
+
+    person_agents = _collect_bulk_person_agents(request)
+    if not person_agents:
+        return _render_acl_single_action_htmx_response(
+            request,
+            scope="bundle",
+            message="Select at least one local user or enter a user URI.",
+            success=False,
+        )
+
+    if target == "filtered":
+        from lacos.storage.views.dashboard_views import build_acl_filtered_bundle_queryset
+
+        bundle_ids = [
+            str(pk)
+            for pk in build_acl_filtered_bundle_queryset(request.POST).values_list("pk", flat=True)
+        ]
+    else:
+        bundle_ids = [bundle_id for bundle_id in request.POST.getlist("bundle_ids") if bundle_id]
+        if bundle_ids:
+            try:
+                bundle_ids = [
+                    str(pk)
+                    for pk in Bundle.objects.filter(pk__in=bundle_ids).values_list("pk", flat=True)
+                ]
+            except (ValidationError, ValueError):
+                bundle_ids = []
+
+    if not bundle_ids:
+        return _render_acl_single_action_htmx_response(
+            request,
+            scope="bundle",
+            message="No bundle ACLs matched this bulk update.",
+            success=False,
+        )
+
+    bundle_ct = ContentType.objects.get_for_model(Bundle)
+    restricted_permissions = list(
+        ACLPermissions.objects.filter(
+            content_type=bundle_ct,
+            object_id__in=bundle_ids,
+            access_level=ACL_LEVEL_RESTRICTED,
+        )
+    )
+    if not restricted_permissions:
+        return _render_acl_single_action_htmx_response(
+            request,
+            scope="bundle",
+            message="No restricted bundle ACL records matched this bulk update.",
+            success=False,
+        )
+
+    updated_count = 0
+    with transaction.atomic():
+        for perm in restricted_permissions:
+            if _add_person_agents_to_permission(perm, person_agents):
+                updated_count += 1
+
+    skipped_count = 0 if target == "filtered" else len(bundle_ids) - len(restricted_permissions)
+    if updated_count:
+        message = (
+            f"Added {len(person_agents)} reader(s) to {updated_count} restricted bundle ACL record(s)."
+        )
+    else:
+        message = "All selected readers were already present on the matching restricted bundle ACL record(s)."
+    if skipped_count:
+        message = f"{message} Skipped {skipped_count} non-restricted or missing ACL record(s)."
+
+    if request.headers.get("HX-Request"):
+        return _render_acl_single_action_htmx_response(
+            request,
+            scope="bundle",
+            message=message,
+            success=True,
+        )
+
+    return _redirect_with_message(
+        request.POST.get("next"),
+        message,
+    )
 
 
 @archivist_required

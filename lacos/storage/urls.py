@@ -71,6 +71,7 @@ urlpatterns = [
     path("dashboard/acl/settings/", views.acl_update_settings, name="acl_update_settings"),
     path("dashboard/acl/permissions/orphans/<str:scope>/", views.acl_delete_orphans, name="acl_delete_orphans"),
     path("dashboard/acl/permissions/update/", views.acl_update_permission, name="acl_update_permission"),
+    path("dashboard/acl/permissions/bulk-readers/", views.acl_bulk_update_bundle_readers, name="acl_bulk_update_bundle_readers"),
     path("dashboard/acl/permissions/edit/<str:object_type>/<str:object_id>/", views.acl_edit_permission_form, name="acl_edit_permission_form"),
     
     # File operations

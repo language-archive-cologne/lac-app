@@ -112,6 +112,14 @@
       updateSelectionInputs(scope);
     }
 
+    function clearSelection(scope) {
+      if (!scope || !selectionStore[scope]) {
+        return;
+      }
+      selectionStore[scope].clear();
+      syncCheckboxes(scope);
+    }
+
     function getAclEditModal() {
       return document.getElementById('acl-edit-modal');
     }
@@ -242,6 +250,18 @@
       if (scope) {
         syncCheckboxes(scope);
       }
+    });
+
+    document.addEventListener('htmx:beforeRequest', event => {
+      const source = event.detail && event.detail.elt;
+      if (!source || !source.closest) {
+        return;
+      }
+      const clearSelectionControl = source.closest('[data-acl-clear-selection-scope]');
+      if (!clearSelectionControl) {
+        return;
+      }
+      clearSelection(clearSelectionControl.dataset.aclClearSelectionScope);
     });
 
     document.addEventListener('htmx:afterRequest', event => {

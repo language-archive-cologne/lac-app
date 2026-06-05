@@ -17,6 +17,7 @@ from .dashboard.acl import (
     acl_update_settings,
     acl_sync_scope_fields,
     acl_update_permission,
+    acl_bulk_update_bundle_readers,
     acl_edit_permission_form,
 )
 acl_sync_all = acl_load_all

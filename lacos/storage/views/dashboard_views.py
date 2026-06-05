@@ -6,6 +6,7 @@ from urllib.parse import quote_plus, urlencode
 from django.conf import settings
 from lacos.storage.permissions import archivist_required, manager_or_archivist_required
 from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import models
 from django.db.models import CharField, Exists, F, OuterRef, Q, Subquery
@@ -30,6 +31,7 @@ from lacos.storage.services.bucket_service import BucketService
 from lacos.storage.models.acl_config import ACLConfig
 from lacos.storage.observability import profiling_scope
 from lacos.storage.services.collection_service import BucketListingPage
+from lacos.users.utils import generate_acl_agent_uri
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +102,34 @@ def _get_acl_scope_model(scope: str):
     raise ValueError(f"Unsupported ACL scope: {scope}")
 
 
+def _normalize_collection_filter(value: str | None) -> str:
+    if not value or value == "all":
+        return "all"
+    try:
+        collection = Collection.objects.only("pk").get(pk=value)
+    except (Collection.DoesNotExist, ValidationError, ValueError):
+        return "__invalid__"
+    return str(collection.pk)
+
+
+def _get_acl_bulk_user_options() -> list[dict[str, str]]:
+    from lacos.users.models import User
+
+    options = []
+    for user in User.objects.order_by("username"):
+        acl_agent_uri = user.acl_agent_uri or generate_acl_agent_uri(user)
+        if not acl_agent_uri:
+            continue
+        options.append(
+            {
+                "id": str(user.pk),
+                "label": user.username,
+                "acl_agent_uri": acl_agent_uri,
+            }
+        )
+    return options
+
+
 def _empty_bundle_access_summary() -> dict[str, int]:
     return {
         "total_bundles": 0,
@@ -164,6 +194,90 @@ def _build_collection_bundle_access_summary(
     return summary_by_collection
 
 
+def _annotate_acl_objects_for_table(scope: str):
+    model = _get_acl_scope_model(scope)
+    content_type = ContentType.objects.get_for_model(model)
+    base_qs = _get_acl_queryset(model).annotate(
+        pk_str=Cast("pk", output_field=CharField())
+    )
+    perm_qs = ACLPermissions.objects.filter(
+        content_type=content_type,
+        object_id=OuterRef("pk_str"),
+    )
+    return base_qs.annotate(
+        has_permission=Exists(perm_qs),
+        access_level=Subquery(perm_qs.values("access_level")[:1]),
+        last_synced=Subquery(perm_qs.values("last_synced")[:1]),
+        read_agents=Subquery(perm_qs.values("read_agents")[:1]),
+        bucket=Subquery(perm_qs.values("ACL_file_bucket")[:1]),
+        key=Subquery(perm_qs.values("ACL_file_key")[:1]),
+        permission_id=Subquery(perm_qs.values("id")[:1]),
+    )
+
+
+def _apply_acl_object_filters(
+    objects,
+    *,
+    scope: str,
+    search_term: str,
+    status_filter: str,
+    access_filter: str,
+    collection_filter: str = "all",
+):
+    if search_term:
+        objects = objects.filter(
+            Q(identifier__icontains=search_term)
+            | Q(general_info__display_title__icontains=search_term)
+            | Q(pk_str__icontains=search_term)
+        ).distinct()
+
+    if status_filter == "missing_acl":
+        objects = objects.filter(has_permission=False)
+    elif status_filter == "has_acl":
+        objects = objects.filter(has_permission=True)
+
+    if access_filter != "all":
+        objects = objects.filter(access_level=access_filter)
+
+    if scope == "bundle" and collection_filter != "all":
+        if collection_filter == "__invalid__":
+            return objects.none()
+        objects = objects.filter(
+            structural_info__is_member_of_collection_id=collection_filter,
+        ).distinct()
+
+    return objects
+
+
+def build_acl_filtered_bundle_queryset(filter_state) -> models.QuerySet:
+    """Return bundle objects matching the ACL records table filters across all pages."""
+    search_term = (filter_state.get("q") or "").strip()
+    status_filter = filter_state.get("status") or "all"
+    access_filter = filter_state.get("access") or "all"
+    collection_filter = _normalize_collection_filter(filter_state.get("collection"))
+    objects = _annotate_acl_objects_for_table("bundle")
+    if status_filter == "missing_object":
+        return objects.none()
+    return _apply_acl_object_filters(
+        objects,
+        scope="bundle",
+        search_term=search_term,
+        status_filter=status_filter,
+        access_filter=access_filter,
+        collection_filter=collection_filter,
+    )
+
+
+def _count_restricted_bundle_acl_matches(filter_state) -> int:
+    filtered_bundles = build_acl_filtered_bundle_queryset(filter_state)
+    bundle_ct = ContentType.objects.get_for_model(Bundle)
+    return ACLPermissions.objects.filter(
+        content_type=bundle_ct,
+        object_id__in=Subquery(filtered_bundles.values("pk_str")),
+        access_level=ACL_LEVEL_RESTRICTED,
+    ).count()
+
+
 def _build_acl_table_context(request, scope: str) -> dict[str, object]:
     model = _get_acl_scope_model(scope)
     content_type = ContentType.objects.get_for_model(model)
@@ -171,6 +285,11 @@ def _build_acl_table_context(request, scope: str) -> dict[str, object]:
     search_term = (request.GET.get("q") or "").strip()
     status_filter = request.GET.get("status") or "all"
     access_filter = request.GET.get("access") or "all"
+    collection_filter = (
+        _normalize_collection_filter(request.GET.get("collection"))
+        if scope == "bundle"
+        else "all"
+    )
 
     existing_ids = model.objects.annotate(
         pk_str=Cast("pk", output_field=CharField())
@@ -210,6 +329,9 @@ def _build_acl_table_context(request, scope: str) -> dict[str, object]:
 
         if search_term:
             orphans = orphans.filter(object_id__icontains=search_term)
+
+        if scope == "bundle" and collection_filter != "all":
+            orphans = orphans.none()
 
         if access_filter != "all":
             orphans = orphans.filter(access_level=access_filter)
@@ -258,39 +380,14 @@ def _build_acl_table_context(request, scope: str) -> dict[str, object]:
         ]
         page_obj.object_list = rows
     else:
-        base_qs = _get_acl_queryset(model).annotate(
-            pk_str=Cast("pk", output_field=CharField())
+        objects = _apply_acl_object_filters(
+            _annotate_acl_objects_for_table(scope),
+            scope=scope,
+            search_term=search_term,
+            status_filter=status_filter,
+            access_filter=access_filter,
+            collection_filter=collection_filter,
         )
-
-        perm_qs = ACLPermissions.objects.filter(
-            content_type=content_type,
-            object_id=OuterRef("pk_str"),
-        )
-
-        objects = base_qs.annotate(
-            has_permission=Exists(perm_qs),
-            access_level=Subquery(perm_qs.values("access_level")[:1]),
-            last_synced=Subquery(perm_qs.values("last_synced")[:1]),
-            read_agents=Subquery(perm_qs.values("read_agents")[:1]),
-            bucket=Subquery(perm_qs.values("ACL_file_bucket")[:1]),
-            key=Subquery(perm_qs.values("ACL_file_key")[:1]),
-            permission_id=Subquery(perm_qs.values("id")[:1]),
-        )
-
-        if search_term:
-            objects = objects.filter(
-                Q(identifier__icontains=search_term)
-                | Q(general_info__display_title__icontains=search_term)
-                | Q(pk_str__icontains=search_term)
-            ).distinct()
-
-        if status_filter == "missing_acl":
-            objects = objects.filter(has_permission=False)
-        elif status_filter == "has_acl":
-            objects = objects.filter(has_permission=True)
-
-        if access_filter != "all":
-            objects = objects.filter(access_level=access_filter)
 
         if sort == "access_level":
             order_expr = (
@@ -321,8 +418,19 @@ def _build_acl_table_context(request, scope: str) -> dict[str, object]:
                 [str(obj.pk) for obj in page_obj.object_list]
             )
 
-        rows = [
-            {
+        rows = []
+        for obj in page_obj.object_list:
+            structural_info = (
+                next(iter(obj.structural_info.all()), None)
+                if scope == "bundle"
+                else None
+            )
+            parent_collection = (
+                structural_info.is_member_of_collection
+                if structural_info
+                else None
+            )
+            rows.append({
                 "scope": scope,
                 "object_id": str(obj.pk),
                 "identifier": getattr(obj, "identifier", str(obj.pk)),
@@ -335,6 +443,9 @@ def _build_acl_table_context(request, scope: str) -> dict[str, object]:
                 "read_agents": obj.read_agents or [],
                 "bucket": obj.bucket,
                 "key": obj.key,
+                "collection_id": str(parent_collection.pk) if parent_collection else None,
+                "collection_identifier": getattr(parent_collection, "identifier", None),
+                "collection_name": _resolve_acl_display_name(parent_collection),
                 "bundle_access_summary": (
                     bundle_access_by_collection.get(
                         str(obj.pk),
@@ -343,9 +454,7 @@ def _build_acl_table_context(request, scope: str) -> dict[str, object]:
                     if scope == "collection"
                     else None
                 ),
-            }
-            for obj in page_obj.object_list
-        ]
+            })
         page_obj.object_list = rows
 
     base_url = reverse("storage:acl_admin_dashboard")
@@ -356,6 +465,8 @@ def _build_acl_table_context(request, scope: str) -> dict[str, object]:
         filter_params["status"] = status_filter
     if access_filter and access_filter != "all":
         filter_params["access"] = access_filter
+    if scope == "bundle" and collection_filter != "all":
+        filter_params["collection"] = collection_filter
 
     filter_query = urlencode(filter_params)
     filter_suffix = f"&{filter_query}" if filter_query else ""
@@ -391,6 +502,14 @@ def _build_acl_table_context(request, scope: str) -> dict[str, object]:
         "status_filter": status_filter,
         "status_filter_options": status_filter_options,
         "access_filter": access_filter,
+        "collection_filter": collection_filter,
+        "collection_options": _get_acl_options(Collection) if scope == "bundle" else [],
+        "bulk_user_options": _get_acl_bulk_user_options() if scope == "bundle" else [],
+        "bulk_restricted_matching_count": (
+            _count_restricted_bundle_acl_matches(request.GET)
+            if scope == "bundle"
+            else 0
+        ),
         "filter_query": filter_query,
         "sort": sort,
         "direction": direction,
