@@ -2,75 +2,54 @@ from http import HTTPStatus
 
 import pytest
 from django.conf import settings
-from django.contrib import messages
 from django.contrib.auth.models import AnonymousUser
-from django.contrib.messages.middleware import MessageMiddleware
-from django.contrib.sessions.middleware import SessionMiddleware
 from django.http import Http404
-from django.http import HttpRequest
 from django.http import HttpResponseRedirect
 from django.test import RequestFactory
 from django.urls import reverse
-from django.utils.translation import gettext_lazy as _
 
-from lacos.users.forms import UserAdminChangeForm
 from lacos.users.models import User
 from lacos.users.tests.factories import UserFactory
 from lacos.users.views import UserRedirectView
-from lacos.users.views import UserUpdateView
 from lacos.users.views import user_detail_view
 
 pytestmark = pytest.mark.django_db
 
 
-class TestUserUpdateView:
-    """
-    TODO:
-        extracting view initialization code as class-scoped fixture
-        would be great if only pytest-django supported non-function-scoped
-        fixture db access -- this is a work-in-progress for now:
-        https://github.com/pytest-dev/pytest-django/pull/258
-    """
+class TestDisabledAccountManagementView:
+    def test_profile_update_is_not_available(self, client, user: User):
+        client.force_login(user)
+        response = client.get(reverse("users:update"))
 
-    def dummy_get_response(self, request: HttpRequest):
-        return None
+        assert response.status_code == HTTPStatus.NOT_FOUND
 
-    def test_get_success_url(self, user: User, rf: RequestFactory):
-        view = UserUpdateView()
-        request = rf.get("/fake-url/")
-        request.user = user
+    def test_profile_update_does_not_change_name(self, client, user: User):
+        client.force_login(user)
+        response = client.post(reverse("users:update"), data={"name": "Changed"})
 
-        view.request = request
-        assert view.get_success_url() == f"/users/{user.username}/"
+        user.refresh_from_db()
+        assert response.status_code == HTTPStatus.NOT_FOUND
+        assert user.name != "Changed"
 
-    def test_get_object(self, user: User, rf: RequestFactory):
-        view = UserUpdateView()
-        request = rf.get("/fake-url/")
-        request.user = user
+    def test_allauth_email_management_is_not_available(self, client, user: User):
+        client.force_login(user)
+        response = client.get(reverse("account_email"))
 
-        view.request = request
+        assert response.status_code == HTTPStatus.NOT_FOUND
 
-        assert view.get_object() == user
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/accounts/2fa/",
+            "/accounts/2fa/totp/activate/",
+            "/accounts/2fa/recovery-codes/",
+        ],
+    )
+    def test_allauth_mfa_management_is_not_available(self, client, user: User, path):
+        client.force_login(user)
+        response = client.get(path)
 
-    def test_form_valid(self, user: User, rf: RequestFactory):
-        view = UserUpdateView()
-        request = rf.get("/fake-url/")
-
-        # Add the session/message middleware to the request
-        SessionMiddleware(self.dummy_get_response).process_request(request)
-        MessageMiddleware(self.dummy_get_response).process_request(request)
-        request.user = user
-
-        view.request = request
-
-        # Initialize the form
-        form = UserAdminChangeForm()
-        form.cleaned_data = {}
-        form.instance = user
-        view.form_valid(form)
-
-        messages_sent = [m.message for m in messages.get_messages(request)]
-        assert messages_sent == [_("Information successfully updated")]
+        assert response.status_code == HTTPStatus.NOT_FOUND
 
 
 class TestUserRedirectView:
@@ -90,6 +69,34 @@ class TestUserDetailView:
         response = user_detail_view(request, username=user.username)
 
         assert response.status_code == HTTPStatus.OK
+
+    def test_self_service_account_links_are_hidden(self, user: User, rf: RequestFactory):
+        request = rf.get("/fake-url/")
+        request.user = user
+        response = user_detail_view(request, username=user.username)
+        response.render()
+        content = response.content.decode()
+
+        assert reverse("users:update") not in content
+        assert reverse("account_email") not in content
+        assert "My Info" not in content
+        assert "E-Mail" not in content
+        assert "MFA" not in content
+
+    def test_profile_shows_read_only_username(self, rf: RequestFactory):
+        user = UserFactory(name="Hidden Display Name")
+        request = rf.get("/fake-url/")
+        request.user = user
+        response = user_detail_view(request, username=user.username)
+        response.render()
+        content = response.content.decode()
+
+        assert "Profile" in content
+        assert "Read-only" in content
+        assert "Username" in content
+        assert user.username in content
+        assert "Display name" not in content
+        assert user.name not in content
 
     def test_other_user_is_hidden(self, user: User, rf: RequestFactory):
         request = rf.get("/fake-url/")

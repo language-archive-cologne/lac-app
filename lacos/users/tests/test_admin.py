@@ -19,8 +19,7 @@ from lacos.users.models import User
 
 class TestUserAdmin:
     @pytest.fixture
-    def admin_client(self, client, admin_user, enroll_mfa):
-        enroll_mfa(admin_user)
+    def admin_client(self, client, admin_user):
         client.force_login(admin_user)
         return client
 

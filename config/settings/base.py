@@ -81,7 +81,6 @@ THIRD_PARTY_APPS = [
     "crispy_bootstrap5",
     "allauth",
     "allauth.account",
-    "allauth.mfa",
     "allauth.socialaccount",
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",
