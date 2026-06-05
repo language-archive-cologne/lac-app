@@ -18,6 +18,21 @@ def test_privacy_policy_mentions_saml_processing(client):
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("path", "expected_text"),
+    [
+        ("/datenschutz/", "Datenschutzerklärung"),
+        ("/impressum/", "Impressum"),
+    ],
+)
+def test_german_static_page_paths_serve_existing_content(client, path, expected_text):
+    response = client.get(path)
+
+    assert response.status_code == 200
+    assert expected_text in response.content.decode("utf-8")
+
+
+@pytest.mark.django_db
 def test_about_page_uses_centered_team_grid(client):
     response = client.get(reverse("about"))
 

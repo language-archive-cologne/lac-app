@@ -80,9 +80,19 @@ urlpatterns = [
         name="privacy-policy",
     ),
     path(
+        "datenschutz/",
+        TemplateView.as_view(template_name="pages/privacy_policy.html"),
+        name="datenschutz",
+    ),
+    path(
         "imprint/",
         TemplateView.as_view(template_name="pages/imprint.html"),
         name="imprint",
+    ),
+    path(
+        "impressum/",
+        TemplateView.as_view(template_name="pages/imprint.html"),
+        name="impressum",
     ),
     path(
         "user-guides/",
