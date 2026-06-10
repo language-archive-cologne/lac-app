@@ -174,3 +174,31 @@ class TestSerializePermissionsDataForAclJson:
         assert serialize_permissions_data_for_acl_json(entries) == [
             {"agentClass": "foaf:Person", "mode": [WAC_READ]}
         ]
+
+    def test_serialization_is_idempotent(self):
+        """Serializing already-external data is a no-op."""
+        entries = [
+            {"agentClass": WAC_AGENT, "mode": [WAC_READ]},
+            {"agentClass": "foaf:Person", "agent": "urn:lacos:eppn:user@example.org", "mode": [WAC_READ]},
+            {"agentClass": "foaf:Group", "agent": "urn:lacos:group:curators", "mode": [WAC_READ]},
+        ]
+        once = serialize_permissions_data_for_acl_json(entries)
+        assert serialize_permissions_data_for_acl_json(once) == once
+
+    def test_unicode_eppn_serialized_bare(self):
+        entries = [
+            {"agentClass": "foaf:Person", "agent": "urn:lacos:eppn:müller@uni-köln.de", "mode": [WAC_READ]}
+        ]
+        assert serialize_permissions_data_for_acl_json(entries) == [
+            {"agent": "müller@uni-köln.de", "mode": [WAC_READ]}
+        ]
+
+    def test_native_user_urn_passes_through(self):
+        """urn:lacos:user:* has no agreed external form; it must survive the
+        round trip unchanged (stripping it would re-normalize differently)."""
+        entries = [
+            {"agentClass": "foaf:Person", "agent": "urn:lacos:user:localadmin", "mode": [WAC_READ]}
+        ]
+        assert serialize_permissions_data_for_acl_json(entries) == [
+            {"agent": "urn:lacos:user:localadmin", "mode": [WAC_READ]}
+        ]

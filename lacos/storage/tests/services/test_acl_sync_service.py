@@ -2,7 +2,6 @@ import json
 
 import pytest
 from django.contrib.contenttypes.models import ContentType
-from django.core.cache import cache
 from unittest.mock import patch
 
 from lacos.blam.models.bundle.bundle_repository import Bundle
@@ -10,29 +9,12 @@ from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.storage.constants import ACL_LEVEL_PUBLIC, ACL_LEVEL_RESTRICTED
 from lacos.storage.models.acl_permissions import ACLPermissions
-from lacos.storage.services.acl_service import ACLService as ACLSyncService
-from lacos.storage.services.resource_mapping_service import ResourceMappingService
 
 from .test_constants import TEST_BUCKET_NAME
 
 
-@pytest.fixture
-def acl_sync_service(mock_s3):
-    original_sync = ACLSyncService._instance
-    original_mapping = ResourceMappingService._instance
-    ACLSyncService._instance = None
-    ResourceMappingService._instance = None
-    cache.clear()
-    try:
-        service = ACLSyncService()
-        service.s3_client = mock_s3
-        service.production_bucket = TEST_BUCKET_NAME
-        service.set_client_and_buckets(service.resource_mapping)
-        yield service
-    finally:
-        cache.clear()
-        ACLSyncService._instance = original_sync
-        ResourceMappingService._instance = original_mapping
+# The acl_sync_service fixture lives in conftest.py (shared with
+# test_acl_external_writeback.py).
 
 
 def _create_collection(identifier: str = "collection-1") -> Collection:
