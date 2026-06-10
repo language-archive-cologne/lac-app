@@ -101,6 +101,60 @@ def test_list_records_without_data_returns_error(client):
 
 
 @pytest.mark.django_db
+def test_list_records_without_set_returns_collections_and_bundles(client):
+    collection = _create_collection("hdl:test/oai-default-collection")
+    bundle = _create_bundle(collection, "hdl:test/oai-default-bundle")
+
+    response = client.get(
+        reverse("oaipmh:endpoint"),
+        {"verb": "ListRecords", "metadataPrefix": "oai_dc"},
+    )
+
+    assert response.status_code == 200
+    body = response.content.decode("utf-8")
+    assert f"<identifier>oai:lacos:{collection.identifier}</identifier>" in body
+    assert f"<identifier>oai:lacos:bundle:{bundle.identifier}</identifier>" in body
+    assert "<setSpec>collections</setSpec>" in body
+    assert "<setSpec>bundles</setSpec>" in body
+
+
+@pytest.mark.django_db
+def test_list_identifiers_without_set_returns_collections_and_bundles(client):
+    collection = _create_collection("hdl:test/oai-default-identifier-collection")
+    bundle = _create_bundle(collection, "hdl:test/oai-default-identifier-bundle")
+
+    response = client.get(
+        reverse("oaipmh:endpoint"),
+        {"verb": "ListIdentifiers", "metadataPrefix": "oai_dc"},
+    )
+
+    assert response.status_code == 200
+    body = response.content.decode("utf-8")
+    assert f"<identifier>oai:lacos:{collection.identifier}</identifier>" in body
+    assert f"<identifier>oai:lacos:bundle:{bundle.identifier}</identifier>" in body
+
+
+@pytest.mark.django_db
+def test_list_records_with_collection_set_excludes_bundles(client):
+    collection = _create_collection("hdl:test/oai-set-collection")
+    bundle = _create_bundle(collection, "hdl:test/oai-set-bundle")
+
+    response = client.get(
+        reverse("oaipmh:endpoint"),
+        {
+            "verb": "ListRecords",
+            "metadataPrefix": "oai_dc",
+            "set": "collections",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.content.decode("utf-8")
+    assert f"<identifier>oai:lacos:{collection.identifier}</identifier>" in body
+    assert f"<identifier>oai:lacos:bundle:{bundle.identifier}</identifier>" not in body
+
+
+@pytest.mark.django_db
 def test_get_record_returns_collection_record(client):
     collection = _create_collection()
 

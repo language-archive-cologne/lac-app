@@ -5,6 +5,12 @@ from datetime import date
 from django.urls import reverse
 
 from lacos.oaipmh.formats.blam import BLAMSerializer
+from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
+from lacos.blam.models.bundle.bundle_general_info import (
+    BundleGeneralInfo,
+    BundleLocation,
+)
+from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.collection.collection_header import CollectionHeader
 from lacos.blam.models.collection.collection_general_info import (
@@ -107,6 +113,27 @@ def sample_collection(db):
     return collection
 
 
+@pytest.fixture
+def sample_bundle(db):
+    """Create a sample bundle with the minimum metadata needed for BLAM export."""
+    bundle = Bundle.objects.create(identifier="hdl:test/blam-oai-bundle-001")
+    location = BundleLocation.objects.create(
+        country_name="Germany",
+        country_facet="Germany",
+        country_code="DE",
+    )
+    BundleGeneralInfo.objects.create(
+        bundle=bundle,
+        id_value=bundle.identifier,
+        id_type=IdentifierTypeChoices.HANDLE,
+        display_title="BLAM OAI Test Bundle",
+        description="Testing BLAM bundle format in OAI-PMH.",
+        version="1.0",
+        location=location,
+    )
+    return bundle
+
+
 @pytest.mark.django_db
 def test_blam_format_in_list_metadata_formats(client):
     """Test that BLAM appears in ListMetadataFormats response."""
@@ -167,6 +194,25 @@ def test_list_records_with_blam_format(client, sample_collection):
 
     # Should contain BLAM XML structure
     assert "CMD" in body or "record" in body
+
+
+@pytest.mark.django_db
+def test_list_records_with_blam_format_without_set_returns_collection_and_bundle(
+    client,
+    sample_collection,
+    sample_bundle,
+):
+    """Test default ListRecords with BLAM returns collections and bundles."""
+    response = client.get(
+        reverse("oaipmh:endpoint"),
+        {"verb": "ListRecords", "metadataPrefix": "blam"},
+    )
+    assert response.status_code == 200
+    body = response.content.decode("utf-8")
+    assert f"<identifier>oai:lacos:{sample_collection.identifier}</identifier>" in body
+    assert f"<identifier>oai:lacos:bundle:{sample_bundle.identifier}</identifier>" in body
+    assert "BLAM-collection-repository_v1.2" in body
+    assert "BLAM-bundle-repository_v1.1" in body
 
 
 @pytest.mark.django_db

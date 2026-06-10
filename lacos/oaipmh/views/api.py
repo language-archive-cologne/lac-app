@@ -31,6 +31,7 @@ from ..services import (
     fetch_bundle_records,
     fetch_collection_record_by_identifier,
     fetch_collection_records,
+    fetch_repository_records,
 )
 
 logger = logging.getLogger(__name__)
@@ -172,7 +173,7 @@ def _handle_list_verbs(request: HttpRequest, verb: str, oai_request) -> HttpResp
             [OAIPMHError("badArgument", f"Unsupported set specification '{set_param}'")],
         )
 
-    active_set = set_param or "collections"
+    active_set = set_param
 
     logger.debug(
         "List verb requested",
@@ -182,7 +183,7 @@ def _handle_list_verbs(request: HttpRequest, verb: str, oai_request) -> HttpResp
             "offset": offset,
             "from": from_param,
             "until": until_param,
-            "set": active_set,
+            "set": active_set or "all",
         },
     )
 
@@ -190,7 +191,12 @@ def _handle_list_verbs(request: HttpRequest, verb: str, oai_request) -> HttpResp
     until_date = _parse_date_param(until_param)
     page_size = _resumption.page_size
 
-    fetch_fn = fetch_bundle_records if active_set == "bundles" else fetch_collection_records
+    if active_set == "bundles":
+        fetch_fn = fetch_bundle_records
+    elif active_set == "collections":
+        fetch_fn = fetch_collection_records
+    else:
+        fetch_fn = fetch_repository_records
 
     records, has_more = fetch_fn(
         offset=offset,
