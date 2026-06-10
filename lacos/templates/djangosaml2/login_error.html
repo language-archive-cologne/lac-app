@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Institutional Login Failed{% endblock title %}
+
+{% block seo_meta %}{% endblock seo_meta %}
+
+{% block content %}
+<div class="flex items-center justify-center min-h-[60vh]">
+  <div class="text-center max-w-md px-6">
+    <div class="text-base-content/20 mb-6">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-24 w-24 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+      </svg>
+    </div>
+    <h1 class="text-3xl font-bold mb-3">Institutional Login Failed</h1>
+    <p class="text-base-content/60 mb-4">
+      Unfortunately, signing in with your institutional account did not work this time.
+      This is most likely <strong>not your fault</strong> &mdash; it can be caused by a
+      temporary problem at your institution&rsquo;s login service or by missing
+      information being sent to us.
+    </p>
+    <p class="text-base-content/60 mb-8">
+      You can try again, and if the problem persists, please let us know at
+      <a href="mailto:lac-helpdesk@uni-koeln.de?subject=Institutional%20login%20problem" class="link link-primary whitespace-nowrap">lac-helpdesk@uni-koeln.de</a>
+      so we can investigate and fix it. Mentioning your institution and the time of
+      your login attempt helps us a lot.
+    </p>
+    <div class="flex flex-col sm:flex-row gap-3 justify-center">
+      <a href="{% url 'users:saml_discovery' %}" class="btn btn-primary">Try Again</a>
+      <a href="{% url 'account_login' %}?credentials=1" class="btn btn-ghost">Sign In with Password</a>
+      <a href="/" class="btn btn-ghost">Go to Homepage</a>
+    </div>
+  </div>
+</div>
+{% endblock content %}

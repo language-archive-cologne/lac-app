@@ -307,6 +307,23 @@ def test_saml2_acs_route_uses_lacos_view():
 
 
 @pytest.mark.django_db
+def test_saml_acs_failure_renders_friendly_error_page(client):
+    response = client.post(
+        "/saml2/acs/",
+        {"SAMLResponse": "not-a-valid-saml-response"},
+    )
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert "djangosaml2/login_error.html" in [
+        template.name for template in response.templates
+    ]
+    content = response.content.decode()
+    assert "Institutional Login Failed" in content
+    assert "not your fault" in content
+    assert "lac-helpdesk@uni-koeln.de" in content
+
+
+@pytest.mark.django_db
 def test_saml_login_view_sets_session_marker(client, settings):
     settings.SAML_LOGIN_ENABLED = True
     response = client.get(reverse("users:saml_login"))
