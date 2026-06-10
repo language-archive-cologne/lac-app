@@ -226,3 +226,112 @@ def test_sync_bundle_legacy_xml_path_without_v1(mock_s3, acl_sync_service):
     permissions = ACLPermissions.objects.get(content_type=ct, object_id=bundle.pk)
     assert permissions.ACL_file_key == expected_acl_key
     assert permissions.permissions_data == acl_rules
+
+
+# =============================================================================
+# Save (DB -> S3) write-back: external WAC-aligned acl.json shape
+# =============================================================================
+
+
+def _read_written_acl(mock_s3, key):
+    response = mock_s3.get_object(Bucket=TEST_BUCKET_NAME, Key=key)
+    return response["Body"].read().decode("utf-8")
+
+
+@pytest.mark.django_db
+def test_save_collection_writes_external_eppn_agents(mock_s3, acl_sync_service):
+    """Internal foaf:Person/urn:lacos:eppn rules are written as bare EPPN agents."""
+    collection = _create_collection()
+    collection.import_bucket = TEST_BUCKET_NAME
+    collection.import_object_key = "collections/collection-1"
+    collection.save()
+
+    internal_rules = [
+        {"agentClass": "foaf:Person", "agent": "urn:lacos:eppn:fmondac1@uni-koeln.de", "mode": ["acl:Read"]},
+        {"agentClass": "foaf:Person", "agent": "urn:lacos:eppn:adebbel1@uni-koeln.de", "mode": ["acl:Read"]},
+    ]
+    ct = ContentType.objects.get_for_model(Collection)
+    ACLPermissions.objects.create(
+        content_type=ct,
+        object_id=collection.pk,
+        permissions_data=internal_rules,
+    )
+
+    result = acl_sync_service.save_collection(collection)
+
+    assert result.success is True
+    raw = _read_written_acl(mock_s3, result.key)
+    assert json.loads(raw) == [
+        {"agent": "fmondac1@uni-koeln.de", "mode": ["acl:Read"]},
+        {"agent": "adebbel1@uni-koeln.de", "mode": ["acl:Read"]},
+    ]
+    assert "urn:lacos:eppn:" not in raw
+    assert "foaf:Person" not in raw
+
+    # The internal DB representation stays untouched
+    permissions = ACLPermissions.objects.get(content_type=ct, object_id=collection.pk)
+    assert permissions.permissions_data == internal_rules
+
+
+@pytest.mark.django_db
+def test_save_permission_keeps_public_rule_unchanged(mock_s3, acl_sync_service):
+    collection = _create_collection()
+    collection.save()
+
+    ct = ContentType.objects.get_for_model(Collection)
+    permission = ACLPermissions.objects.create(
+        content_type=ct,
+        object_id=collection.pk,
+        ACL_file_bucket=TEST_BUCKET_NAME,
+        ACL_file_key="collections/collection-1/extensions/0013-acl/acl.json",
+        permissions_data=[{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}],
+    )
+
+    result = acl_sync_service.save_permission(permission)
+
+    assert result.success is True
+    assert json.loads(_read_written_acl(mock_s3, result.key)) == [
+        {"agentClass": "foaf:Agent", "mode": ["acl:Read"]}
+    ]
+
+
+@pytest.mark.django_db
+def test_save_permission_keeps_authenticated_rule_unchanged(mock_s3, acl_sync_service):
+    collection = _create_collection()
+    collection.save()
+
+    ct = ContentType.objects.get_for_model(Collection)
+    permission = ACLPermissions.objects.create(
+        content_type=ct,
+        object_id=collection.pk,
+        ACL_file_bucket=TEST_BUCKET_NAME,
+        ACL_file_key="collections/collection-1/extensions/0013-acl/acl.json",
+        permissions_data=[{"agentClass": "acl:AuthenticatedAgent", "mode": ["acl:Read"]}],
+    )
+
+    result = acl_sync_service.save_permission(permission)
+
+    assert result.success is True
+    assert json.loads(_read_written_acl(mock_s3, result.key)) == [
+        {"agentClass": "acl:AuthenticatedAgent", "mode": ["acl:Read"]}
+    ]
+
+
+@pytest.mark.django_db
+def test_save_permission_empty_data_writes_empty_list(mock_s3, acl_sync_service):
+    collection = _create_collection()
+    collection.save()
+
+    ct = ContentType.objects.get_for_model(Collection)
+    permission = ACLPermissions.objects.create(
+        content_type=ct,
+        object_id=collection.pk,
+        ACL_file_bucket=TEST_BUCKET_NAME,
+        ACL_file_key="collections/collection-1/extensions/0013-acl/acl.json",
+        permissions_data=None,
+    )
+
+    result = acl_sync_service.save_permission(permission)
+
+    assert result.success is True
+    assert json.loads(_read_written_acl(mock_s3, result.key)) == []
