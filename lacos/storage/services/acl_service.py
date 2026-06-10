@@ -17,6 +17,7 @@ from lacos.cache import get_acl_entry, set_acl_entry, invalidate_acl_entry
 from lacos.storage.services.base_storage_service import BaseStorageService
 from lacos.storage.services.resource_mapping_service import ResourceMappingService
 from lacos.storage.utils.acl import determine_access_level, extract_read_agents, normalize_permissions_data
+from lacos.storage.utils.acl_external import serialize_permissions_data_for_acl_json
 
 logger = logging.getLogger(__name__)
 
@@ -250,10 +251,9 @@ class ACLService(BaseStorageService):
         key: str,
         permissions_data: Optional[Sequence[dict[str, Any]]],
     ) -> ACLResult:
-        """Write permissions data to S3 as acl.json."""
+        """Write permissions data to S3 as acl.json in the external WAC-aligned shape."""
         try:
-            # Convert to JSON
-            data = permissions_data if permissions_data else []
+            data = serialize_permissions_data_for_acl_json(permissions_data)
             json_content = json.dumps(data, indent=2)
 
             # Write to S3

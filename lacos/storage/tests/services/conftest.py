@@ -53,6 +53,30 @@ def mock_s3(aws_credentials):
         yield s3
 
 @pytest.fixture(scope='function')
+def acl_sync_service(mock_s3):
+    """ACLService singleton wired to the moto S3 client and test bucket."""
+    from django.core.cache import cache
+
+    from lacos.storage.services.acl_service import ACLService
+    from lacos.storage.services.resource_mapping_service import ResourceMappingService
+
+    original_sync = ACLService._instance
+    original_mapping = ResourceMappingService._instance
+    ACLService._instance = None
+    ResourceMappingService._instance = None
+    cache.clear()
+    try:
+        service = ACLService()
+        service.s3_client = mock_s3
+        service.production_bucket = TEST_BUCKET_NAME
+        service.set_client_and_buckets(service.resource_mapping)
+        yield service
+    finally:
+        cache.clear()
+        ACLService._instance = original_sync
+        ResourceMappingService._instance = original_mapping
+
+@pytest.fixture(scope='function')
 def temp_dir():
     """Create a temporary directory for tests and clean it up afterwards"""
     temp_dir = tempfile.mkdtemp()
