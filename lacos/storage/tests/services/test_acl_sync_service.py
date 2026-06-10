@@ -335,3 +335,36 @@ def test_save_permission_empty_data_writes_empty_list(mock_s3, acl_sync_service)
 
     assert result.success is True
     assert json.loads(_read_written_acl(mock_s3, result.key)) == []
+
+
+@pytest.mark.django_db
+def test_save_then_load_roundtrip_restores_internal_form(mock_s3, acl_sync_service):
+    """Re-loading the external acl.json we wrote restores the internal DB shape."""
+    collection = _create_collection()
+    collection.import_bucket = TEST_BUCKET_NAME
+    collection.import_object_key = "collections/collection-1"
+    collection.save()
+
+    internal_rules = [
+        {"agentClass": "foaf:Person", "agent": "urn:lacos:eppn:fmondac1@uni-koeln.de", "mode": ["acl:Read"]},
+        {"agentClass": "acl:AuthenticatedAgent", "mode": ["acl:Read"]},
+    ]
+    ct = ContentType.objects.get_for_model(Collection)
+    ACLPermissions.objects.create(
+        content_type=ct,
+        object_id=collection.pk,
+        permissions_data=internal_rules,
+    )
+
+    save_result = acl_sync_service.save_collection(collection)
+    assert save_result.success is True
+
+    load_result = acl_sync_service.load_collection(collection, force_refresh=True)
+    assert load_result.success is True
+
+    permissions = ACLPermissions.objects.get(content_type=ct, object_id=collection.pk)
+    assert permissions.permissions_data == internal_rules
+    assert permissions.read_agents == [
+        "urn:lacos:eppn:fmondac1@uni-koeln.de",
+        "acl:AuthenticatedAgent",
+    ]
