@@ -36,17 +36,16 @@
     </div>
   </div>
 
-  <div role="group" aria-label="{% translate 'Search mode' %}" class="flex items-center gap-2">
-    <span class="text-[11px] font-semibold uppercase tracking-widest text-base-content/50">{% translate "Mode" %}</span>
-    <div class="join">
-      {% if active_mode == "faceted" %}
-        <button type="button" aria-pressed="true" class="btn btn-sm join-item btn-primary pointer-events-none">{% translate "Faceted" %}</button>
-        <a href="{{ url_mode_field }}" aria-pressed="false" class="btn btn-sm join-item bg-base-100 border border-base-300 text-base-content/70 hover:bg-base-200">{% translate "Fields" %}</a>
-      {% else %}
-        <a href="{{ url_mode_faceted }}" aria-pressed="false" class="btn btn-sm join-item bg-base-100 border border-base-300 text-base-content/70 hover:bg-base-200">{% translate "Faceted" %}</a>
-        <button type="button" aria-pressed="true" class="btn btn-sm join-item btn-primary pointer-events-none">{% translate "Fields" %}</button>
-      {% endif %}
-    </div>
+  <div role="group" aria-label="{% translate 'Search options' %}" class="flex items-center gap-2">
+    {% if active_mode == "faceted" %}
+      <a href="{{ url_mode_field }}" class="btn btn-sm btn-ghost text-base-content/70 hover:text-base-content">
+        {% translate "Search specific metadata" %}
+      </a>
+    {% else %}
+      <a href="{{ url_mode_faceted }}" class="btn btn-sm btn-ghost text-base-content/70 hover:text-base-content">
+        {% translate "Use filters" %}
+      </a>
+    {% endif %}
   </div>
 </div>
 

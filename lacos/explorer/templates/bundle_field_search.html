@@ -2,7 +2,7 @@
 {% load i18n %}
 {% load explorer_extras %}
 
-{% block title %}{% translate "Field Search - Bundles" %} - {{ block.super }}{% endblock title %}
+{% block title %}{% translate "Metadata Search - Bundles" %} - {{ block.super }}{% endblock title %}
 
 {% block explorer_content %}
   <style>
@@ -28,7 +28,7 @@
   <!-- Dynamic query builder -->
   <form id="field-search-form" method="get" action="{% url 'bundle_field_search' %}" class="mb-6">
     <fieldset class="fieldset bg-base-200/50 border-base-300 rounded-box border p-4">
-      <legend class="fieldset-legend text-sm">{% translate "Search by field" %}</legend>
+      <legend class="fieldset-legend text-sm">{% translate "Search specific metadata" %}</legend>
 
       <input type="hidden" name="logic" id="logic-value" value="{{ search_logic|default:'and' }}">
 
@@ -83,7 +83,7 @@
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
           </svg>
-          {% translate "Add field" %}
+          {% translate "Add condition" %}
         </button>
         <div class="join" id="logic-toggle">
           <input type="radio" name="logic-radio" value="and" class="btn btn-sm join-item checked:btn-primary" aria-label="AND" {% if search_logic != "or" %}checked{% endif %}>
