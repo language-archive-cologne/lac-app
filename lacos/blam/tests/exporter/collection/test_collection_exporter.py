@@ -266,7 +266,7 @@ def test_export_resource_proxy_list_with_bundles(sample_collection):
     xml_output = exporter.export(sample_collection)
     proxies = _find_resource_proxies(xml_output)
 
-    assert len(proxies) == 1
+    assert len(proxies) == 2
     proxy = proxies[0]
     assert proxy.get("id") == "rp1"
 
@@ -277,6 +277,10 @@ def test_export_resource_proxy_list_with_bundles(sample_collection):
     rr = proxy.find(f"{{{CMD_NS}}}ResourceRef")
     assert rr is not None
     assert rr.text.strip() == "hdl:test/bundle-001"
+
+    landing_page = proxies[1]
+    assert landing_page.get("id") == "lp1"
+    assert landing_page.find(f"{{{CMD_NS}}}ResourceType").text.strip() == "LandingPage"
 
 
 @pytest.mark.django_db
@@ -292,19 +296,23 @@ def test_export_resource_proxy_list_multiple_bundles(sample_collection):
     xml_output = exporter.export(sample_collection)
     proxies = _find_resource_proxies(xml_output)
 
-    assert len(proxies) == 3
+    assert len(proxies) == 4
     ids = [p.get("id") for p in proxies]
-    assert ids == ["rp1", "rp2", "rp3"]
+    assert ids == ["rp1", "rp2", "rp3", "lp1"]
 
 
 @pytest.mark.django_db
-def test_export_resource_proxy_list_empty_when_no_bundles(sample_collection):
-    """ResourceProxyList should be empty when there are no bundles."""
+def test_export_resource_proxy_list_falls_back_to_landing_page_when_no_bundles(sample_collection):
+    """A collection without bundles still exposes a LandingPage proxy (VLO minimum)."""
     exporter = CollectionExporter()
     xml_output = exporter.export(sample_collection)
     proxies = _find_resource_proxies(xml_output)
 
-    assert len(proxies) == 0
+    assert len(proxies) == 1
+    landing_page = proxies[0]
+    assert landing_page.get("id") == "lp1"
+    assert landing_page.find(f"{{{CMD_NS}}}ResourceType").text.strip() == "LandingPage"
+    assert landing_page.find(f"{{{CMD_NS}}}ResourceRef").text.strip() == "hdl:test/collection-001"
 
 
 # ---------------------------------------------------------------------------

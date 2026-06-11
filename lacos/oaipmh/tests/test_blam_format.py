@@ -233,6 +233,98 @@ def test_get_record_with_blam_format(client, sample_collection):
     assert "CMD" in body
 
 
+# ---------------------------------------------------------------------------
+# ResourceProxyList over OAI-PMH (issues #144/#145: VLO requires >= 1 proxy)
+# ---------------------------------------------------------------------------
+
+def _resource_proxies(body: str) -> list[tuple[str, str]]:
+    """Return [(ResourceType, ResourceRef)] for every ResourceProxy, ns-agnostic."""
+    from xml.etree import ElementTree as ET
+
+    def _ln(tag):
+        return tag.rsplit("}", 1)[-1]
+
+    out = []
+    for el in ET.fromstring(body).iter():
+        if _ln(el.tag) == "ResourceProxy":
+            rt = ref = None
+            for ch in el:
+                if _ln(ch.tag) == "ResourceType":
+                    rt = (ch.text or "").strip()
+                elif _ln(ch.tag) == "ResourceRef":
+                    ref = (ch.text or "").strip()
+            out.append((rt, ref))
+    return out
+
+
+@pytest.mark.django_db
+def test_get_record_collection_without_bundles_has_landing_page_proxy(
+    client,
+    sample_collection,
+):
+    """A harvested collection with no member bundles must still expose a proxy."""
+    response = client.get(
+        reverse("oaipmh:endpoint"),
+        {
+            "verb": "GetRecord",
+            "metadataPrefix": "blam",
+            "identifier": f"oai:lacos:{sample_collection.identifier}",
+        },
+    )
+    assert response.status_code == 200
+    proxies = _resource_proxies(response.content.decode("utf-8"))
+
+    assert proxies, "OAI collection record must expose at least one ResourceProxy"
+    assert ("LandingPage", sample_collection.identifier) in proxies
+
+
+@pytest.mark.django_db
+def test_list_records_collections_set_has_no_empty_resource_proxy_lists(
+    client,
+    sample_collection,
+    sample_bundle,
+):
+    """Every record in the collections set must contain a ResourceProxy."""
+    from xml.etree import ElementTree as ET
+
+    response = client.get(
+        reverse("oaipmh:endpoint"),
+        {"verb": "ListRecords", "metadataPrefix": "blam", "set": "collections"},
+    )
+    assert response.status_code == 200
+
+    root = ET.fromstring(response.content.decode("utf-8"))
+    records = [el for el in root.iter() if el.tag.rsplit("}", 1)[-1] == "record"]
+    assert records, "expected at least one collection record"
+    for record in records:
+        proxies = [
+            el for el in record.iter()
+            if el.tag.rsplit("}", 1)[-1] == "ResourceProxy"
+        ]
+        assert proxies, "collection record with empty ResourceProxyList"
+
+
+@pytest.mark.django_db
+def test_get_record_bundle_without_files_has_landing_page_proxy(
+    client,
+    sample_bundle,
+):
+    """A harvested bundle with no files must still expose a proxy (issue #145)."""
+    response = client.get(
+        reverse("oaipmh:endpoint"),
+        {
+            "verb": "GetRecord",
+            "metadataPrefix": "blam",
+            "identifier": f"oai:lacos:bundle:{sample_bundle.identifier}",
+        },
+    )
+    assert response.status_code == 200
+    proxies = _resource_proxies(response.content.decode("utf-8"))
+
+    assert proxies, "OAI bundle record must expose at least one ResourceProxy"
+    assert ("LandingPage", sample_bundle.identifier) in proxies
+
+
 @pytest.mark.django_db
 def test_unsupported_metadata_prefix_error(client):
     """Test that unsupported prefix returns proper error."""

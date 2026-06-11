@@ -88,7 +88,12 @@ class CollectionExporter:
         return cmd
 
     def _create_resources(self, collection: Collection) -> Cmd.Resources:
-        """Create resources section with ResourceProxy entries for each bundle."""
+        """Create resources section with ResourceProxy entries for each bundle.
+
+        A ``LandingPage`` proxy to the collection's own handle is always added so
+        every collection exposes at least one proxy (a VLO minimum requirement),
+        even when it has no member bundles yet.
+        """
         resources = Cmd.Resources()
         resources.resource_proxy_list = Cmd.Resources.ResourceProxyList()
         resources.journal_file_proxy_list = Cmd.Resources.JournalFileProxyList()
@@ -117,6 +122,13 @@ class CollectionExporter:
                 id=f"rp{idx}",
             )
             resources.resource_proxy_list.resource_proxy.append(proxy)
+
+        if collection.identifier:
+            resources.resource_proxy_list.resource_proxy.append(ResourceProxy(
+                resource_type=ResourceType(value=ResourcetypeSimple.LANDING_PAGE),
+                resource_ref=ResourceRef(value=collection.identifier),
+                id="lp1",
+            ))
 
         return resources
 
