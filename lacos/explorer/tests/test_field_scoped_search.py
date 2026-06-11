@@ -112,6 +112,36 @@ def test_field_definitions_in_context(client):
     assert r.context["active_search_in"] == []
 
 
+@pytest.mark.django_db
+def test_search_in_selection_renders_labeled_chips(client):
+    _collection("C1", "Rock Art Interviews", keyword="ritual")
+    r = client.get(
+        reverse("faceted_search"), {"q": "ritual", "search_in": ["title", "keyword"]}
+    )
+    assert r.status_code == 200
+    page = r.content.decode("utf-8")
+    assert page.count("Search in:") == 2
+    # removing one field keeps the other selected
+    assert "search_in=keyword" in page
+    assert "search_in=title" in page
+
+
+@pytest.mark.django_db
+def test_no_search_in_renders_no_chips(client):
+    r = client.get(reverse("faceted_search"), {"q": "ritual"})
+    assert "Search in:" not in r.content.decode("utf-8")
+
+
+@pytest.mark.django_db
+def test_bundle_search_in_selection_renders_labeled_chips(client):
+    r = client.get(
+        reverse("bundle_faceted_search"), {"q": "ritual", "search_in": ["title"]}
+    )
+    assert r.status_code == 200
+    page = r.content.decode("utf-8")
+    assert page.count("Search in:") == 1
+
+
 def test_clear_all_filters_drops_search_in():
     from django.test import RequestFactory
 

@@ -1,7 +1,26 @@
 {% load i18n %}
 {% load explorer_extras %}
-{% if active_filters %}
+{% if active_filters or active_search_in %}
   <div class="flex flex-wrap items-center gap-2 mb-4">
+    {% if active_search_in %}
+      {% for defn in field_definitions %}
+        {% if defn.key in active_search_in %}
+          {% facet_remove_url "search_in" defn.key as remove_url %}
+          <a href="{{ remove_url }}"
+             hx-get="{{ remove_url }}"
+             hx-target="#faceted-results"
+             hx-swap="outerHTML"
+             hx-push-url="true"
+             class="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors">
+            <span class="text-base-content/50">{% translate "Search in" %}:</span>
+            {{ defn.label }}
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </a>
+        {% endif %}
+      {% endfor %}
+    {% endif %}
     {% for chip in active_filters %}
       {% facet_remove_url chip.facet_name chip.value as remove_url %}
       <a href="{{ remove_url }}"
