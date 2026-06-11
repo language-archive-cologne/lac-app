@@ -58,8 +58,12 @@ def test_collection_list_grouped_map_popup_scroll_is_contained(client):
 
     assert response.status_code == 200
     page = response.content.decode("utf-8")
+    assert "max-height: 300px" in page
+    assert 'font-family: "Albert Sans", system-ui, sans-serif' in page
+    assert "collection-item" in page
     assert "overscroll-behavior: contain" in page
-    assert "function containPopupListScroll(popup)" in page
+    assert "function containPopupScroll(popup)" in page
+    assert "element.querySelector('.maplibregl-popup-content')" in page
     assert "event.stopPropagation();" in page
 
 

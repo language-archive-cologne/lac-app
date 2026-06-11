@@ -82,30 +82,33 @@
         .lac-collection-popup .maplibregl-popup-content {
           background: #fff;
           border: 1px solid rgba(0,0,0,.08);
-          border-radius: 10px;
-          padding: 14px 16px 12px;
+          border-radius: 8px;
+          padding: 0;
           box-shadow: 0 6px 20px rgba(0,42,61,.18);
-          min-width: 240px;
-          max-width: 280px;
-          font-family: inherit;
+          min-width: 260px;
+          max-width: 320px;
+          max-height: 300px;
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          font-family: "Albert Sans", system-ui, sans-serif;
         }
         .lac-collection-popup .maplibregl-popup-close-button {
-          right: 4px; top: 4px;
+          right: 6px; top: 6px;
           font-size: 18px; line-height: 1; color: rgba(31,41,55,.4);
-          padding: 4px 8px; background: transparent; border: 0;
+          padding: 4px 8px; background: transparent; border: 0; border-radius: 6px;
         }
         .lac-collection-popup .maplibregl-popup-close-button:hover {
           color: #1f2937; background: rgba(0,0,0,.04);
         }
         .lac-collection-popup .maplibregl-popup-tip { border-top-color: rgba(0,0,0,.08); }
         .lac-collection-popup.maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: #fff; }
-        .lac-popup-body { font-size: 13px; color: #1f2937; line-height: 1.45; }
+        .lac-popup-body { font-size: 13px; color: #1f2937; line-height: 1.45; padding: 14px 16px 12px; }
         .lac-popup-body .title {
-          display: block; font-size: 14px; font-weight: 600; color: #1f2937;
-          margin: 0 18px 4px 0; letter-spacing: -0.005em; text-decoration: none;
+          display: block; font-size: 14px; font-weight: 650; color: #1f2937;
+          margin: 0 20px 4px 0; text-decoration: none;
         }
         .lac-popup-body a.title:hover { color: #005176; text-decoration: underline; }
-        .lac-popup-body .meta { font-size: 11px; color: rgba(31,41,55,.6); display: flex; flex-wrap: wrap; gap: 4px 6px; }
+        .lac-popup-body .meta { font-size: 11px; color: rgba(31,41,55,.62); display: flex; flex-wrap: wrap; gap: 4px 6px; }
         .lac-popup-body .meta .dot { color: rgba(31,41,55,.3); }
         .lac-popup-body .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
         .lac-popup-body .chip {
@@ -115,16 +118,17 @@
         }
         .lac-popup-body .chip .iso { color: rgba(31,41,55,.55); font-size: 10px; }
         .lac-popup-body .collection-list {
-          display: flex; flex-direction: column; gap: 7px; margin-top: 8px;
-          max-height: 220px; overflow-y: auto; overscroll-behavior: contain;
+          display: flex; flex-direction: column; margin: 10px -16px -12px;
         }
+        .lac-popup-body .collection-item { padding: 9px 16px 10px; border-top: 1px solid #eef0f2; }
+        .lac-popup-body .collection-item:hover { background: #f7f9fa; }
         .lac-popup-body .collection-list a {
-          display: block; color: #1f2937; font-weight: 600; line-height: 1.3;
+          display: block; color: #1f2937; font-weight: 620; line-height: 1.32;
           text-decoration: none;
         }
         .lac-popup-body .collection-list a:hover { color: #005176; text-decoration: underline; }
         .lac-popup-body .collection-list .item-meta {
-          margin-top: 2px; font-size: 11px; color: rgba(31,41,55,.6);
+          margin-top: 3px; font-size: 11px; color: rgba(31,41,55,.58);
         }
       </style>
 
@@ -275,12 +279,12 @@
           : [marker];
       }
 
-      function containPopupListScroll(popup) {
+      function containPopupScroll(popup) {
         const element = popup.getElement();
-        const list = element ? element.querySelector('.collection-list') : null;
-        if (!list) return;
-        ['wheel', 'touchmove'].forEach(eventName => {
-          list.addEventListener(eventName, event => {
+        const content = element ? element.querySelector('.maplibregl-popup-content') : null;
+        if (!content) return;
+        ['wheel', 'touchstart', 'touchmove'].forEach(eventName => {
+          content.addEventListener(eventName, event => {
             event.stopPropagation();
           }, { passive: true });
         });
@@ -306,7 +310,7 @@
         if (isGroup) {
           const itemsHtml = collections.map(item => {
             const itemMeta = item.bundles ? `<div class="item-meta">${bundleLabel(item.bundles)}</div>` : '';
-            return `<div><a href="${escHtml(item.url)}">${escHtml(item.title)}</a>${itemMeta}</div>`;
+            return `<div class="collection-item"><a href="${escHtml(item.url)}">${escHtml(item.title)}</a>${itemMeta}</div>`;
           }).join('');
           bodyHtml = `<div class="title">${collectionCountLabel(collections.length)}</div>` +
             meta +
@@ -325,7 +329,7 @@
           .setLngLat(lngLat)
           .setHTML(html)
           .addTo(state.map);
-        containPopupListScroll(popup);
+        containPopupScroll(popup);
       }
 
       function addCollectionsLayer() {
