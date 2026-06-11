@@ -25,6 +25,17 @@ from lacos.blam.models.collection.collection_repository import Collection
 from lacos.explorer.map_utils import get_collection_map_markers
 
 
+def _marker_collection_urls(markers: list[dict]) -> set[str]:
+    urls = set()
+    for marker in markers:
+        if marker.get("url"):
+            urls.add(marker["url"])
+        for collection in marker.get("collections", []):
+            if collection.get("url"):
+                urls.add(collection["url"])
+    return urls
+
+
 def _build_collection_graph(index: int) -> Collection:
     collection = Collection.objects.create(identifier=f"hdl:test/query-opt-{index}")
 
@@ -309,7 +320,40 @@ def test_collection_map_markers_include_zero_bundle_collections():
     visible_collection = _build_collection_graph(2)
 
     markers = json.loads(get_collection_map_markers())
-    marker_urls = {marker["url"] for marker in markers}
+    marker_urls = _marker_collection_urls(markers)
 
     assert f"/collections/{visible_collection.pk}/" in marker_urls
     assert f"/collections/{empty_collection.pk}/" in marker_urls
+
+
+@pytest.mark.django_db
+def test_collection_map_markers_group_duplicate_coordinates():
+    cache.clear()
+    first = _build_collection_graph(100)
+    second = _build_collection_graph(101)
+    first_location = first.general_info.first().location
+    second_location = second.general_info.first().location
+    second_location.geo_location = first_location.geo_location
+    second_location.country_facet = first_location.country_facet
+    second_location.save(update_fields=["geo_location", "country_facet"])
+
+    markers = json.loads(get_collection_map_markers())
+    grouped_markers = [
+        marker
+        for marker in markers
+        if marker["lat"] == 110.0 and marker["lng"] == 120.0
+    ]
+
+    assert len(grouped_markers) == 1
+    grouped = grouped_markers[0]
+    assert grouped["title"] == "2 collections"
+    assert grouped["url"] == ""
+    assert grouped["bundles"] == 2
+    assert {item["title"] for item in grouped["collections"]} == {
+        "Collection 100",
+        "Collection 101",
+    }
+    assert _marker_collection_urls([grouped]) == {
+        f"/collections/{first.pk}/",
+        f"/collections/{second.pk}/",
+    }

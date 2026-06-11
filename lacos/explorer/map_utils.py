@@ -6,7 +6,7 @@ from django.db.models import Count, Prefetch
 from django.urls import reverse
 
 
-MAP_MARKERS_CACHE_KEY = "explorer:map_markers:v5"
+MAP_MARKERS_CACHE_KEY = "explorer:map_markers:v6"
 MAP_MARKERS_CACHE_TIMEOUT = 86400  # 24 hours (invalidated on collection changes)
 
 
@@ -32,6 +32,70 @@ def _all_map_collections():
     ).annotate(
         bundles_count=Count('bundle_collection', distinct=True)
     )
+
+
+def _group_markers_by_coordinates(markers):
+    """Collapse exact coordinate duplicates into a single map point."""
+    grouped = {}
+    order = []
+    for marker in markers:
+        key = (marker["lat"], marker["lng"])
+        if key not in grouped:
+            grouped[key] = {
+                "lat": marker["lat"],
+                "lng": marker["lng"],
+                "collections": [],
+            }
+            order.append(key)
+        grouped[key]["collections"].append({
+            "title": marker["title"],
+            "url": marker["url"],
+            "languages": marker["languages"],
+            "language_keys": marker["language_keys"],
+            "country": marker["country"],
+            "bundles": marker["bundles"],
+        })
+
+    markers_by_coordinate = []
+    for key in order:
+        group = grouped[key]
+        collections = group["collections"]
+        countries = sorted({item["country"] for item in collections if item["country"]})
+        language_keys = sorted({
+            key
+            for item in collections
+            for key in item["language_keys"]
+        })
+        language_entries = []
+        seen_languages = set()
+        for item in collections:
+            for language in item["languages"]:
+                language_key = (
+                    language.get("display_name"),
+                    language.get("name"),
+                    language.get("iso"),
+                    language.get("glottocode"),
+                )
+                if language_key in seen_languages:
+                    continue
+                seen_languages.add(language_key)
+                language_entries.append(language)
+
+        first = collections[0]
+        is_group = len(collections) > 1
+        markers_by_coordinate.append({
+            "lat": group["lat"],
+            "lng": group["lng"],
+            "title": f"{len(collections)} collections" if is_group else first["title"],
+            "url": "" if is_group else first["url"],
+            "languages": language_entries,
+            "language_keys": language_keys,
+            "country": ", ".join(countries),
+            "bundles": sum(item["bundles"] for item in collections),
+            "collections": collections,
+        })
+
+    return markers_by_coordinate
 
 
 def get_collection_map_markers(collections=None):
@@ -91,7 +155,7 @@ def get_collection_map_markers(collections=None):
         except (ValueError, AttributeError):
             pass
 
-    markers_json = json.dumps(markers)
+    markers_json = json.dumps(_group_markers_by_coordinates(markers))
     cache.set(MAP_MARKERS_CACHE_KEY, markers_json, MAP_MARKERS_CACHE_TIMEOUT)
     return markers_json
 
