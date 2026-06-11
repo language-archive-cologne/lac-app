@@ -1,9 +1,13 @@
 /*
  * Collections map for the explorer collection-list page.
  *
- * Renders a MapLibre globe with one pin per collection location, groups
- * collocated collections into a single scrollable popup, and reacts to the
- * language filter. Config (style URLs, translated legend labels) is read from
+ * Renders a MapLibre globe. Collections at the exact same coordinate are merged
+ * server-side into one marker (shown as a scrollable popup list). Markers that
+ * sit close together — but not identical (e.g. "Cologne" vs "University of
+ * Cologne"), or in adjacent villages — are clustered client-side: a clustered
+ * dot shows the total collection count and zooms apart on click. The language
+ * filter is reflected as a `match` data property so both pins and clusters can
+ * be coloured. Config (style URLs, translated legend labels) is read from
  * `#collections-map` data attributes; marker data comes from the
  * `collections-markers` json_script block. No Django template vars live here.
  */
@@ -34,7 +38,8 @@ export function isMatchMarker(marker, activeLang) {
   return (marker.language_keys || []).includes(activeLang);
 }
 
-export function toGeoJSON(markers) {
+export function toGeoJSON(markers, activeLang = '') {
+  const active = !!activeLang;
   return {
     type: 'FeatureCollection',
     features: markers.map((m, i) => ({
@@ -49,6 +54,10 @@ export function toGeoJSON(markers) {
         bundles: m.bundles || 0,
         collection_count: markerCollections(m).length,
         language_keys: (m.language_keys || []).join('|'),
+        // Driven into the source data (not feature-state) so clusters can
+        // aggregate match counts and colour accordingly.
+        match: isMatchMarker(m, activeLang),
+        active,
       },
     })),
   };
@@ -149,15 +158,12 @@ function fitAll(map) {
   }
 }
 
-function applyMatchStyling() {
+/* Recompute match/active properties for the current filter and push them into
+ * the source. setData re-clusters, so cluster colours update too. */
+function refreshMatchData() {
   const map = state.map;
-  if (!map || !state.loaded) return;
-  state.markers.forEach((m, i) => {
-    map.setFeatureState(
-      { source: 'collections', id: i },
-      { match: isMatchMarker(m, state.activeLang), active: !!state.activeLang }
-    );
-  });
+  const source = map && map.getSource('collections');
+  if (source) source.setData(toGeoJSON(state.markers, state.activeLang));
 }
 
 function focusMatches() {
@@ -177,7 +183,7 @@ function focusMatches() {
 
 function applyFilter() {
   state.activeLang = currentActiveLang();
-  applyMatchStyling();
+  refreshMatchData();
   renderLegend();
   focusMatches();
 }
@@ -207,48 +213,95 @@ function openPopup(marker, lngLat) {
   containPopupScroll(popup);
 }
 
+const CLUSTER_RADIUS = 40;
+const CLUSTER_MAX_ZOOM = 14;
+const COLLECTION_LAYERS = ['collections-clusters', 'collections-cluster-count', 'collections-pins'];
+
+/* Remove the collections layers + source (used before a style rebuild). */
+function removeCollectionsLayers(map) {
+  COLLECTION_LAYERS.forEach(id => { if (map.getLayer(id)) map.removeLayer(id); });
+  if (map.getSource('collections')) map.removeSource('collections');
+}
+
 function addCollectionsLayer() {
   const map = state.map;
   if (!map || map.getLayer('collections-pins')) return;
   if (!map.getSource('collections')) {
     map.addSource('collections', {
       type: 'geojson',
-      data: toGeoJSON(state.markers),
+      data: toGeoJSON(state.markers, state.activeLang),
       promoteId: 'idx',
+      cluster: true,
+      clusterRadius: CLUSTER_RADIUS,
+      clusterMaxZoom: CLUSTER_MAX_ZOOM,
+      // Aggregate per-cluster totals: collections behind the dot, and how many
+      // of its markers match the active language filter.
+      clusterProperties: {
+        collections_sum: ['+', ['get', 'collection_count']],
+        match_count: ['+', ['case', ['get', 'match'], 1, 0]],
+      },
     });
   }
 
+  // Clustered dot for several nearby markers.
+  map.addLayer({
+    id: 'collections-clusters',
+    type: 'circle',
+    source: 'collections',
+    filter: ['has', 'point_count'],
+    paint: {
+      'circle-color': ['case', ['>', ['get', 'match_count'], 0], '#ea564f', '#005176'],
+      'circle-radius': [
+        'interpolate', ['linear'], ['get', 'collections_sum'],
+        2, 12, 5, 15, 10, 18, 25, 22,
+      ],
+      'circle-stroke-color': '#ffffff',
+      'circle-stroke-width': 2,
+      'circle-opacity': 0.92,
+    },
+  });
+
+  // Total collection count inside the cluster.
+  map.addLayer({
+    id: 'collections-cluster-count',
+    type: 'symbol',
+    source: 'collections',
+    filter: ['has', 'point_count'],
+    layout: {
+      'text-field': ['to-string', ['get', 'collections_sum']],
+      'text-font': ['Noto Sans Regular'],
+      'text-size': 12,
+      'text-allow-overlap': true,
+    },
+    paint: { 'text-color': '#ffffff' },
+  });
+
+  // Individual marker (one exact point; may itself hold several collections).
   map.addLayer({
     id: 'collections-pins',
     type: 'circle',
     source: 'collections',
+    filter: ['!', ['has', 'point_count']],
     paint: {
       'circle-radius': [
         'interpolate', ['linear'], ['zoom'],
         1, [
-          'case',
-          ['boolean', ['feature-state', 'match'], false],
+          'case', ['get', 'match'],
           ['case', ['>', ['to-number', ['get', 'collection_count']], 1], 8, 7],
           ['case', ['>', ['to-number', ['get', 'collection_count']], 1], 6, 4.5]
         ],
         6, [
-          'case',
-          ['boolean', ['feature-state', 'match'], false],
+          'case', ['get', 'match'],
           ['case', ['>', ['to-number', ['get', 'collection_count']], 1], 12, 11],
           ['case', ['>', ['to-number', ['get', 'collection_count']], 1], 9, 7]
         ],
       ],
-      'circle-color': [
-        'case',
-        ['boolean', ['feature-state', 'match'], false], '#ea564f',
-        '#005176',
-      ],
+      'circle-color': ['case', ['get', 'match'], '#ea564f', '#005176'],
       'circle-stroke-color': '#ffffff',
       'circle-stroke-width': 1.8,
       'circle-opacity': [
-        'case',
-        ['boolean', ['feature-state', 'active'], false],
-        ['case', ['boolean', ['feature-state', 'match'], false], 1, 0.32],
+        'case', ['get', 'active'],
+        ['case', ['get', 'match'], 1, 0.32],
         1,
       ],
     },
@@ -256,6 +309,8 @@ function addCollectionsLayer() {
 
   if (state.pinsHandlersBound) return;
   state.pinsHandlersBound = true;
+
+  // Click a single marker -> popup (grouped list if it holds several collections).
   map.on('click', 'collections-pins', (e) => {
     if (!e.features || !e.features.length) return;
     const idx = e.features[0].properties.idx;
@@ -263,8 +318,26 @@ function addCollectionsLayer() {
     if (!marker) return;
     openPopup(marker, e.lngLat);
   });
-  map.on('mouseenter', 'collections-pins', () => { map.getCanvas().style.cursor = 'pointer'; });
-  map.on('mouseleave', 'collections-pins', () => { map.getCanvas().style.cursor = ''; });
+
+  // Click a cluster -> zoom in until the markers separate.
+  map.on('click', 'collections-clusters', (e) => {
+    const features = map.queryRenderedFeatures(e.point, { layers: ['collections-clusters'] });
+    if (!features.length) return;
+    const clusterId = features[0].properties.cluster_id;
+    const source = map.getSource('collections');
+    source.getClusterExpansionZoom(clusterId).then(zoom => {
+      map.easeTo({
+        center: features[0].geometry.coordinates,
+        zoom: Math.max(zoom, map.getZoom() + 0.5),
+        duration: 600,
+      });
+    }).catch(() => {});
+  });
+
+  ['collections-pins', 'collections-clusters'].forEach(layer => {
+    map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; });
+  });
 }
 
 function markerIndexForPk(pk) {
@@ -311,7 +384,6 @@ export function initCollectionsMap() {
   map.on('load', () => {
     state.loaded = true;
     addCollectionsLayer();
-    applyMatchStyling();
     if (state.activeLang) focusMatches();
   });
 
@@ -333,11 +405,9 @@ export function initCollectionsMap() {
       state.loaded = false;
       m.setStyle(next, { diff: false });
       m.once('style.load', () => {
-        if (m.getLayer('collections-pins')) m.removeLayer('collections-pins');
-        if (m.getSource('collections')) m.removeSource('collections');
+        removeCollectionsLayers(m);
         state.loaded = true;
         addCollectionsLayer();
-        applyMatchStyling();
       });
     });
     window.__lacGlobeThemeObserver.observe(document.documentElement, {

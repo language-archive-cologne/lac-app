@@ -65,25 +65,42 @@ describe('isMatchMarker', () => {
 });
 
 describe('toGeoJSON', () => {
+  const sample = {
+    lng: 10,
+    lat: 20,
+    title: 'A',
+    url: '/a',
+    country: 'DE',
+    bundles: 2,
+    language_keys: ['deu', 'eng'],
+    collections: [{ title: 'A' }, { title: 'B' }],
+  };
+
   test('maps markers to features with derived properties', () => {
-    const fc = toGeoJSON([
-      {
-        lng: 10,
-        lat: 20,
-        title: 'A',
-        url: '/a',
-        country: 'DE',
-        bundles: 2,
-        language_keys: ['deu', 'eng'],
-        collections: [{ title: 'A' }, { title: 'B' }],
-      },
-    ]);
+    const fc = toGeoJSON([sample]);
     expect(fc.type).toBe('FeatureCollection');
     const f = fc.features[0];
     expect(f.geometry.coordinates).toEqual([10, 20]);
     expect(f.properties.idx).toBe(0);
     expect(f.properties.collection_count).toBe(2);
     expect(f.properties.language_keys).toBe('deu|eng');
+  });
+
+  test('without an active language, match and active are false', () => {
+    const f = toGeoJSON([sample]).features[0];
+    expect(f.properties.match).toBe(false);
+    expect(f.properties.active).toBe(false);
+  });
+
+  test('with an active language, sets match per marker and active globally', () => {
+    const features = toGeoJSON(
+      [sample, { lng: 1, lat: 1, language_keys: ['fra'] }],
+      'eng',
+    ).features;
+    expect(features[0].properties.match).toBe(true);   // has 'eng'
+    expect(features[1].properties.match).toBe(false);  // only 'fra'
+    expect(features[0].properties.active).toBe(true);
+    expect(features[1].properties.active).toBe(true);
   });
 });
 
