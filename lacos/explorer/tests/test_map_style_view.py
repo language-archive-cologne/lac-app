@@ -61,6 +61,20 @@ def test_map_style_view_glyphs_url_has_fontstack_range_template(client):
 
 
 @pytest.mark.django_db
+def test_map_style_view_does_not_render_country_labels(client):
+    response = client.get(reverse("explorer:map_style_ne_c"))
+    style = json.loads(response.content)
+    country_label_layers = [
+        layer
+        for layer in style["layers"]
+        if layer.get("type") == "symbol"
+        and layer.get("source-layer") == "countries"
+        and "text-field" in layer.get("layout", {})
+    ]
+    assert country_label_layers == []
+
+
+@pytest.mark.django_db
 def test_map_style_view_cache_header_present(client):
     response = client.get(reverse("explorer:map_style_ne_c"))
     assert response["Cache-Control"] == "public, max-age=86400, stale-while-revalidate=604800"
