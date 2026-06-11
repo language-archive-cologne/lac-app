@@ -102,6 +102,44 @@ def test_csp_allows_storage_api_and_extra_asset_origins_for_media(client, settin
 
 
 @pytest.mark.django_db
+def test_csp_allows_configured_script_origins_for_analytics(client, settings):
+    # A single setting must cover the external script AND its beacons/pixel.
+    settings.CSP_EXTRA_SCRIPT_ORIGINS = ["https://matomo.rrz.uni-koeln.de/"]
+
+    response = client.get("/")
+
+    csp = response.headers["Content-Security-Policy"]
+    # External tracker script must be allowed in script-src...
+    assert "script-src 'self'" in csp
+    script_directive = next(
+        part for part in csp.split("; ") if part.startswith("script-src ")
+    )
+    assert "https://matomo.rrz.uni-koeln.de" in script_directive
+    # ...and its beacons/pixel in connect-src and img-src.
+    connect_directive = next(
+        part for part in csp.split("; ") if part.startswith("connect-src ")
+    )
+    img_directive = next(
+        part for part in csp.split("; ") if part.startswith("img-src ")
+    )
+    assert "https://matomo.rrz.uni-koeln.de" in connect_directive
+    assert "https://matomo.rrz.uni-koeln.de" in img_directive
+
+
+@pytest.mark.django_db
+def test_csp_script_src_excludes_unconfigured_origins(client, settings):
+    settings.CSP_EXTRA_SCRIPT_ORIGINS = []
+
+    response = client.get("/")
+
+    csp = response.headers["Content-Security-Policy"]
+    script_directive = next(
+        part for part in csp.split("; ") if part.startswith("script-src ")
+    )
+    assert "matomo" not in script_directive
+
+
+@pytest.mark.django_db
 def test_csp_allows_configured_saml_form_action_origins(client, settings):
     settings.SAML_METADATA_REFRESH_URL = "https://idp.rrz.uni-koeln.de/idp/shibboleth"
     settings.SAML_FORM_ACTION_ORIGINS = ["https://idp.example.org/saml/sso"]

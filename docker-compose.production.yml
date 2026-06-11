@@ -42,6 +42,8 @@ services:
       EDUGAIN_METADATA_URL: "https://www.aai.dfn.de/fileadmin/metadata/dfn-aai-edugain+idp-metadata.xml"
       GUIDELINES_REPO_URL: /app/lac-guidelines
       LAC_MEDIA_TMP_DIR: "/app/.tmp/media-processing"
+      # Allow Matomo analytics (matomo.js + tracking beacons) through the CSP.
+      CSP_EXTRA_SCRIPT_ORIGINS: "https://matomo.rrz.uni-koeln.de"
     ports:
       - '127.0.0.1:8103:8000'
     command: /start-production

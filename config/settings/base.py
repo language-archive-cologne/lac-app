@@ -398,6 +398,10 @@ S3_PRODUCTION_BUCKET = env("S3_PRODUCTION_BUCKET", default="lacos-production")
 AWS_S3_MAX_POOL_CONNECTIONS = env.int("AWS_S3_MAX_POOL_CONNECTIONS", default=50)
 AWS_S3_BROWSER_ENDPOINT_URL = env("AWS_S3_BROWSER_ENDPOINT_URL", default="")
 CSP_EXTRA_ASSET_ORIGINS = env.list("CSP_EXTRA_ASSET_ORIGINS", default=[])
+# Extra origins allowed to load scripts in CSP (e.g. analytics like Matomo).
+# These are added to script-src and also to connect-src/img-src so the tracker's
+# beacons and fallback pixel are allowed with a single setting.
+CSP_EXTRA_SCRIPT_ORIGINS = env.list("CSP_EXTRA_SCRIPT_ORIGINS", default=[])
 
 # Cache configuration for storage subsystems
 STORAGE_ACL_CACHE_TIMEOUT = env.int("STORAGE_ACL_CACHE_TIMEOUT", default=900)

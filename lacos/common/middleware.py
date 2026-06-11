@@ -73,6 +73,9 @@ class SecurityHeadersMiddleware:
             )
             if origin not in asset_origins
         )
+        script_origins = _origins_from_values(
+            getattr(settings, "CSP_EXTRA_SCRIPT_ORIGINS", [])
+        )
         saml_form_origins = _origins_from_settings(
             "SAML_METADATA_REFRESH_URL",
             "SAML2_DISCO_URL",
@@ -85,13 +88,19 @@ class SecurityHeadersMiddleware:
             if origin not in saml_form_origins
         )
 
-        script_src = ["'self'", *static_origins]
+        script_src = ["'self'", *static_origins, *script_origins]
         style_src = ["'self'", "'unsafe-inline'", *static_origins]
         style_elem = ["'self'", "'unsafe-inline'", *static_origins]
         style_attr = ["'unsafe-inline'"]
+        # Script origins (e.g. Matomo) also need connect-src/img-src so the
+        # tracker's beacons and fallback pixel are not blocked.
         img_src = ["'self'", "data:", *asset_origins]
+        img_src.extend(origin for origin in script_origins if origin not in img_src)
         font_src = ["'self'", "data:", *asset_origins]
         connect_src = ["'self'", *asset_origins]
+        connect_src.extend(
+            origin for origin in script_origins if origin not in connect_src
+        )
         media_src = ["'self'", "blob:", *asset_origins]
         frame_src = ["'self'", *asset_origins]
         form_action = ["'self'", *saml_form_origins]
