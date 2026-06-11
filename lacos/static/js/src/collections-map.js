@@ -213,7 +213,7 @@ function openPopup(marker, lngLat) {
   containPopupScroll(popup);
 }
 
-const CLUSTER_RADIUS = 40;
+const CLUSTER_RADIUS = 20;
 const CLUSTER_MAX_ZOOM = 14;
 const COLLECTION_LAYERS = ['collections-clusters', 'collections-cluster-count', 'collections-pins'];
 
