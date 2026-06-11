@@ -14,7 +14,16 @@
 {% block title %}{% if collection.get_general_info.display_title %}{{ collection.get_general_info.display_title }}{% elif collection.get_general_info.title %}{{ collection.get_general_info.title }}{% else %}{{ collection.identifier }}{% endif %} - Language Archive Cologne{% endblock title %}
 
 {% block explorer_content %}
-  <div class="mb-6">
+  <div class="mb-6 flex flex-wrap items-center gap-x-5 gap-y-2">
+    {% safe_back_url as search_back_url %}
+    {% if search_back_url %}
+      <a href="{{ search_back_url }}" class="inline-flex items-center text-base-content/70 hover:text-base-content font-medium">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
+        {% translate "Back to search results" %}
+      </a>
+    {% else %}
+      {% include "explorer/partials/previous_page_button.html" %}
+    {% endif %}
     <a href="{% url 'explorer:collection_list' %}" class="inline-flex items-center text-base-content/70 hover:text-base-content font-medium">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
         <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />

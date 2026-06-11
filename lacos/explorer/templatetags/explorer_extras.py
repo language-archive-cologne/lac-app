@@ -1,9 +1,12 @@
 import ast
 import re
+from urllib.parse import quote
 
 from django import template
 from django.template.defaultfilters import stringfilter
+from django.urls import Resolver404, resolve
 from django.utils.html import conditional_escape, format_html, mark_safe
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.safestring import SafeString
 
 from lacos.explorer.identifier_display import format_identifier_html
@@ -14,6 +17,43 @@ from lacos.explorer.media_utils import (
 )
 
 register = template.Library()
+
+# Must stay in sync with the search URL names in config/urls.py.
+SEARCH_VIEW_NAMES = {
+    "faceted_search", "field_search", "bundle_faceted_search", "bundle_field_search",
+}
+
+
+@register.simple_tag(takes_context=True)
+def back_query(context):
+    """Return ``?back=<current-search-url>`` for detail-page links."""
+    request = context.get("request")
+    if request is None:
+        return ""
+    return "?back=" + quote(request.get_full_path(), safe="")
+
+
+@register.simple_tag(takes_context=True)
+def safe_back_url(context):
+    """Return the validated ``?back=`` search URL, or '' if missing/unsafe."""
+    request = context.get("request")
+    if request is None:
+        return ""
+    back = request.GET.get("back", "").strip()
+    if not back:
+        return ""
+    if not url_has_allowed_host_and_scheme(
+        back, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return ""
+    path = back.split("?", 1)[0]
+    try:
+        match = resolve(path)
+    except Resolver404:
+        return ""
+    if match.url_name not in SEARCH_VIEW_NAMES:
+        return ""
+    return back
 
 FACET_PARAM_NAMES = {
     "keyword", "language", "year", "country", "region", "provider", "access", "license",
@@ -61,7 +101,7 @@ def clear_all_filters_url(context):
     params = request.GET.copy()
 
     for key in list(params.keys()):
-        if key in FACET_PARAM_NAMES or key in ("q", "page") or key.startswith("row_"):
+        if key in FACET_PARAM_NAMES or key in ("q", "page", "search_in") or key.startswith("row_"):
             del params[key]
 
     return f"?{params.urlencode()}" if params else "?"

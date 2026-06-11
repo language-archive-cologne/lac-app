@@ -114,6 +114,8 @@ def test_bundle_detail_shows_explicit_parent_collection(client):
 
     assert response.status_code == 200
     page = response.content.decode("utf-8")
+    assert "Back to previous page" in page
+    assert "data-history-back" in page
     assert "Back to Collection" in page
     assert "Bundle Parent Title" in page
     assert "Part of" in page

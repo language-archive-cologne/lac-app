@@ -7,6 +7,7 @@ from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from django.urls import include
 from django.urls import path
 from django.views import defaults as default_views
+from django.views.generic import RedirectView
 from django.views.generic import TemplateView
 from drf_spectacular.views import SpectacularAPIView
 from drf_spectacular.views import SpectacularSwaggerView
@@ -16,10 +17,8 @@ from lacos.sitemaps import sitemaps
 from lacos.common.views import guideline_view
 from lacos.explorer.views import (
     BundleFacetedSearchView,
-    BundleFieldSearchView,
     CollectionListView,
     FacetedSearchView,
-    FieldSearchView,
     ResourceByHandleView,
     legacy_bundle_by_handle,
     legacy_collection_by_handle,
@@ -44,12 +43,12 @@ urlpatterns = [
     ),
     path(
         "search/fields/",
-        FieldSearchView.as_view(),
+        RedirectView.as_view(pattern_name="faceted_search", permanent=True, query_string=True),
         name="field_search",
     ),
     path(
         "search/bundles/fields/",
-        BundleFieldSearchView.as_view(),
+        RedirectView.as_view(pattern_name="bundle_faceted_search", permanent=True, query_string=True),
         name="bundle_field_search",
     ),
     # Crawler control files

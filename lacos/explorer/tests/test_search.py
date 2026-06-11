@@ -544,6 +544,15 @@ def test_collection_search_page_renders_highlighted_snippet(client):
 
 
 @pytest.mark.django_db
+def test_collection_list_has_no_advanced_search_jargon(client):
+    response = client.get(reverse("explorer:collection_list"))
+    assert response.status_code == 200
+    page = response.content.decode("utf-8")
+
+    assert "Advanced Search" not in page
+
+
+@pytest.mark.django_db
 def test_collection_search_page_renders_highlighted_bundle_snippet(client):
     collection = Collection.objects.create(identifier="COL-PARENT-001")
     collection_location = CollectionLocation.objects.create(

@@ -1,0 +1,34 @@
+{% load i18n %}
+{% comment %}
+  Vars: active_scope "collections" | "bundles"; form_id (scope buttons submit it).
+{% endcomment %}
+{% url 'faceted_search' as url_scope_collections %}
+{% url 'bundle_faceted_search' as url_scope_bundles %}
+
+<div class="flex items-center gap-2 mb-6">
+  <div role="group" aria-label="{% translate 'Search scope' %}" class="join">
+    {% if active_scope == "collections" %}
+      <button type="button" aria-pressed="true" class="btn btn-sm join-item btn-primary pointer-events-none">{% translate "Collections" %}</button>
+      <button type="button" data-search-scope-submit data-form-id="{{ form_id }}" data-formaction="{{ url_scope_bundles }}" aria-pressed="false" class="btn btn-sm join-item bg-base-100 border border-base-300 text-base-content/70 hover:bg-base-200">{% translate "Bundles" %}</button>
+    {% else %}
+      <button type="button" data-search-scope-submit data-form-id="{{ form_id }}" data-formaction="{{ url_scope_collections }}" aria-pressed="false" class="btn btn-sm join-item bg-base-100 border border-base-300 text-base-content/70 hover:bg-base-200">{% translate "Collections" %}</button>
+      <button type="button" aria-pressed="true" class="btn btn-sm join-item btn-primary pointer-events-none">{% translate "Bundles" %}</button>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  (function () {
+    if (window.lacosSearchScopeToggleBound) { return; }
+    window.lacosSearchScopeToggleBound = true;
+    document.addEventListener('click', function (event) {
+      var trigger = event.target.closest('[data-search-scope-submit]');
+      if (!trigger) { return; }
+      var form = document.getElementById(trigger.getAttribute('data-form-id'));
+      var action = trigger.getAttribute('data-formaction');
+      if (!form || !action) { return; }
+      form.setAttribute('action', action);
+      form.submit();
+    });
+  })();
+</script>
