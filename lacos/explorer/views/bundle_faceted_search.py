@@ -7,6 +7,10 @@ from django.shortcuts import render
 from django.views.generic import ListView
 
 from lacos.blam.models import Bundle
+from lacos.explorer.advanced_search import (
+    BUNDLE_FIELD_DEFINITIONS,
+    apply_field_scoped_search,
+)
 from lacos.explorer.facets import (
     BUNDLE_FACET_CACHE_KEY,
     BUNDLE_FACET_DEFINITIONS,
@@ -29,6 +33,7 @@ class BundleFacetedSearchView(ListView):
     context_object_name = "bundles"
     paginate_by = 50
     _faceted_result: FacetedSearchResult | None = None
+    _search_in: list[str] = []
 
     def get_queryset(self):
         bundle_ct = ContentType.objects.get_for_model(Bundle)
@@ -42,8 +47,17 @@ class BundleFacetedSearchView(ListView):
         )
 
         search_query = self.request.GET.get("q", "").strip()
+        valid_keys = {d.key for d in BUNDLE_FIELD_DEFINITIONS}
+        self._search_in = [
+            k for k in self.request.GET.getlist("search_in") if k in valid_keys
+        ]
         if search_query:
-            base_qs = apply_text_search(base_qs, search_query)
+            if self._search_in:
+                base_qs = apply_field_scoped_search(
+                    base_qs, search_query, self._search_in, BUNDLE_FIELD_DEFINITIONS
+                )
+            else:
+                base_qs = apply_text_search(base_qs, search_query)
 
         facet_cache_key = BUNDLE_FACET_CACHE_KEY if not search_query else None
         self._faceted_result = FacetService(
@@ -99,6 +113,8 @@ class BundleFacetedSearchView(ListView):
         context["current_sort"] = self.request.GET.get("sort", "name")
         context["current_order"] = self.request.GET.get("order", "asc")
         context["current_params"] = self.request.GET.copy()
+        context["field_definitions"] = BUNDLE_FIELD_DEFINITIONS
+        context["active_search_in"] = self._search_in
         return context
 
     def render_to_response(self, context, **kwargs):

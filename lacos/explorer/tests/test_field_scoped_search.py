@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from django.urls import reverse
 
 from lacos.blam.models import Collection
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
@@ -83,3 +84,29 @@ def test_no_resolvable_fields_returns_qs_unchanged():
     base = Collection.objects.all()
     out = apply_field_scoped_search(base, "Anything", ["nonexistent"], COLLECTION_FIELD_DEFINITIONS)
     assert list(out) == list(base)
+
+
+@pytest.mark.django_db
+def test_search_in_scopes_results(client):
+    _collection("C1", "Rock Art Interviews", keyword="ritual")
+    url = reverse("faceted_search")
+    r_title = client.get(url, {"q": "ritual", "search_in": ["title"]})
+    assert r_title.status_code == 200
+    assert r_title.context["total_count"] == 0
+    r_kw = client.get(url, {"q": "ritual", "search_in": ["keyword"]})
+    assert r_kw.context["total_count"] == 1
+
+
+@pytest.mark.django_db
+def test_no_search_in_uses_global_search(client):
+    _collection("C1", "Rock Art Interviews", keyword="ritual")
+    r = client.get(reverse("faceted_search"), {"q": "ritual"})
+    assert r.status_code == 200
+    assert r.context["total_count"] == 1
+
+
+@pytest.mark.django_db
+def test_field_definitions_in_context(client):
+    r = client.get(reverse("faceted_search"))
+    assert r.context["field_definitions"] is not None
+    assert r.context["active_search_in"] == []
