@@ -51,6 +51,19 @@ def test_collection_list_map_triggers_use_delegated_modal_js(client):
 
 
 @pytest.mark.django_db
+def test_collection_list_grouped_map_popup_scroll_is_contained(client):
+    _build_collection_graph(94)
+
+    response = client.get(reverse("explorer:collection_list"))
+
+    assert response.status_code == 200
+    page = response.content.decode("utf-8")
+    assert "overscroll-behavior: contain" in page
+    assert "function containPopupListScroll(popup)" in page
+    assert "event.stopPropagation();" in page
+
+
+@pytest.mark.django_db
 def test_faceted_collection_table_renders_map_trigger_for_geo_location(client):
     collection = _build_collection_graph(93)
     location = collection.general_info.first().location
