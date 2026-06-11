@@ -110,3 +110,13 @@ def test_field_definitions_in_context(client):
     r = client.get(reverse("faceted_search"))
     assert r.context["field_definitions"] is not None
     assert r.context["active_search_in"] == []
+
+
+def test_clear_all_filters_drops_search_in():
+    from django.test import RequestFactory
+
+    from lacos.explorer.templatetags.explorer_extras import clear_all_filters_url
+
+    request = RequestFactory().get("/search/", {"q": "x", "search_in": ["title"], "language": "Yuracare"})
+    url = clear_all_filters_url({"request": request})
+    assert "search_in" not in url
