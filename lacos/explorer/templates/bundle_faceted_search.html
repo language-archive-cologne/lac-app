@@ -2,7 +2,7 @@
 {% load i18n %}
 {% load explorer_extras %}
 
-{% block title %}{% translate "Search Bundles" %} - {{ block.super }}{% endblock title %}
+{% block title %}{% translate "Archive Explorer" %} - {{ block.super }}{% endblock title %}
 
 {% block explorer_content %}
   <style>
@@ -62,7 +62,7 @@
     })();
   </script>
 
-  {% include "explorer/partials/search_mode_toggle.html" with active_scope="bundles" active_mode="faceted" form_id="faceted-search-form" %}
+  {% include "explorer/partials/search_scope_toggle.html" with active_scope="bundles" form_id="faceted-search-form" %}
 
   <!-- Search bar -->
   <form id="faceted-search-form" method="get" action="{% url 'bundle_faceted_search' %}" class="mb-6">
