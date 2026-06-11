@@ -252,3 +252,32 @@ def apply_search_rows(
             qs = qs.filter(q)
 
     return qs.distinct()
+
+
+def apply_field_scoped_search(
+    qs: QuerySet,
+    term: str,
+    field_keys: list[str],
+    definitions: list[AdvancedFieldDefinition],
+) -> QuerySet:
+    """Filter ``qs`` so ``term`` matches within ANY of the selected fields.
+
+    Builds one SearchVector over the union of the selected definitions' ORM
+    field paths and filters with a prefix FTS query. Returns ``qs`` unchanged
+    when the term is empty or none of the keys resolve to fields.
+    """
+    fts_query = build_fts_query(term)
+    if fts_query is None:
+        return qs
+    field_map = {d.key: d.orm_fields for d in definitions}
+    orm_fields: list[str] = []
+    for key in field_keys:
+        orm_fields.extend(field_map.get(key, []))
+    if not orm_fields:
+        return qs
+    vector = SearchVector(*orm_fields, config="simple")
+    return (
+        qs.annotate(_field_scoped_fts=vector)
+        .filter(_field_scoped_fts=fts_query)
+        .distinct()
+    )
