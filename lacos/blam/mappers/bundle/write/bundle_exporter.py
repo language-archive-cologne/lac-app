@@ -5,8 +5,9 @@ from xml.etree import ElementTree as ET
 from xsdata.formats.dataclass.serializers import XmlSerializer
 from xsdata.formats.dataclass.serializers.config import SerializerConfig
 
-from blam_schemas.bundle.blam_bundle_repository_v1_1 import Cmd
+from blam_schemas.bundle.blam_bundle_repository_v1_1 import Cmd, ResourcetypeSimple
 from lacos.blam.models.bundle.bundle_repository import Bundle
+from lacos.blam.models.bundle.bundle_structural_info import BundleResources
 
 from .export_header import export_header
 from .export_general_info import export_general_info
@@ -48,7 +49,7 @@ class BundleExporter:
 
         # Initialize required structures
         cmd.header = Cmd.Header()
-        cmd.resources = self._create_empty_resources()
+        cmd.resources = self._create_resources(bundle)
         cmd.components = Cmd.Components()
         cmd.components.blam_bundle_repository_v1_1 = (
             Cmd.Components.BlamBundleRepositoryV11()
@@ -85,12 +86,51 @@ class BundleExporter:
 
         return cmd
 
-    def _create_empty_resources(self) -> Cmd.Resources:
-        """Create empty resources section."""
+    def _create_resources(self, bundle: Bundle) -> Cmd.Resources:
+        """Create the resources section with a ResourceProxy per file.
+
+        One ``Resource`` proxy per media/written/other file (referencing its
+        ``file_pid``), plus a ``LandingPage`` proxy to the bundle's own handle so
+        every bundle exposes at least one proxy (a VLO minimum requirement).
+        """
         resources = Cmd.Resources()
-        resources.resource_proxy_list = Cmd.Resources.ResourceProxyList()
+        proxy_list = Cmd.Resources.ResourceProxyList()
+        resources.resource_proxy_list = proxy_list
         resources.journal_file_proxy_list = Cmd.Resources.JournalFileProxyList()
         resources.resource_relation_list = Cmd.Resources.ResourceRelationList()
+
+        ResourceProxy = Cmd.Resources.ResourceProxyList.ResourceProxy
+        ResourceType = ResourceProxy.ResourceType
+        ResourceRef = ResourceProxy.ResourceRef
+
+        idx = 0
+        bundle_resources = BundleResources.objects.filter(bundle=bundle).first()
+        if bundle_resources:
+            files = [
+                *bundle_resources.bundle_media_resources.all(),
+                *bundle_resources.bundle_written_resources.all(),
+                *bundle_resources.bundle_other_resources.all(),
+            ]
+            for resource in files:
+                if not resource.file_pid:
+                    continue
+                idx += 1
+                proxy_list.resource_proxy.append(ResourceProxy(
+                    resource_type=ResourceType(
+                        value=ResourcetypeSimple.RESOURCE,
+                        mimetype=resource.mime_type or None,
+                    ),
+                    resource_ref=ResourceRef(value=resource.file_pid),
+                    id=f"d{idx}",
+                ))
+
+        if bundle.identifier:
+            proxy_list.resource_proxy.append(ResourceProxy(
+                resource_type=ResourceType(value=ResourcetypeSimple.LANDING_PAGE),
+                resource_ref=ResourceRef(value=bundle.identifier),
+                id="lp1",
+            ))
+
         return resources
 
     def _create_md_license(self, admin_info) -> Cmd.Components.BlamBundleRepositoryV11.Mdlicense:
