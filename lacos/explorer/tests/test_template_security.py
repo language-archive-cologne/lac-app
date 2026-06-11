@@ -1,4 +1,7 @@
+from pathlib import Path
+
 import pytest
+from django.contrib.staticfiles import finders
 from django.urls import reverse
 
 from lacos.explorer.templatetags.explorer_extras import urlize_text
@@ -58,13 +61,20 @@ def test_collection_list_grouped_map_popup_scroll_is_contained(client):
 
     assert response.status_code == 200
     page = response.content.decode("utf-8")
+    # Popup container styling stays inline in the template.
     assert "max-height: 300px" in page
     assert 'font-family: "Albert Sans", system-ui, sans-serif' in page
     assert "collection-item" in page
     assert "overscroll-behavior: contain" in page
-    assert "function containPopupScroll(popup)" in page
-    assert "element.querySelector('.maplibregl-popup-content')" in page
-    assert "event.stopPropagation();" in page
+    # The map behaviour is loaded from the extracted static module.
+    assert 'src="/static/js/src/collections-map.js"' in page
+    # The scroll-containment logic now lives in that module.
+    module_path = finders.find("js/src/collections-map.js")
+    assert module_path is not None
+    module_src = Path(module_path).read_text(encoding="utf-8")
+    assert "function containPopupScroll(popup)" in module_src
+    assert "element.querySelector('.maplibregl-popup-content')" in module_src
+    assert "event.stopPropagation();" in module_src
 
 
 @pytest.mark.django_db
