@@ -302,13 +302,13 @@ def test_scope_switch_button_does_not_become_default_search_submitter(client):
 
 
 @pytest.mark.django_db
-def test_bundle_search_options_do_not_expose_mode_or_faceted_terms(client):
+def test_bundle_search_page_uses_unified_terminology(client):
     response = client.get("/search/bundles/")
     assert response.status_code == 200
     page = response.content.decode("utf-8")
 
-    assert "Search specific metadata" in page
-    assert "Search options" in page
+    assert "Archive Explorer" in page
+    assert "Search in" in page
     assert ">Mode<" not in page
     assert ">Faceted<" not in page
     assert ">Fields<" not in page
