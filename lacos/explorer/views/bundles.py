@@ -30,6 +30,7 @@ from lacos.blam.models.bundle.bundle_structural_info import (
 )
 from lacos.blam.mappers.bundle.write.bundle_exporter import BundleExporter
 from lacos.blam.serializers import BundleJsonLdSerializer
+from lacos.explorer.bundle_structured_data import serialize_bundle_json_ld
 from lacos.explorer.head_metadata import build_bundle_head_metadata
 from lacos.explorer.media_utils import determine_media_type, guess_source_mime_type
 from lacos.explorer.permissions import (
@@ -124,8 +125,10 @@ class BundleDetailView(MetadataExposureMixin, HandleLookupMixin, ACLPermissionMi
     def get_queryset(self):
         return Bundle.objects.prefetch_related(
             "general_info",
+            "general_info__location",
             "general_info__keywords",
             "general_info__object_languages",
+            "general_info__object_languages__bundle_object_language_taxonomy__language_family",
             Prefetch(
                 "publication_info",
                 queryset=BundlePublicationInfo.objects.prefetch_related(
@@ -142,6 +145,7 @@ class BundleDetailView(MetadataExposureMixin, HandleLookupMixin, ACLPermissionMi
                 ),
             ),
             "structural_info",
+            "structural_info__is_member_of_collection__general_info",
             "structural_info__additional_metadata_files",
             "administrative_info",
             "administrative_info__licenses",
@@ -244,6 +248,18 @@ class BundleDetailView(MetadataExposureMixin, HandleLookupMixin, ACLPermissionMi
             publication_info=publication_info,
             creators=bundle_creators,
             metadata_files=context["metadata_files"],
+            media_resources=context["media_resources"],
+            written_resources=context["written_resources"],
+            other_resources=context["other_resources"],
+            licenses=context["licenses"],
+        )
+        context["bundle_json_ld"] = serialize_bundle_json_ld(
+            self.object,
+            public_base_url=settings.PUBLIC_BASE_URL,
+            access_level=result.access_level if result else "restricted",
+            collection=context.get("collection"),
+            publication_info=publication_info,
+            creators=bundle_creators,
             media_resources=context["media_resources"],
             written_resources=context["written_resources"],
             other_resources=context["other_resources"],
