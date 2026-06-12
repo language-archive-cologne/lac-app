@@ -728,6 +728,17 @@ if SAML_LOGIN_ENABLED:
         "SAML_ADDITIONAL_SINGLE_LOGOUT_SERVICE_URLS",
         default=[],
     )
+    SAML_REQUEST_INITIATOR_URL = env(
+        "SAML_REQUEST_INITIATOR_URL",
+        default=f"{_saml_base}/saml2/login/",
+    )
+    SAML_DISCOVERY_RESPONSE_URL = env(
+        "SAML_DISCOVERY_RESPONSE_URL",
+        default=f"{_saml_base}/saml2/login/",
+    )
+    SAML_DISCOVERY_RESPONSE_BINDING = (
+        "urn:oasis:names:tc:SAML:profiles:SSO:idp-discovery-protocol"
+    )
     SAML_DEFAULT_NAME_ID_FORMAT = env(
         "SAML_NAME_ID_FORMAT",
         default="urn:oasis:names:tc:SAML:2.0:nameid-format:persistent",
@@ -773,10 +784,20 @@ if SAML_LOGIN_ENABLED:
         additional_urls=SAML_ADDITIONAL_SINGLE_LOGOUT_SERVICE_URLS,
         binding=BINDING_HTTP_REDIRECT,
     )
+    _saml_discovery_response_services = build_saml_endpoints(
+        primary_url=SAML_DISCOVERY_RESPONSE_URL,
+        additional_urls=[],
+        binding=SAML_DISCOVERY_RESPONSE_BINDING,
+    )
+    _saml_service_description = (
+        "Digital archive for endangered-language and ethnographic research "
+        "data at the University of Cologne."
+    )
     SAML_CONFIG = {
         "debug": DEBUG,
         "entityid": SAML_ENTITY_ID,
         "name": "Language Archive Cologne",
+        "description": (_saml_service_description, "en"),
         "allow_unknown_attributes": True,
         "service": {
             "sp": {
@@ -784,6 +805,7 @@ if SAML_LOGIN_ENABLED:
                 "endpoints": {
                     "assertion_consumer_service": _saml_assertion_consumer_services,
                     "single_logout_service": _saml_single_logout_services,
+                    "discovery_response": _saml_discovery_response_services,
                 },
                 "allow_unsolicited": env.bool(
                     "SAML_ALLOW_UNSOLICITED",
@@ -812,14 +834,7 @@ if SAML_LOGIN_ENABLED:
                         {"text": "Language Archive Cologne", "lang": "en"},
                     ],
                     "description": [
-                        {
-                            "text": (
-                                "Digital archive for endangered-language and "
-                                "ethnographic research data at the University "
-                                "of Cologne."
-                            ),
-                            "lang": "en",
-                        },
+                        {"text": _saml_service_description, "lang": "en"},
                     ],
                     "information_url": [
                         {"text": f"{PUBLIC_BASE_URL}/", "lang": "en"},
@@ -849,6 +864,12 @@ if SAML_LOGIN_ENABLED:
         },
         "contact_person": [
             {
+                "contact_type": "administrative",
+                "given_name": "Francisco",
+                "sur_name": "Mondaca",
+                "email_address": ["mailto:mondaca@uni-koeln.de"],
+            },
+            {
                 "contact_type": "technical",
                 "given_name": "Francisco",
                 "sur_name": "Mondaca",
@@ -856,6 +877,8 @@ if SAML_LOGIN_ENABLED:
             },
             {
                 "contact_type": "support",
+                "given_name": "LAC",
+                "sur_name": "Helpdesk",
                 "email_address": ["mailto:lac-helpdesk@uni-koeln.de"],
             },
         ],
@@ -864,6 +887,7 @@ if SAML_LOGIN_ENABLED:
             "http://refeds.org/category/research-and-scholarship",
             "http://clarin.eu/category/clarin-member",
         ],
+        "metadata_key_usage": env("SAML_METADATA_KEY_USAGE", default="signing"),
         "security": {
             "wantAttributeStatementSigned": True,
             "requestedAuthnContext": env.list(

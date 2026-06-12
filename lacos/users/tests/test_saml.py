@@ -18,6 +18,7 @@ from lacos.users.models import SamlIdp
 from lacos.users.models import User
 from lacos.users.saml import sync_user_from_saml
 from lacos.users.saml_views import LacosAssertionConsumerServiceView
+from lacos.users.saml_views import LacosMetadataView
 from lacos.users.tests.factories import UserFactory
 
 
@@ -341,6 +342,12 @@ def test_saml2_acs_route_uses_lacos_view():
     match = resolve("/saml2/acs/")
 
     assert match.func.view_class is LacosAssertionConsumerServiceView
+
+
+def test_saml2_metadata_route_uses_lacos_view():
+    match = resolve("/saml2/metadata/")
+
+    assert match.func.view_class is LacosMetadataView
 
 
 def test_saml_acs_failure_logs_sanitized_session_info(caplog):

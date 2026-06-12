@@ -4,18 +4,33 @@ import logging
 from typing import TYPE_CHECKING
 from typing import Any
 
+from django.conf import settings
 from django.contrib import auth
 from django.core.exceptions import PermissionDenied
 from djangosaml2.views import AssertionConsumerServiceView
+from djangosaml2.views import MetadataView
 from djangosaml2.views import _set_subject_id
 
 from lacos.users.saml_logging import build_acs_failure_log_context
+from lacos.users.saml_metadata import add_request_initiator
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
     from django.http import HttpResponse
 
 logger = logging.getLogger(__name__)
+
+
+class LacosMetadataView(MetadataView):
+    """Publish SP metadata extensions that pysaml2 does not emit natively."""
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        response = super().get(request, *args, **kwargs)
+        response.content = add_request_initiator(
+            response.content,
+            location=getattr(settings, "SAML_REQUEST_INITIATOR_URL", ""),
+        )
+        return response
 
 
 class LacosAssertionConsumerServiceView(AssertionConsumerServiceView):
