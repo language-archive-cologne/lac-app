@@ -5,6 +5,10 @@
 
 {% block title %}{% translate "Collections" %} - {{ block.super }}{% endblock title %}
 
+{% block structured_data %}
+  <script type="application/ld+json">{{ catalogue_json_ld|safe }}</script>
+{% endblock structured_data %}
+
 {% block css %}
   {{ block.super }}
   {% if collection_list and not search_query %}

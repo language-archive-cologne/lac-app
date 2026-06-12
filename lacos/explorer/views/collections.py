@@ -45,6 +45,7 @@ from lacos.explorer.permissions import (
     enforce_binary_exposure,
 )
 from lacos.explorer.search import search_archives
+from lacos.explorer.structured_data import serialize_catalogue_json_ld
 from lacos.explorer.views.utils import build_content_disposition
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
 from lacos.storage.services.exposure_policy_service import ExposurePolicyService
@@ -226,6 +227,9 @@ class CollectionListView(ListView):
         """Add processed location data to the context."""
         context = super().get_context_data(**kwargs)
         context["is_htmx"] = self.request.headers.get("HX-Request") == "true"
+        context["catalogue_json_ld"] = serialize_catalogue_json_ld(
+            settings.PUBLIC_BASE_URL,
+        )
         context['current_sort'] = self.request.GET.get('sort', 'name')
         context['current_order'] = self.request.GET.get('order', 'asc')
         search_query = self.request.GET.get("q", "").strip()
