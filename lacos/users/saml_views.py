@@ -9,14 +9,40 @@ from django.core.exceptions import PermissionDenied
 from djangosaml2.views import AssertionConsumerServiceView
 from djangosaml2.views import _set_subject_id
 
+from lacos.users.saml_logging import build_acs_failure_log_context
+
 if TYPE_CHECKING:
     from django.http import HttpRequest
+    from django.http import HttpResponse
 
 logger = logging.getLogger(__name__)
 
 
 class LacosAssertionConsumerServiceView(AssertionConsumerServiceView):
     """Authenticate SAML responses that identify users by ePPN attributes."""
+
+    def handle_acs_failure(
+        self,
+        request: HttpRequest,
+        exception: Exception | None = None,
+        status: int = 403,
+        **kwargs: Any,
+    ) -> HttpResponse:
+        logger.warning(
+            "SAML ACS failure",
+            extra=build_acs_failure_log_context(
+                request,
+                exception=exception,
+                status=status,
+                session_info=kwargs.get("session_info"),
+            ),
+        )
+        return super().handle_acs_failure(
+            request,
+            exception=exception,
+            status=status,
+            **kwargs,
+        )
 
     def authenticate_user(
         self,
@@ -38,9 +64,7 @@ class LacosAssertionConsumerServiceView(AssertionConsumerServiceView):
         )
         if user is None:
             logger.warning(
-                "Could not authenticate user received in SAML Assertion. "
-                "Session info: %s",
-                session_info,
+                "Could not authenticate user received in SAML Assertion.",
             )
             message = "No user could be authenticated."
             raise PermissionDenied(message)

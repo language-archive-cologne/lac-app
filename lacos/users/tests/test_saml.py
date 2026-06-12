@@ -300,18 +300,122 @@ def test_saml_acs_view_raises_permission_denied_when_authentication_fails(
         )
 
 
+def test_saml_acs_auth_failure_warning_does_not_log_full_session_info(
+    monkeypatch,
+    caplog,
+    settings,
+):
+    request = RequestFactory().post("/saml2/acs/")
+    request.saml_session = {}
+    view = LacosAssertionConsumerServiceView()
+    view.request = request
+    session_info = {
+        "issuer": "https://idp.ed.ac.uk/shibboleth",
+        "name_id": None,
+        "ava": {"eduPersonPrincipalName": ["alice@ed.ac.uk"]},
+    }
+
+    monkeypatch.setattr(
+        "lacos.users.saml_views.auth.authenticate",
+        lambda **_kwargs: None,
+    )
+
+    with (
+        caplog.at_level(logging.WARNING, logger="lacos.users.saml_views"),
+        pytest.raises(PermissionDenied),
+    ):
+        view.authenticate_user(
+            request,
+            session_info,
+            settings.SAML_ATTRIBUTE_MAPPING,
+            create_unknown_user=True,
+            assertion_info={},
+        )
+
+    assert "Could not authenticate user received in SAML Assertion." in caplog.text
+    assert "alice@ed.ac.uk" not in caplog.text
+    assert "eduPersonPrincipalName" not in caplog.text
+
+
 def test_saml2_acs_route_uses_lacos_view():
     match = resolve("/saml2/acs/")
 
     assert match.func.view_class is LacosAssertionConsumerServiceView
 
 
-@pytest.mark.django_db
-def test_saml_acs_failure_renders_friendly_error_page(client):
-    response = client.post(
+def test_saml_acs_failure_logs_sanitized_session_info(caplog):
+    request = RequestFactory().post(
         "/saml2/acs/",
-        {"SAMLResponse": "not-a-valid-saml-response"},
+        {
+            "SAMLResponse": "raw-secret-assertion",
+            "RelayState": "/collections/?token=secret",
+        },
+        HTTP_USER_AGENT="Mozilla/5.0 Example",
+        HTTP_X_FORWARDED_FOR="198.51.100.10, 10.0.0.1",
     )
+    view = LacosAssertionConsumerServiceView()
+    session_info = {
+        "issuer": "https://idp.ed.ac.uk/shibboleth",
+        "name_id": None,
+        "ava": {
+            "eduPersonPrincipalName": ["alice@ed.ac.uk"],
+            "mail": ["alice@example.org"],
+        },
+    }
+
+    with caplog.at_level(logging.WARNING, logger="lacos.users.saml_views"):
+        response = view.handle_acs_failure(
+            request,
+            exception=PermissionDenied("No user could be authenticated."),
+            status=HTTPStatus.FORBIDDEN,
+            session_info=session_info,
+        )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    record = next(
+        record for record in caplog.records if record.message == "SAML ACS failure"
+    )
+    assert record.saml_failure_exception_type == "PermissionDenied"
+    assert record.saml_failure_status == HTTPStatus.FORBIDDEN
+    assert record.saml_failure_issuer == "https://idp.ed.ac.uk/shibboleth"
+    assert record.saml_failure_name_id_present is False
+    assert record.saml_failure_attribute_names == ["eduPersonPrincipalName", "mail"]
+    assert record.saml_failure_has_eppn is True
+    assert record.saml_failure_eppn_scope == "ed.ac.uk"
+    assert record.saml_failure_has_saml_response is True
+    assert record.saml_failure_relay_state == "/collections/"
+    assert record.saml_failure_remote_addr == "198.51.100.10"
+    assert record.saml_failure_user_agent == "Mozilla/5.0 Example"
+    assert "raw-secret-assertion" not in caplog.text
+    assert "alice@ed.ac.uk" not in caplog.text
+
+
+@pytest.mark.django_db
+def test_saml_acs_failure_renders_friendly_error_page_and_logs_failure(
+    client,
+    caplog,
+):
+    raw_saml_response = "not-a-valid-saml-response"
+
+    with caplog.at_level(logging.WARNING, logger="lacos.users.saml_views"):
+        response = client.post(
+            "/saml2/acs/",
+            {
+                "SAMLResponse": raw_saml_response,
+                "RelayState": "/private/?token=secret",
+            },
+            HTTP_USER_AGENT="SAML test browser",
+            REMOTE_ADDR="203.0.113.15",
+        )
+
+    record = next(
+        record for record in caplog.records if record.message == "SAML ACS failure"
+    )
+    assert record.saml_failure_has_saml_response is True
+    assert record.saml_failure_relay_state == "/private/"
+    assert record.saml_failure_remote_addr == "203.0.113.15"
+    assert record.saml_failure_user_agent == "SAML test browser"
+    assert raw_saml_response not in caplog.text
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
     assert "djangosaml2/login_error.html" in [
