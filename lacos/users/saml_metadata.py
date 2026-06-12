@@ -7,6 +7,7 @@ from defusedxml.ElementTree import fromstring
 MD_NS = "urn:oasis:names:tc:SAML:2.0:metadata"
 REQUEST_INIT_NS = "urn:oasis:names:tc:SAML:profiles:SSO:request-init"
 REQUEST_INITIATOR_BINDING = REQUEST_INIT_NS
+XS_NS = "http://www.w3.org/2001/XMLSchema"
 
 ET.register_namespace("md", MD_NS)
 ET.register_namespace("init", REQUEST_INIT_NS)
@@ -45,4 +46,14 @@ def add_request_initiator(
             },
         )
 
+    _ensure_xs_namespace(root)
     return ET.tostring(root, encoding="utf-8")
+
+
+def _ensure_xs_namespace(root: ET.Element) -> None:
+    if any(
+        isinstance(value, str) and value.startswith("xs:")
+        for element in root.iter()
+        for value in element.attrib.values()
+    ):
+        root.set("xmlns:xs", XS_NS)
