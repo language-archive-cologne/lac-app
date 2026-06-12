@@ -698,6 +698,13 @@ if SAML_LOGIN_ENABLED:
         else BINDING_HTTP_REDIRECT
     )
 
+    # Disable djangosaml2's own CSP management. It exists only to add a nonce to
+    # the HTTP-POST auto-submit form, which we no longer render (Redirect binding
+    # above), and our SecurityHeadersMiddleware owns the site CSP anyway. Empty
+    # string is djangosaml2's documented opt-out and silences the startup
+    # "django-csp could not be found" warning.
+    SAML_CSP_HANDLER = ""
+
     from lacos.users.saml_config import DEFAULT_MDQ_URL
     from lacos.users.saml_config import build_saml_endpoints
     from lacos.users.saml_config import build_saml_metadata_sources
