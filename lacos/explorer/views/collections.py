@@ -741,12 +741,7 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
 
         # Handle URL
         if self.object.identifier:
-            handle = self.object.identifier
-            if handle.startswith('hdl:'):
-                handle_url = f"https://hdl.handle.net/{handle[4:]}"
-            else:
-                handle_url = handle
-            parts.append(handle_url)
+            parts.append(self.object.handle_url)
 
         return ". ".join(parts) + "." if parts else ""
 

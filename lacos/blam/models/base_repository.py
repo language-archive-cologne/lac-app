@@ -19,9 +19,16 @@ class Repository(BaseModel):
     @property
     def handle_path(self):
         """Return identifier without hdl: prefix, for use in URLs."""
-        if self.identifier and self.identifier.startswith('hdl:'):
+        if self.identifier and self.identifier.startswith("hdl:"):
             return self.identifier[4:]
-        return self.identifier or ''
+        return self.identifier or ""
+
+    @property
+    def handle_url(self):
+        """Return the external Handle resolver URL for hdl identifiers."""
+        if self.identifier and self.identifier.startswith("hdl:"):
+            return f"https://hdl.handle.net/{self.handle_path}"
+        return self.identifier or ""
 
     class Meta:
         abstract = True
