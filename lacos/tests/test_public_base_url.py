@@ -117,8 +117,10 @@ def test_collection_detail_public_urls_use_public_base_url(client):
     assert f'<link rel="canonical" href="{collection_url}"' in body
     assert f'href="{handle_url}"' in body
     assert f'data-copy-text="{handle_url}"' in body
-    assert '"url": "https://lac.uni-koeln.de"' in body
-    assert '"license": "https://lac.uni-koeln.de/privacy-policy/"' in body
+    # Schema.org Dataset JSON-LD uses PUBLIC_BASE_URL for the landing page and
+    # the publisher organisation node.
+    assert f'"url": "{collection_url}"' in body
+    assert '"@id": "https://lac.uni-koeln.de/#org"' in body
 
 
 @pytest.mark.django_db

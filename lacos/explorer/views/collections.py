@@ -45,6 +45,7 @@ from lacos.explorer.permissions import (
     MetadataExposureMixin,
     enforce_binary_exposure,
 )
+from lacos.explorer.collection_structured_data import serialize_collection_json_ld
 from lacos.explorer.search import search_archives
 from lacos.explorer.structured_data import serialize_catalogue_json_ld
 from lacos.explorer.views.utils import build_content_disposition
@@ -525,7 +526,9 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
     def get_queryset(self):
         return Collection.objects.prefetch_related(
             "general_info",
+            "general_info__location",
             "general_info__object_languages",
+            "general_info__object_languages__taxonomy__language_family",
             "general_info__keywords",
             Prefetch(
                 "publication_info",
@@ -547,6 +550,8 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
             "administrative_info",
             "administrative_info__licenses",
             "administrative_info__rights_holders",
+            "administrative_info__rights_holders__rights_holder_identifiers",
+            "administrative_info__is_identical_to",
         )
 
     def get_context_data(self, **kwargs):
@@ -694,6 +699,15 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
         # Citation
         context['citation'] = self._format_citation(publication_info, collection_creators)
         context["head_metadata"] = build_collection_head_metadata(
+            self.object,
+            public_base_url=settings.PUBLIC_BASE_URL,
+            access_level=collection_acl.access_level,
+            publication_info=publication_info,
+            creators=collection_creators,
+            metadata_files=context["additional_metadata_files"],
+            licenses=context["content_licenses"],
+        )
+        context["collection_json_ld"] = serialize_collection_json_ld(
             self.object,
             public_base_url=settings.PUBLIC_BASE_URL,
             access_level=collection_acl.access_level,
