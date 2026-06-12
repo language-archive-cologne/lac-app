@@ -7,6 +7,7 @@ from defusedxml.ElementTree import fromstring
 from lacos.users.saml_metadata import MD_NS
 from lacos.users.saml_metadata import REQUEST_INIT_NS
 from lacos.users.saml_metadata import REQUEST_INITIATOR_BINDING
+from lacos.users.saml_metadata import XS_NS
 from lacos.users.saml_metadata import add_request_initiator
 
 
@@ -85,6 +86,28 @@ def test_add_request_initiator_leaves_metadata_unchanged_without_location():
     metadata = b"<metadata />"
 
     assert add_request_initiator(metadata, location="") == metadata
+
+
+def test_add_request_initiator_preserves_xs_namespace_for_xsi_type_values():
+    metadata = b"""
+    <md:EntityDescriptor
+        xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata"
+        xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+      <md:Extensions>
+        <AttributeValue xsi:type="xs:string">value</AttributeValue>
+      </md:Extensions>
+      <md:SPSSODescriptor />
+    </md:EntityDescriptor>
+    """
+
+    updated = add_request_initiator(
+        metadata,
+        location="https://lacos.uni-koeln.de/saml2/login/",
+    )
+
+    assert b'xmlns:xs="' + XS_NS.encode() + b'"' in updated
+    assert b'xsi:type="xs:string"' in updated
 
 
 def test_add_request_initiator_raises_for_invalid_xml():
