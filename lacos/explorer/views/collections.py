@@ -37,6 +37,7 @@ from lacos.blam.models.collection.collection_structural_info import (
     CollectionAdditionalMetadataFile,
 )
 from lacos.explorer.glottolog import lookup_glottolog_entry
+from lacos.explorer.head_metadata import build_collection_head_metadata
 from lacos.explorer.map_utils import get_collection_map_markers
 from lacos.explorer.media_utils import determine_media_type, guess_source_mime_type
 from lacos.explorer.permissions import (
@@ -545,6 +546,7 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
             "structural_info__additional_metadata_files",
             "administrative_info",
             "administrative_info__licenses",
+            "administrative_info__rights_holders",
         )
 
     def get_context_data(self, **kwargs):
@@ -691,6 +693,15 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
 
         # Citation
         context['citation'] = self._format_citation(publication_info, collection_creators)
+        context["head_metadata"] = build_collection_head_metadata(
+            self.object,
+            public_base_url=settings.PUBLIC_BASE_URL,
+            access_level=collection_acl.access_level,
+            publication_info=publication_info,
+            creators=collection_creators,
+            metadata_files=context["additional_metadata_files"],
+            licenses=context["content_licenses"],
+        )
 
         return context
 

@@ -1,0 +1,6 @@
+{% for meta_tag in head_metadata.meta %}
+  <meta name="{{ meta_tag.name }}" content="{{ meta_tag.content }}">
+{% endfor %}
+{% for link_tag in head_metadata.links %}
+  <link rel="{{ link_tag.rel }}" href="{{ link_tag.href }}"{% if link_tag.type %} type="{{ link_tag.type }}"{% endif %}>
+{% endfor %}

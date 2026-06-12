@@ -6,13 +6,22 @@ from pathlib import Path, PurePosixPath
 from typing import Optional
 from urllib.parse import unquote
 
+from django.conf import settings
+from django.db.models import Prefetch
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import DetailView
 
+from lacos.blam.creator_ordering import PREFETCHED_BUNDLE_CREATOR_LINKS_ATTR
+from lacos.blam.creator_ordering import order_creator_links
+from lacos.blam.creator_ordering import ordered_bundle_creators
 from lacos.blam.models import Bundle
+from lacos.blam.models.bundle.bundle_publication_info import BundlePublicationInfo
+from lacos.blam.models.bundle.bundle_publication_info import (
+    BundlePublicationInfoCreator,
+)
 from lacos.blam.models.bundle.bundle_structural_info import (
     BundleAdditionalMetadataFile,
     MediaResource,
@@ -21,6 +30,7 @@ from lacos.blam.models.bundle.bundle_structural_info import (
 )
 from lacos.blam.mappers.bundle.write.bundle_exporter import BundleExporter
 from lacos.blam.serializers import BundleJsonLdSerializer
+from lacos.explorer.head_metadata import build_bundle_head_metadata
 from lacos.explorer.media_utils import determine_media_type, guess_source_mime_type
 from lacos.explorer.permissions import (
     ACLPermissionMixin,
@@ -56,6 +66,11 @@ from .utils import (
 
 
 logger = logging.getLogger(__name__)
+
+
+def _get_first_bundle_publication_info(bundle):
+    publication_infos = list(bundle.publication_info.all())
+    return publication_infos[0] if publication_infos else None
 
 
 def _iter_bundle_detail_resources(resources_container, structural_info=None):
@@ -111,13 +126,26 @@ class BundleDetailView(MetadataExposureMixin, HandleLookupMixin, ACLPermissionMi
             "general_info",
             "general_info__keywords",
             "general_info__object_languages",
-            "publication_info",
-            "publication_info__creators",
-            "publication_info__contributors",
+            Prefetch(
+                "publication_info",
+                queryset=BundlePublicationInfo.objects.prefetch_related(
+                    Prefetch(
+                        "bundlepublicationinfocreator_set",
+                        queryset=order_creator_links(
+                            BundlePublicationInfoCreator.objects.select_related(
+                                "bundlecreator"
+                            )
+                        ),
+                        to_attr=PREFETCHED_BUNDLE_CREATOR_LINKS_ATTR,
+                    ),
+                    "contributors",
+                ),
+            ),
             "structural_info",
             "structural_info__additional_metadata_files",
             "administrative_info",
             "administrative_info__licenses",
+            "administrative_info__rights_holders",
             "resources",
             "resources__bundle_media_resources",
             "resources__bundle_written_resources",
@@ -146,6 +174,10 @@ class BundleDetailView(MetadataExposureMixin, HandleLookupMixin, ACLPermissionMi
         context["acl_check_result"] = result
         context["can_read_bundle"] = allowed
         context["acl_enforcement_enabled"] = enforcement_enabled
+        publication_info = _get_first_bundle_publication_info(self.object)
+        bundle_creators = (
+            ordered_bundle_creators(publication_info) if publication_info else []
+        )
 
         structural_info = None
         if hasattr(self.object, 'structural_info'):
@@ -204,6 +236,19 @@ class BundleDetailView(MetadataExposureMixin, HandleLookupMixin, ACLPermissionMi
         context['licenses'] = []
         if hasattr(self.object, 'administrative_info') and self.object.administrative_info.first():
             context['licenses'] = self.object.administrative_info.first().licenses.all()
+        context["head_metadata"] = build_bundle_head_metadata(
+            self.object,
+            public_base_url=settings.PUBLIC_BASE_URL,
+            access_level=result.access_level if result else "restricted",
+            collection=context.get("collection"),
+            publication_info=publication_info,
+            creators=bundle_creators,
+            metadata_files=context["metadata_files"],
+            media_resources=context["media_resources"],
+            written_resources=context["written_resources"],
+            other_resources=context["other_resources"],
+            licenses=context["licenses"],
+        )
 
         return context
 
