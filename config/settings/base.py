@@ -685,6 +685,19 @@ if SAML_LOGIN_ENABLED:
     from saml2 import BINDING_HTTP_POST  # type: ignore[import-not-found]
     from saml2 import BINDING_HTTP_REDIRECT  # type: ignore[import-not-found]
 
+    # Send the SP-initiated AuthnRequest via HTTP-Redirect (302) instead of
+    # djangosaml2's default HTTP-POST. The POST binding renders an auto-submit
+    # form whose inline script and cross-origin POST are blocked by our CSP
+    # (script-src has no nonce; form-action only allows our own IdP), stranding
+    # users on the "click to continue" page for every external IdP. Redirect
+    # binding has no interstitial, so CSP is irrelevant to login initiation.
+    # Override to POST via env only if a specific IdP requires it.
+    SAML_DEFAULT_BINDING = (
+        BINDING_HTTP_POST
+        if env.bool("SAML_DEFAULT_BINDING_POST", default=False)
+        else BINDING_HTTP_REDIRECT
+    )
+
     from lacos.users.saml_config import DEFAULT_MDQ_URL
     from lacos.users.saml_config import build_saml_endpoints
     from lacos.users.saml_config import build_saml_metadata_sources
