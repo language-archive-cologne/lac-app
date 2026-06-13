@@ -10,6 +10,8 @@ CATALOGUE_DESCRIPTION = (
 
 ORGANIZATION_NAME = "Language Archive Cologne"
 ORGANIZATION_ALTERNATE_NAME = "LAC"
+PERMANENT_ROOT_URL = "https://lac.uni-koeln.de/"
+CURRENT_ROOT_URL = "https://lacos.uni-koeln.de/"
 
 # Organisation projection depths. A single serializer keeps the root-page node
 # (full institutional genealogy) and the trimmed/minimal nodes nested on
@@ -29,19 +31,19 @@ def _re3data_identifier() -> dict:
 
 
 def build_organization_node(root_url: str, depth: str = ORG_DEPTH_FULL) -> dict:
-    """Build the LAC ``Organization`` node at one of three projection depths.
+    """Build the LAC ``ArchiveOrganization`` node at one of three projection depths.
 
     - ``minimal``: ``@type``/``@id``/``name`` only (used for ``sdPublisher``).
     - ``trimmed``: adds ``alternateName``/``url``/re3data ``identifier`` (used
       for ``publisher`` nested on collection pages).
-    - ``full``: adds ``contactPoint``/``parentOrganization``/``memberOf`` (used
-      on the catalogue root page only).
+    - ``full``: adds contact, location, certification, genealogy, and membership
+      data (used on the catalogue root page only).
 
     ``root_url`` must already carry its trailing slash.
     """
     organization_id = f"{root_url}#org"
     node = {
-        "@type": "Organization",
+        "@type": "ArchiveOrganization",
         "@id": organization_id,
         "name": ORGANIZATION_NAME,
     }
@@ -54,10 +56,45 @@ def build_organization_node(root_url: str, depth: str = ORG_DEPTH_FULL) -> dict:
     if depth == ORG_DEPTH_TRIMMED:
         return node
 
+    node["sameAs"] = CURRENT_ROOT_URL
+    node["description"] = (
+        "The Language Archive Cologne (LAC) is a digital archive for long-term "
+        "preservation and accessibility of primary language documentation data, "
+        "including audio and video recordings, transcriptions, and annotations "
+        "of endangered and under-documented languages."
+    )
+    node["address"] = {
+        "@type": "PostalAddress",
+        "streetAddress": "Albertus-Magnus-Platz",
+        "addressLocality": "Köln",
+        "postalCode": "50923",
+        "addressCountry": "DE",
+    }
+    node["geo"] = {
+        "@type": "GeoCoordinates",
+        "latitude": 50.926464612771746,
+        "longitude": 6.929621015158671,
+    }
+    node["email"] = "lac-helpdesk@uni-koeln.de"
     node["contactPoint"] = {
         "@type": "ContactPoint",
         "contactType": "helpdesk",
         "email": "lac-helpdesk@uni-koeln.de",
+    }
+    node["hasCertification"] = {
+        "@type": "Certification",
+        "name": "CoreTrustSeal",
+        "url": "https://doi.org/10.34894/961CYL",
+        "validFrom": "2024-01-23",
+        "validUntil": "2026-04-17",
+        "issuedBy": {
+            "@type": "Organization",
+            "name": "CoreTrustSeal",
+            "url": "https://www.coretrustseal.org/",
+        },
+    }
+    node["archiveHeld"] = {
+        "@id": f"{root_url}#catalog",
     }
     node["parentOrganization"] = {
         "@type": "Organization",
@@ -101,9 +138,9 @@ def build_data_catalog_node(root_url: str) -> dict:
 
 
 def build_catalogue_json_ld(public_base_url: str) -> dict:
-    root_url = f"{public_base_url.rstrip('/')}/"
-    catalog_id = f"{root_url}#catalog"
-    organization_id = f"{root_url}#org"
+    current_root_url = f"{public_base_url.rstrip('/')}/"
+    catalog_id = f"{PERMANENT_ROOT_URL}#catalog"
+    organization_id = f"{PERMANENT_ROOT_URL}#org"
 
     return {
         "@context": "https://schema.org/",
@@ -113,7 +150,7 @@ def build_catalogue_json_ld(public_base_url: str) -> dict:
                 "@id": catalog_id,
                 "name": ORGANIZATION_NAME,
                 "alternateName": ORGANIZATION_ALTERNATE_NAME,
-                "url": root_url,
+                "url": current_root_url,
                 "description": CATALOGUE_DESCRIPTION,
                 "inLanguage": "en",
                 "keywords": [
@@ -125,7 +162,7 @@ def build_catalogue_json_ld(public_base_url: str) -> dict:
                 "publisher": {"@id": organization_id},
                 "provider": {"@id": organization_id},
             },
-            build_organization_node(root_url, ORG_DEPTH_FULL),
+            build_organization_node(PERMANENT_ROOT_URL, ORG_DEPTH_FULL),
         ],
     }
 
