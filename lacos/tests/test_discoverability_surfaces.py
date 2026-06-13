@@ -113,11 +113,11 @@ def _store_acl(obj, rules):
 
 @pytest.mark.django_db
 @override_settings(
-    ALLOWED_HOSTS=["lac.uni-koeln.de"],
-    PUBLIC_BASE_URL="https://lac.uni-koeln.de",
+    ALLOWED_HOSTS=["lacos.uni-koeln.de"],
+    PUBLIC_BASE_URL="https://lacos.uni-koeln.de",
 )
 def test_catalogue_root_emits_schema_org_data_catalog_json_ld(client):
-    response = client.get("/", HTTP_HOST="lac.uni-koeln.de")
+    response = client.get("/", HTTP_HOST="lacos.uni-koeln.de")
 
     assert response.status_code == 200
     body = response.content.decode("utf-8")
@@ -130,26 +130,45 @@ def test_catalogue_root_emits_schema_org_data_catalog_json_ld(client):
     assert payload["@context"] == "https://schema.org/"
     assert catalog["@type"] == "DataCatalog"
     assert catalog["@id"] == "https://lac.uni-koeln.de/#catalog"
-    assert catalog["url"] == "https://lac.uni-koeln.de/"
+    assert catalog["url"] == "https://lacos.uni-koeln.de/"
     assert catalog["description"] == _default_meta_description(body)
     assert catalog["publisher"] == {"@id": "https://lac.uni-koeln.de/#org"}
     assert catalog["provider"] == {"@id": "https://lac.uni-koeln.de/#org"}
-    assert organization["@type"] == "Organization"
+    assert organization["@type"] == "ArchiveOrganization"
+    assert organization["@id"] == "https://lac.uni-koeln.de/#org"
+    assert organization["url"] == "https://lac.uni-koeln.de/"
+    assert organization["sameAs"] == "https://lacos.uni-koeln.de/"
     assert organization["identifier"]["propertyID"] == "re3data"
     assert organization["identifier"]["url"] == "https://doi.org/10.17616/R3JV4W"
+    assert organization["address"] == {
+        "@type": "PostalAddress",
+        "streetAddress": "Albertus-Magnus-Platz",
+        "addressLocality": "Köln",
+        "postalCode": "50923",
+        "addressCountry": "DE",
+    }
+    assert organization["geo"] == {
+        "@type": "GeoCoordinates",
+        "latitude": 50.926464612771746,
+        "longitude": 6.929621015158671,
+    }
+    assert organization["hasCertification"]["name"] == "CoreTrustSeal"
+    assert organization["hasCertification"]["validUntil"] == "2026-04-17"
+    assert organization["archiveHeld"] == {"@id": "https://lac.uni-koeln.de/#catalog"}
+    assert organization["memberOf"][0]["@id"] == "https://ror.org/03wp25384"
 
 
 @pytest.mark.django_db
 @override_settings(
-    ALLOWED_HOSTS=["lac.uni-koeln.de"],
+    ALLOWED_HOSTS=["lacos.uni-koeln.de"],
     EXPLORER_COLLECTIONS_PAGE_SIZE=1,
-    PUBLIC_BASE_URL="https://lac.uni-koeln.de",
+    PUBLIC_BASE_URL="https://lacos.uni-koeln.de",
 )
 def test_paginated_catalogue_root_emits_schema_org_data_catalog_json_ld(client):
     _create_collection("discoverability-paginated-catalogue-1")
     _create_collection("discoverability-paginated-catalogue-2")
 
-    response = client.get("/", {"page": 2}, HTTP_HOST="lac.uni-koeln.de")
+    response = client.get("/", {"page": 2}, HTTP_HOST="lacos.uni-koeln.de")
 
     assert response.status_code == 200
     payload = json.loads(_json_ld_scripts(response.content.decode("utf-8"))[0])
