@@ -1,4 +1,5 @@
 stages:
+  - validate
   - deploy
 
 .deploy_base:
@@ -20,6 +21,17 @@ stages:
   environment:
     name: development
     url: https://dev.lacos.uni-koeln.de
+
+clarin_saml_metadata_preflight:
+  extends: .deploy_base
+  stage: validate
+  environment:
+    name: production
+    url: https://lacos.uni-koeln.de
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  script:
+    - ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd /opt/lacos/lac-app-production && git fetch origin main && git checkout main && git reset --hard origin/main && export DOCKER_GID=\$(stat -c '%g' /var/run/docker.sock) && SAML_PREFLIGHT_COMPOSE_FILE=docker-compose.production.yml SAML_PREFLIGHT_DJANGO_SETTINGS=config.settings.production SAML_PREFLIGHT_SP_KEY_FILE=/etc/shibboleth/prod-sp-key.pem SAML_PREFLIGHT_SP_CERT_FILE=/etc/shibboleth/prod-sp-cert.pem SAML_PREFLIGHT_BASE_URL=https://lacos.uni-koeln.de scripts/validate_saml_metadata.sh"
 
 deploy_dev_full:
   extends: .deploy_base
