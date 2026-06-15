@@ -25,13 +25,29 @@ stages:
 clarin_saml_metadata_preflight:
   extends: .deploy_base
   stage: validate
+  image: debian:bookworm-slim
   environment:
     name: production
     url: https://lacos.uni-koeln.de
+  before_script:
+    - export DEBIAN_FRONTEND=noninteractive
+    - apt-get update
+    - apt-get install -y --no-install-recommends openssh-client curl dnsutils netcat-openbsd bash git default-jdk ant libxml2-utils openssl unzip wget ca-certificates
+    - eval $(ssh-agent -s)
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - cp "$SSH_PRIVATE_KEY" ~/.ssh/deploy_key
+    - chmod 600 ~/.ssh/deploy_key
+    - ssh-add ~/.ssh/deploy_key
+    - 'echo "Runner public IP: $(curl -s --connect-timeout 2 --max-time 5 https://ifconfig.me || true)"'
+    - nslookup $DEPLOY_HOST || true
+    - nc -vz -w 5 $DEPLOY_HOST 22 || true
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
   script:
-    - ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd /opt/lacos/lac-app-production && git fetch origin main && git checkout main && git reset --hard origin/main && export DOCKER_GID=\$(stat -c '%g' /var/run/docker.sock) && SAML_PREFLIGHT_COMPOSE_FILE=docker-compose.production.yml SAML_PREFLIGHT_DJANGO_SETTINGS=config.settings.production SAML_PREFLIGHT_SP_KEY_FILE=/etc/shibboleth/prod-sp-key.pem SAML_PREFLIGHT_SP_CERT_FILE=/etc/shibboleth/prod-sp-cert.pem SAML_PREFLIGHT_BASE_URL=https://lacos.uni-koeln.de scripts/validate_saml_metadata.sh"
+    - ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd /opt/lacos/lac-app-production && git fetch origin main && git checkout main && git reset --hard origin/main && export DOCKER_GID=\$(stat -c '%g' /var/run/docker.sock) && SAML_PREFLIGHT_COMPOSE_FILE=docker-compose.production.yml SAML_PREFLIGHT_DJANGO_SETTINGS=config.settings.production SAML_PREFLIGHT_SP_KEY_FILE=/etc/shibboleth/prod-sp-key.pem SAML_PREFLIGHT_SP_CERT_FILE=/etc/shibboleth/prod-sp-cert.pem SAML_PREFLIGHT_BASE_URL=https://lacos.uni-koeln.de SAML_PREFLIGHT_KEEP_WORK_DIR=1 scripts/validate_saml_metadata.sh --generate-only"
+    - scp -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST:/opt/lacos/lac-app-production/.tmp/saml-preflight/metadata.xml saml-metadata.xml
+    - scripts/validate_saml_metadata_file.sh saml-metadata.xml
 
 deploy_dev_full:
   extends: .deploy_base

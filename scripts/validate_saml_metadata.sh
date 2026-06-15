@@ -62,6 +62,9 @@ validate the exact certificate that will be submitted to CLARIN.
 If the validator container cannot resolve package hosts, set
 SAML_PREFLIGHT_DOCKER_DNS to comma- or space-separated DNS servers. If unset,
 the script tries DNS_PRIMARY/DNS_SECONDARY and then the rendered compose config.
+
+Pass --generate-only to stop after writing the metadata XML. This is useful
+when CI should generate metadata on a deployment host and validate it elsewhere.
 EOF
 }
 
@@ -380,10 +383,18 @@ run_validators() {
 }
 
 main() {
+  local generate_only=0
+
   if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     usage
     exit 0
   fi
+
+  if [[ "${1:-}" == "--generate-only" ]]; then
+    generate_only=1
+    shift
+  fi
+
   [[ "$#" -eq 0 ]] || die "Unknown arguments. Use --help for usage."
 
   require_command docker
@@ -393,6 +404,12 @@ main() {
 
   generate_dev_certificate
   generate_metadata
+
+  if [[ "${generate_only}" == "1" ]]; then
+    log "Generated metadata only: ${METADATA_FILE}"
+    exit 0
+  fi
+
   run_validators
 
   log "CLARIN preflight passed"
