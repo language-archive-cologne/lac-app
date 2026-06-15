@@ -20,6 +20,8 @@ WORK_DIR="${SAML_PREFLIGHT_WORK_DIR:-${REPO_ROOT}/.tmp/saml-preflight}"
 TOOL_IMAGE="${SAML_PREFLIGHT_TOOL_IMAGE:-debian:bookworm-slim}"
 FAIL_ON_QA_WARNINGS="${SAML_PREFLIGHT_FAIL_ON_QA_WARNINGS:-1}"
 KEEP_WORK_DIR="${SAML_PREFLIGHT_KEEP_WORK_DIR:-0}"
+DOCKER_DNS_ARGS=()
+SEEN_DNS_SERVERS=" "
 
 APP_WORK_DIR="/app/.tmp/saml-preflight"
 METADATA_FILE="${WORK_DIR}/metadata.xml"
@@ -50,11 +52,16 @@ Useful environment variables:
   SAML_PREFLIGHT_SP_CERT_FILE=/host/path/sp-cert.pem
   SAML_PREFLIGHT_FAIL_ON_QA_WARNINGS=0
   SAML_PREFLIGHT_KEEP_WORK_DIR=1
+  SAML_PREFLIGHT_DOCKER_DNS=134.95.127.3,134.95.127.4
 
 If no key/cert pair is supplied, the script generates a temporary 4096-bit
 self-signed certificate to exercise CLARIN's certificate validation path. Use
 SAML_PREFLIGHT_SP_KEY_FILE and SAML_PREFLIGHT_SP_CERT_FILE when you need to
 validate the exact certificate that will be submitted to CLARIN.
+
+If the validator container cannot resolve package hosts, set
+SAML_PREFLIGHT_DOCKER_DNS to comma- or space-separated DNS servers. If unset,
+the script tries DNS_PRIMARY/DNS_SECONDARY and then the rendered compose config.
 EOF
 }
 
@@ -77,6 +84,64 @@ trap cleanup EXIT
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1"
+}
+
+append_docker_dns_server() {
+  local dns_server
+  dns_server="${1//\"/}"
+  dns_server="${dns_server//\'/}"
+  dns_server="${dns_server%,}"
+  [[ -n "${dns_server}" ]] || return 0
+  [[ "${SEEN_DNS_SERVERS}" == *" ${dns_server} "* ]] && return 0
+
+  SEEN_DNS_SERVERS+="${dns_server} "
+  DOCKER_DNS_ARGS+=(--dns "${dns_server}")
+  return 0
+}
+
+collect_compose_dns_servers() {
+  local in_dns=0
+  local line
+
+  while IFS= read -r line; do
+    if [[ "${line}" =~ ^[[:space:]]+dns:[[:space:]]*$ ]]; then
+      in_dns=1
+      continue
+    fi
+
+    if [[ "${in_dns}" == "1" ]]; then
+      if [[ "${line}" =~ ^[[:space:]]*-[[:space:]]*([^[:space:]#]+) ]]; then
+        append_docker_dns_server "${BASH_REMATCH[1]}"
+        continue
+      fi
+
+      if [[ "${line}" =~ ^[[:space:]]*[A-Za-z0-9_-]+: ]]; then
+        in_dns=0
+      fi
+    fi
+  done < <((cd "${REPO_ROOT}" && docker compose -f "${COMPOSE_FILE_PATH}" config) 2>/dev/null || true)
+  return 0
+}
+
+build_docker_dns_args() {
+  local dns_server
+  local configured_dns
+
+  configured_dns="${SAML_PREFLIGHT_DOCKER_DNS:-}"
+  configured_dns="${configured_dns//,/ }"
+  for dns_server in ${configured_dns}; do
+    append_docker_dns_server "${dns_server}"
+  done
+
+  if [[ ${#DOCKER_DNS_ARGS[@]} -eq 0 ]]; then
+    append_docker_dns_server "${DNS_PRIMARY:-}"
+    append_docker_dns_server "${DNS_SECONDARY:-}"
+  fi
+
+  if [[ ${#DOCKER_DNS_ARGS[@]} -eq 0 ]]; then
+    collect_compose_dns_servers
+  fi
+  return 0
 }
 
 write_metadata_generator() {
@@ -296,9 +361,15 @@ SH
 
 run_validators() {
   write_validator_runner
+  build_docker_dns_args
+
+  if [[ ${#DOCKER_DNS_ARGS[@]} -gt 0 ]]; then
+    log "Using validator container DNS servers: ${SEEN_DNS_SERVERS}"
+  fi
 
   log "Running CLARIN validators in disposable ${TOOL_IMAGE} container"
   docker run --rm \
+    "${DOCKER_DNS_ARGS[@]}" \
     -e "SAML_PREFLIGHT_FAIL_ON_QA_WARNINGS=${FAIL_ON_QA_WARNINGS}" \
     -e "SAML_PREFLIGHT_HOST_UID=$(id -u)" \
     -e "SAML_PREFLIGHT_HOST_GID=$(id -g)" \
