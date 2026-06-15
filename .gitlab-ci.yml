@@ -25,14 +25,11 @@ stages:
 clarin_saml_metadata_preflight:
   extends: .deploy_base
   stage: validate
-  image: debian:bookworm-slim
   environment:
     name: production
     url: https://lacos.uni-koeln.de
   before_script:
-    - export DEBIAN_FRONTEND=noninteractive
-    - apt-get update
-    - apt-get install -y --no-install-recommends openssh-client curl dnsutils netcat-openbsd bash git default-jdk ant libxml2-utils openssl unzip wget ca-certificates
+    - apk add --no-cache openssh-client curl bind-tools busybox-extras bash git openjdk17-jre-headless apache-ant libxml2-utils openssl unzip wget ca-certificates coreutils
     - eval $(ssh-agent -s)
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
