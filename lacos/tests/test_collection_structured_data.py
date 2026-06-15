@@ -293,11 +293,12 @@ def test_dataset_subject_of_and_record_nodes():
         "description": "The metadata Excel file.",
     }
     assert data["publisher"]["@id"] == "https://lac.uni-koeln.de/#org"
+    assert data["publisher"]["@type"] == "ArchiveOrganization"
     assert data["publisher"]["identifier"]["propertyID"] == "re3data"
     assert data["includedInDataCatalog"]["@id"] == "https://lac.uni-koeln.de/#catalog"
     assert data["sdLicense"] == "https://creativecommons.org/publicdomain/zero/1.0/"
     assert data["sdPublisher"] == {
-        "@type": "Organization",
+        "@type": "ArchiveOrganization",
         "@id": "https://lac.uni-koeln.de/#org",
         "name": "Language Archive Cologne",
     }

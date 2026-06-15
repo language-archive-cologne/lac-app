@@ -7,6 +7,7 @@ from lacos.users.saml_config import build_saml_metadata_sources
 
 def test_saml_settings_publish_ka3_successor_entity_categories():
     assert settings.SAML_CONFIG["entity_category"] == [
+        "http://www.geant.net/uri/dataprotection-code-of-conduct/v1",
         "https://refeds.org/category/code-of-conduct/v2",
         "http://refeds.org/category/research-and-scholarship",
         "http://clarin.eu/category/clarin-member",
