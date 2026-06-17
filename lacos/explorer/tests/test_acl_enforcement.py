@@ -564,6 +564,45 @@ def test_flat_resource_handle_resolves_collection_metadata_file_with_resolver_ur
 
 
 @pytest.mark.django_db
+def test_flat_resource_handle_renders_collection_metadata_pdf_preview_when_mapped(client, monkeypatch):
+    collection = _create_collection("hdl:11341/flat-handle-pdf-collection")
+    metadata_file = CollectionAdditionalMetadataFile.objects.create(
+        file_pid="hdl:11341/flat-handle-pdf-metadata",
+        file_name="info.pdf",
+        file_description="Collection metadata PDF",
+        mime_type="application/pdf",
+    )
+    collection.structural_info.first().additional_metadata_files.add(metadata_file)
+
+    class DummyService:
+        def generate_presigned_url(self, _bucket, _key, response_headers=None):
+            return "https://example.test/download.pdf"
+
+    monkeypatch.setattr(
+        "lacos.explorer.views.collections.ResourceMappingService",
+        lambda *args, **kwargs: DummyService(),
+    )
+    monkeypatch.setattr(
+        "lacos.explorer.views.collections.resolve_collection_metadata_to_presigned",
+        lambda *_args, **_kwargs: {
+            "bucket": "test-bucket",
+            "key": "test/info.pdf",
+            "url": "https://example.test/preview.pdf",
+        },
+    )
+
+    response = client.get(
+        reverse("resource_by_handle", kwargs={"handle_id": metadata_file.file_pid[4:]}),
+    )
+
+    assert response.status_code == 200
+    html = response.content.decode("utf-8")
+    assert '<iframe src="https://example.test/preview.pdf"' in html
+    assert 'data-bucket="test-bucket"' in html
+    assert 'data-key="test/info.pdf"' in html
+
+
+@pytest.mark.django_db
 def test_flat_resource_handle_unknown_returns_404(client):
     response = client.get(
         reverse("resource_by_handle", kwargs={"handle_id": "test/does-not-exist"})

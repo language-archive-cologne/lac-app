@@ -851,17 +851,6 @@ class CollectionResourcesView(View):
                 raise Http404(f"Collection metadata resource {decoded_resource_id} not found")
 
             is_htmx = request.headers.get('HX-Request') == 'true'
-            if not is_htmx and action in {'play', 'view', 'analyze', 'pitch'}:
-                return self._render_resource_page(
-                    request,
-                    metadata_file,
-                    collection,
-                    detected_media_type=determine_media_type(
-                        metadata_file.mime_type,
-                        metadata_file.file_name,
-                    ),
-                )
-
             resource_service = ResourceMappingService(skip_bucket_check=True)
             storage_resolution = resolve_collection_metadata_to_presigned(
                 resource_service,
@@ -869,6 +858,16 @@ class CollectionResourcesView(View):
                 collection,
             )
             if not storage_resolution:
+                if not is_htmx and action in {'play', 'view', 'analyze', 'pitch'}:
+                    return self._render_resource_page(
+                        request,
+                        metadata_file,
+                        collection,
+                        detected_media_type=determine_media_type(
+                            metadata_file.mime_type,
+                            metadata_file.file_name,
+                        ),
+                    )
                 raise ValueError(f"No S3 location found for PID: {decoded_resource_id}")
 
             # Get file information for display
