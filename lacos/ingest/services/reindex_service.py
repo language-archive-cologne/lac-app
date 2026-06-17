@@ -200,6 +200,11 @@ def reindex_bundle_xml_status(
         skip, current_etag = _check_etag_unchanged(service, bucket, s3_key, stored_etag)
         if skip:
             logger.info("Bundle unchanged (ETag match), skipping %s", s3_key)
+            from lacos.explorer.services.file_type_facets import (
+                refresh_bundle_file_type_facets,
+            )
+
+            refresh_bundle_file_type_facets(existing)
             resources = existing.resources.first()
             return BundleReindexResult(
                 bundle_id=existing.id,

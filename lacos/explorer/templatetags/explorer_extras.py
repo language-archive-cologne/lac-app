@@ -57,7 +57,7 @@ def safe_back_url(context):
 
 FACET_PARAM_NAMES = {
     "keyword", "language", "year", "country", "region", "provider", "access", "license",
-    "topic", "collection",
+    "topic", "collection", "file_type",
 }
 
 

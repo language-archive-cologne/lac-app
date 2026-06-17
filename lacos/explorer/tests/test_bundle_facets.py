@@ -17,6 +17,7 @@ from lacos.blam.models.bundle.bundle_general_info import (
 )
 from lacos.blam.models.bundle.bundle_publication_info import BundlePublicationInfo
 from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
+from lacos.explorer.models import BundleFileTypeFacet
 from lacos.blam.models.collection.collection_general_info import (
     CollectionGeneralInfo,
     CollectionLocation,
@@ -169,6 +170,54 @@ def test_collection_filter():
     assert result.queryset.count() == 1
     pks = list(result.queryset.values_list("pk", flat=True))
     assert b1.pk in pks
+
+
+@pytest.mark.django_db
+def test_file_type_filter():
+    coll = _create_collection("C1", "Test Collection")
+    b1 = _create_bundle("B1", "ELAN Bundle", coll)
+    _create_bundle("B2", "PDF Bundle", coll)
+    BundleFileTypeFacet.objects.create(
+        bundle=b1,
+        collection=coll,
+        file_type="eaf",
+    )
+
+    result = _service().search(_make_params(file_type=["eaf"]), Bundle.objects.all())
+
+    assert result.queryset.count() == 1
+    assert list(result.queryset.values_list("pk", flat=True)) == [b1.pk]
+    file_type_facet = next(f for f in result.facets if f.name == "file_type")
+    assert file_type_facet.label == "File format"
+    assert file_type_facet.values[0].label == "ELAN"
+
+
+@pytest.mark.django_db
+def test_file_type_facet_hides_stale_broad_values():
+    coll = _create_collection("C1", "Test Collection")
+    bundle = _create_bundle("B1", "Mixed Bundle", coll)
+    BundleFileTypeFacet.objects.create(
+        bundle=bundle,
+        collection=coll,
+        file_type="audio",
+    )
+    BundleFileTypeFacet.objects.create(
+        bundle=bundle,
+        collection=coll,
+        file_type="document",
+    )
+    BundleFileTypeFacet.objects.create(
+        bundle=bundle,
+        collection=coll,
+        file_type="wav",
+    )
+
+    result = _service().search(_make_params(file_type=["audio"]), Bundle.objects.all())
+
+    assert list(result.queryset.values_list("pk", flat=True)) == [bundle.pk]
+    assert not result.active_filters
+    file_type_facet = next(f for f in result.facets if f.name == "file_type")
+    assert [value.value for value in file_type_facet.values] == ["wav"]
 
 
 @pytest.mark.django_db

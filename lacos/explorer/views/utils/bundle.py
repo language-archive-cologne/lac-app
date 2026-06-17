@@ -8,6 +8,7 @@ from django.core.paginator import Paginator
 from django.db.models import (
     Case,
     CharField,
+    Count,
     IntegerField,
     OuterRef,
     Prefetch,
@@ -23,6 +24,8 @@ from lacos.blam.models.bundle.bundle_structural_info import (
     BundleStructuralInfo,
 )
 from lacos.blam.models.collection.collection_repository import Collection
+from lacos.explorer.file_types import FILE_TYPE_LABELS
+from lacos.explorer.models import BundleFileTypeFacet
 from lacos.storage.constants import ACL_LEVEL_ACADEMIC, ACL_LEVEL_PUBLIC, ACL_LEVEL_RESTRICTED
 from lacos.storage.models.acl_permissions import ACLPermissions
 
@@ -56,11 +59,18 @@ def _normalize_collection_summary(raw_summary: dict) -> dict[str, int]:
     }
 
 
-def bundle_queryset_for_collection(collection, search_query=None, sort="name", order="asc"):
+def bundle_queryset_for_collection(
+    collection,
+    search_query=None,
+    sort="name",
+    order="asc",
+    file_type=None,
+):
     """Build a queryset for bundles belonging to a collection.
 
     Includes prefetching of related resources and metadata.
-    Optionally filters by search_query against identifier, title, and description.
+    Optionally filters by search_query against identifier, title, description,
+    and resource file names.
     """
     queryset = (
         BundleStructuralInfo.objects.filter(is_member_of_collection=collection)
@@ -85,7 +95,17 @@ def bundle_queryset_for_collection(collection, search_query=None, sort="name", o
         queryset = queryset.filter(
             Q(bundle__identifier__icontains=search_query) |
             Q(bundle__general_info__display_title__icontains=search_query) |
-            Q(bundle__general_info__description__icontains=search_query)
+            Q(bundle__general_info__description__icontains=search_query) |
+            Q(bundle__resources__bundle_media_resources__file_name__icontains=search_query) |
+            Q(bundle__resources__bundle_written_resources__file_name__icontains=search_query) |
+            Q(bundle__resources__bundle_other_resources__file_name__icontains=search_query) |
+            Q(additional_metadata_files__file_name__icontains=search_query)
+        ).distinct()
+
+    if file_type in FILE_TYPE_LABELS:
+        queryset = queryset.filter(
+            bundle__file_type_facets__collection=collection,
+            bundle__file_type_facets__file_type=file_type,
         ).distinct()
 
     normalized_sort = sort if sort in {"name", "access"} else "name"
@@ -137,6 +157,27 @@ def bundle_queryset_for_collection(collection, search_query=None, sort="name", o
         f"{prefix}bundle__general_info__display_title",
         "bundle__identifier",
     )
+
+
+def collection_bundle_file_type_options(collection, selected_file_type=None):
+    rows = (
+        BundleFileTypeFacet.objects.filter(
+            collection=collection,
+            file_type__in=FILE_TYPE_LABELS,
+        )
+        .values("file_type")
+        .annotate(count=Count("bundle", distinct=True))
+    )
+    options = [
+        {
+            "value": row["file_type"],
+            "label": FILE_TYPE_LABELS[row["file_type"]],
+            "count": row["count"],
+            "selected": row["file_type"] == selected_file_type,
+        }
+        for row in rows
+    ]
+    return sorted(options, key=lambda option: option["label"].lower())
 
 
 def _iter_structural_info_resources(struct_infos):
@@ -200,6 +241,7 @@ def paginate_bundle_contexts(
     search_query=None,
     sort="name",
     order="asc",
+    file_type=None,
 ):
     """Paginate bundles for a collection and build context for each.
 
@@ -210,6 +252,7 @@ def paginate_bundle_contexts(
         search_query=search_query,
         sort=sort,
         order=order,
+        file_type=file_type,
     )
     paginator = Paginator(queryset, per_page)
 

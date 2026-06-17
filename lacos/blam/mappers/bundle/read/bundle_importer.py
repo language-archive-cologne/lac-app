@@ -156,6 +156,8 @@ class BundleImporter:
                 bundle.identifier = md_self_link
                 bundle.save(update_fields=["identifier"])
 
+            cls._refresh_file_type_facets(bundle)
+
             logger.info(
                 "Bundle update completed for '%s'.",
                 md_self_link or bundle.identifier,
@@ -233,6 +235,8 @@ class BundleImporter:
                 except Exception as e:
                      logger.error("Error getting BundleResources ID after structural info import", extra={"error": e})
             
+            cls._refresh_file_type_facets(bundle)
+
             logger.info("Bundle import completed", extra={"md_self_link": getattr(header, 'md_self_link', 'Unknown')})
             return (bundle, bundle_resources_id)
             
@@ -316,6 +320,14 @@ class BundleImporter:
         except Exception as e:
             logger.error("Unexpected error during structural info import", extra={"error": e}, exc_info=True)
             return None
+
+    @classmethod
+    def _refresh_file_type_facets(cls, bundle: Bundle) -> None:
+        from lacos.explorer.services.file_type_facets import (
+            refresh_bundle_file_type_facets,
+        )
+
+        refresh_bundle_file_type_facets(bundle)
 
     @staticmethod
     def _detect_version(xml_content: str) -> str:

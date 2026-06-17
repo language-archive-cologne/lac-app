@@ -46,6 +46,7 @@ from lacos.explorer.permissions import (
     enforce_binary_exposure,
 )
 from lacos.explorer.collection_structured_data import serialize_collection_json_ld
+from lacos.explorer.file_types import FILE_TYPE_LABELS
 from lacos.explorer.search import search_archives
 from lacos.explorer.structured_data import serialize_catalogue_json_ld
 from lacos.explorer.views.utils import build_content_disposition
@@ -58,6 +59,7 @@ from lacos.storage.services.resource_mapping_service import ResourceMappingServi
 from .utils import (
     HandleLookupMixin,
     annotate_resource,
+    collection_bundle_file_type_options,
     get_formatted_location,
     get_object_by_pk_or_handle,
     is_imdi_resource,
@@ -575,6 +577,7 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
 
         page_number = self.request.GET.get('bundle_page')
         bundle_search = self.request.GET.get('bundle_search', '').strip()
+        bundle_file_type = self.request.GET.get('bundle_file_type', '').strip()
         bundle_sort = self.request.GET.get('bundle_sort', 'name')
         bundle_order = self.request.GET.get('bundle_order', 'asc')
         allowed_per_page = {10, 25, 50}
@@ -588,7 +591,14 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
             bundle_sort = "name"
         if bundle_order not in {"asc", "desc"}:
             bundle_order = "asc"
+        if bundle_file_type not in FILE_TYPE_LABELS:
+            bundle_file_type = ""
         context['bundle_search'] = bundle_search
+        context['bundle_file_type'] = bundle_file_type
+        context['bundle_file_type_options'] = collection_bundle_file_type_options(
+            self.object,
+            selected_file_type=bundle_file_type or None,
+        )
         context['bundle_current_sort'] = bundle_sort
         context['bundle_current_order'] = bundle_order
         context['bundle_per_page'] = bundle_per_page
@@ -599,6 +609,7 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
             search_query=bundle_search or None,
             sort=bundle_sort,
             order=bundle_order,
+            file_type=bundle_file_type or None,
         )
 
         query_params = self.request.GET.copy()
@@ -785,6 +796,7 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
                 'bundle_page' in self.request.GET
                 or 'bundle_per_page' in self.request.GET
                 or 'bundle_search' in self.request.GET
+                or 'bundle_file_type' in self.request.GET
                 or 'bundle_sort' in self.request.GET
                 or 'bundle_order' in self.request.GET
             ):

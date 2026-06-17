@@ -10,6 +10,7 @@ from lacos.blam.models.collection.collection_repository import Collection
 from lacos.ingest.services.reindex_service import (
     _check_etag_unchanged,
     _save_etag,
+    reindex_bundle_xml_status,
 )
 
 
@@ -99,3 +100,27 @@ class TestSaveEtag:
         with patch.object(Collection, "save") as mock_save:
             _save_etag(collection, "same-etag")
             mock_save.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_bundle_skip_refreshes_file_type_facets():
+    bundle = Bundle.objects.create(
+        identifier=f"test-{uuid4()}",
+        import_object_key="collection/bundle/v1/metadata/bundle.xml",
+        import_etag="same-etag",
+    )
+    service = MagicMock()
+    service.head_s3_object.return_value = {"ETag": "same-etag"}
+
+    with patch(
+        "lacos.explorer.services.file_type_facets.refresh_bundle_file_type_facets"
+    ) as mock_refresh:
+        result = reindex_bundle_xml_status(
+            bucket="bucket",
+            s3_key="collection/bundle/v1/metadata/bundle.xml",
+            discovery_service=service,
+        )
+
+    assert result.skipped is True
+    assert result.bundle_id == bundle.id
+    mock_refresh.assert_called_once_with(bundle)

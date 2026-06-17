@@ -462,26 +462,55 @@
 
   <!-- Bundles Section -->
   <div class="mb-6">
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between mb-6">
       <div class="space-y-2">
         <h2 class="text-2xl font-light text-base-content tracking-tight">{% translate "Bundles in this Collection" %}</h2>
       </div>
-      <div class="flex items-center gap-2">
-        <input
-          type="search"
-          name="bundle_search"
-          value="{{ bundle_search }}"
-          placeholder="{% translate 'Filter bundles...' %}"
-          class="input input-bordered input-sm w-64"
-          hx-get="{{ request.path }}"
-          hx-target="#collection-bundles-table"
-          hx-swap="innerHTML"
-          hx-trigger="keyup changed delay:300ms, search"
-          hx-include="[name='bundle_search'], [name='bundle_sort'], [name='bundle_order']"
-        >
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-end">
+        <label class="form-control w-full sm:w-72">
+          <span class="label py-0 pb-1">
+            <span class="label-text text-xs font-semibold uppercase tracking-wide text-base-content/60">{% translate "Search bundles" %}</span>
+          </span>
+          <input
+            type="search"
+            name="bundle_search"
+            value="{{ bundle_search }}"
+            placeholder="{% translate 'Title, description, handle, filename' %}"
+            class="input input-bordered input-sm w-full"
+            hx-get="{{ request.path }}"
+            hx-target="#collection-bundles-table"
+            hx-swap="innerHTML"
+            hx-trigger="keyup changed delay:300ms, search"
+            hx-include="[name='bundle_search'], [name='bundle_file_type'], [name='bundle_sort'], [name='bundle_order']"
+          >
+        </label>
+        {% if bundle_file_type_options %}
+          <label class="form-control w-full sm:w-48">
+            <span class="label py-0 pb-1">
+              <span class="label-text text-xs font-semibold uppercase tracking-wide text-base-content/60">{% translate "Contains format" %}</span>
+            </span>
+            <select
+              name="bundle_file_type"
+              class="select select-bordered select-sm w-full"
+              hx-get="{{ request.path }}"
+              hx-target="#collection-bundles-table"
+              hx-swap="innerHTML"
+              hx-trigger="change"
+              hx-include="[name='bundle_search'], [name='bundle_file_type'], [name='bundle_sort'], [name='bundle_order']"
+              aria-label="{% translate 'Contains file format' %}"
+            >
+              <option value="">{% translate "Any format" %}</option>
+              {% for option in bundle_file_type_options %}
+                <option value="{{ option.value }}" {% if option.selected %}selected{% endif %}>
+                  {{ option.label }} ({{ option.count }})
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+        {% endif %}
         <input type="hidden" name="bundle_sort" value="{{ bundle_current_sort }}">
         <input type="hidden" name="bundle_order" value="{{ bundle_current_order }}">
-        {% if bundle_search %}
+        {% if bundle_search or bundle_file_type %}
           <a href="{{ request.path }}?bundle_sort={{ bundle_current_sort }}&bundle_order={{ bundle_current_order }}" class="btn btn-ghost btn-sm">{% translate "Clear" %}</a>
         {% endif %}
       </div>
