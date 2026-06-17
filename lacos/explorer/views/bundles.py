@@ -28,6 +28,10 @@ from lacos.blam.models.bundle.bundle_structural_info import (
     OtherResource,
     WrittenResource,
 )
+from lacos.blam.models.collection.collection_repository import Collection
+from lacos.blam.models.collection.collection_structural_info import (
+    CollectionAdditionalMetadataFile,
+)
 from lacos.blam.mappers.bundle.write.bundle_exporter import BundleExporter
 from lacos.blam.serializers import BundleJsonLdSerializer
 from lacos.explorer.bundle_structured_data import serialize_bundle_json_ld
@@ -881,6 +885,26 @@ class ResourceByHandleView(View):
                         handle=bundle.identifier,
                         resource_pid=file_pid,
                     )
+
+        # Collection-level additional metadata files live on the collection,
+        # not a bundle, so resolve them through CollectionResourcesView.
+        collection_metadata = CollectionAdditionalMetadataFile.objects.filter(
+            file_pid=file_pid
+        ).first()
+        if collection_metadata:
+            collection = Collection.objects.filter(
+                structural_info__additional_metadata_files=collection_metadata
+            ).first()
+            if collection:
+                # Imported here to avoid a circular import with the collections view module.
+                from lacos.explorer.views.collections import CollectionResourcesView
+
+                view = CollectionResourcesView()
+                return view.get(
+                    request,
+                    handle=collection.identifier,
+                    resource_id=file_pid,
+                )
 
         raise Http404(f"Resource with handle '{file_pid}' not found")
 

@@ -491,3 +491,43 @@ def test_collection_metadata_route_obeys_binary_exposure_policy(client, monkeypa
     )
 
     assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_flat_resource_handle_resolves_collection_metadata_file(client, monkeypatch):
+    """A flat /resource/<handle>/ URL resolves a collection-level metadata file.
+
+    Regression for #158: collection additional metadata file handles previously
+    returned 404 because ResourceByHandleView only searched bundle-level models.
+    """
+    collection = _create_collection("flat-handle-collection-metadata")
+    metadata_file = CollectionAdditionalMetadataFile.objects.create(
+        file_pid="hdl:test/flat-handle-collection-metadata",
+        file_name="meta.xml",
+        file_description="Collection metadata",
+        mime_type="application/xml",
+    )
+    collection.structural_info.first().additional_metadata_files.add(metadata_file)
+
+    # Binary exposure is denied after the file is resolved but before any storage
+    # access, so a 403 (not 404) proves the flat handle resolved to the file.
+    monkeypatch.setattr(
+        ExposurePolicyService,
+        "can_download_binary",
+        lambda self, user, obj: False,
+    )
+
+    response = client.get(
+        reverse("resource_by_handle", kwargs={"handle_id": metadata_file.file_pid[4:]})
+    )
+
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_flat_resource_handle_unknown_returns_404(client):
+    response = client.get(
+        reverse("resource_by_handle", kwargs={"handle_id": "test/does-not-exist"})
+    )
+
+    assert response.status_code == 404
