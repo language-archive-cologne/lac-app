@@ -3,7 +3,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.http import Http404
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 
 from lacos.common.services.safe_html import sanitize_html
 
@@ -13,11 +13,16 @@ from lacos.common.services.safe_html import sanitize_html
 GUIDELINE_SLUG_MAP = {
     "submission-guidelines": "submission",
     "format-whitelist": "whitelist",
-    "depositing-policy": "archiving_LAC",
-    "depositor-agreement": "licenses",
     "licenses": "licenses",
     "user": "user",
     "archiving": "archiving_LAC",
+}
+
+# Legacy URL slugs kept for backward compatibility. Each redirects to the slug
+# whose URL matches the page title (issue #156).
+GUIDELINE_SLUG_REDIRECTS = {
+    "depositing-policy": "archiving",
+    "depositor-agreement": "licenses",
 }
 
 
@@ -56,7 +61,13 @@ def guideline_view(request, slug: str):
     Only serves pages that have MD files in lac-guidelines/texts/.
     Returns 404 if no MD file exists for the slug.
     Title is extracted from the MD file's # heading.
+    Legacy slugs are permanently redirected to their title-aligned slug.
     """
+    # Redirect legacy slugs whose URL did not match the page title (issue #156).
+    redirect_slug = GUIDELINE_SLUG_REDIRECTS.get(slug)
+    if redirect_slug:
+        return redirect("user-guide", slug=redirect_slug, permanent=True)
+
     # Get the file slug (may differ from URL slug)
     file_slug = GUIDELINE_SLUG_MAP.get(slug, slug.replace("-", "_"))
 
