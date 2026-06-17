@@ -6,6 +6,7 @@ from lacos.blam.models.bundle.bundle_general_info import BundleGeneralInfo, Bund
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo, CollectionLocation
 from lacos.blam.models.collection.collection_repository import Collection
+from lacos.oaipmh.identifiers import build_oai_identifier
 
 
 def _create_collection(identifier: str = "hdl:test/oai-collection") -> Collection:
@@ -57,6 +58,15 @@ def test_identify(client):
     assert "<repositoryName>" in body
     assert "<adminEmail>lac-helpdesk@uni-koeln.de</adminEmail>" in body
     assert "support@example.com" not in body
+    # OLAC repository identifier declaration
+    assert "<oai-identifier" in body
+    assert "<scheme>oai</scheme>" in body
+    assert "<repositoryIdentifier>lac.uni-koeln.de</repositoryIdentifier>" in body
+    assert "<delimiter>:</delimiter>" in body
+    assert (
+        "<sampleIdentifier>oai:lac.uni-koeln.de:11341/00-0000-0000-0000-0D93-7"
+        "</sampleIdentifier>" in body
+    )
 
 
 @pytest.mark.django_db
@@ -85,7 +95,7 @@ def test_overview_includes_get_record_examples(client):
     body = response.content.decode("utf-8")
     assert "GetRecord" in body
     assert "metadataPrefix=oai_dc" in body
-    assert "identifier=oai:lacos:hdl:11341/00-0000-0000-0000-0D92-9" in body
+    assert "identifier=oai:lac.uni-koeln.de:11341/00-0000-0000-0000-0D92-9" in body
     assert 'id="tab-get-record"' not in body
 
 
@@ -112,8 +122,8 @@ def test_list_records_without_set_returns_collections_and_bundles(client):
 
     assert response.status_code == 200
     body = response.content.decode("utf-8")
-    assert f"<identifier>oai:lacos:{collection.identifier}</identifier>" in body
-    assert f"<identifier>oai:lacos:bundle:{bundle.identifier}</identifier>" in body
+    assert f"<identifier>{build_oai_identifier(collection.identifier)}</identifier>" in body
+    assert f"<identifier>{build_oai_identifier(bundle.identifier)}</identifier>" in body
     assert "<setSpec>collections</setSpec>" in body
     assert "<setSpec>bundles</setSpec>" in body
 
@@ -130,8 +140,8 @@ def test_list_identifiers_without_set_returns_collections_and_bundles(client):
 
     assert response.status_code == 200
     body = response.content.decode("utf-8")
-    assert f"<identifier>oai:lacos:{collection.identifier}</identifier>" in body
-    assert f"<identifier>oai:lacos:bundle:{bundle.identifier}</identifier>" in body
+    assert f"<identifier>{build_oai_identifier(collection.identifier)}</identifier>" in body
+    assert f"<identifier>{build_oai_identifier(bundle.identifier)}</identifier>" in body
 
 
 @pytest.mark.django_db
@@ -150,8 +160,8 @@ def test_list_records_with_collection_set_excludes_bundles(client):
 
     assert response.status_code == 200
     body = response.content.decode("utf-8")
-    assert f"<identifier>oai:lacos:{collection.identifier}</identifier>" in body
-    assert f"<identifier>oai:lacos:bundle:{bundle.identifier}</identifier>" not in body
+    assert f"<identifier>{build_oai_identifier(collection.identifier)}</identifier>" in body
+    assert f"<identifier>{build_oai_identifier(bundle.identifier)}</identifier>" not in body
 
 
 @pytest.mark.django_db
@@ -163,14 +173,14 @@ def test_get_record_returns_collection_record(client):
         {
             "verb": "GetRecord",
             "metadataPrefix": "oai_dc",
-            "identifier": f"oai:lacos:{collection.identifier}",
+            "identifier": build_oai_identifier(collection.identifier),
         },
     )
 
     assert response.status_code == 200
     body = response.content.decode("utf-8")
     assert "<GetRecord>" in body
-    assert f"<identifier>oai:lacos:{collection.identifier}</identifier>" in body
+    assert f"<identifier>{build_oai_identifier(collection.identifier)}</identifier>" in body
     assert "<dc:title>OAI Test Collection</dc:title>" in body
 
 
@@ -184,14 +194,14 @@ def test_get_record_returns_bundle_record(client):
         {
             "verb": "GetRecord",
             "metadataPrefix": "oai_dc",
-            "identifier": f"oai:lacos:bundle:{bundle.identifier}",
+            "identifier": build_oai_identifier(bundle.identifier),
         },
     )
 
     assert response.status_code == 200
     body = response.content.decode("utf-8")
     assert "<GetRecord>" in body
-    assert f"<identifier>oai:lacos:bundle:{bundle.identifier}</identifier>" in body
+    assert f"<identifier>{build_oai_identifier(bundle.identifier)}</identifier>" in body
     assert "<dc:title>OAI Test Bundle</dc:title>" in body
 
 
@@ -215,14 +225,14 @@ def test_get_record_supports_xml_metadata_formats(
         {
             "verb": "GetRecord",
             "metadataPrefix": metadata_prefix,
-            "identifier": f"oai:lacos:{collection.identifier}",
+            "identifier": build_oai_identifier(collection.identifier),
         },
     )
 
     assert response.status_code == 200
     body = response.content.decode("utf-8")
     assert "<GetRecord>" in body
-    assert f"<identifier>oai:lacos:{collection.identifier}</identifier>" in body
+    assert f"<identifier>{build_oai_identifier(collection.identifier)}</identifier>" in body
     assert expected_marker in body
 
 
@@ -246,7 +256,7 @@ def test_get_record_unknown_identifier_returns_id_does_not_exist(client):
         {
             "verb": "GetRecord",
             "metadataPrefix": "oai_dc",
-            "identifier": "oai:lacos:hdl:test/missing",
+            "identifier": "oai:lac.uni-koeln.de:test/missing",
         },
     )
 
@@ -264,7 +274,7 @@ def test_get_record_unsupported_metadata_prefix_returns_error(client):
         {
             "verb": "GetRecord",
             "metadataPrefix": "unsupported_format",
-            "identifier": f"oai:lacos:{collection.identifier}",
+            "identifier": build_oai_identifier(collection.identifier),
         },
     )
 

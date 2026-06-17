@@ -19,6 +19,7 @@ from lacos.blam.models.collection.collection_structural_info import (
     CollectionStructuralInfo,
 )
 from lacos.explorer.structured_data import serialize_json_ld
+from lacos.oaipmh.identifiers import build_oai_identifier
 from lacos.storage.models.acl_permissions import ACLPermissions
 from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 
@@ -241,7 +242,7 @@ def test_oai_list_identifiers_includes_restricted_collection_metadata(client):
     )
 
     assert response.status_code == 200
-    assert f"oai:lacos:{collection.identifier}" in response.content.decode("utf-8")
+    assert build_oai_identifier(collection.identifier) in response.content.decode("utf-8")
 
 
 @pytest.mark.django_db
@@ -265,4 +266,4 @@ def test_oai_excludes_collection_when_policy_disallows_harvest(client, monkeypat
     )
 
     assert response.status_code == 200
-    assert f"oai:lacos:{collection.identifier}" not in response.content.decode("utf-8")
+    assert build_oai_identifier(collection.identifier) not in response.content.decode("utf-8")

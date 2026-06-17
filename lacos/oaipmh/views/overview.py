@@ -13,8 +13,8 @@ class OAIPMHOverviewView(TemplateView):
         context = super().get_context_data(**kwargs)
         endpoint_path = reverse("oaipmh:endpoint")
         absolute_endpoint = self.request.build_absolute_uri(endpoint_path)
-        collection_example_identifier = "oai:lacos:hdl:11341/00-0000-0000-0000-0D92-9"
-        bundle_example_identifier = "oai:lacos:bundle:hdl:11341/00-0000-0000-0000-0D93-7"
+        collection_example_identifier = "oai:lac.uni-koeln.de:11341/00-0000-0000-0000-0D92-9"
+        bundle_example_identifier = "oai:lac.uni-koeln.de:11341/00-0000-0000-0000-0D93-7"
 
         metadata_formats = [
             {
