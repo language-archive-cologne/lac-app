@@ -528,6 +528,7 @@ def test_flat_resource_handle_resolves_collection_metadata_file(client):
     html = response.content.decode("utf-8")
     assert "meta.xml" in html
     assert metadata_file.file_pid in html
+    assert 'src="None"' not in html
     assert reverse(
         "explorer:collection_detail_by_handle",
         kwargs={"handle": collection.handle_path},
