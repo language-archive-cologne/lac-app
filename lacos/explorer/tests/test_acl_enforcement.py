@@ -522,16 +522,16 @@ def test_flat_resource_handle_resolves_collection_metadata_file(client):
 
     response = client.get(
         reverse("resource_by_handle", kwargs={"handle_id": metadata_file.file_pid[4:]}),
-        {"action": "view"},
     )
 
-    # Non-HTMX view resolves the file and redirects to the owning collection
-    # without requiring a mapped S3 object.
-    assert response.status_code == 302
-    assert response["Location"] == reverse(
+    assert response.status_code == 200
+    html = response.content.decode("utf-8")
+    assert "meta.xml" in html
+    assert metadata_file.file_pid in html
+    assert reverse(
         "explorer:collection_detail_by_handle",
         kwargs={"handle": collection.handle_path},
-    )
+    ) in html
 
 
 @pytest.mark.django_db
@@ -549,15 +549,17 @@ def test_flat_resource_handle_resolves_collection_metadata_file_with_resolver_ur
         reverse(
             "resource_by_handle",
             kwargs={"handle_id": "11341/flat-handle-url-metadata"},
-        ),
-        {"action": "view"},
+        )
     )
 
-    assert response.status_code == 302
-    assert response["Location"] == reverse(
+    assert response.status_code == 200
+    html = response.content.decode("utf-8")
+    assert "meta.xml" in html
+    assert metadata_file.file_pid in html
+    assert reverse(
         "explorer:collection_detail_by_handle",
         kwargs={"handle": collection.handle_path},
-    )
+    ) in html
 
 
 @pytest.mark.django_db

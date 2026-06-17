@@ -852,9 +852,14 @@ class CollectionResourcesView(View):
 
             is_htmx = request.headers.get('HX-Request') == 'true'
             if not is_htmx and action in {'play', 'view', 'analyze', 'pitch'}:
-                return redirect(
-                    'explorer:collection_detail_by_handle',
-                    handle=collection.handle_path,
+                return self._render_resource_page(
+                    request,
+                    metadata_file,
+                    collection,
+                    detected_media_type=determine_media_type(
+                        metadata_file.mime_type,
+                        metadata_file.file_name,
+                    ),
                 )
 
             resource_service = ResourceMappingService(skip_bucket_check=True)
@@ -993,9 +998,28 @@ class CollectionResourcesView(View):
                 )
 
             if action in {'play', 'view', 'analyze', 'pitch'}:
-                return redirect(
-                    'explorer:collection_detail_by_handle',
-                    handle=collection.handle_path,
+                return self._render_resource_page(
+                    request,
+                    metadata_file,
+                    collection,
+                    detected_media_type=detected_media_type,
+                    source_mime_type=source_mime_type,
+                    presigned_url=presigned_url,
+                    download_url=download_url,
+                    download_bucket=storage_resolution["bucket"],
+                    download_key=storage_resolution["key"],
+                    xml_preview=xml_preview,
+                    markdown_html=markdown_html,
+                    peaks_url=peaks_url,
+                    spectrogram_data_url=spectrogram_data_url,
+                    player_mode=player_mode,
+                    spectrogram_available=spectrogram_available,
+                    pitch_data_url=pitch_data_url,
+                    pitch_available=pitch_available,
+                    subtitle_url=subtitle_url,
+                    resource_play_url=resource_play_url,
+                    resource_analyze_url=resource_analyze_url,
+                    resource_pitch_url=resource_pitch_url,
                 )
 
             raise Http404("Unsupported action")
@@ -1006,6 +1030,61 @@ class CollectionResourcesView(View):
         except Exception as e:
             logger.error("Error accessing resource", extra={"error": str(e)})
             raise Http404(f"Error accessing resource: {str(e)}")
+
+    def _render_resource_page(
+        self,
+        request,
+        metadata_file,
+        collection,
+        *,
+        detected_media_type,
+        source_mime_type=None,
+        presigned_url=None,
+        download_url=None,
+        download_bucket=None,
+        download_key=None,
+        xml_preview=None,
+        markdown_html=None,
+        peaks_url=None,
+        spectrogram_data_url=None,
+        player_mode='simple',
+        spectrogram_available=False,
+        pitch_data_url=None,
+        pitch_available=False,
+        subtitle_url=None,
+        resource_play_url=None,
+        resource_analyze_url=None,
+        resource_pitch_url=None,
+    ):
+        context = {
+            'resource_name': metadata_file.file_name,
+            'resource_description': metadata_file.file_description,
+            'mime_type': metadata_file.mime_type,
+            'media_type': detected_media_type,
+            'source_mime_type': source_mime_type,
+            'stream_url': presigned_url if detected_media_type in {'audio', 'video'} else None,
+            'preview_url': presigned_url,
+            'download_url': download_url,
+            'download_bucket': download_bucket,
+            'download_key': download_key,
+            'download_filename': metadata_file.file_name,
+            'elan_context': None,
+            'xml_content': xml_preview,
+            'markdown_html': markdown_html,
+            'peaks_url': peaks_url,
+            'spectrogram_data_url': spectrogram_data_url,
+            'player_mode': player_mode,
+            'spectrogram_available': spectrogram_available,
+            'pitch_data_url': pitch_data_url,
+            'pitch_available': pitch_available,
+            'subtitle_url': subtitle_url,
+            'resource_play_url': resource_play_url,
+            'resource_analyze_url': resource_analyze_url,
+            'resource_pitch_url': resource_pitch_url,
+            'collection': collection,
+            'resource': metadata_file,
+        }
+        return render(request, 'resource_detail.html', context)
 
     def _render_htmx_modal(
         self, request, file_name, file_description, mime_type,
