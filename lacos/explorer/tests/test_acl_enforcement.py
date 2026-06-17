@@ -500,28 +500,44 @@ def test_flat_resource_handle_resolves_collection_metadata_file(client, monkeypa
     Regression for #158: collection additional metadata file handles previously
     returned 404 because ResourceByHandleView only searched bundle-level models.
     """
-    collection = _create_collection("flat-handle-collection-metadata")
+    # Mirror real data: collection identifier carries the hdl: scheme prefix.
+    collection = _create_collection("hdl:11341/flat-handle-collection")
     metadata_file = CollectionAdditionalMetadataFile.objects.create(
-        file_pid="hdl:test/flat-handle-collection-metadata",
+        file_pid="hdl:11341/flat-handle-collection-metadata",
         file_name="meta.xml",
         file_description="Collection metadata",
         mime_type="application/xml",
     )
     collection.structural_info.first().additional_metadata_files.add(metadata_file)
 
-    # Binary exposure is denied after the file is resolved but before any storage
-    # access, so a 403 (not 404) proves the flat handle resolved to the file.
+    # A bundle resource sharing the same pid must not shadow the collection file:
+    # the collection metadata is resolved before the bundle-resource search.
+    bundle = _create_bundle(collection, "hdl:11341/flat-handle-shadow-bundle")
+    shadow = MediaResource.objects.create(
+        file_pid=metadata_file.file_pid,
+        file_name="meta.xml",
+        mime_type="application/xml",
+    )
+    BundleResources.objects.create(bundle=bundle).bundle_media_resources.add(shadow)
+
     monkeypatch.setattr(
-        ExposurePolicyService,
-        "can_download_binary",
-        lambda self, user, obj: False,
+        "lacos.explorer.views.collections.resolve_collection_metadata_to_presigned",
+        lambda service, mf, col: {
+            "bucket": "test-bucket",
+            "key": "test/meta.xml",
+            "url": "https://example.test/meta.xml",
+        },
     )
 
     response = client.get(
-        reverse("resource_by_handle", kwargs={"handle_id": metadata_file.file_pid[4:]})
+        reverse("resource_by_handle", kwargs={"handle_id": metadata_file.file_pid[4:]}),
+        {"action": "view"},
     )
 
-    assert response.status_code == 403
+    # Non-HTMX view resolves the file and redirects to the owning collection,
+    # proving the flat handle no longer 404s.
+    assert response.status_code == 302
+    assert collection.handle_path in response["Location"]
 
 
 @pytest.mark.django_db

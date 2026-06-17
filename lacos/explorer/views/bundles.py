@@ -864,6 +864,27 @@ class ResourceByHandleView(View):
     def get(self, request, handle_id):
         file_pid = f"hdl:{handle_id}"
 
+        # Collection-level additional metadata files live on the collection, not
+        # a bundle. Resolve them first: a collection metadata handle must not be
+        # shadowed by a bundle resource that happens to share the same pid.
+        collection_metadata = CollectionAdditionalMetadataFile.objects.filter(
+            file_pid=file_pid
+        ).first()
+        if collection_metadata:
+            collection = Collection.objects.filter(
+                structural_info__additional_metadata_files=collection_metadata
+            ).first()
+            if collection:
+                # Imported here to avoid a circular import with the collections view module.
+                from lacos.explorer.views.collections import CollectionResourcesView
+
+                view = CollectionResourcesView()
+                return view.get(
+                    request,
+                    handle=collection.handle_path,
+                    resource_id=collection_metadata.file_pid,
+                )
+
         # Search across all bundle resource types.
         for model in (MediaResource, WrittenResource, OtherResource, BundleAdditionalMetadataFile):
             resource = model.objects.filter(file_pid=file_pid).first()
@@ -885,26 +906,6 @@ class ResourceByHandleView(View):
                         handle=bundle.identifier,
                         resource_pid=file_pid,
                     )
-
-        # Collection-level additional metadata files live on the collection,
-        # not a bundle, so resolve them through CollectionResourcesView.
-        collection_metadata = CollectionAdditionalMetadataFile.objects.filter(
-            file_pid=file_pid
-        ).first()
-        if collection_metadata:
-            collection = Collection.objects.filter(
-                structural_info__additional_metadata_files=collection_metadata
-            ).first()
-            if collection:
-                # Imported here to avoid a circular import with the collections view module.
-                from lacos.explorer.views.collections import CollectionResourcesView
-
-                view = CollectionResourcesView()
-                return view.get(
-                    request,
-                    handle=collection.identifier,
-                    resource_id=file_pid,
-                )
 
         raise Http404(f"Resource with handle '{file_pid}' not found")
 
