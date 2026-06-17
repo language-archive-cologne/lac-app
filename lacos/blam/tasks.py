@@ -91,24 +91,25 @@ def backup_database_task(tracking_id: str) -> dict:
 
 
 @task(retries=0)
-def reindex_collections_task(tracking_id: str) -> dict:
+def reindex_collections_task(tracking_id: str, force: bool = False) -> dict:
     """Reindex all collections and their bundles from S3 XML."""
+    mode = "forced" if force else "incremental"
     BackgroundTaskService.mark_running(
         tracking_id,
-        message="Reindexing all collections from S3 XML",
+        message=f"Reindexing all collections from S3 XML ({mode})",
     )
     command_output = StringIO()
     try:
-        call_command(
-            "reindex_collection",
-            "--all",
-            "--update-bundles",
-            "--force",
-            stdout=command_output,
-        )
+        command_args = ["reindex_collection", "--all", "--update-bundles"]
+        if force:
+            command_args.append("--force")
+
+        call_command(*command_args, stdout=command_output)
         output = command_output.getvalue()
         collections_reindexed = output.count("Reindexed collection ")
         bundles_reindexed = output.count("Reindexed bundle ")
+        collections_skipped = output.count("Skipped unchanged collection ")
+        bundles_skipped = output.count("Skipped unchanged bundle ")
         collection_failures = output.count("Failed to reindex collection ")
         bundle_failures = output.count("Failed to reindex bundle ")
 
@@ -116,15 +117,20 @@ def reindex_collections_task(tracking_id: str) -> dict:
             "success": collection_failures == 0 and bundle_failures == 0,
             "collections_reindexed": collections_reindexed,
             "bundles_reindexed": bundles_reindexed,
+            "collections_skipped": collections_skipped,
+            "bundles_skipped": bundles_skipped,
             "collection_failures": collection_failures,
             "bundle_failures": bundle_failures,
+            "force": force,
+            "mode": mode,
         }
         if payload["success"]:
             BackgroundTaskService.mark_success(
                 tracking_id,
                 message=(
-                    "Collection reindex completed."
+                    f"{mode.title()} collection reindex completed."
                     f" Collections: {collections_reindexed}, bundles: {bundles_reindexed}."
+                    f" Skipped unchanged: {collections_skipped} collections, {bundles_skipped} bundles."
                 ),
                 result=payload,
             )

@@ -20,8 +20,11 @@
             </div>
             {% if status == 'success' and task.result %}
             <div class="text-[11px] opacity-80 mt-2">
-                {% if task.result.collections_reindexed %}
+                {% if task.result.collections_reindexed or task.result.collections_skipped or task.result.bundles_skipped %}
                     Collections: {{ task.result.collections_reindexed }} · Bundles: {{ task.result.bundles_reindexed }}
+                    {% if task.result.collections_skipped or task.result.bundles_skipped %}
+                        · Skipped unchanged: {{ task.result.collections_skipped|default:0 }} collections, {{ task.result.bundles_skipped|default:0 }} bundles
+                    {% endif %}
                 {% elif task.result.backup_file %}
                     {{ task.result.backup_file }} to <code>s3://{{ task.result.bucket }}/{{ task.result.key }}</code>
                 {% endif %}

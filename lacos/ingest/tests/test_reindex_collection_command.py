@@ -4,9 +4,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from lacos.blam.models.bundle.bundle_repository import Bundle
-from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
+from lacos.blam.models.bundle.bundle_structural_info import BundleResources, BundleStructuralInfo
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.ingest.management.commands.reindex_collection import Command
+from lacos.ingest.services.reindex_service import (
+    BundleReindexResult,
+    CollectionReindexResult,
+)
 
 
 def test_group_bundle_keys_by_collection():
@@ -31,16 +35,20 @@ def test_group_bundle_keys_by_collection():
 
 
 @patch("lacos.ingest.management.commands.reindex_collection.close_old_connections")
-@patch("lacos.ingest.management.commands.reindex_collection.reindex_bundle_xml")
+@patch("lacos.ingest.management.commands.reindex_collection.reindex_bundle_xml_status")
 def test_reindex_bundle_keys_deduplicates_inputs(
-    mock_reindex_bundle_xml,
+    mock_reindex_bundle_xml_status,
     _mock_close_old_connections,
 ):
     command = Command()
     discovery_service = MagicMock()
     bundle_id = uuid.uuid4()
     bundle_resources_id = uuid.uuid4()
-    mock_reindex_bundle_xml.return_value = (bundle_id, bundle_resources_id)
+    mock_reindex_bundle_xml_status.return_value = BundleReindexResult(
+        bundle_id=bundle_id,
+        bundle_resources_id=bundle_resources_id,
+        skipped=False,
+    )
 
     results = command._reindex_bundle_keys(
         bucket="lacos-production",
@@ -53,14 +61,14 @@ def test_reindex_bundle_keys_deduplicates_inputs(
     )
 
     assert len(results) == 2
-    assert mock_reindex_bundle_xml.call_count == 2
-    mock_reindex_bundle_xml.assert_any_call(
+    assert mock_reindex_bundle_xml_status.call_count == 2
+    mock_reindex_bundle_xml_status.assert_any_call(
         bucket="lacos-production",
         s3_key="col-a/bundle-1/v1/content/bundle-1.xml",
         force=False,
         discovery_service=discovery_service,
     )
-    mock_reindex_bundle_xml.assert_any_call(
+    mock_reindex_bundle_xml_status.assert_any_call(
         bucket="lacos-production",
         s3_key="col-a/bundle-2/v1/content/bundle-2.xml",
         force=False,
@@ -69,16 +77,20 @@ def test_reindex_bundle_keys_deduplicates_inputs(
 
 
 @patch("lacos.ingest.management.commands.reindex_collection.close_old_connections")
-@patch("lacos.ingest.management.commands.reindex_collection.reindex_bundle_xml")
+@patch("lacos.ingest.management.commands.reindex_collection.reindex_bundle_xml_status")
 def test_reindex_bundle_keys_forwards_force(
-    mock_reindex_bundle_xml,
+    mock_reindex_bundle_xml_status,
     _mock_close_old_connections,
 ):
     command = Command()
     discovery_service = MagicMock()
     bundle_id = uuid.uuid4()
     bundle_resources_id = uuid.uuid4()
-    mock_reindex_bundle_xml.return_value = (bundle_id, bundle_resources_id)
+    mock_reindex_bundle_xml_status.return_value = BundleReindexResult(
+        bundle_id=bundle_id,
+        bundle_resources_id=bundle_resources_id,
+        skipped=False,
+    )
 
     command._reindex_bundle_keys(
         bucket="lacos-production",
@@ -87,7 +99,7 @@ def test_reindex_bundle_keys_forwards_force(
         discovery_service=discovery_service,
     )
 
-    mock_reindex_bundle_xml.assert_called_once_with(
+    mock_reindex_bundle_xml_status.assert_called_once_with(
         bucket="lacos-production",
         s3_key="col-a/bundle-1/v1/content/bundle-1.xml",
         force=True,
@@ -113,7 +125,12 @@ def test_handle_prefix_reindexes_only_associated_bundles(mock_discovery_service_
     mock_discovery_service_cls.return_value = discovery_service
 
     command = Command()
-    command._reindex_collection = MagicMock(side_effect=[uuid.uuid4(), uuid.uuid4()])
+    command._reindex_collection = MagicMock(
+        side_effect=[
+            CollectionReindexResult(collection_id=uuid.uuid4(), skipped=False),
+            CollectionReindexResult(collection_id=uuid.uuid4(), skipped=False),
+        ]
+    )
     command._reindex_bundle_keys = MagicMock(return_value=[])
     command._update_s3_resource_locations = MagicMock()
 
@@ -151,7 +168,9 @@ def test_handle_prefix_forwards_force_to_collections_and_bundles(mock_discovery_
     mock_discovery_service_cls.return_value = discovery_service
 
     command = Command()
-    command._reindex_collection = MagicMock(return_value=uuid.uuid4())
+    command._reindex_collection = MagicMock(
+        return_value=CollectionReindexResult(collection_id=uuid.uuid4(), skipped=False)
+    )
     command._reindex_bundle_keys = MagicMock(return_value=[])
     command._update_s3_resource_locations = MagicMock()
 
@@ -259,3 +278,134 @@ def test_update_s3_resource_locations_passes_explicit_bundle_pairs(mock_mapping_
 
     _, kwargs = mapping_service.map_collection_hierarchy.call_args
     assert kwargs["bundle_resources_pairs"] == [(bundle_id, resources_id)]
+
+
+def test_maybe_update_s3_resource_locations_skips_when_unchanged_and_mapped():
+    command = Command()
+    collection_id = uuid.uuid4()
+    command._has_missing_s3_resource_locations = MagicMock(return_value=False)
+    command._update_s3_resource_locations = MagicMock()
+
+    command._maybe_update_s3_resource_locations(
+        CollectionReindexResult(collection_id=collection_id, skipped=True),
+        [
+            BundleReindexResult(
+                bundle_id=uuid.uuid4(),
+                bundle_resources_id=uuid.uuid4(),
+                skipped=True,
+            )
+        ],
+    )
+
+    command._has_missing_s3_resource_locations.assert_called_once()
+    command._update_s3_resource_locations.assert_not_called()
+
+
+def test_maybe_update_s3_resource_locations_maps_when_unchanged_but_missing():
+    command = Command()
+    collection_id = uuid.uuid4()
+    bundle_result = BundleReindexResult(
+        bundle_id=uuid.uuid4(),
+        bundle_resources_id=uuid.uuid4(),
+        skipped=True,
+    )
+    command._has_missing_s3_resource_locations = MagicMock(return_value=True)
+    command._update_s3_resource_locations = MagicMock()
+
+    command._maybe_update_s3_resource_locations(
+        CollectionReindexResult(collection_id=collection_id, skipped=True),
+        [bundle_result],
+    )
+
+    command._update_s3_resource_locations.assert_called_once_with(
+        collection_id,
+        [bundle_result],
+        dry_run=False,
+        fallback_to_all_bundles=False,
+    )
+
+
+def test_maybe_update_s3_resource_locations_maps_when_collection_changed():
+    command = Command()
+    collection_id = uuid.uuid4()
+    command._has_missing_s3_resource_locations = MagicMock()
+    command._update_s3_resource_locations = MagicMock()
+
+    command._maybe_update_s3_resource_locations(
+        CollectionReindexResult(collection_id=collection_id, skipped=False),
+        [],
+        dry_run=True,
+    )
+
+    command._has_missing_s3_resource_locations.assert_not_called()
+    command._update_s3_resource_locations.assert_called_once_with(
+        collection_id,
+        [],
+        dry_run=True,
+        fallback_to_all_bundles=True,
+    )
+
+
+@pytest.mark.django_db
+def test_has_missing_s3_resource_locations_detects_existing_collection_mapping():
+    from django.contrib.contenttypes.models import ContentType
+    from lacos.storage.models.s3_resource_location import S3ResourceLocation
+
+    collection = Collection.objects.create(identifier=f"collection-{uuid.uuid4()}")
+    S3ResourceLocation.objects.create(
+        content_type=ContentType.objects.get_for_model(Collection),
+        object_id=str(collection.id),
+        s3_bucket="bucket",
+        s3_key="collection/",
+    )
+
+    assert Command()._has_missing_s3_resource_locations(collection.id, []) is False
+
+
+@pytest.mark.django_db
+def test_has_missing_s3_resource_locations_detects_missing_resource_mapping():
+    from django.contrib.contenttypes.models import ContentType
+    from lacos.blam.models.bundle.bundle_structural_info import MediaResource
+    from lacos.storage.models.s3_resource_location import S3ResourceLocation
+
+    collection = Collection.objects.create(identifier=f"collection-{uuid.uuid4()}")
+    bundle = Bundle.objects.create(identifier=f"bundle-{uuid.uuid4()}")
+    BundleStructuralInfo.objects.create(
+        bundle=bundle,
+        is_member_of_collection=collection,
+    )
+    bundle_resources = BundleResources.objects.create(bundle=bundle)
+    media_resource = MediaResource.objects.create(
+        file_name="audio.wav",
+        file_pid=f"https://hdl.handle.net/{uuid.uuid4()}",
+        mime_type="audio/wav",
+        file_length="10",
+    )
+    bundle_resources.bundle_media_resources.add(media_resource)
+
+    S3ResourceLocation.objects.create(
+        content_type=ContentType.objects.get_for_model(Collection),
+        object_id=str(collection.id),
+        s3_bucket="bucket",
+        s3_key="collection/",
+    )
+    S3ResourceLocation.objects.create(
+        content_type=ContentType.objects.get_for_model(Bundle),
+        object_id=str(bundle.id),
+        s3_bucket="bucket",
+        s3_key="collection/bundle/",
+    )
+
+    assert (
+        Command()._has_missing_s3_resource_locations(
+            collection.id,
+            [
+                BundleReindexResult(
+                    bundle_id=bundle.id,
+                    bundle_resources_id=bundle_resources.id,
+                    skipped=True,
+                )
+            ],
+        )
+        is True
+    )

@@ -90,6 +90,8 @@ def test_reindex_collections_task_marks_success(mock_call_command):
         out.write("Reindexed collection 1 from bucket/key\n")
         out.write("Reindexed bundle 10 (resources 11)\n")
         out.write("Reindexed bundle 12 (resources 13)\n")
+        out.write("Skipped unchanged collection 2 from bucket/key\n")
+        out.write("Skipped unchanged bundle 14 (resources 15)\n")
 
     mock_call_command.side_effect = fake_call_command
     task_record = BackgroundTaskService.create(task_name="blam_reindex_collections")
@@ -101,13 +103,37 @@ def test_reindex_collections_task_marks_success(mock_call_command):
     assert result["success"] is True
     assert result["collections_reindexed"] == 1
     assert result["bundles_reindexed"] == 2
+    assert result["collections_skipped"] == 1
+    assert result["bundles_skipped"] == 1
     assert result["collection_failures"] == 0
     assert result["bundle_failures"] == 0
     assert task_record.status == BackgroundTask.Status.SUCCESS
     mock_call_command.assert_called_once()
     args, kwargs = mock_call_command.call_args
+    assert args == ("reindex_collection", "--all", "--update-bundles")
+    assert "stdout" in kwargs
+    assert result["force"] is False
+    assert result["mode"] == "incremental"
+
+
+@pytest.mark.django_db
+@patch("lacos.blam.tasks.call_command")
+def test_reindex_collections_task_can_force_full_reindex(mock_call_command):
+    def fake_call_command(*args, **kwargs):
+        out: StringIO = kwargs["stdout"]
+        out.write("Reindexed collection 1 from bucket/key\n")
+
+    mock_call_command.side_effect = fake_call_command
+    task_record = BackgroundTaskService.create(task_name="blam_force_reindex_collections")
+
+    runner = getattr(reindex_collections_task, "call_local", reindex_collections_task)
+    result = runner(str(task_record.id), force=True)
+
+    args, kwargs = mock_call_command.call_args
     assert args == ("reindex_collection", "--all", "--update-bundles", "--force")
     assert "stdout" in kwargs
+    assert result["force"] is True
+    assert result["mode"] == "forced"
 
 
 @pytest.mark.django_db

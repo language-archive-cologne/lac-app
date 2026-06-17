@@ -1,5 +1,6 @@
 import logging
 from typing import Dict, List, Optional
+from uuid import UUID
 
 from django.db import close_old_connections, connection
 from django.core.management.base import BaseCommand
@@ -7,8 +8,10 @@ from django.core.management.base import BaseCommand
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.ingest.services.reindex_service import (
-    reindex_bundle_xml,
-    reindex_collection_xml,
+    BundleReindexResult,
+    CollectionReindexResult,
+    reindex_bundle_xml_status,
+    reindex_collection_xml_status,
 )
 from lacos.storage.services.file_discovery_service import FileDiscoveryService
 from lacos.storage.services.resource_mapping_service import ResourceMappingService
@@ -90,7 +93,7 @@ class Command(BaseCommand):
                 self._remove_missing_collection(collection, dry_run=dry_run)
                 return 0
 
-            collection_id = self._reindex_collection(
+            collection_result = self._reindex_collection(
                 bucket_to_use,
                 s3_key,
                 dry_run=dry_run,
@@ -109,8 +112,11 @@ class Command(BaseCommand):
                 )
 
             # Update S3 resource locations
-            if collection_id:
-                self._update_s3_resource_locations(collection_id, bundle_results, dry_run=dry_run)
+            self._maybe_update_s3_resource_locations(
+                collection_result,
+                bundle_results,
+                dry_run=dry_run,
+            )
             return 0
 
         if prefix:
@@ -130,7 +136,7 @@ class Command(BaseCommand):
                 return 1
 
             for collection_key in collection_keys:
-                collection_id = self._reindex_collection(
+                collection_result = self._reindex_collection(
                     bucket,
                     collection_key,
                     dry_run=dry_run,
@@ -154,8 +160,11 @@ class Command(BaseCommand):
                         discovery_service=discovery_service,
                     )
                 # Update S3 resource locations
-                if collection_id:
-                    self._update_s3_resource_locations(collection_id, bundle_results, dry_run=dry_run)
+                self._maybe_update_s3_resource_locations(
+                    collection_result,
+                    bundle_results,
+                    dry_run=dry_run,
+                )
             return 0
 
         if options.get("all"):
@@ -174,7 +183,7 @@ class Command(BaseCommand):
                 if not self._s3_object_exists(discovery_service, bucket_to_use, s3_key):
                     self._remove_missing_collection(collection, dry_run=dry_run)
                     continue
-                collection_id = self._reindex_collection(
+                collection_result = self._reindex_collection(
                     bucket_to_use,
                     s3_key,
                     dry_run=dry_run,
@@ -191,8 +200,11 @@ class Command(BaseCommand):
                         discovery_service=discovery_service,
                     )
                 # Update S3 resource locations
-                if collection_id:
-                    self._update_s3_resource_locations(collection_id, bundle_results, dry_run=dry_run)
+                self._maybe_update_s3_resource_locations(
+                    collection_result,
+                    bundle_results,
+                    dry_run=dry_run,
+                )
             connection.close()
             return 0
 
@@ -276,19 +288,26 @@ class Command(BaseCommand):
         if dry_run:
             self.stdout.write(f"DRY RUN: would reindex collection {bucket}/{s3_key}")
             return None
-        collection_id = reindex_collection_xml(
+        result = reindex_collection_xml_status(
             bucket=bucket,
             s3_key=s3_key,
             force=force,
             discovery_service=discovery_service,
         )
-        if collection_id:
+        if result:
+            if result.skipped:
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"Skipped unchanged collection {result.collection_id} from {bucket}/{s3_key}"
+                    )
+                )
+                return result
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"Reindexed collection {collection_id} from {bucket}/{s3_key}"
+                    f"Reindexed collection {result.collection_id} from {bucket}/{s3_key}"
                 )
             )
-            return collection_id
+            return result
         else:
             self.stdout.write(
                 self.style.ERROR(
@@ -297,7 +316,46 @@ class Command(BaseCommand):
             )
             return None
 
-    def _update_s3_resource_locations(self, collection_id, bundle_results: list, dry_run: bool = False):
+    def _maybe_update_s3_resource_locations(
+        self,
+        collection_result: Optional[CollectionReindexResult],
+        bundle_results: list,
+        dry_run: bool = False,
+    ):
+        if not collection_result:
+            return
+        if self._has_reindexed_xml(collection_result, bundle_results):
+            self._update_s3_resource_locations(
+                collection_result.collection_id,
+                bundle_results,
+                dry_run=dry_run,
+                fallback_to_all_bundles=True,
+            )
+            return
+        if self._has_missing_s3_resource_locations(
+            collection_result.collection_id,
+            bundle_results,
+        ):
+            self._update_s3_resource_locations(
+                collection_result.collection_id,
+                bundle_results,
+                dry_run=dry_run,
+                fallback_to_all_bundles=False,
+            )
+            return
+        self.stdout.write(
+            self.style.WARNING(
+                f"S3 resource locations unchanged; skipped mapping for collection {collection_result.collection_id}"
+            )
+        )
+
+    def _update_s3_resource_locations(
+        self,
+        collection_id,
+        bundle_results: list,
+        dry_run: bool = False,
+        fallback_to_all_bundles: bool = True,
+    ):
         """Update S3ResourceLocation entries for collection and its resources."""
         if dry_run:
             self.stdout.write(f"DRY RUN: would update S3 resource locations for collection {collection_id}")
@@ -306,7 +364,9 @@ class Command(BaseCommand):
         # Build list of (bundle_id, bundle_resources_id) pairs
         bundle_resources_pairs = [
             (bundle_id, bundle_resources_id)
-            for bundle_id, bundle_resources_id in bundle_results
+            for bundle_id, bundle_resources_id in (
+                self._bundle_result_pair(result) for result in bundle_results
+            )
             if bundle_id and bundle_resources_id
         ]
 
@@ -314,7 +374,9 @@ class Command(BaseCommand):
         # Passing None triggers fallback discovery of all bundles/resources
         # belonging to the collection, which is what we want when reindex
         # did not return explicit bundle/resource pairs.
-        pairs_for_mapping = bundle_resources_pairs or None
+        pairs_for_mapping = bundle_resources_pairs
+        if fallback_to_all_bundles and not bundle_resources_pairs:
+            pairs_for_mapping = None
 
         try:
             mapping_service = ResourceMappingService()
@@ -331,6 +393,112 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.ERROR(f"Failed to update S3 resource locations: {e}")
             )
+
+    def _has_reindexed_xml(
+        self,
+        collection_result: CollectionReindexResult,
+        bundle_results: list,
+    ) -> bool:
+        if not collection_result.skipped:
+            return True
+        return any(not self._bundle_result_was_skipped(result) for result in bundle_results)
+
+    def _has_missing_s3_resource_locations(
+        self,
+        collection_id: UUID,
+        bundle_results: list,
+    ) -> bool:
+        from django.contrib.contenttypes.models import ContentType
+        from lacos.blam.models.bundle.bundle_structural_info import (
+            BundleAdditionalMetadataFile,
+            BundleResources,
+            MediaResource,
+            OtherResource,
+            WrittenResource,
+        )
+        from lacos.blam.models.collection.collection_structural_info import (
+            CollectionAdditionalMetadataFile,
+        )
+        from lacos.storage.models.s3_resource_location import S3ResourceLocation
+
+        models_by_class = ContentType.objects.get_for_models(
+            Collection,
+            Bundle,
+            CollectionAdditionalMetadataFile,
+            BundleAdditionalMetadataFile,
+            MediaResource,
+            WrittenResource,
+            OtherResource,
+        )
+        targets = set()
+
+        def add_target(obj) -> None:
+            content_type = models_by_class[obj.__class__]
+            targets.add((content_type.id, str(obj.pk)))
+
+        collection = (
+            Collection.objects
+            .filter(id=collection_id)
+            .prefetch_related("structural_info__additional_metadata_files")
+            .first()
+        )
+        if not collection:
+            return True
+        add_target(collection)
+        for structural_info in collection.structural_info.all():
+            for metadata_file in structural_info.additional_metadata_files.all():
+                add_target(metadata_file)
+
+        bundle_result_pairs = [self._bundle_result_pair(result) for result in bundle_results]
+        bundle_ids = [bundle_id for bundle_id, _ in bundle_result_pairs if bundle_id]
+        bundle_resources_ids = [
+            bundle_resources_id
+            for _, bundle_resources_id in bundle_result_pairs
+            if bundle_resources_id
+        ]
+
+        for bundle in (
+            Bundle.objects
+            .filter(id__in=bundle_ids)
+            .prefetch_related("structural_info__additional_metadata_files")
+        ):
+            add_target(bundle)
+            for structural_info in bundle.structural_info.all():
+                for metadata_file in structural_info.additional_metadata_files.all():
+                    add_target(metadata_file)
+
+        bundle_resources_qs = BundleResources.objects.filter(
+            id__in=bundle_resources_ids,
+        ).prefetch_related(
+            "bundle_media_resources",
+            "bundle_written_resources",
+            "bundle_other_resources",
+        )
+        for bundle_resources in bundle_resources_qs:
+            for media_resource in bundle_resources.bundle_media_resources.all():
+                add_target(media_resource)
+            for written_resource in bundle_resources.bundle_written_resources.all():
+                add_target(written_resource)
+            for other_resource in bundle_resources.bundle_other_resources.all():
+                add_target(other_resource)
+
+        existing_targets = set(
+            S3ResourceLocation.objects.filter(
+                content_type_id__in=[content_type_id for content_type_id, _ in targets],
+                object_id__in=[object_id for _, object_id in targets],
+            ).values_list("content_type_id", "object_id")
+        )
+        return bool(targets - existing_targets)
+
+    def _bundle_result_pair(self, result) -> tuple:
+        if isinstance(result, BundleReindexResult):
+            return result.bundle_id, result.bundle_resources_id
+        return result
+
+    def _bundle_result_was_skipped(self, result) -> bool:
+        if isinstance(result, BundleReindexResult):
+            return result.skipped
+        return False
 
     def _reindex_bundles_for_collection(
         self,
@@ -421,18 +589,24 @@ class Command(BaseCommand):
                     f"DRY RUN: would reindex bundle {bucket}/{bundle_key}"
                 )
                 continue
-            result = reindex_bundle_xml(
+            result = reindex_bundle_xml_status(
                 bucket=bucket,
                 s3_key=bundle_key,
                 force=force,
                 discovery_service=discovery_service,
             )
             if result:
-                bundle_id, bundle_resources_id = result
-                results.append((bundle_id, bundle_resources_id))
+                results.append(result)
+                if result.skipped:
+                    self.stdout.write(
+                        self.style.WARNING(
+                            f"Skipped unchanged bundle {result.bundle_id} (resources {result.bundle_resources_id})"
+                        )
+                    )
+                    continue
                 self.stdout.write(
                     self.style.SUCCESS(
-                        f"Reindexed bundle {bundle_id} (resources {bundle_resources_id})"
+                        f"Reindexed bundle {result.bundle_id} (resources {result.bundle_resources_id})"
                     )
                 )
             else:
