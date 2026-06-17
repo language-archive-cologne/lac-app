@@ -494,7 +494,7 @@ def test_collection_metadata_route_obeys_binary_exposure_policy(client, monkeypa
 
 
 @pytest.mark.django_db
-def test_flat_resource_handle_resolves_collection_metadata_file(client, monkeypatch):
+def test_flat_resource_handle_resolves_collection_metadata_file(client):
     """A flat /resource/<handle>/ URL resolves a collection-level metadata file.
 
     Regression for #158: collection additional metadata file handles previously
@@ -520,24 +520,18 @@ def test_flat_resource_handle_resolves_collection_metadata_file(client, monkeypa
     )
     BundleResources.objects.create(bundle=bundle).bundle_media_resources.add(shadow)
 
-    monkeypatch.setattr(
-        "lacos.explorer.views.collections.resolve_collection_metadata_to_presigned",
-        lambda service, mf, col: {
-            "bucket": "test-bucket",
-            "key": "test/meta.xml",
-            "url": "https://example.test/meta.xml",
-        },
-    )
-
     response = client.get(
         reverse("resource_by_handle", kwargs={"handle_id": metadata_file.file_pid[4:]}),
         {"action": "view"},
     )
 
-    # Non-HTMX view resolves the file and redirects to the owning collection,
-    # proving the flat handle no longer 404s.
+    # Non-HTMX view resolves the file and redirects to the owning collection
+    # without requiring a mapped S3 object.
     assert response.status_code == 302
-    assert collection.handle_path in response["Location"]
+    assert response["Location"] == reverse(
+        "explorer:collection_detail_by_handle",
+        kwargs={"handle": collection.handle_path},
+    )
 
 
 @pytest.mark.django_db

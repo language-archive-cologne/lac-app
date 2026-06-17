@@ -854,6 +854,13 @@ class CollectionResourcesView(View):
             if metadata_file is None:
                 raise Http404(f"Collection metadata resource {decoded_resource_id} not found")
 
+            is_htmx = request.headers.get('HX-Request') == 'true'
+            if not is_htmx and action in {'play', 'view', 'analyze', 'pitch'}:
+                return redirect(
+                    'explorer:collection_detail_by_handle',
+                    handle=collection.handle_path,
+                )
+
             resource_service = ResourceMappingService(skip_bucket_check=True)
             storage_resolution = resolve_collection_metadata_to_presigned(
                 resource_service,
@@ -895,7 +902,6 @@ class CollectionResourcesView(View):
                 response_headers=download_headers,
             )
 
-            is_htmx = request.headers.get('HX-Request') == 'true'
             if is_htmx and action in {'play', 'view'} and is_imdi_resource(file_name, mime_type):
                 imdi_modal_response = render_imdi_modal_response(
                     request,
@@ -993,7 +999,7 @@ class CollectionResourcesView(View):
             if action in {'play', 'view', 'analyze', 'pitch'}:
                 return redirect(
                     'explorer:collection_detail_by_handle',
-                    handle=collection.identifier,
+                    handle=collection.handle_path,
                 )
 
             raise Http404("Unsupported action")
