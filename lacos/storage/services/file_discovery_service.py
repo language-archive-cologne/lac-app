@@ -431,10 +431,7 @@ class FileDiscoveryService(BaseStorageService):
         xml_id = self._xml_filename_stem(key)
         if not xml_id:
             return None
-        if self._matches_any_s3_key_tail(
-            key,
-            self._collection_xml_path_variants(xml_id),
-        ):
+        if self._matches_s3_key_tail(key, self.form_collection_xml_path(xml_id)):
             return xml_id
         return None
 
@@ -447,34 +444,12 @@ class FileDiscoveryService(BaseStorageService):
         if not bundle_id:
             return None
         for collection_id in collection_ids:
-            if self._matches_any_s3_key_tail(
+            if self._matches_s3_key_tail(
                 key,
-                self._bundle_xml_path_variants(collection_id, bundle_id),
+                self.form_bundle_xml_path(collection_id, bundle_id),
             ):
                 return collection_id
         return None
-
-    def _collection_xml_path_variants(self, collection_id: str) -> List[str]:
-        collection_base = self.form_collection_path(collection_id)
-        return self._deduplicate_paths([
-            self.form_collection_xml_path(collection_id),
-            f"{collection_base}/v1/content/{collection_id}.xml",
-        ])
-
-    def _bundle_xml_path_variants(
-        self,
-        collection_id: str,
-        bundle_id: str,
-    ) -> List[str]:
-        bundle_base = self.form_bundle_path(collection_id, bundle_id)
-        return self._deduplicate_paths([
-            self.form_bundle_xml_path(collection_id, bundle_id),
-            f"{bundle_base}/v1/content/{bundle_id}.xml",
-        ])
-
-    @staticmethod
-    def _deduplicate_paths(paths: List[str]) -> List[str]:
-        return list(dict.fromkeys(paths))
 
     @staticmethod
     def _xml_filename_stem(key: str) -> Optional[str]:
@@ -482,12 +457,6 @@ class FileDiscoveryService(BaseStorageService):
         if not filename.endswith(".xml") or filename == ".xml":
             return None
         return filename[:-4]
-
-    def _matches_any_s3_key_tail(self, key: str, candidate_keys: List[str]) -> bool:
-        return any(
-            self._matches_s3_key_tail(key, candidate_key)
-            for candidate_key in candidate_keys
-        )
 
     @staticmethod
     def _matches_s3_key_tail(key: str, candidate_key: str) -> bool:

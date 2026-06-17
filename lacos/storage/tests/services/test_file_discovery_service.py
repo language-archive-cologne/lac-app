@@ -310,14 +310,18 @@ def test_find_collection_and_bundle_xmls_s3_lists_keys_without_head(
     ]
 
 
-def test_find_collection_and_bundle_xmls_s3_accepts_content_xml_paths(
+def test_find_collection_and_bundle_xmls_s3_ignores_content_xml_paths(
     mock_s3,
     discovery_service,
 ):
-    """Older imported XML locations are still recognized during discovery."""
-    collection_key = "legacy/legacy/v1/content/legacy.xml"
-    bundle_key = "legacy/bundle-1/v1/content/bundle-1.xml"
-    for key in [collection_key, bundle_key]:
+    """Resource/content XML files are not BLAM metadata import candidates."""
+    collection_metadata_key = "current/current/v1/metadata/current.xml"
+    bundle_metadata_key = "current/bundle-1/v1/metadata/bundle-1.xml"
+    content_keys = [
+        "current/current/v1/content/current.xml",
+        "current/bundle-1/v1/content/bundle-1.xml",
+    ]
+    for key in [collection_metadata_key, bundle_metadata_key, *content_keys]:
         mock_s3.put_object(
             Bucket=TEST_BUCKET_NAME,
             Key=key,
@@ -326,11 +330,11 @@ def test_find_collection_and_bundle_xmls_s3_accepts_content_xml_paths(
 
     result = discovery_service.find_collection_and_bundle_xmls_s3(
         TEST_BUCKET_NAME,
-        prefix="legacy/",
+        prefix="current/",
     )
 
-    assert result["potential_collection_xmls"] == [collection_key]
-    assert result["potential_bundle_xmls"] == [bundle_key]
+    assert result["potential_collection_xmls"] == [collection_metadata_key]
+    assert result["potential_bundle_xmls"] == [bundle_metadata_key]
 
 
 def test_find_collection_and_bundle_xmls_s3_returns_empty_when_listing_fails(
