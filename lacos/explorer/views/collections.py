@@ -62,6 +62,7 @@ from .utils import (
     collection_bundle_file_type_options,
     get_formatted_location,
     get_object_by_pk_or_handle,
+    hdl_pid_candidates,
     is_imdi_resource,
     load_markdown_preview,
     load_xml_preview,
@@ -825,20 +826,15 @@ class CollectionResourcesView(View):
         action = request.GET.get('action', 'view')
 
         try:
-            decoded_resource_id = unquote(resource_id)
-            if decoded_resource_id.startswith('ID_'):
-                decoded_resource_id = decoded_resource_id[3:]
-
-            # URLs no longer include hdl: prefix, but DB stores it
-            if not decoded_resource_id.startswith('hdl:'):
-                decoded_resource_id = f"hdl:{decoded_resource_id}"
+            pid_candidates = hdl_pid_candidates(resource_id)
+            decoded_resource_id = pid_candidates[0] if pid_candidates else unquote(resource_id)
 
             # Try to find the metadata file in the collection's additional metadata
             metadata_file = None
             structural_info = collection.structural_info.first()
             if structural_info:
                 metadata_file = structural_info.additional_metadata_files.filter(
-                    file_pid=decoded_resource_id
+                    file_pid__in=pid_candidates
                 ).first()
 
             if metadata_file is not None:

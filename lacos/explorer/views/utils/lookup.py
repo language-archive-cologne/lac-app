@@ -1,7 +1,45 @@
 """Lookup utilities for resolving objects by UUID or handle."""
 
+from urllib.parse import unquote
+
 from django.http import Http404
 from django.shortcuts import get_object_or_404
+
+
+HDL_RESOLVER_PREFIXES = (
+    "https://hdl.handle.net/",
+    "http://hdl.handle.net/",
+)
+
+
+def hdl_pid_candidates(value):
+    """Return possible stored PID forms for a URL handle path or PID value."""
+    decoded = unquote(str(value or "")).strip().rstrip("/")
+    if decoded.startswith("ID_"):
+        decoded = decoded[3:]
+    if not decoded:
+        return []
+
+    clean_handle = decoded
+    if clean_handle.startswith("hdl:"):
+        clean_handle = clean_handle[4:]
+    else:
+        for prefix in HDL_RESOLVER_PREFIXES:
+            if clean_handle.startswith(prefix):
+                clean_handle = clean_handle[len(prefix):]
+                break
+
+    candidates = []
+
+    def add(candidate):
+        if candidate and candidate not in candidates:
+            candidates.append(candidate)
+
+    add(f"hdl:{clean_handle}")
+    add(f"https://hdl.handle.net/{clean_handle}")
+    add(f"http://hdl.handle.net/{clean_handle}")
+    add(decoded)
+    return candidates
 
 
 def get_object_by_pk_or_handle(model, pk=None, handle=None):

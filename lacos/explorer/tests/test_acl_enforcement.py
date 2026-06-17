@@ -535,6 +535,32 @@ def test_flat_resource_handle_resolves_collection_metadata_file(client):
 
 
 @pytest.mark.django_db
+def test_flat_resource_handle_resolves_collection_metadata_file_with_resolver_url_pid(client):
+    collection = _create_collection("hdl:11341/flat-handle-url-collection")
+    metadata_file = CollectionAdditionalMetadataFile.objects.create(
+        file_pid="https://hdl.handle.net/11341/flat-handle-url-metadata",
+        file_name="meta.xml",
+        file_description="Collection metadata",
+        mime_type="application/xml",
+    )
+    collection.structural_info.first().additional_metadata_files.add(metadata_file)
+
+    response = client.get(
+        reverse(
+            "resource_by_handle",
+            kwargs={"handle_id": "11341/flat-handle-url-metadata"},
+        ),
+        {"action": "view"},
+    )
+
+    assert response.status_code == 302
+    assert response["Location"] == reverse(
+        "explorer:collection_detail_by_handle",
+        kwargs={"handle": collection.handle_path},
+    )
+
+
+@pytest.mark.django_db
 def test_flat_resource_handle_unknown_returns_404(client):
     response = client.get(
         reverse("resource_by_handle", kwargs={"handle_id": "test/does-not-exist"})

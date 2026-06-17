@@ -46,6 +46,7 @@ from .subtitle import (
 from .lookup import (
     get_object_by_pk_or_handle,
     HandleLookupMixin,
+    hdl_pid_candidates,
 )
 
 
@@ -89,4 +90,5 @@ __all__ = [
     # Lookup utilities
     "get_object_by_pk_or_handle",
     "HandleLookupMixin",
+    "hdl_pid_candidates",
 ]
