@@ -269,6 +269,93 @@ def test_find_collection_and_bundle_xmls_s3(mock_s3, discovery_service):
     for expected_path in expected_bundle_xml_paths:
         assert expected_path in result['potential_bundle_xmls'], f"Expected bundle path {expected_path} not found in results"
 
+
+def test_find_collection_and_bundle_xmls_s3_lists_keys_without_head(
+    mock_s3,
+    discovery_service,
+    monkeypatch,
+):
+    """Nested prefixes and multiple collections are classified from list results."""
+    keys = [
+        "root/col-a/col-a/v1/metadata/col-a.xml",
+        "root/col-a/bundle-1/v1/metadata/bundle-1.xml",
+        "root/col-a/not-a-match/v1/metadata/file.xml",
+        "root/col-b/col-b/v1/metadata/col-b.xml",
+        "root/col-b/bundle-2/v1/metadata/bundle-2.xml",
+    ]
+    for key in keys:
+        mock_s3.put_object(
+            Bucket=TEST_BUCKET_NAME,
+            Key=key,
+            Body=f"<xml>{key}</xml>",
+        )
+
+    def fail_head_object(*args, **kwargs):
+        raise AssertionError("combined XML discovery should not call head_object")
+
+    monkeypatch.setattr(discovery_service.s3_client, "head_object", fail_head_object)
+
+    result = discovery_service.find_collection_and_bundle_xmls_s3(
+        TEST_BUCKET_NAME,
+        prefix="root/",
+    )
+
+    assert result["potential_collection_xmls"] == [
+        "root/col-a/col-a/v1/metadata/col-a.xml",
+        "root/col-b/col-b/v1/metadata/col-b.xml",
+    ]
+    assert result["potential_bundle_xmls"] == [
+        "root/col-a/bundle-1/v1/metadata/bundle-1.xml",
+        "root/col-b/bundle-2/v1/metadata/bundle-2.xml",
+    ]
+
+
+def test_find_collection_and_bundle_xmls_s3_accepts_content_xml_paths(
+    mock_s3,
+    discovery_service,
+):
+    """Older imported XML locations are still recognized during discovery."""
+    collection_key = "legacy/legacy/v1/content/legacy.xml"
+    bundle_key = "legacy/bundle-1/v1/content/bundle-1.xml"
+    for key in [collection_key, bundle_key]:
+        mock_s3.put_object(
+            Bucket=TEST_BUCKET_NAME,
+            Key=key,
+            Body=f"<xml>{key}</xml>",
+        )
+
+    result = discovery_service.find_collection_and_bundle_xmls_s3(
+        TEST_BUCKET_NAME,
+        prefix="legacy/",
+    )
+
+    assert result["potential_collection_xmls"] == [collection_key]
+    assert result["potential_bundle_xmls"] == [bundle_key]
+
+
+def test_find_collection_and_bundle_xmls_s3_returns_empty_when_listing_fails(
+    discovery_service,
+    monkeypatch,
+):
+    def fail_get_paginator(_operation):
+        raise RuntimeError("S3 listing failed")
+
+    monkeypatch.setattr(
+        discovery_service.s3_client,
+        "get_paginator",
+        fail_get_paginator,
+    )
+
+    result = discovery_service.find_collection_and_bundle_xmls_s3(
+        TEST_BUCKET_NAME,
+        prefix="broken/",
+    )
+
+    assert result == {
+        "potential_collection_xmls": [],
+        "potential_bundle_xmls": [],
+    }
+
 def test_get_collection_xml(mock_s3, discovery_service):
     """Test retrieving a collection XML file"""
     collection_id = "algerien"

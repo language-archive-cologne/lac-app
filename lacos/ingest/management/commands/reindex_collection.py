@@ -145,7 +145,9 @@ class Command(BaseCommand):
                 )
                 bundle_results = []
                 if update_bundles:
-                    collection_identifier = self._infer_collection_identifier(collection_key)
+                    collection_identifier = self._infer_collection_identifier_from_collection_key(
+                        collection_key
+                    )
                     scoped_bundle_keys = bundle_keys
                     if collection_identifier:
                         scoped_bundle_keys = bundle_keys_by_collection.get(
@@ -263,7 +265,38 @@ class Command(BaseCommand):
         parts = [part for part in s3_key.split("/") if part]
         if not parts:
             return None
+        filename_stem = Command._xml_filename_stem(s3_key)
+        if filename_stem and len(parts) >= 5 and parts[-4] == filename_stem:
+            if parts[-5] == parts[-4]:
+                return parts[-4]
+            return parts[-5]
+        if filename_stem and len(parts) >= 4:
+            return parts[-4]
         return parts[0]
+
+    @staticmethod
+    def _infer_collection_identifier_from_collection_key(s3_key: str) -> Optional[str]:
+        filename_stem = Command._xml_filename_stem(s3_key)
+        return filename_stem or Command._infer_collection_identifier(s3_key)
+
+    @staticmethod
+    def _xml_filename_stem(s3_key: str) -> Optional[str]:
+        filename = s3_key.rsplit("/", 1)[-1]
+        if not filename.endswith(".xml") or filename == ".xml":
+            return None
+        return filename[:-4]
+
+    @staticmethod
+    def _collection_sibling_prefix(collection_xml_key: str) -> str:
+        parts = [part for part in collection_xml_key.split("/") if part]
+        filename_stem = Command._xml_filename_stem(collection_xml_key)
+        if filename_stem and len(parts) >= 5 and parts[-4] == filename_stem:
+            prefix_parts = parts[:-4]
+            if prefix_parts:
+                return "/".join(prefix_parts) + "/"
+        if len(parts) > 1:
+            return parts[0] + "/"
+        return ""
 
     def _group_bundle_keys_by_collection(
         self,
@@ -516,17 +549,28 @@ class Command(BaseCommand):
         service = discovery_service or FileDiscoveryService()
 
         # Always discover bundle keys from S3 so we have the authoritative
-        # list for orphan cleanup — DB-derived keys would include orphans.
+        # list for orphan cleanup; DB-derived keys would include orphans.
         s3_bundle_keys = []
+        found_collection_xmls = []
         if collection.import_object_key:
-            prefix = f"{collection.import_object_key.split('/')[0]}/"
+            prefix = self._collection_sibling_prefix(collection.import_object_key)
             candidates = service.find_collection_and_bundle_xmls_s3(
                 bucket,
                 prefix,
             )
-            s3_bundle_keys = candidates.get("potential_bundle_xmls", [])
+            found_collection_xmls = candidates.get("potential_collection_xmls", [])
+            discovered_bundle_keys = candidates.get("potential_bundle_xmls", [])
+            collection_identifier = self._infer_collection_identifier_from_collection_key(
+                collection.import_object_key
+            )
+            if collection_identifier:
+                s3_bundle_keys = self._group_bundle_keys_by_collection(
+                    discovered_bundle_keys
+                ).get(collection_identifier, [])
+            else:
+                s3_bundle_keys = discovered_bundle_keys
 
-        if not s3_bundle_keys:
+        if not s3_bundle_keys and not found_collection_xmls:
             # Fallback to DB-derived keys when S3 discovery returns nothing
             bundle_qs = Bundle.objects.filter(
                 structural_info__is_member_of_collection=collection

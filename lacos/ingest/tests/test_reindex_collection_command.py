@@ -1,4 +1,5 @@
 import uuid
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -32,6 +33,31 @@ def test_group_bundle_keys_by_collection():
         ],
         "col-b": ["col-b/bundle-3/v1/content/bundle-3.xml"],
     }
+
+
+def test_group_bundle_keys_by_collection_handles_nested_prefixes():
+    command = Command()
+
+    grouped = command._group_bundle_keys_by_collection(
+        [
+            "root/col-a/bundle-1/v1/metadata/bundle-1.xml",
+            "root/col-b/bundle-2/v1/metadata/bundle-2.xml",
+        ]
+    )
+
+    assert grouped == {
+        "col-a": ["root/col-a/bundle-1/v1/metadata/bundle-1.xml"],
+        "col-b": ["root/col-b/bundle-2/v1/metadata/bundle-2.xml"],
+    }
+
+
+def test_collection_sibling_prefix_handles_nested_collection_xml():
+    assert (
+        Command._collection_sibling_prefix(
+            "root/col-a/col-a/v1/metadata/col-a.xml"
+        )
+        == "root/col-a/"
+    )
 
 
 @patch("lacos.ingest.management.commands.reindex_collection.close_old_connections")
@@ -187,6 +213,47 @@ def test_handle_prefix_forwards_force_to_collections_and_bundles(mock_discovery_
     assert result == 0
     assert command._reindex_collection.call_args.kwargs["force"] is True
     assert command._reindex_bundle_keys.call_args.kwargs["force"] is True
+
+
+def test_reindex_bundles_for_collection_scopes_discovered_bundles_to_collection():
+    collection = SimpleNamespace(
+        identifier="col-a",
+        import_object_key="root/col-a/col-a/v1/metadata/col-a.xml",
+    )
+    discovery_service = MagicMock()
+    discovery_service.find_collection_and_bundle_xmls_s3.return_value = {
+        "potential_collection_xmls": [
+            "root/col-a/col-a/v1/metadata/col-a.xml",
+        ],
+        "potential_bundle_xmls": [
+            "root/col-a/bundle-1/v1/metadata/bundle-1.xml",
+            "root/col-b/bundle-2/v1/metadata/bundle-2.xml",
+        ],
+    }
+
+    command = Command()
+    command._reindex_bundle_keys = MagicMock(return_value=[])
+
+    result = command._reindex_bundles_for_collection(
+        collection,
+        bucket="lacos-production",
+        dry_run=True,
+        force=True,
+        discovery_service=discovery_service,
+    )
+
+    assert result == []
+    discovery_service.find_collection_and_bundle_xmls_s3.assert_called_once_with(
+        "lacos-production",
+        "root/col-a/",
+    )
+    command._reindex_bundle_keys.assert_called_once_with(
+        "lacos-production",
+        ["root/col-a/bundle-1/v1/metadata/bundle-1.xml"],
+        dry_run=True,
+        force=True,
+        discovery_service=discovery_service,
+    )
 
 
 @pytest.mark.django_db
