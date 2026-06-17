@@ -471,6 +471,41 @@ def test_text_search_highlights_literal_query_in_title(client):
 
 
 @pytest.mark.django_db
+def test_matched_in_hidden_when_no_field_is_attributable(client):
+    """A full-text match on a non-displayed field must not render an empty
+    "Matched in" row (region_facet is in the search vector but is not a field
+    bundle_match_reasons attributes)."""
+    coll = _create_collection("C-NOREASON", "Plain Collection")
+    bundle = _create_bundle("B-NOREASON", "Plain Bundle", coll, region="Zzqxville")
+    update_bundle_search_vector(bundle)
+
+    response = client.get("/search/bundles/", {"q": "zzqxville"})
+    page = response.content.decode("utf-8")
+
+    assert response.status_code == 200
+    # The bundle matched via full-text search...
+    assert "B-NOREASON" in [b.identifier for b in response.context["bundles"]]
+    # ...but no attributable field means the "Matched in" row is omitted entirely.
+    assert "Matched in" not in page
+
+
+@pytest.mark.django_db
+def test_matched_in_shown_when_field_is_attributable(client):
+    """When a displayed field matches, the "Matched in" row is still rendered."""
+    coll = _create_collection("C-REASON", "Plain Collection")
+    bundle = _create_bundle("B-REASON", "Zzqxtitle Bundle", coll)
+    update_bundle_search_vector(bundle)
+
+    response = client.get("/search/bundles/", {"q": "zzqxtitle"})
+    page = response.content.decode("utf-8")
+
+    assert response.status_code == 200
+    assert "B-REASON" in [b.identifier for b in response.context["bundles"]]
+    assert "Matched in" in page
+    assert "Title" in page
+
+
+@pytest.mark.django_db
 def test_text_search_by_language_name(client):
     """Verify searching by language name works."""
     coll = _create_collection("C1", "Test Collection")
