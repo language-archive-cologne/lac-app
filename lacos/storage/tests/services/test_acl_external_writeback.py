@@ -86,6 +86,29 @@ def test_save_bundle_writes_external_eppn_agents(mock_s3, acl_sync_service):
 
 
 @pytest.mark.django_db
+def test_save_writes_agent_before_mode(mock_s3, acl_sync_service):
+    """Regression (#138): mode-first DB data must be written agent/agentClass-first."""
+    collection = _create_collection()
+    _create_permissions(
+        collection,
+        [
+            {"mode": ["acl:Read"], "agentClass": "foaf:Agent"},
+            {"mode": ["acl:Read"], "agentClass": "foaf:Person", "agent": "urn:lacos:eppn:adebbel1@uni-koeln.de"},
+        ],
+        Collection,
+    )
+
+    result = acl_sync_service.save_collection(collection)
+
+    assert result.success is True
+    written = json.loads(_read_acl(mock_s3, result.key))
+    assert [list(rule.keys()) for rule in written] == [
+        ["agentClass", "mode"],
+        ["agent", "mode"],
+    ]
+
+
+@pytest.mark.django_db
 def test_save_mixed_rules_with_group_passthrough(mock_s3, acl_sync_service):
     """Public + EPPN + group rules: only the EPPN rule changes shape externally."""
     collection = _create_collection()

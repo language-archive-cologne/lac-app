@@ -202,3 +202,37 @@ class TestSerializePermissionsDataForAclJson:
         assert serialize_permissions_data_for_acl_json(entries) == [
             {"agent": "urn:lacos:user:localadmin", "mode": [WAC_READ]}
         ]
+
+
+class TestSerializePermissionsKeyOrdering:
+    """Issue #138: external acl.json lists agent/agentClass before mode."""
+
+    def test_concrete_agent_key_order_is_agent_then_mode(self):
+        """Regression: internal data with mode first must serialize agent first."""
+        entries = [
+            {"mode": [WAC_READ], "agentClass": "foaf:Person", "agent": "urn:lacos:eppn:fmondac1@uni-koeln.de"}
+        ]
+        [serialized] = serialize_permissions_data_for_acl_json(entries)
+        assert list(serialized.keys()) == ["agent", "mode"]
+
+    def test_public_class_rule_key_order_is_class_then_mode(self):
+        entries = [{"mode": [WAC_READ], "agentClass": WAC_AGENT}]
+        [serialized] = serialize_permissions_data_for_acl_json(entries)
+        assert list(serialized.keys()) == ["agentClass", "mode"]
+
+    def test_authenticated_class_rule_key_order_is_class_then_mode(self):
+        entries = [{"mode": [WAC_READ], "agentClass": WAC_AUTHENTICATED_AGENT}]
+        [serialized] = serialize_permissions_data_for_acl_json(entries)
+        assert list(serialized.keys()) == ["agentClass", "mode"]
+
+    def test_extra_keys_follow_canonical_keys(self):
+        entries = [{"mode": [WAC_READ], "note": "x", "agent": "urn:lacos:eppn:user@example.org"}]
+        [serialized] = serialize_permissions_data_for_acl_json(entries)
+        assert list(serialized.keys()) == ["agent", "mode", "note"]
+
+    def test_rendered_json_places_agent_before_mode(self):
+        entries = [
+            {"mode": [WAC_READ], "agentClass": "foaf:Person", "agent": "urn:lacos:eppn:adebbel1@uni-koeln.de"}
+        ]
+        rendered = json.dumps(serialize_permissions_data_for_acl_json(entries))
+        assert rendered.index('"agent"') < rendered.index('"mode"')
