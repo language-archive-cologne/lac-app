@@ -14,7 +14,7 @@ from lacos.blam.models.collection.collection_header import CollectionHeader
 from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo
 from lacos.blam.models.collection.collection_publication_info import CollectionPublicationInfo
 from lacos.blam.models.collection.collection_administrative_info import CollectionAdministrativeInfo
-from lacos.blam.models.collection.collection_structural_info import CollectionStructuralInfo
+from lacos.blam.models.collection.collection_structural_info import CollectionStructuralInfo, CollectionMember
 
 # --- Basic Admin Views ---
 
@@ -75,6 +75,12 @@ class CollectionAdministrativeInfoAdmin(admin.ModelAdmin):
 class CollectionStructuralInfoAdmin(admin.ModelAdmin):
     list_display = ('id',)
     # Add fields if needed
+
+@admin.register(CollectionMember)
+class CollectionMemberAdmin(admin.ModelAdmin):
+    list_display = ('identifier_value', 'identifier_type', 'structural_info')
+    search_fields = ('identifier_value',)
+    list_filter = ('identifier_type',)
 
 @admin.register(Collection)
 class CollectionAdmin(admin.ModelAdmin):

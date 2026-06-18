@@ -147,6 +147,10 @@ def test_clear_all_filters_drops_search_in():
 
     from lacos.explorer.templatetags.explorer_extras import clear_all_filters_url
 
-    request = RequestFactory().get("/search/", {"q": "x", "search_in": ["title"], "language": "Yuracare"})
+    request = RequestFactory().get(
+        "/search/",
+        {"q": "x", "search_in": ["title"], "language": "Yuracare", "file_type": "wav"},
+    )
     url = clear_all_filters_url({"request": request})
     assert "search_in" not in url
+    assert "file_type" not in url

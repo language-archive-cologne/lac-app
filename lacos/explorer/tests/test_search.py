@@ -553,6 +553,27 @@ def test_collection_list_has_no_advanced_search_jargon(client):
 
 
 @pytest.mark.django_db
+def test_startpage_links_to_filtered_search(client):
+    """The LAC startpage exposes a link to the full search under the search field."""
+    response = client.get(reverse("home"))
+    assert response.status_code == 200
+    page = response.content.decode("utf-8")
+
+    assert "Advanced search" in page
+    assert f'formaction="{reverse("faceted_search")}"' in page
+
+
+@pytest.mark.django_db
+def test_archive_explorer_view_has_no_filtered_search_link(client):
+    """The Archive Explorer view keeps the redundant search link hidden."""
+    response = client.get(reverse("explorer:collection_list"))
+    assert response.status_code == 200
+    page = response.content.decode("utf-8")
+
+    assert "Advanced search" not in page
+
+
+@pytest.mark.django_db
 def test_collection_search_page_renders_highlighted_bundle_snippet(client):
     collection = Collection.objects.create(identifier="COL-PARENT-001")
     collection_location = CollectionLocation.objects.create(

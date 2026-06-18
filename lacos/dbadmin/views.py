@@ -65,6 +65,7 @@ class TaskAction:
     start_message: str
     callable_name: str
     extra_fields: tuple[str, ...] = ()
+    callable_kwargs: tuple[tuple[str, object], ...] = ()
 
 
 TASK_ACTIONS = {
@@ -82,9 +83,17 @@ TASK_ACTIONS = {
     ),
     "reindex-collections": TaskAction(
         task_name="blam_reindex_collections",
-        description="Reindex all collections and bundles from S3 XML",
-        start_message="Collection reindex queued.",
+        description="Incremental reindex of changed collections and bundles from S3 XML",
+        start_message="Incremental collection reindex queued.",
         callable_name="reindex_collections_task",
+        callable_kwargs=(("force", False),),
+    ),
+    "reindex-collections-force": TaskAction(
+        task_name="blam_force_reindex_collections",
+        description="Force full reindex of all collections and bundles from S3 XML",
+        start_message="Forced collection reindex queued.",
+        callable_name="reindex_collections_task",
+        callable_kwargs=(("force", True),),
     ),
     "generate-peaks": TaskAction(
         task_name="generate_audio_sidecars",
@@ -123,10 +132,15 @@ class TaskEnqueueView(SuperuserRequiredMixin, View):
         if task_action is None:
             return HttpResponse("Unknown task action.", status=400)
 
+        task_kwargs = dict(task_action.callable_kwargs)
+        task_metadata = {"source": "dbadmin", "action": action}
+        if task_kwargs:
+            task_metadata["task_options"] = task_kwargs
+
         task_record = BackgroundTaskService.create(
             task_name=task_action.task_name,
             description=task_action.description,
-            metadata={"source": "dbadmin", "action": action},
+            metadata=task_metadata,
         )
 
         try:
@@ -136,10 +150,14 @@ class TaskEnqueueView(SuperuserRequiredMixin, View):
                 for field in task_action.extra_fields
                 if request.POST.get(field)
             }
+            enqueue_kwargs = {**task_kwargs, **extra_kwargs}
 
             def _enqueue_after_commit():
                 try:
-                    result = enqueue_callable(tracking_id=str(task_record.id), **extra_kwargs)
+                    result = enqueue_callable(
+                        tracking_id=str(task_record.id),
+                        **enqueue_kwargs,
+                    )
                     huey_task_id = getattr(result, "id", None)
                     if huey_task_id:
                         task = BackgroundTask.objects.filter(pk=task_record.id).first()

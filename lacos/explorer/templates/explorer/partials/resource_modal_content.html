@@ -46,7 +46,7 @@
   </div>
 
   <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
-    {% if media_type == 'audio' %}
+    {% if media_type == 'audio' and stream_url %}
       {% if peaks_url %}
         <div id="linguist-audio-player"
              data-audio-url="{{ stream_url }}"
@@ -184,7 +184,7 @@
         </audio>
       </noscript>
 
-    {% elif media_type == 'video' %}
+    {% elif media_type == 'video' and stream_url %}
       <video controls preload="metadata" class="w-full rounded-lg" style="max-height: 70vh"{% if subtitle_url %} data-subtitle-url="{{ subtitle_url }}"{% endif %}>
         <source src="{{ stream_url }}" type="{{ source_mime_type }}">
         <p>{% translate "Your browser does not support the video element." %}</p>
@@ -192,9 +192,9 @@
       <p class="mt-3 text-sm text-slate-600">
         {% translate "If this video does not play, your browser may not support its codecs. Use the download button below or try a different browser." %}
       </p>
-    {% elif media_type == 'image' %}
+    {% elif media_type == 'image' and preview_url %}
       <img src="{{ preview_url }}" alt="{{ resource_name }}" class="max-h-[70vh] mx-auto rounded-lg shadow" loading="lazy" />
-    {% elif media_type == 'pdf' %}
+    {% elif media_type == 'pdf' and preview_url %}
       <iframe src="{{ preview_url }}" title="{{ resource_name }}" class="w-full h-[70vh] rounded-lg border border-slate-200" loading="lazy"></iframe>
     {% elif media_type == 'elan' %}
       <div class="space-y-4" data-has-audio="{% if elan_context and elan_context.audio_url %}true{% else %}false{% endif %}">
@@ -416,7 +416,7 @@
     {% else %}
       <div class="flex flex-col items-start gap-3">
         <p class="text-sm text-slate-600">
-          {% translate "Preview is not available for this file type." %}
+          {% translate "Preview is not available for this file." %}
         </p>
       </div>
     {% endif %}

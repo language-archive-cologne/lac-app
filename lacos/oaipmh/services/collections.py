@@ -14,7 +14,8 @@ from lacos.blam.models.collection.collection_publication_info import CollectionP
 from lacos.blam.models.collection.collection_administrative_info import CollectionAdministrativeInfo
 from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 
-from ..constants import REPO_IDENTIFIER, DEFAULT_PAGE_SIZE
+from ..constants import DEFAULT_PAGE_SIZE
+from ..identifiers import build_oai_identifier
 
 
 GeneralInfoPrefetch = Prefetch(
@@ -132,7 +133,7 @@ def _base_queryset() -> QuerySet[Collection]:
 
 
 def _build_oai_identifier(collection: Collection) -> str:
-    return f"oai:{REPO_IDENTIFIER}:{collection.identifier}"
+    return build_oai_identifier(collection.identifier)
 
 
 def _collection_datestamp(collection: Collection) -> str:

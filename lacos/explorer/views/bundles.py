@@ -28,6 +28,7 @@ from lacos.blam.models.bundle.bundle_structural_info import (
     OtherResource,
     WrittenResource,
 )
+from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.mappers.bundle.write.bundle_exporter import BundleExporter
 from lacos.blam.serializers import BundleJsonLdSerializer
 from lacos.explorer.bundle_structured_data import serialize_bundle_json_ld
@@ -54,6 +55,7 @@ from .utils import (
     get_formatted_location,
     get_object_by_pk_or_handle,
     HandleLookupMixin,
+    hdl_pid_candidates,
     is_imdi_resource,
     load_markdown_preview,
     load_xml_preview,
@@ -858,11 +860,36 @@ class ResourceByHandleView(View):
     """
 
     def get(self, request, handle_id):
-        file_pid = f"hdl:{handle_id}"
+        pid_candidates = hdl_pid_candidates(handle_id)
+        file_pid = pid_candidates[0] if pid_candidates else f"hdl:{handle_id}"
+
+        # Collection-level additional metadata files live on the collection, not
+        # a bundle. Resolve them first: a collection metadata handle must not be
+        # shadowed by a bundle resource that happens to share the same pid.
+        collection = Collection.objects.filter(
+            structural_info__additional_metadata_files__file_pid__in=pid_candidates
+        ).distinct().first()
+        if collection:
+            structural_info = collection.structural_info.first()
+            collection_metadata = None
+            if structural_info:
+                collection_metadata = structural_info.additional_metadata_files.filter(
+                    file_pid__in=pid_candidates
+                ).first()
+            if collection_metadata:
+                # Imported here to avoid a circular import with the collections view module.
+                from lacos.explorer.views.collections import CollectionResourcesView
+
+                view = CollectionResourcesView()
+                return view.get(
+                    request,
+                    handle=collection.handle_path,
+                    resource_id=collection_metadata.file_pid,
+                )
 
         # Search across all bundle resource types.
         for model in (MediaResource, WrittenResource, OtherResource, BundleAdditionalMetadataFile):
-            resource = model.objects.filter(file_pid=file_pid).first()
+            resource = model.objects.filter(file_pid__in=pid_candidates).first()
             if resource:
                 if isinstance(resource, BundleAdditionalMetadataFile):
                     bundle = Bundle.objects.filter(
@@ -879,7 +906,7 @@ class ResourceByHandleView(View):
                     return view.get(
                         request,
                         handle=bundle.identifier,
-                        resource_pid=file_pid,
+                        resource_pid=resource.file_pid,
                     )
 
         raise Http404(f"Resource with handle '{file_pid}' not found")

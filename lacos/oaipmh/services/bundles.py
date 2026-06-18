@@ -14,7 +14,8 @@ from lacos.blam.models.bundle.bundle_publication_info import BundlePublicationIn
 from lacos.blam.models.bundle.bundle_administrative_info import BundleAdministrativeInfo
 from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 
-from ..constants import REPO_IDENTIFIER, DEFAULT_PAGE_SIZE
+from ..constants import DEFAULT_PAGE_SIZE
+from ..identifiers import build_oai_identifier
 
 
 GeneralInfoPrefetch = Prefetch(
@@ -128,7 +129,7 @@ def _base_queryset() -> QuerySet[Bundle]:
 
 
 def _build_oai_identifier(bundle: Bundle) -> str:
-    return f"oai:{REPO_IDENTIFIER}:bundle:{bundle.identifier}"
+    return build_oai_identifier(bundle.identifier)
 
 
 def _bundle_datestamp(bundle: Bundle) -> str:

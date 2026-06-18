@@ -4,6 +4,7 @@ from .bundle import (
     BUNDLES_PER_PAGE,
     build_bundle_context,
     bundle_queryset_for_collection,
+    collection_bundle_file_type_options,
     paginate_bundle_contexts,
     summarize_bundle_access_levels_by_collection_ids,
     summarize_collection_bundle_access_levels,
@@ -45,6 +46,7 @@ from .subtitle import (
 from .lookup import (
     get_object_by_pk_or_handle,
     HandleLookupMixin,
+    hdl_pid_candidates,
 )
 
 
@@ -53,6 +55,7 @@ __all__ = [
     "BUNDLES_PER_PAGE",
     "build_bundle_context",
     "bundle_queryset_for_collection",
+    "collection_bundle_file_type_options",
     "paginate_bundle_contexts",
     "summarize_bundle_access_levels_by_collection_ids",
     "summarize_collection_bundle_access_levels",
@@ -87,4 +90,5 @@ __all__ = [
     # Lookup utilities
     "get_object_by_pk_or_handle",
     "HandleLookupMixin",
+    "hdl_pid_candidates",
 ]

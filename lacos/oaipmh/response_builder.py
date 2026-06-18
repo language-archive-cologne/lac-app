@@ -13,13 +13,18 @@ from .constants import (
     REPO_BASE_ENDPOINT,
     REPO_EARLIEST_DATASTAMP,
     REPO_GRANULARITY,
+    REPO_IDENTIFIER,
     REPO_NAME,
+    REPO_OAI_DELIMITER,
+    REPO_OAI_SCHEME,
     REPO_PROTOCOL_VERSION,
+    REPO_SAMPLE_IDENTIFIER,
 )
 from .errors import OAIPMHError, normalize_errors
 
 OAI_NS = "http://www.openarchives.org/OAI/2.0/"
 XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
+OAI_IDENTIFIER_NS = "http://www.openarchives.org/OAI/2.0/oai-identifier"
 DEFAULT_SCHEMA_LOCATION = (
     "http://www.openarchives.org/OAI/2.0/"
     " http://www.openarchives.org/OAI/2.0/OAI-PMH.xsd"
@@ -71,7 +76,27 @@ def render_identify(request: HttpRequest) -> HttpResponse:
     ET.SubElement(identify, "earliestDatestamp").text = REPO_EARLIEST_DATASTAMP
     ET.SubElement(identify, "deletedRecord").text = "no"
     ET.SubElement(identify, "granularity").text = REPO_GRANULARITY
+    _append_oai_identifier_description(identify)
     return _as_http_response(envelope)
+
+
+def _append_oai_identifier_description(identify: ET.Element) -> None:
+    """Declare the registered OLAC repository identifier scheme.
+
+    See http://www.openarchives.org/OAI/2.0/guidelines-oai-identifier.htm
+    """
+
+    description = ET.SubElement(identify, "description")
+    oai_identifier = ET.SubElement(description, "oai-identifier")
+    oai_identifier.set("xmlns", OAI_IDENTIFIER_NS)
+    oai_identifier.set(
+        "xsi:schemaLocation",
+        f"{OAI_IDENTIFIER_NS} {OAI_IDENTIFIER_NS}.xsd",
+    )
+    ET.SubElement(oai_identifier, "scheme").text = REPO_OAI_SCHEME
+    ET.SubElement(oai_identifier, "repositoryIdentifier").text = REPO_IDENTIFIER
+    ET.SubElement(oai_identifier, "delimiter").text = REPO_OAI_DELIMITER
+    ET.SubElement(oai_identifier, "sampleIdentifier").text = REPO_SAMPLE_IDENTIFIER
 
 
 def render_metadata_formats(request: HttpRequest, formats: Iterable[dict[str, str]]) -> HttpResponse:

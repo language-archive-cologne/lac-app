@@ -103,23 +103,20 @@ def _handle_get_record(request: HttpRequest, oai_request) -> HttpResponse:
             [OAIPMHError("badArgument", "identifier is required")],
         )
 
-    parsed_identifier = parse_oai_identifier(identifier)
-    if parsed_identifier is None:
+    local_identifier = parse_oai_identifier(identifier)
+    if local_identifier is None:
         return render_error_response(
             request,
             "GetRecord",
             [OAIPMHError("idDoesNotExist", "Unknown identifier")],
         )
 
-    fetch_fn = (
-        fetch_bundle_record_by_identifier
-        if parsed_identifier.kind == "bundle"
-        else fetch_collection_record_by_identifier
-    )
-    record = fetch_fn(
-        parsed_identifier.local_identifier,
-        user=getattr(request, "user", None),
-    )
+    # Collections and bundles share a single Handle namespace, so the kind is
+    # resolved by lookup: try a bundle first, then fall back to a collection.
+    user = getattr(request, "user", None)
+    record = fetch_bundle_record_by_identifier(
+        local_identifier, user=user
+    ) or fetch_collection_record_by_identifier(local_identifier, user=user)
     if record is None:
         return render_error_response(
             request,

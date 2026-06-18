@@ -14,6 +14,7 @@ from django.db.models.functions import Cast, Coalesce
 from django.http import QueryDict
 
 from lacos.blam.models import Bundle, Collection
+from lacos.explorer.file_types import FILE_TYPE_LABELS
 from lacos.storage.models.acl_permissions import ACLPermissions
 
 logger = logging.getLogger(__name__)
@@ -73,6 +74,7 @@ class FacetDefinition:
     label_field: str
     filter_lookup: str
     label_map: dict[str, str] | None = None
+    allowed_values: frozenset[str] | None = None
     sort_alphabetically: bool = False
     show_all: bool = False
 
@@ -93,6 +95,15 @@ FACET_DEFINITIONS: list[FacetDefinition] = [
         value_field="general_info__object_languages__iso_639_3_code",
         label_field="general_info__object_languages__name",
         filter_lookup="general_info__object_languages__iso_639_3_code__in",
+    ),
+    FacetDefinition(
+        name="file_type",
+        label="File format",
+        value_field="bundle_file_type_facets__file_type",
+        label_field="bundle_file_type_facets__file_type",
+        filter_lookup="bundle_file_type_facets__file_type__in",
+        label_map=FILE_TYPE_LABELS,
+        allowed_values=frozenset(FILE_TYPE_LABELS),
     ),
     FacetDefinition(
         name="year",
@@ -154,6 +165,15 @@ BUNDLE_FACET_DEFINITIONS: list[FacetDefinition] = [
         value_field="general_info__object_languages__iso_639_3_code",
         label_field="general_info__object_languages__name",
         filter_lookup="general_info__object_languages__iso_639_3_code__in",
+    ),
+    FacetDefinition(
+        name="file_type",
+        label="File format",
+        value_field="file_type_facets__file_type",
+        label_field="file_type_facets__file_type",
+        filter_lookup="file_type_facets__file_type__in",
+        label_map=FILE_TYPE_LABELS,
+        allowed_values=frozenset(FILE_TYPE_LABELS),
     ),
     FacetDefinition(
         name="collection",
@@ -282,6 +302,8 @@ class FacetService:
         for defn in self.definitions:
             raw_values = params.getlist(defn.name)
             cleaned = list(dict.fromkeys(v.strip() for v in raw_values if v.strip()))
+            if defn.allowed_values is not None:
+                cleaned = [v for v in cleaned if v in defn.allowed_values]
             if cleaned:
                 selections[defn.name] = cleaned
         return selections
@@ -401,6 +423,8 @@ class FacetService:
 
         Casts value/label to text so all UNION branches share the same types.
         """
+        if defn.allowed_values is not None:
+            qs = qs.filter(**{f"{defn.value_field}__in": defn.allowed_values})
         return (
             qs.annotate(
                 facet_name=Value(defn.name, output_field=CharField()),

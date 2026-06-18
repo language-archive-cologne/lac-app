@@ -5,6 +5,7 @@ from datetime import date
 from django.urls import reverse
 
 from lacos.oaipmh.formats.blam import BLAMSerializer
+from lacos.oaipmh.identifiers import build_oai_identifier
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
 from lacos.blam.models.bundle.bundle_general_info import (
     BundleGeneralInfo,
@@ -209,8 +210,8 @@ def test_list_records_with_blam_format_without_set_returns_collection_and_bundle
     )
     assert response.status_code == 200
     body = response.content.decode("utf-8")
-    assert f"<identifier>oai:lacos:{sample_collection.identifier}</identifier>" in body
-    assert f"<identifier>oai:lacos:bundle:{sample_bundle.identifier}</identifier>" in body
+    assert f"<identifier>{build_oai_identifier(sample_collection.identifier)}</identifier>" in body
+    assert f"<identifier>{build_oai_identifier(sample_bundle.identifier)}</identifier>" in body
     assert "BLAM-collection-repository_v1.2" in body
     assert "BLAM-bundle-repository_v1.1" in body
 
@@ -223,13 +224,13 @@ def test_get_record_with_blam_format(client, sample_collection):
         {
             "verb": "GetRecord",
             "metadataPrefix": "blam",
-            "identifier": f"oai:lacos:{sample_collection.identifier}",
+            "identifier": build_oai_identifier(sample_collection.identifier),
         },
     )
     assert response.status_code == 200
     body = response.content.decode("utf-8")
     assert "<GetRecord>" in body
-    assert f"<identifier>oai:lacos:{sample_collection.identifier}</identifier>" in body
+    assert f"<identifier>{build_oai_identifier(sample_collection.identifier)}</identifier>" in body
     assert "CMD" in body
 
 
@@ -268,7 +269,7 @@ def test_get_record_collection_without_bundles_has_landing_page_proxy(
         {
             "verb": "GetRecord",
             "metadataPrefix": "blam",
-            "identifier": f"oai:lacos:{sample_collection.identifier}",
+            "identifier": build_oai_identifier(sample_collection.identifier),
         },
     )
     assert response.status_code == 200
@@ -315,7 +316,7 @@ def test_get_record_bundle_without_files_has_landing_page_proxy(
         {
             "verb": "GetRecord",
             "metadataPrefix": "blam",
-            "identifier": f"oai:lacos:bundle:{sample_bundle.identifier}",
+            "identifier": build_oai_identifier(sample_bundle.identifier),
         },
     )
     assert response.status_code == 200

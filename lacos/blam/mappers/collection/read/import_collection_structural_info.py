@@ -2,7 +2,8 @@ from typing import Any
 from django.db import transaction
 from lacos.blam.models.collection.collection_structural_info import (
     CollectionStructuralInfo,
-    CollectionAdditionalMetadataFile
+    CollectionAdditionalMetadataFile,
+    CollectionMember,
 )
 from lacos.blam.models.collection.collection_repository import Collection
 
@@ -37,11 +38,19 @@ def import_structural_info(cmd_data: Any, collection: Collection) -> CollectionS
     except CollectionStructuralInfo.DoesNotExist:
         # Create the structural info model with reference to collection
         structural_info = CollectionStructuralInfo.objects.create(collection=collection)
-    
+
+    # Replace declared members so re-imports stay in sync with the metadata.
+    structural_info.members.all().delete()
+
     # Import additional metadata files if they exist
     if hasattr(structural_info_schema, 'collection_additional_metadata_file') and structural_info_schema.collection_additional_metadata_file:
         import_additional_metadata_files(structural_info, structural_info_schema)
-    
+
+    # Import declared collection members (bundles) from CollectionHasCollectionMember.
+    collection_members = getattr(structural_info_schema, 'collection_members', None)
+    if collection_members and collection_members.collection_has_collection_member:
+        import_collection_members(structural_info, collection_members)
+
     return structural_info
 
 
@@ -68,3 +77,30 @@ def import_additional_metadata_files(structural_info: CollectionStructuralInfo, 
         )
         # Add it to the structural info's many-to-many relationship
         structural_info.additional_metadata_files.add(metadata_file)
+
+
+def import_collection_members(structural_info: CollectionStructuralInfo, collection_members_schema) -> None:
+    """Persist declared collection members from ``CollectionHasCollectionMember``.
+
+    Members are stored as their declared identifier (typically a bundle handle)
+    regardless of whether the bundle's content has been imported into the active
+    archive, so referenced-but-absent bundles remain auditable.
+
+    Args:
+        structural_info: The CollectionStructuralInfo instance to attach members to.
+        collection_members_schema: The ``CollectionMembers`` section of the schema.
+    """
+    for member_schema in collection_members_schema.collection_has_collection_member:
+        identifier_value = (member_schema.value or "").strip()
+        if not identifier_value:
+            continue
+        identifier_type = (
+            member_schema.identifier_type.value
+            if member_schema.identifier_type is not None
+            else ""
+        )
+        CollectionMember.objects.get_or_create(
+            structural_info=structural_info,
+            identifier_value=identifier_value,
+            defaults={"identifier_type": identifier_type},
+        )

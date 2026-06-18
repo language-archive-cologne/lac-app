@@ -7,12 +7,13 @@ from lacos.blam.models import Bundle, Collection
 from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 
 
-# Slugs for user guide pages (only pages with MD files in lac-guidelines/texts/)
+# Slugs for user guide pages (only pages with MD files in lac-guidelines/texts/).
+# Use the title-aligned slugs so the sitemap lists canonical (non-redirecting) URLs.
 USER_GUIDE_SLUGS = [
     "user",
-    "depositing-policy",
+    "archiving",
     "submission-guidelines",
-    "depositor-agreement",
+    "licenses",
     "format-whitelist",
 ]
 

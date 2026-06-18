@@ -93,8 +93,8 @@ def _fix_internal_links(html: str) -> str:
     file_to_slug = {
         "submission": "submission-guidelines",
         "whitelist": "format-whitelist",
-        "archiving_LAC": "depositing-policy",
-        "licenses": "depositor-agreement",
+        "archiving_LAC": "archiving",
+        "licenses": "licenses",
         "user": "user",
     }
 

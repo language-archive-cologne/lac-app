@@ -11,6 +11,8 @@ and the LACOS workbench. Its contract is WAC-aligned in semantics:
   ``foaf:Person`` annotations are internal-only and must never be written out
 - the external group representation is not decided yet, so group entries are
   passed through unchanged
+- within each rule object the agent identity (``agent``/``agentClass``) is
+  written before ``mode``
 
 The internal shape produced by ``lacos.storage.utils.acl.normalize_permissions_data``
 stays untouched; this module only converts on the way out (DB -> S3).
@@ -26,6 +28,23 @@ _GROUP_PREFIX = "urn:lacos:group:"
 
 _FOAF_PERSON = "foaf:Person"
 _FOAF_GROUP = "foaf:Group"
+
+# External acl.json lists the agent identity before its access mode. The internal
+# permissions shape does not guarantee that order, so rule objects are reordered
+# on the way out (issue #138).
+_CANONICAL_KEY_ORDER = ("agent", "agentClass", "mode")
+
+
+def _ordered_acl_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of ``entry`` with agent/agentClass first, then mode, then the rest.
+
+    Key order is the only thing changed; values and any extra keys are preserved
+    in their original relative order after the canonical keys.
+    """
+    ordered = {key: entry[key] for key in _CANONICAL_KEY_ORDER if key in entry}
+    for key, value in entry.items():
+        ordered.setdefault(key, value)
+    return ordered
 
 
 def serialize_agent_for_acl_json(agent: str) -> str:
@@ -82,6 +101,6 @@ def serialize_permissions_data_for_acl_json(
             if new_entry.get("agentClass") == _FOAF_PERSON:
                 del new_entry["agentClass"]
 
-        serialized.append(new_entry)
+        serialized.append(_ordered_acl_entry(new_entry))
 
     return serialized

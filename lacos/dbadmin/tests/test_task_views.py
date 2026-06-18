@@ -84,13 +84,64 @@ def test_task_enqueue_creates_tracked_collection_reindex_task(
     assert response.status_code == 200
     assert task.metadata["action"] == "reindex-collections"
     assert task.metadata["source"] == "dbadmin"
+    assert task.metadata["task_options"] == {"force": False}
     assert "task_id" not in task.metadata
     mock_task.assert_not_called()
     assert len(callbacks) == 1
     callbacks[0]()
     task.refresh_from_db()
     assert task.metadata["task_id"] == "huey-456"
+    mock_task.assert_called_once_with(tracking_id=str(task.id), force=False)
     assert f"dbadmin-task-{task.id}" in response.content.decode()
+
+
+@pytest.mark.django_db
+@patch("lacos.dbadmin.views.transaction.on_commit")
+def test_task_enqueue_creates_tracked_forced_collection_reindex_task(
+    mock_on_commit,
+    superuser_client,
+):
+    mock_task = MagicMock(return_value=SimpleNamespace(id="huey-789"))
+    callbacks = []
+    mock_on_commit.side_effect = callbacks.append
+
+    with patch.dict(
+        "lacos.dbadmin.views._TASK_CALLABLES",
+        {"reindex_collections_task": mock_task},
+    ):
+        response = superuser_client.post(
+            reverse(
+                "dbadmin:task_enqueue",
+                kwargs={"action": "reindex-collections-force"},
+            ),
+            HTTP_HX_REQUEST="true",
+        )
+
+    task = BackgroundTask.objects.get(task_name="blam_force_reindex_collections")
+    assert response.status_code == 200
+    assert task.metadata["action"] == "reindex-collections-force"
+    assert task.metadata["source"] == "dbadmin"
+    assert task.metadata["task_options"] == {"force": True}
+    assert "task_id" not in task.metadata
+    mock_task.assert_not_called()
+    assert len(callbacks) == 1
+    callbacks[0]()
+    task.refresh_from_db()
+    assert task.metadata["task_id"] == "huey-789"
+    mock_task.assert_called_once_with(tracking_id=str(task.id), force=True)
+    assert f"dbadmin-task-{task.id}" in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_dashboard_exposes_incremental_and_forced_reindex_options(superuser_client):
+    response = superuser_client.get(reverse("dbadmin:dashboard"))
+
+    content = response.content.decode()
+    assert response.status_code == 200
+    assert "Reindex changed XML" in content
+    assert "Force full XML reindex" in content
+    assert "Checks each stored S3 XML ETag" in content
+    assert "Ignores stored ETags" in content
 
 
 @pytest.mark.django_db
@@ -150,6 +201,30 @@ def test_task_status_sets_success_trigger(superuser_client):
     assert response.status_code == 200
     trigger = json.loads(response["HX-Trigger"])
     assert trigger["showMessage"]["level"] == "success"
+
+
+@pytest.mark.django_db
+def test_task_status_shows_skipped_reindex_counts(superuser_client):
+    task = BackgroundTask.objects.create(
+        task_name="blam_reindex_collections",
+        status=BackgroundTask.Status.SUCCESS,
+        message="Done",
+        result={
+            "collections_reindexed": 0,
+            "bundles_reindexed": 0,
+            "collections_skipped": 3,
+            "bundles_skipped": 7,
+        },
+    )
+
+    response = superuser_client.get(
+        reverse("dbadmin:task_status", kwargs={"task_id": task.id}),
+        HTTP_HX_REQUEST="true",
+    )
+
+    content = response.content.decode()
+    assert response.status_code == 200
+    assert "Skipped unchanged: 3 collections, 7 bundles" in content
 
 
 @pytest.mark.django_db

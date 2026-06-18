@@ -491,3 +491,121 @@ def test_collection_metadata_route_obeys_binary_exposure_policy(client, monkeypa
     )
 
     assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_flat_resource_handle_resolves_collection_metadata_file(client):
+    """A flat /resource/<handle>/ URL resolves a collection-level metadata file.
+
+    Regression for #158: collection additional metadata file handles previously
+    returned 404 because ResourceByHandleView only searched bundle-level models.
+    """
+    # Mirror real data: collection identifier carries the hdl: scheme prefix.
+    collection = _create_collection("hdl:11341/flat-handle-collection")
+    metadata_file = CollectionAdditionalMetadataFile.objects.create(
+        file_pid="hdl:11341/flat-handle-collection-metadata",
+        file_name="meta.xml",
+        file_description="Collection metadata",
+        mime_type="application/xml",
+    )
+    collection.structural_info.first().additional_metadata_files.add(metadata_file)
+
+    # A bundle resource sharing the same pid must not shadow the collection file:
+    # the collection metadata is resolved before the bundle-resource search.
+    bundle = _create_bundle(collection, "hdl:11341/flat-handle-shadow-bundle")
+    shadow = MediaResource.objects.create(
+        file_pid=metadata_file.file_pid,
+        file_name="meta.xml",
+        mime_type="application/xml",
+    )
+    BundleResources.objects.create(bundle=bundle).bundle_media_resources.add(shadow)
+
+    response = client.get(
+        reverse("resource_by_handle", kwargs={"handle_id": metadata_file.file_pid[4:]}),
+    )
+
+    assert response.status_code == 200
+    html = response.content.decode("utf-8")
+    assert "meta.xml" in html
+    assert metadata_file.file_pid in html
+    assert 'src="None"' not in html
+    assert reverse(
+        "explorer:collection_detail_by_handle",
+        kwargs={"handle": collection.handle_path},
+    ) in html
+
+
+@pytest.mark.django_db
+def test_flat_resource_handle_resolves_collection_metadata_file_with_resolver_url_pid(client):
+    collection = _create_collection("hdl:11341/flat-handle-url-collection")
+    metadata_file = CollectionAdditionalMetadataFile.objects.create(
+        file_pid="https://hdl.handle.net/11341/flat-handle-url-metadata",
+        file_name="meta.xml",
+        file_description="Collection metadata",
+        mime_type="application/xml",
+    )
+    collection.structural_info.first().additional_metadata_files.add(metadata_file)
+
+    response = client.get(
+        reverse(
+            "resource_by_handle",
+            kwargs={"handle_id": "11341/flat-handle-url-metadata"},
+        )
+    )
+
+    assert response.status_code == 200
+    html = response.content.decode("utf-8")
+    assert "meta.xml" in html
+    assert metadata_file.file_pid in html
+    assert reverse(
+        "explorer:collection_detail_by_handle",
+        kwargs={"handle": collection.handle_path},
+    ) in html
+
+
+@pytest.mark.django_db
+def test_flat_resource_handle_renders_collection_metadata_pdf_preview_when_mapped(client, monkeypatch):
+    collection = _create_collection("hdl:11341/flat-handle-pdf-collection")
+    metadata_file = CollectionAdditionalMetadataFile.objects.create(
+        file_pid="hdl:11341/flat-handle-pdf-metadata",
+        file_name="info.pdf",
+        file_description="Collection metadata PDF",
+        mime_type="application/pdf",
+    )
+    collection.structural_info.first().additional_metadata_files.add(metadata_file)
+
+    class DummyService:
+        def generate_presigned_url(self, _bucket, _key, response_headers=None):
+            return "https://example.test/download.pdf"
+
+    monkeypatch.setattr(
+        "lacos.explorer.views.collections.ResourceMappingService",
+        lambda *args, **kwargs: DummyService(),
+    )
+    monkeypatch.setattr(
+        "lacos.explorer.views.collections.resolve_collection_metadata_to_presigned",
+        lambda *_args, **_kwargs: {
+            "bucket": "test-bucket",
+            "key": "test/info.pdf",
+            "url": "https://example.test/preview.pdf",
+        },
+    )
+
+    response = client.get(
+        reverse("resource_by_handle", kwargs={"handle_id": metadata_file.file_pid[4:]}),
+    )
+
+    assert response.status_code == 200
+    html = response.content.decode("utf-8")
+    assert '<iframe src="https://example.test/preview.pdf"' in html
+    assert 'data-bucket="test-bucket"' in html
+    assert 'data-key="test/info.pdf"' in html
+
+
+@pytest.mark.django_db
+def test_flat_resource_handle_unknown_returns_404(client):
+    response = client.get(
+        reverse("resource_by_handle", kwargs={"handle_id": "test/does-not-exist"})
+    )
+
+    assert response.status_code == 404

@@ -46,6 +46,7 @@ from lacos.explorer.permissions import (
     enforce_binary_exposure,
 )
 from lacos.explorer.collection_structured_data import serialize_collection_json_ld
+from lacos.explorer.file_types import FILE_TYPE_LABELS
 from lacos.explorer.search import search_archives
 from lacos.explorer.structured_data import serialize_catalogue_json_ld
 from lacos.explorer.views.utils import build_content_disposition
@@ -58,8 +59,10 @@ from lacos.storage.services.resource_mapping_service import ResourceMappingServi
 from .utils import (
     HandleLookupMixin,
     annotate_resource,
+    collection_bundle_file_type_options,
     get_formatted_location,
     get_object_by_pk_or_handle,
+    hdl_pid_candidates,
     is_imdi_resource,
     load_markdown_preview,
     load_xml_preview,
@@ -575,6 +578,7 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
 
         page_number = self.request.GET.get('bundle_page')
         bundle_search = self.request.GET.get('bundle_search', '').strip()
+        bundle_file_type = self.request.GET.get('bundle_file_type', '').strip()
         bundle_sort = self.request.GET.get('bundle_sort', 'name')
         bundle_order = self.request.GET.get('bundle_order', 'asc')
         allowed_per_page = {10, 25, 50}
@@ -588,7 +592,14 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
             bundle_sort = "name"
         if bundle_order not in {"asc", "desc"}:
             bundle_order = "asc"
+        if bundle_file_type not in FILE_TYPE_LABELS:
+            bundle_file_type = ""
         context['bundle_search'] = bundle_search
+        context['bundle_file_type'] = bundle_file_type
+        context['bundle_file_type_options'] = collection_bundle_file_type_options(
+            self.object,
+            selected_file_type=bundle_file_type or None,
+        )
         context['bundle_current_sort'] = bundle_sort
         context['bundle_current_order'] = bundle_order
         context['bundle_per_page'] = bundle_per_page
@@ -599,6 +610,7 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
             search_query=bundle_search or None,
             sort=bundle_sort,
             order=bundle_order,
+            file_type=bundle_file_type or None,
         )
 
         query_params = self.request.GET.copy()
@@ -785,6 +797,7 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
                 'bundle_page' in self.request.GET
                 or 'bundle_per_page' in self.request.GET
                 or 'bundle_search' in self.request.GET
+                or 'bundle_file_type' in self.request.GET
                 or 'bundle_sort' in self.request.GET
                 or 'bundle_order' in self.request.GET
             ):
@@ -813,20 +826,15 @@ class CollectionResourcesView(View):
         action = request.GET.get('action', 'view')
 
         try:
-            decoded_resource_id = unquote(resource_id)
-            if decoded_resource_id.startswith('ID_'):
-                decoded_resource_id = decoded_resource_id[3:]
-
-            # URLs no longer include hdl: prefix, but DB stores it
-            if not decoded_resource_id.startswith('hdl:'):
-                decoded_resource_id = f"hdl:{decoded_resource_id}"
+            pid_candidates = hdl_pid_candidates(resource_id)
+            decoded_resource_id = pid_candidates[0] if pid_candidates else unquote(resource_id)
 
             # Try to find the metadata file in the collection's additional metadata
             metadata_file = None
             structural_info = collection.structural_info.first()
             if structural_info:
                 metadata_file = structural_info.additional_metadata_files.filter(
-                    file_pid=decoded_resource_id
+                    file_pid__in=pid_candidates
                 ).first()
 
             if metadata_file is not None:
@@ -842,6 +850,7 @@ class CollectionResourcesView(View):
             if metadata_file is None:
                 raise Http404(f"Collection metadata resource {decoded_resource_id} not found")
 
+            is_htmx = request.headers.get('HX-Request') == 'true'
             resource_service = ResourceMappingService(skip_bucket_check=True)
             storage_resolution = resolve_collection_metadata_to_presigned(
                 resource_service,
@@ -849,6 +858,16 @@ class CollectionResourcesView(View):
                 collection,
             )
             if not storage_resolution:
+                if not is_htmx and action in {'play', 'view', 'analyze', 'pitch'}:
+                    return self._render_resource_page(
+                        request,
+                        metadata_file,
+                        collection,
+                        detected_media_type=determine_media_type(
+                            metadata_file.mime_type,
+                            metadata_file.file_name,
+                        ),
+                    )
                 raise ValueError(f"No S3 location found for PID: {decoded_resource_id}")
 
             # Get file information for display
@@ -883,7 +902,6 @@ class CollectionResourcesView(View):
                 response_headers=download_headers,
             )
 
-            is_htmx = request.headers.get('HX-Request') == 'true'
             if is_htmx and action in {'play', 'view'} and is_imdi_resource(file_name, mime_type):
                 imdi_modal_response = render_imdi_modal_response(
                     request,
@@ -979,9 +997,28 @@ class CollectionResourcesView(View):
                 )
 
             if action in {'play', 'view', 'analyze', 'pitch'}:
-                return redirect(
-                    'explorer:collection_detail_by_handle',
-                    handle=collection.identifier,
+                return self._render_resource_page(
+                    request,
+                    metadata_file,
+                    collection,
+                    detected_media_type=detected_media_type,
+                    source_mime_type=source_mime_type,
+                    presigned_url=presigned_url,
+                    download_url=download_url,
+                    download_bucket=storage_resolution["bucket"],
+                    download_key=storage_resolution["key"],
+                    xml_preview=xml_preview,
+                    markdown_html=markdown_html,
+                    peaks_url=peaks_url,
+                    spectrogram_data_url=spectrogram_data_url,
+                    player_mode=player_mode,
+                    spectrogram_available=spectrogram_available,
+                    pitch_data_url=pitch_data_url,
+                    pitch_available=pitch_available,
+                    subtitle_url=subtitle_url,
+                    resource_play_url=resource_play_url,
+                    resource_analyze_url=resource_analyze_url,
+                    resource_pitch_url=resource_pitch_url,
                 )
 
             raise Http404("Unsupported action")
@@ -992,6 +1029,61 @@ class CollectionResourcesView(View):
         except Exception as e:
             logger.error("Error accessing resource", extra={"error": str(e)})
             raise Http404(f"Error accessing resource: {str(e)}")
+
+    def _render_resource_page(
+        self,
+        request,
+        metadata_file,
+        collection,
+        *,
+        detected_media_type,
+        source_mime_type=None,
+        presigned_url=None,
+        download_url=None,
+        download_bucket=None,
+        download_key=None,
+        xml_preview=None,
+        markdown_html=None,
+        peaks_url=None,
+        spectrogram_data_url=None,
+        player_mode='simple',
+        spectrogram_available=False,
+        pitch_data_url=None,
+        pitch_available=False,
+        subtitle_url=None,
+        resource_play_url=None,
+        resource_analyze_url=None,
+        resource_pitch_url=None,
+    ):
+        context = {
+            'resource_name': metadata_file.file_name,
+            'resource_description': metadata_file.file_description,
+            'mime_type': metadata_file.mime_type,
+            'media_type': detected_media_type,
+            'source_mime_type': source_mime_type,
+            'stream_url': presigned_url if detected_media_type in {'audio', 'video'} else None,
+            'preview_url': presigned_url,
+            'download_url': download_url,
+            'download_bucket': download_bucket,
+            'download_key': download_key,
+            'download_filename': metadata_file.file_name,
+            'elan_context': None,
+            'xml_content': xml_preview,
+            'markdown_html': markdown_html,
+            'peaks_url': peaks_url,
+            'spectrogram_data_url': spectrogram_data_url,
+            'player_mode': player_mode,
+            'spectrogram_available': spectrogram_available,
+            'pitch_data_url': pitch_data_url,
+            'pitch_available': pitch_available,
+            'subtitle_url': subtitle_url,
+            'resource_play_url': resource_play_url,
+            'resource_analyze_url': resource_analyze_url,
+            'resource_pitch_url': resource_pitch_url,
+            'collection': collection,
+            'resource': metadata_file,
+        }
+        return render(request, 'resource_detail.html', context)
 
     def _render_htmx_modal(
         self, request, file_name, file_description, mime_type,

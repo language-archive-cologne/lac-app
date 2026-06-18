@@ -17,6 +17,7 @@ from lacos.blam.models.bundle.bundle_general_info import (
 )
 from lacos.blam.models.bundle.bundle_publication_info import BundlePublicationInfo
 from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
+from lacos.explorer.models import BundleFileTypeFacet
 from lacos.blam.models.collection.collection_general_info import (
     CollectionGeneralInfo,
     CollectionLocation,
@@ -169,6 +170,54 @@ def test_collection_filter():
     assert result.queryset.count() == 1
     pks = list(result.queryset.values_list("pk", flat=True))
     assert b1.pk in pks
+
+
+@pytest.mark.django_db
+def test_file_type_filter():
+    coll = _create_collection("C1", "Test Collection")
+    b1 = _create_bundle("B1", "ELAN Bundle", coll)
+    _create_bundle("B2", "PDF Bundle", coll)
+    BundleFileTypeFacet.objects.create(
+        bundle=b1,
+        collection=coll,
+        file_type="eaf",
+    )
+
+    result = _service().search(_make_params(file_type=["eaf"]), Bundle.objects.all())
+
+    assert result.queryset.count() == 1
+    assert list(result.queryset.values_list("pk", flat=True)) == [b1.pk]
+    file_type_facet = next(f for f in result.facets if f.name == "file_type")
+    assert file_type_facet.label == "File format"
+    assert file_type_facet.values[0].label == "ELAN"
+
+
+@pytest.mark.django_db
+def test_file_type_facet_hides_stale_broad_values():
+    coll = _create_collection("C1", "Test Collection")
+    bundle = _create_bundle("B1", "Mixed Bundle", coll)
+    BundleFileTypeFacet.objects.create(
+        bundle=bundle,
+        collection=coll,
+        file_type="audio",
+    )
+    BundleFileTypeFacet.objects.create(
+        bundle=bundle,
+        collection=coll,
+        file_type="document",
+    )
+    BundleFileTypeFacet.objects.create(
+        bundle=bundle,
+        collection=coll,
+        file_type="wav",
+    )
+
+    result = _service().search(_make_params(file_type=["audio"]), Bundle.objects.all())
+
+    assert list(result.queryset.values_list("pk", flat=True)) == [bundle.pk]
+    assert not result.active_filters
+    file_type_facet = next(f for f in result.facets if f.name == "file_type")
+    assert [value.value for value in file_type_facet.values] == ["wav"]
 
 
 @pytest.mark.django_db
@@ -468,6 +517,41 @@ def test_text_search_highlights_literal_query_in_title(client):
         r"B1</div>\s*<div class=\"mt-2 flex flex-wrap items-center gap-1\.5 text-xs matched-in-row\">",
         page,
     )
+
+
+@pytest.mark.django_db
+def test_matched_in_hidden_when_no_field_is_attributable(client):
+    """A full-text match on a non-displayed field must not render an empty
+    "Matched in" row (region_facet is in the search vector but is not a field
+    bundle_match_reasons attributes)."""
+    coll = _create_collection("C-NOREASON", "Plain Collection")
+    bundle = _create_bundle("B-NOREASON", "Plain Bundle", coll, region="Zzqxville")
+    update_bundle_search_vector(bundle)
+
+    response = client.get("/search/bundles/", {"q": "zzqxville"})
+    page = response.content.decode("utf-8")
+
+    assert response.status_code == 200
+    # The bundle matched via full-text search...
+    assert "B-NOREASON" in [b.identifier for b in response.context["bundles"]]
+    # ...but no attributable field means the "Matched in" row is omitted entirely.
+    assert "Matched in" not in page
+
+
+@pytest.mark.django_db
+def test_matched_in_shown_when_field_is_attributable(client):
+    """When a displayed field matches, the "Matched in" row is still rendered."""
+    coll = _create_collection("C-REASON", "Plain Collection")
+    bundle = _create_bundle("B-REASON", "Zzqxtitle Bundle", coll)
+    update_bundle_search_vector(bundle)
+
+    response = client.get("/search/bundles/", {"q": "zzqxtitle"})
+    page = response.content.decode("utf-8")
+
+    assert response.status_code == 200
+    assert "B-REASON" in [b.identifier for b in response.context["bundles"]]
+    assert "Matched in" in page
+    assert "Title" in page
 
 
 @pytest.mark.django_db

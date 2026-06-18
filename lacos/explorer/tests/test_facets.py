@@ -11,8 +11,9 @@ from django.db.models.functions import Cast
 from django.http import QueryDict
 from django.test import RequestFactory
 
-from lacos.blam.models import Collection
+from lacos.blam.models import Bundle, Collection
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
+from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
 from lacos.blam.models.collection.collection_general_info import (
     CollectionGeneralInfo,
     CollectionKeyword,
@@ -23,6 +24,7 @@ from lacos.blam.models.collection.collection_publication_info import (
     CollectionPublicationInfo,
 )
 from lacos.explorer.facets import FacetService
+from lacos.explorer.models import BundleFileTypeFacet
 from lacos.explorer.search_indexing import update_collection_search_vector
 from lacos.storage.models.acl_permissions import ACLPermissions
 
@@ -168,6 +170,31 @@ def test_country_filter():
     assert result.queryset.count() == 1
     pks = list(result.queryset.values_list("pk", flat=True))
     assert c2.pk in pks
+
+
+@pytest.mark.django_db
+def test_file_type_filter_matches_collections_with_linked_bundle():
+    c1 = _create_collection("C1", "ELAN Collection")
+    _create_collection("C2", "PDF Collection")
+    bundle = Bundle.objects.create(identifier="B1")
+    BundleStructuralInfo.objects.create(
+        bundle=bundle,
+        is_member_of_collection=c1,
+    )
+    BundleFileTypeFacet.objects.create(
+        bundle=bundle,
+        collection=c1,
+        file_type="eaf",
+    )
+
+    service = FacetService()
+    result = service.search(_make_params(file_type=["eaf"]), _collection_qs())
+
+    assert result.queryset.count() == 1
+    assert list(result.queryset.values_list("pk", flat=True)) == [c1.pk]
+    file_type_facet = next(f for f in result.facets if f.name == "file_type")
+    assert file_type_facet.label == "File format"
+    assert file_type_facet.values[0].label == "ELAN"
 
 
 @pytest.mark.django_db

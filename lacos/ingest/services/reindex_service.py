@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass
 from typing import Optional, Tuple
 from uuid import UUID
 
@@ -7,6 +8,19 @@ from lacos.blam.mappers.bundle.read.bundle_importer import BundleImporter
 from lacos.storage.services.file_discovery_service import FileDiscoveryService
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class CollectionReindexResult:
+    collection_id: UUID
+    skipped: bool
+
+
+@dataclass(frozen=True)
+class BundleReindexResult:
+    bundle_id: UUID
+    bundle_resources_id: Optional[UUID]
+    skipped: bool
 
 
 def _check_etag_unchanged(
@@ -52,6 +66,24 @@ def reindex_collection_xml(
 
     Skips reindex if the S3 ETag matches the stored value unless force=True.
     """
+    result = reindex_collection_xml_status(
+        bucket=bucket,
+        s3_key=s3_key,
+        update_existing=update_existing,
+        discovery_service=discovery_service,
+        force=force,
+    )
+    return result.collection_id if result else None
+
+
+def reindex_collection_xml_status(
+    bucket: str,
+    s3_key: str,
+    update_existing: bool = True,
+    discovery_service: Optional[FileDiscoveryService] = None,
+    force: bool = False,
+) -> Optional[CollectionReindexResult]:
+    """Reindex collection XML and report whether it was skipped by ETag."""
     from lacos.blam.models.collection.collection_repository import Collection
 
     service = discovery_service or FileDiscoveryService()
@@ -64,7 +96,7 @@ def reindex_collection_xml(
         skip, current_etag = _check_etag_unchanged(service, bucket, s3_key, stored_etag)
         if skip:
             logger.info("Collection unchanged (ETag match), skipping %s", s3_key)
-            return existing.id
+            return CollectionReindexResult(collection_id=existing.id, skipped=True)
 
     try:
         xml_content_bytes = service.read_s3_object(bucket, s3_key)
@@ -122,7 +154,7 @@ def reindex_collection_xml(
         current_etag = meta.get("ETag") if meta else None
     _save_etag(collection, current_etag)
 
-    return collection.id
+    return CollectionReindexResult(collection_id=collection.id, skipped=False)
 
 
 def reindex_bundle_xml(
@@ -131,11 +163,31 @@ def reindex_bundle_xml(
     update_existing: bool = True,
     discovery_service: Optional[FileDiscoveryService] = None,
     force: bool = False,
-) -> Optional[Tuple[UUID, UUID]]:
+) -> Optional[Tuple[UUID, Optional[UUID]]]:
     """Reindex a bundle XML stored in S3.
 
     Skips reindex if the S3 ETag matches the stored value unless force=True.
     """
+    result = reindex_bundle_xml_status(
+        bucket=bucket,
+        s3_key=s3_key,
+        update_existing=update_existing,
+        discovery_service=discovery_service,
+        force=force,
+    )
+    if not result:
+        return None
+    return (result.bundle_id, result.bundle_resources_id)
+
+
+def reindex_bundle_xml_status(
+    bucket: str,
+    s3_key: str,
+    update_existing: bool = True,
+    discovery_service: Optional[FileDiscoveryService] = None,
+    force: bool = False,
+) -> Optional[BundleReindexResult]:
+    """Reindex bundle XML and report whether it was skipped by ETag."""
     from lacos.blam.models.bundle.bundle_repository import Bundle
 
     service = discovery_service or FileDiscoveryService()
@@ -148,8 +200,17 @@ def reindex_bundle_xml(
         skip, current_etag = _check_etag_unchanged(service, bucket, s3_key, stored_etag)
         if skip:
             logger.info("Bundle unchanged (ETag match), skipping %s", s3_key)
+            from lacos.explorer.services.file_type_facets import (
+                refresh_bundle_file_type_facets,
+            )
+
+            refresh_bundle_file_type_facets(existing)
             resources = existing.resources.first()
-            return (existing.id, resources.id if resources else None)
+            return BundleReindexResult(
+                bundle_id=existing.id,
+                bundle_resources_id=resources.id if resources else None,
+                skipped=True,
+            )
 
     try:
         xml_content_bytes = service.read_s3_object(bucket, s3_key)
@@ -220,4 +281,8 @@ def reindex_bundle_xml(
         current_etag = meta.get("ETag") if meta else None
     _save_etag(bundle, current_etag)
 
-    return (bundle.id, bundle_resources_id)
+    return BundleReindexResult(
+        bundle_id=bundle.id,
+        bundle_resources_id=bundle_resources_id,
+        skipped=False,
+    )

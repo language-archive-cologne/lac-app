@@ -8,7 +8,13 @@ REPO_PROTOCOL_VERSION = "2.0"
 REPO_DELETED_RECORD = "no"
 REPO_GRANULARITY = "YYYY-MM-DDThh:mm:ssZ"
 REPO_EARLIEST_DATASTAMP = "1970-01-01T00:00:00Z"
-REPO_IDENTIFIER = "lacos"
+# Registered OLAC repositoryIdentifier (see http://www.language-archives.org/OLAC/repositories.html).
+# OAI identifiers are formed as oai:<REPO_IDENTIFIER>:<handle>, e.g.
+# oai:lac.uni-koeln.de:11341/00-0000-0000-0000-0D93-7
+REPO_IDENTIFIER = "lac.uni-koeln.de"
+REPO_OAI_SCHEME = "oai"
+REPO_OAI_DELIMITER = ":"
+REPO_SAMPLE_IDENTIFIER = f"oai:{REPO_IDENTIFIER}:11341/00-0000-0000-0000-0D93-7"
 REPO_BASE_ENDPOINT = "/oai/"
 
 # Metadata formats supported by the LACOS OAI-PMH endpoint.
