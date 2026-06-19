@@ -9,7 +9,10 @@ from __future__ import annotations
 
 from django.urls import reverse
 
-from lacos.blam.creator_ordering import ordered_bundle_creators
+from lacos.blam.creator_ordering import (
+    ordered_bundle_creators,
+    ordered_collection_creators,
+)
 from lacos.explorer import structured_data_fields as fields
 from lacos.explorer.structured_data import (
     ORG_DEPTH_MINIMAL,
@@ -146,12 +149,37 @@ def _is_part_of(collection, public_base_url: str) -> dict | None:
         "explorer:collection_detail_by_handle",
         collection.handle_path,
     )
+    general_info = collection.get_general_info
     node = {
         "@type": ["Dataset", "Collection"],
         "@id": collection.handle_url if is_handle else landing_url,
-        "name": fields.title(collection, collection.get_general_info),
+        "name": fields.title(collection, general_info),
         "url": landing_url,
     }
+
+    # Google's Dataset validator requires every Dataset node -- including nested
+    # ones like isPartOf -- to carry description, creator, and license (issue #160).
+    description = (
+        fields.clean(getattr(general_info, "description", "")) if general_info else ""
+    )
+    if description:
+        node["description"] = description
+
+    administrative_info = collection.get_administrative_info
+    licenses = (
+        list(administrative_info.licenses.all()) if administrative_info else []
+    )
+    uris = fields.license_uris(licenses, collection.identifier)
+    if uris:
+        node["license"] = fields.scalar_or_list(uris)
+
+    publication_info = collection.get_publication_info
+    creator_nodes = fields.creators(
+        ordered_collection_creators(publication_info) if publication_info else []
+    )
+    if creator_nodes:
+        node["creator"] = creator_nodes
+
     return node
 
 

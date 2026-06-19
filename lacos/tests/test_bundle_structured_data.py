@@ -33,9 +33,18 @@ from lacos.blam.models.bundle.bundle_publication_info import (
 )
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
+from lacos.blam.models.collection.collection_administrative_info import (
+    CollectionAdministrativeInfo,
+    CollectionLicense,
+)
 from lacos.blam.models.collection.collection_general_info import (
     CollectionGeneralInfo,
     CollectionLocation,
+)
+from lacos.blam.models.collection.collection_publication_info import (
+    CollectionCreator,
+    CollectionPublicationInfo,
+    CollectionPublicationInfoCreator,
 )
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.collection.collection_structural_info import (
@@ -86,6 +95,32 @@ def _create_collection(identifier: str = "hdl:11341/parent-collection") -> Colle
         location=location,
     )
     CollectionStructuralInfo.objects.create(collection=collection)
+
+    pub_info = CollectionPublicationInfo.objects.create(
+        collection=collection, publication_year=2020, data_provider="LAC"
+    )
+    creator = CollectionCreator.objects.create(
+        family_name="Himmelmann",
+        given_name="Nikolaus",
+        name_identifier="0000-0002-0931-3597",
+        name_identifier_type=PersonIdentifierTypeChoices.ORCID,
+    )
+    CollectionPublicationInfoCreator.objects.create(
+        collectionpublicationinfo=pub_info, collectioncreator=creator, order=1
+    )
+
+    admin_info = CollectionAdministrativeInfo.objects.create(
+        collection=collection,
+        access_level="public",
+        availability_date=date(2020, 1, 1),
+    )
+    admin_info.licenses.add(
+        CollectionLicense.objects.create(
+            license_name="CC BY 4.0",
+            license_identifier="https://creativecommons.org/licenses/by/4.0/",
+            access=AccessTypeChoices.OPEN,
+        )
+    )
     return collection
 
 
@@ -191,6 +226,17 @@ def test_bundle_dataset_core_and_is_part_of():
                 kwargs={"handle": "11341/parent-collection"},
             )
         ),
+        "description": "Parent.",
+        "license": "https://creativecommons.org/licenses/by/4.0/",
+        "creator": [
+            {
+                "@type": "Person",
+                "@id": "https://orcid.org/0000-0002-0931-3597",
+                "givenName": "Nikolaus",
+                "familyName": "Himmelmann",
+                "name": "Nikolaus Himmelmann",
+            }
+        ],
     }
     assert data["spatialCoverage"]["geo"] == {
         "@type": "GeoCoordinates",
