@@ -327,25 +327,63 @@
         {% endif %}
 
         <div class="border border-slate-200 rounded-lg overflow-hidden">
-          <div class="bg-slate-100 px-4 py-2 text-sm font-medium text-slate-600 flex items-center justify-between">
-            <span>{% translate "Annotations" %}</span>
-            <span class="text-xs text-slate-400">{{ elan_context.annotations|length }} {% translate "segments" %}</span>
+          <div class="bg-slate-100 px-4 py-2 text-sm font-medium text-slate-600 flex items-center justify-between gap-2">
+            <span class="flex items-center gap-1.5">
+              {% translate "Annotations" %}
+              {% if elan_context.tier_headers %}
+                <span class="text-slate-400 hover:text-slate-600 cursor-help" tabindex="0"
+                      title="{% translate 'Drag a column header to reorder · drag a column edge to resize · use Reset layout to restore the default' %}">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M18 10A8 8 0 11 2 10a8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                  </svg>
+                </span>
+              {% endif %}
+            </span>
+            <div class="flex items-center gap-2">
+              {% if elan_context.tier_headers %}
+                <button type="button" data-elan-reset class="btn btn-ghost btn-xs text-slate-500 hover:text-slate-700" title="{% translate 'Reset column order and widths' %}">
+                  {% translate "Reset layout" %}
+                </button>
+              {% endif %}
+              <span class="text-xs text-slate-400">{{ elan_context.annotations|length }} {% translate "segments" %}</span>
+            </div>
           </div>
           <div class="max-h-[65vh] overflow-auto">
             {% if elan_context and elan_context.annotations %}
-              <table class="min-w-full divide-y divide-slate-200 text-sm whitespace-nowrap">
+              <style>
+                /* Column boundaries — signal a resizable grid (issue #142 follow-up). */
+                [data-elan-table] thead th { border-right: 1px solid #e2e8f0; }
+                [data-elan-table] thead th:last-child { border-right: none; }
+                [data-elan-table] tbody td { border-right: 1px solid #f1f5f9; }
+                [data-elan-table] tbody td:last-child { border-right: none; }
+                /* Resize grip: faint at rest on resizable columns, brightens on hover. */
+                [data-elan-table] .elan-col-resize-handle {
+                  position: absolute; top: 0; right: -1px; height: 100%; width: 9px;
+                  cursor: col-resize; user-select: none; touch-action: none;
+                  border-right: 2px solid #cbd5e1;
+                }
+                [data-elan-table] .elan-col-resize-handle:hover,
+                [data-elan-table] .elan-col-resize-handle:active {
+                  border-right-color: #3b82f6;
+                  background: linear-gradient(to right, transparent, rgba(59,130,246,0.18));
+                }
+                [data-elan-table] th[data-col-reorder] { cursor: grab; }
+              </style>
+              <table class="min-w-full divide-y divide-slate-200 text-sm whitespace-nowrap"
+                     data-elan-table data-resource-id="{{ resource_play_url }}"
+                     data-resize-hint="{% translate 'Drag to resize column' %}">
                 <thead class="bg-slate-50 sticky top-0 z-10 shadow-sm">
                   <tr>
                     {% if elan_context and elan_context.audio_url %}
-                      <th class="px-3 py-2 text-center font-semibold text-slate-600 w-16"></th>
+                      <th class="px-3 py-2 text-center font-semibold text-slate-600 w-16" data-col-key="__play"></th>
                     {% endif %}
-                    <th class="px-3 py-2 text-left font-semibold text-slate-600 whitespace-nowrap">{% translate "Time" %}</th>
+                    <th class="px-3 py-2 text-left font-semibold text-slate-600 whitespace-nowrap" data-col-key="__time" data-col-resizable>{% translate "Time" %}</th>
                     {% if elan_context.tier_headers %}
                       {% for tier_name in elan_context.tier_headers %}
-                        <th class="px-3 py-2 text-left font-semibold text-slate-600">{{ tier_name }}</th>
+                        <th class="px-3 py-2 text-left font-semibold text-slate-600 select-none" data-col-key="{{ tier_name }}" data-col-reorder data-col-resizable title="{% translate 'Drag to reorder; drag the right edge to resize' %}">{{ tier_name }}</th>
                       {% endfor %}
                     {% else %}
-                      <th class="px-3 py-2 text-left font-semibold text-slate-600">{% translate "Annotation" %}</th>
+                      <th class="px-3 py-2 text-left font-semibold text-slate-600" data-col-key="__annotation" data-col-resizable>{% translate "Annotation" %}</th>
                     {% endif %}
                   </tr>
                 </thead>
@@ -355,7 +393,7 @@
                         {% if annotation.start is not None %}data-annotation-start="{{ annotation.start|stringformat:'.3f' }}"{% endif %}
                         {% if annotation.end is not None %}data-annotation-end="{{ annotation.end|stringformat:'.3f' }}"{% endif %}>
                       {% if elan_context and elan_context.audio_url %}
-                        <td class="px-3 py-2 text-center">
+                        <td class="px-3 py-2 text-center" data-col-key="__play">
                           {% if annotation.start is not None %}
                             <button type="button"
                                     class="btn btn-xs btn-circle btn-primary"
@@ -369,7 +407,7 @@
                           {% endif %}
                         </td>
                       {% endif %}
-                      <td class="px-3 py-2 text-slate-500 whitespace-nowrap font-mono text-xs">
+                      <td class="px-3 py-2 text-slate-500 whitespace-nowrap font-mono text-xs" data-col-key="__time">
                         {% if annotation.start is not None %}
                           {{ annotation.start|floatformat:2 }}s
                         {% else %}
@@ -384,10 +422,10 @@
                       </td>
                       {% if elan_context.tier_headers %}
                         {% for tier in annotation.ordered_tiers %}
-                          <td class="px-3 py-2 text-slate-700">{{ tier.value|default:"" }}</td>
+                          <td class="px-3 py-2 text-slate-700" data-col-key="{{ tier.name }}">{{ tier.value|default:"" }}</td>
                         {% endfor %}
                       {% else %}
-                        <td class="px-3 py-2 text-slate-700">{{ annotation.value|default:"" }}</td>
+                        <td class="px-3 py-2 text-slate-700" data-col-key="__annotation">{{ annotation.value|default:"" }}</td>
                       {% endif %}
                     </tr>
                   {% endfor %}
