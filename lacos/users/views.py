@@ -14,6 +14,7 @@ from django.views.decorators.http import require_http_methods
 from django.views.generic import DetailView
 from django.views.generic import RedirectView
 
+from lacos.users.models import SamlCountry
 from lacos.users.models import SamlIdp
 from lacos.users.models import User
 
@@ -120,7 +121,9 @@ login_view = LoginView.as_view()
 def saml_discovery_view(request: HttpRequest) -> HttpResponse:
     if not settings.SAML_LOGIN_ENABLED:
         raise Http404("SAML login is not enabled.")
+    countries = SamlCountry.objects.filter(idps__isnull=False).distinct()
     return render(request, "users/saml_discovery.html", {
+        "countries": countries,
         "next": _safe_next(request, request.GET.get("next")) or "",
         "trusted_login_url": reverse("users:saml_login"),
     })

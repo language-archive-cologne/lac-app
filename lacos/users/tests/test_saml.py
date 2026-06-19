@@ -502,9 +502,10 @@ def test_saml_discovery_view_links_to_external_discovery_handoff(client):
     rendered = html.unescape(response.content.decode())
     assert "Continue with CLARIN Discovery" in rendered
     assert 'href="/users/login/saml/?next=/target/"' in rendered
-    assert "idp-search" not in rendered
-    assert "country-select" not in rendered
-    assert "saml/discover/idps" not in rendered
+    assert "Choose an institution directly" in rendered
+    assert "idp-search" in rendered
+    assert "country-select" in rendered
+    assert "saml/discover/idps" in rendered
 
 
 @pytest.mark.django_db
