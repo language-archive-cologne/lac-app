@@ -32,7 +32,8 @@
   {% endif %}
 
   <!-- Resource viewer -->
-  <style>[data-standalone-viewer] [data-modal-close] { display: none; }</style>
+  <style>[data-standalone-viewer] [data-modal-close],
+  [data-standalone-viewer] [data-expand-fullpage] { display: none; }</style>
   <div class="bg-base-100 shadow rounded-2xl p-6 border border-base-300">
     <div id="resource-viewer-content" data-resource-container data-standalone-viewer>
       {% include "explorer/partials/resource_modal_content.html" %}
