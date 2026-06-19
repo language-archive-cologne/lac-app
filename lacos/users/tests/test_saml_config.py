@@ -130,3 +130,26 @@ def test_build_saml_metadata_sources_preserves_explicit_remote_urls():
             {"url": "https://metadata.example.org/two.xml"},
         ],
     }
+
+
+def test_build_saml_metadata_sources_allows_remote_only_proxy_config():
+    clarin_proxy_metadata_url = (
+        "https://infra.clarin.eu/aai/"
+        "prod_md_about_clarin_erics_proxy-idp.xml"
+    )
+    metadata = build_saml_metadata_sources(
+        local_paths=["", "  "],
+        remote_urls=[
+            f" {clarin_proxy_metadata_url} ",
+        ],
+        mdq_url="",
+        fallback_local_path="/app/shibboleth.xml",
+    )
+
+    assert metadata == {
+        "remote": [
+            {
+                "url": clarin_proxy_metadata_url,
+            },
+        ],
+    }

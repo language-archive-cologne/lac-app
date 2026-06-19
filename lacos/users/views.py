@@ -20,6 +20,8 @@ from lacos.users.models import User
 
 from .adapters import TRUSTED_SAML_SESSION_KEY
 
+DIRECT_IDP_SELECTION_DISABLED_MESSAGE = "Direct SAML IdP selection is not enabled."
+
 
 class UserDetailView(LoginRequiredMixin, DetailView):
     model = User
@@ -67,10 +69,20 @@ def saml_login_view(request: HttpRequest) -> HttpResponse:
     next_url = _safe_next(request, request.GET.get("next"))
     saml_login_url = _build_saml_login_url(
         next_url=next_url,
-        idp=request.GET.get("idp"),
+        idp=_selected_idp_from_request(request),
     )
 
     return redirect(saml_login_url)
+
+
+def _direct_idp_selection_enabled() -> bool:
+    return bool(getattr(settings, "SAML_DIRECT_IDP_SELECTION_ENABLED", True))
+
+
+def _selected_idp_from_request(request: HttpRequest) -> str | None:
+    if not _direct_idp_selection_enabled():
+        return None
+    return request.GET.get("idp")
 
 
 def _safe_next(request: HttpRequest, value: str | None) -> str | None:
@@ -85,7 +97,11 @@ def _safe_next(request: HttpRequest, value: str | None) -> str | None:
     return None
 
 
-def _build_saml_login_url(*, next_url: str | None = None, idp: str | None = None) -> str:
+def _build_saml_login_url(
+    *,
+    next_url: str | None = None,
+    idp: str | None = None,
+) -> str:
     saml_login_url = reverse("saml2_login")
     params = {}
     if next_url:
@@ -121,18 +137,30 @@ login_view = LoginView.as_view()
 def saml_discovery_view(request: HttpRequest) -> HttpResponse:
     if not settings.SAML_LOGIN_ENABLED:
         raise Http404("SAML login is not enabled.")
-    countries = SamlCountry.objects.filter(idps__isnull=False).distinct()
-    return render(request, "users/saml_discovery.html", {
-        "countries": countries,
-        "next": _safe_next(request, request.GET.get("next")) or "",
-        "trusted_login_url": reverse("users:saml_login"),
-    })
+    direct_idp_selection_enabled = _direct_idp_selection_enabled()
+    countries = (
+        SamlCountry.objects.filter(idps__isnull=False).distinct()
+        if direct_idp_selection_enabled
+        else SamlCountry.objects.none()
+    )
+    return render(
+        request,
+        "users/saml_discovery.html",
+        {
+            "countries": countries,
+            "direct_idp_selection_enabled": direct_idp_selection_enabled,
+            "next": _safe_next(request, request.GET.get("next")) or "",
+            "trusted_login_url": reverse("users:saml_login"),
+        },
+    )
 
 
 @require_http_methods(["GET"])
 def saml_discovery_idp_list(request: HttpRequest) -> HttpResponse:
     if not settings.SAML_LOGIN_ENABLED:
         raise Http404("SAML login is not enabled.")
+    if not _direct_idp_selection_enabled():
+        raise Http404(DIRECT_IDP_SELECTION_DISABLED_MESSAGE)
 
     search = request.GET.get("search", "").strip()
     country_code = request.GET.get("country", "").strip()
@@ -145,8 +173,12 @@ def saml_discovery_idp_list(request: HttpRequest) -> HttpResponse:
     if not search and not country_code:
         qs = qs.none()
 
-    return render(request, "users/partials/saml_idp_list.html", {
-        "idps": qs,
-        "next": _safe_next(request, request.GET.get("next")) or "",
-        "trusted_login_url": reverse("users:saml_login"),
-    })
+    return render(
+        request,
+        "users/partials/saml_idp_list.html",
+        {
+            "idps": qs,
+            "next": _safe_next(request, request.GET.get("next")) or "",
+            "trusted_login_url": reverse("users:saml_login"),
+        },
+    )

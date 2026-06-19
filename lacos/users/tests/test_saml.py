@@ -463,6 +463,26 @@ def test_saml_login_view_preserves_selected_idp(client, settings):
 
 
 @pytest.mark.django_db
+def test_saml_login_view_ignores_selected_idp_when_direct_selection_disabled(
+    client,
+    settings,
+):
+    settings.SAML_LOGIN_ENABLED = True
+    settings.SAML_DIRECT_IDP_SELECTION_ENABLED = False
+
+    response = client.get(
+        reverse("users:saml_login"),
+        {
+            "idp": "https://idp.example.org/idp/shibboleth",
+            "next": "/collections/",
+        },
+    )
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.headers["Location"] == "/saml2/login/?next=%2Fcollections%2F"
+
+
+@pytest.mark.django_db
 def test_saml_login_view_preserves_internal_next(client, settings):
     settings.SAML_LOGIN_ENABLED = True
 
@@ -509,6 +529,26 @@ def test_saml_discovery_view_links_to_external_discovery_handoff(client):
 
 
 @pytest.mark.django_db
+def test_saml_discovery_view_hides_direct_idp_selection_when_disabled(
+    client,
+    settings,
+):
+    settings.SAML_DIRECT_IDP_SELECTION_ENABLED = False
+
+    response = client.get(reverse("users:saml_discovery"), {"next": "/target/"})
+
+    assert response.status_code == HTTPStatus.OK
+    rendered = html.unescape(response.content.decode())
+    assert "Continue with CLARIN Discovery" in rendered
+    assert 'href="/users/login/saml/?next=/target/"' in rendered
+    assert "Sign in with credentials" in rendered
+    assert "Choose an institution directly" not in rendered
+    assert "idp-search" not in rendered
+    assert "country-select" not in rendered
+    assert "saml/discover/idps" not in rendered
+
+
+@pytest.mark.django_db
 def test_saml_discovery_idp_list_routes_via_trusted_login_view(client, settings):
     settings.SAML_LOGIN_ENABLED = True
     country = SamlCountry.objects.create(code="DE", name="Germany")
@@ -535,3 +575,18 @@ def test_saml_discovery_idp_list_routes_via_trusted_login_view(client, settings)
     assert "https://idp.example.org/logo.png" not in rendered
     assert "onerror=" not in rendered
     assert reverse("saml2_login") not in rendered
+
+
+@pytest.mark.django_db
+def test_saml_discovery_idp_list_404s_when_direct_selection_disabled(
+    client,
+    settings,
+):
+    settings.SAML_DIRECT_IDP_SELECTION_ENABLED = False
+
+    response = client.get(
+        reverse("users:saml_discovery_idp_list"),
+        {"search": "CLARIN"},
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND

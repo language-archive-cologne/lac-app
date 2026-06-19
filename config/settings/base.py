@@ -759,6 +759,10 @@ if SAML_LOGIN_ENABLED:
     _saml_metadata_mdq_url = env("SAML_METADATA_MDQ_URL", default=DEFAULT_MDQ_URL)
     SAML_METADATA_MDQ_CERT_FILE = env("SAML_METADATA_MDQ_CERT_FILE", default="")
     SAML2_DISCO_URL = env("SAML2_DISCO_URL", default="")
+    SAML_DIRECT_IDP_SELECTION_ENABLED = env.bool(
+        "SAML_DIRECT_IDP_SELECTION_ENABLED",
+        default=True,
+    )
     EDUGAIN_METADATA_URL = env(
         "EDUGAIN_METADATA_URL",
         default="https://www.aai.dfn.de/fileadmin/metadata/dfn-aai-edugain+idp-metadata.xml",
@@ -908,5 +912,6 @@ if SAML_LOGIN_ENABLED:
     _saml_xmlsec = env("SAML_XMLSEC_BINARY", default="/usr/bin/xmlsec1")
     SAML_CONFIG["xmlsec_binary"] = _saml_xmlsec
 else:
+    SAML_DIRECT_IDP_SELECTION_ENABLED = False
     SAML_ATTRIBUTE_MAPPING = {}
     SAML_CONFIG: dict[str, object] = {}
