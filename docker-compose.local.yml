@@ -38,6 +38,7 @@ services:
       SAML_DJANGO_USER_MAIN_ATTRIBUTE: "username"
       SAML_USE_NAME_ID_AS_USERNAME: "false"
       SAML_SP_BASE_URL: "http://localhost:8101"
+      SAML2_DISCO_URL: "https://discovery.clarin.eu/feed/edugain"
       SAML_IDP_METADATA_LOCAL: "/app/shibboleth.xml"
       LAC_MEDIA_TMP_DIR: "/app/.tmp/media-processing"
     ports:
@@ -152,6 +153,7 @@ services:
       SAML_DJANGO_USER_MAIN_ATTRIBUTE: "username"
       SAML_USE_NAME_ID_AS_USERNAME: "false"
       SAML_SP_BASE_URL: "http://localhost:8101"
+      SAML2_DISCO_URL: "https://discovery.clarin.eu/feed/edugain"
       SAML_IDP_METADATA_LOCAL: "/app/shibboleth.xml"
       DB_BACKUP_ENABLED: "false"
       HUEY_WORKERS: "1"

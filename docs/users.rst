@@ -25,6 +25,9 @@ Key settings
   URLs.
 * ``SAML_DJANGO_USER_MAIN_ATTRIBUTE`` – defaults to ``username`` so users are
   looked up by ``eduPersonPrincipalName`` (ePPN).
+* ``SAML2_DISCO_URL`` – Discovery Service used when users choose institutional
+  sign-in. Production and local compose files point this at CLARIN's eduGAIN
+  feed, ``https://discovery.clarin.eu/feed/edugain``.
 * ``SAML_IDP_METADATA_LOCAL`` / ``SAML_IDP_METADATA_REMOTE`` – IdP metadata
   sources. The repository ships a local fallback
   ``shibboleth.xml`` for development.
