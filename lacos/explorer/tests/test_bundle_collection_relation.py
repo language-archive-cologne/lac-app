@@ -114,12 +114,35 @@ def test_bundle_detail_shows_explicit_parent_collection(client):
 
     assert response.status_code == 200
     page = response.content.decode("utf-8")
-    assert "Back to results" in page
-    assert "data-history-back" in page
+    # Reached directly (not via search), so no "Back to results" affordance (issue #142).
+    assert "Back to results" not in page
+    assert "data-history-back" not in page
+    assert "Back to search results" not in page
     assert "Collection:" in page
     assert "Bundle Parent Title" in page
     assert "Part of" in page
     assert 'rel="preload" href="/static/vendor/js/pmtiles/pmtiles.js" as="script"' in page
+
+
+@pytest.mark.django_db
+def test_bundle_detail_from_search_shows_back_to_results(client):
+    collection = _create_collection("COL-REL-FROMSEARCH", "From Search Parent")
+    bundle = _create_bundle(
+        "BND-REL-FROMSEARCH", "From Search Bundle", collection=collection
+    )
+    _allow_anonymous_read(bundle)
+
+    search_url = reverse("bundle_faceted_search")
+    response = client.get(
+        reverse("explorer:bundle_detail", kwargs={"pk": bundle.pk}),
+        {"back": search_url},
+    )
+
+    assert response.status_code == 200
+    page = response.content.decode("utf-8")
+    # Arrived via search: the back-to-search affordance is shown.
+    assert "Back to search results" in page
+    assert search_url in page
 
 
 @pytest.mark.django_db
