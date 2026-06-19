@@ -2,16 +2,21 @@ from allauth.account.views import LoginView as AllauthLoginView
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import QuerySet
-from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
-from django.shortcuts import redirect, render
+from django.http import Http404
+from django.http import HttpRequest
+from django.http import HttpResponse
+from django.shortcuts import redirect
+from django.shortcuts import render
 from django.urls import reverse
-from django.utils.http import urlencode
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils.http import urlencode
 from django.views.decorators.http import require_http_methods
 from django.views.generic import DetailView
 from django.views.generic import RedirectView
 
-from lacos.users.models import SamlCountry, SamlIdp, User
+from lacos.users.models import SamlIdp
+from lacos.users.models import User
+
 from .adapters import TRUSTED_SAML_SESSION_KEY
 
 
@@ -115,10 +120,9 @@ login_view = LoginView.as_view()
 def saml_discovery_view(request: HttpRequest) -> HttpResponse:
     if not settings.SAML_LOGIN_ENABLED:
         raise Http404("SAML login is not enabled.")
-    countries = SamlCountry.objects.filter(idps__isnull=False).distinct()
     return render(request, "users/saml_discovery.html", {
-        "countries": countries,
         "next": _safe_next(request, request.GET.get("next")) or "",
+        "trusted_login_url": reverse("users:saml_login"),
     })
 
 

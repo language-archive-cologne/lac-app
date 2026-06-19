@@ -495,6 +495,19 @@ def test_saml2_login_redirects_to_discovery_service(client, settings):
 
 
 @pytest.mark.django_db
+def test_saml_discovery_view_links_to_external_discovery_handoff(client):
+    response = client.get(reverse("users:saml_discovery"), {"next": "/target/"})
+
+    assert response.status_code == HTTPStatus.OK
+    rendered = html.unescape(response.content.decode())
+    assert "Continue with CLARIN Discovery" in rendered
+    assert 'href="/users/login/saml/?next=/target/"' in rendered
+    assert "idp-search" not in rendered
+    assert "country-select" not in rendered
+    assert "saml/discover/idps" not in rendered
+
+
+@pytest.mark.django_db
 def test_saml_discovery_idp_list_routes_via_trusted_login_view(client, settings):
     settings.SAML_LOGIN_ENABLED = True
     country = SamlCountry.objects.create(code="DE", name="Germany")
