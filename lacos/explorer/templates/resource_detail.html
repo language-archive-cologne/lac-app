@@ -39,6 +39,8 @@
       {% include "explorer/partials/resource_modal_content.html" %}
     </div>
   </div>
+
+  {% include "dashboard/partials/single_file_download_modal.html" %}
 {% endblock explorer_content %}
 
 {% block inline_javascript %}
@@ -47,6 +49,29 @@
     document.addEventListener('DOMContentLoaded', function() {
       var container = document.getElementById('resource-viewer-content');
       if (!container) return;
+
+      // Single file download button - open the ALTCHA-protected download dialog.
+      document.addEventListener('click', function(event) {
+        var btn = event.target.closest('.single-download-btn');
+        if (!btn) return;
+        event.preventDefault();
+        if (!window.singleFileDownloadModal) {
+          console.info('[single-download] modal is not initialized');
+          return;
+        }
+        var bucket = btn.dataset.bucket;
+        var key = btn.dataset.key;
+        if (!bucket || !key) {
+          console.info('[single-download] missing storage mapping', {
+            filename: btn.dataset.filename || null,
+            bucket: bucket || null,
+            key: key || null,
+          });
+          return;
+        }
+        var filename = btn.dataset.filename || key.split('/').pop() || 'download';
+        window.singleFileDownloadModal.open({ bucket: bucket, key: key, filename: filename });
+      });
 
       // Initialize audio player
       var playerContainer = container.querySelector('#linguist-audio-player');
