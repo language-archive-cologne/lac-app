@@ -24,6 +24,7 @@ from lacos.blam.models.collection.collection_general_info import (
     CollectionLocation,
 )
 from lacos.explorer.facets import BUNDLE_FACET_DEFINITIONS, FacetService
+from lacos.explorer import match_reasons
 from lacos.explorer.search_indexing import update_bundle_search_vector
 
 
@@ -566,6 +567,40 @@ def test_matched_in_shown_when_field_is_attributable(client):
 
     assert response.status_code == 200
     assert "B-REASON" in [b.identifier for b in response.context["bundles"]]
+    assert "Matched in" in page
+    assert "Title" in page
+
+
+@pytest.mark.django_db
+def test_bundle_match_reasons_are_computed_once_per_rendered_result(
+    client,
+    monkeypatch,
+):
+    coll = _create_collection("C-REASON-COUNT", "Plain Collection")
+    first = _create_bundle("B-REASON-COUNT-1", "Alpha One", coll)
+    second = _create_bundle("B-REASON-COUNT-2", "Alpha Two", coll)
+    update_bundle_search_vector(first)
+    update_bundle_search_vector(second)
+
+    calls: list[str] = []
+    original = match_reasons.bundle_match_reasons_for_tokens
+
+    def counting_match_reasons(bundle, tokens):
+        calls.append(bundle.identifier)
+        return original(bundle, tokens)
+
+    monkeypatch.setattr(
+        match_reasons,
+        "bundle_match_reasons_for_tokens",
+        counting_match_reasons,
+    )
+
+    response = client.get("/search/bundles/", {"q": "Alpha"})
+
+    assert response.status_code == 200
+    rendered_identifiers = [bundle.identifier for bundle in response.context["bundles"]]
+    assert calls == rendered_identifiers
+    page = response.content.decode("utf-8")
     assert "Matched in" in page
     assert "Title" in page
 

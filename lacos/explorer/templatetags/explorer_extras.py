@@ -10,6 +10,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.safestring import SafeString
 
 from lacos.explorer.identifier_display import format_identifier_html
+from lacos.explorer.match_reasons import bundle_match_reasons_csv
 from lacos.explorer.media_utils import (
     determine_media_type,
     is_annotation_file as media_utils_is_annotation_file,
@@ -398,78 +399,4 @@ def collection_match_reasons(collection, query):
 @register.filter
 def bundle_match_reasons(bundle, query):
     """Infer matched bundle fields for advanced search display."""
-    tokens = _tokenize_query((query or "").strip())
-    if not tokens:
-        return ""
-
-    reasons: list[str] = []
-    if _text_matches_query(getattr(bundle, "identifier", ""), tokens):
-        reasons.append("identifier")
-
-    gi = getattr(bundle, "get_general_info", None)
-    if gi:
-        if _text_matches_query(getattr(gi, "display_title", ""), tokens):
-            reasons.append("title")
-        if _text_matches_query(getattr(gi, "description", ""), tokens):
-            reasons.append("description")
-        keywords = getattr(gi, "keywords", None)
-        if keywords and any(
-            _text_matches_query(getattr(kw, "value", ""), tokens) for kw in keywords.all()
-        ):
-            reasons.append("keyword")
-        location = getattr(gi, "location", None)
-        if location:
-            if (
-                _text_matches_query(getattr(location, "country_name", ""), tokens)
-                or _text_matches_query(getattr(location, "country_facet", ""), tokens)
-            ):
-                reasons.append("country")
-        object_languages = getattr(gi, "object_languages", None)
-        if object_languages and any(
-            _text_matches_query(getattr(lang, "name", ""), tokens)
-            or _text_matches_query(getattr(lang, "display_name", ""), tokens)
-            for lang in object_languages.all()
-        ):
-            reasons.append("language")
-
-    si = getattr(bundle, "get_structural_info", None)
-    if si and getattr(si, "is_member_of_collection", None):
-        parent = si.is_member_of_collection
-        if _text_matches_query(getattr(parent, "identifier", ""), tokens):
-            reasons.append("parent collection identifier")
-        parent_gi = getattr(parent, "get_general_info", None)
-        if parent_gi and _text_matches_query(getattr(parent_gi, "display_title", ""), tokens):
-            reasons.append("parent collection title")
-
-    pub = getattr(bundle, "get_publication_info", None)
-    if pub:
-        if _text_matches_query(getattr(pub, "data_provider", ""), tokens):
-            reasons.append("data provider")
-        if any(
-            _text_matches_query(getattr(creator, "family_name", ""), tokens)
-            or _text_matches_query(getattr(creator, "given_name", ""), tokens)
-            for creator in pub.creators.all()
-        ):
-            reasons.append("creator")
-        if any(
-            _text_matches_query(getattr(contributor, "family_name", ""), tokens)
-            or _text_matches_query(getattr(contributor, "given_name", ""), tokens)
-            or _text_matches_query(getattr(contributor, "role", ""), tokens)
-            or (
-                getattr(contributor, "contributor_name", None)
-                and (
-                    _text_matches_query(
-                        getattr(contributor.contributor_name, "contributor_family_name", ""),
-                        tokens,
-                    )
-                    or _text_matches_query(
-                        getattr(contributor.contributor_name, "contributor_given_name", ""),
-                        tokens,
-                    )
-                )
-            )
-            for contributor in pub.contributors.all()
-        ):
-            reasons.append("contributor")
-
-    return ", ".join(_dedupe(reasons))
+    return bundle_match_reasons_csv(bundle, query)

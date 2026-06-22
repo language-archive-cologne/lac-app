@@ -17,6 +17,7 @@ from lacos.explorer.facets import (
     FacetedSearchResult,
     FacetService,
 )
+from lacos.explorer.match_reasons import attach_bundle_match_reasons
 from lacos.explorer.text_search import apply_text_search
 from lacos.storage.models.acl_permissions import ACLPermissions
 
@@ -115,6 +116,11 @@ class BundleFacetedSearchView(ListView):
         context["current_params"] = self.request.GET.copy()
         context["field_definitions"] = BUNDLE_FIELD_DEFINITIONS
         context["active_search_in"] = self._search_in
+        if context["search_query"]:
+            attach_bundle_match_reasons(
+                context.get("bundles", ()),
+                context["search_query"],
+            )
         return context
 
     def render_to_response(self, context, **kwargs):
