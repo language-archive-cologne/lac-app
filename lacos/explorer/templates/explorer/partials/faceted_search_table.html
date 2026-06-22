@@ -1,7 +1,6 @@
 {% load i18n %}
 {% load explorer_extras %}
 <div class="rounded-2xl border border-base-300 bg-base-100 shadow-sm overflow-hidden">
-  <!-- Header bar -->
   <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-base-300 bg-base-200">
     <div class="flex items-center gap-3 text-xs text-base-content/60">
       <span class="font-semibold uppercase tracking-widest">{{ total_count }} {% translate "collections" %}</span>
@@ -18,146 +17,61 @@
       </span>
     </div>
   </div>
-  <!-- Mobile card view -->
-  <div class="lg:hidden divide-y divide-base-200">
-    {% for collection in collections %}
-      <a href="{% url 'explorer:collection_detail_by_handle' handle=collection.handle_path %}{% back_query %}" class="block px-4 py-4 hover:bg-base-200 transition-colors">
-        <div class="flex items-start justify-between gap-3">
-          <div class="min-w-0 flex-1">
-            <h3 class="font-semibold text-base-content leading-snug">
-              {% if collection.get_general_info.display_title %}
-                {{ collection.get_general_info.display_title|highlight_query:search_query }}
-              {% else %}
-                {{ collection.identifier|highlight_query:search_query }}
-              {% endif %}
-            </h3>
-            <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-base-content/50">
-              <span class="font-mono">{{ collection.identifier }}</span>
-              <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 font-semibold text-base-content/70">
-                {{ collection.bundles_count }} {% translate "bundles" %}
-              </span>
-            </div>
-          </div>
-          <svg class="w-4 h-4 text-base-content/30 shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-          </svg>
+
+  {% facet_sort_url "name" as sort_name_url %}
+  {% facet_sort_url "language" as sort_lang_url %}
+  <div class="overflow-x-auto">
+    <div class="min-w-full text-sm">
+      <div class="hidden lg:grid lg:min-w-[72rem] lg:grid-cols-[minmax(18rem,2fr)_minmax(12rem,1fr)_minmax(16rem,1.4fr)_minmax(12rem,1fr)_8rem] bg-base-200 sticky top-0 z-10">
+        <div class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">
+          <a href="{{ sort_name_url }}"
+             hx-get="{{ sort_name_url }}"
+             hx-target="#faceted-results"
+             hx-swap="outerHTML"
+             hx-push-url="true"
+             class="hover:text-primary cursor-pointer inline-flex items-center gap-2 uppercase tracking-widest">
+            {% translate "Collection" %}
+            {% if current_sort == 'name' %}
+              <span class="text-primary">{% if current_order == 'asc' %}&#9650;{% else %}&#9660;{% endif %}</span>
+            {% endif %}
+          </a>
         </div>
-        {% if collection.get_general_info and collection.get_general_info.object_languages.all %}
-          <div class="mt-2 flex flex-wrap items-center gap-1.5">
-            {% for language in collection.get_general_info.object_languages.all %}
-              {% include "explorer/partials/language_chip.html" with language=language size="sm" %}
-            {% endfor %}
-          </div>
-        {% endif %}
-        {% if collection.get_general_info and collection.get_general_info.description %}
-          <p class="mt-1.5 text-xs text-base-content/60 line-clamp-2">{{ collection.get_general_info.description|truncatewords:20|highlight_query:search_query }}</p>
-        {% endif %}
-        {% with gi=collection.get_general_info %}
-          {% if gi and gi.location %}
-            <div class="mt-1.5 text-xs text-base-content/50">
-              {% if gi.location.region_facet %}{{ gi.location.region_facet }}{% endif %}{% if gi.location.region_facet and gi.location.country_facet %}, {% endif %}{% if gi.location.country_facet %}{{ gi.location.country_facet }}{% endif %}
-            </div>
-          {% endif %}
-        {% endwith %}
-        {% with keywords=collection.get_general_info.keywords.all %}
-          {% if keywords %}
-            <div class="mt-2 flex flex-wrap gap-1">
-              {% for keyword in keywords|slice:":3" %}
-                <span class="inline-flex max-w-[10rem] items-center rounded-full border border-base-300 bg-base-200 px-1.5 py-0.5 text-xs text-base-content/60">
-                  <span class="truncate">{{ keyword.value|highlight_query:search_query }}</span>
-                </span>
-              {% endfor %}
-              {% if keywords|length > 3 %}
-                <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-1.5 py-0.5 text-xs font-semibold text-base-content/50">+{{ keywords|length|add:"-3" }}</span>
-              {% endif %}
-            </div>
-          {% endif %}
-        {% endwith %}
-        {% if search_query %}
-          {% if searched_field_labels %}
-            <div class="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
-              <span class="text-[11px] uppercase tracking-wide text-base-content/50">{% translate "Matched in" %}</span>
-              {% for label in searched_field_labels %}
-                <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-[11px] font-medium text-base-content/75">
-                  {{ label }}
-                </span>
-              {% endfor %}
-            </div>
-          {% else %}
-            {% with reasons=collection|collection_match_reasons:search_query|split_csv %}
-              {% if reasons %}
-                <div class="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
-                  <span class="text-[11px] uppercase tracking-wide text-base-content/50">{% translate "Matched in" %}</span>
-                  {% for reason in reasons %}
-                    <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-[11px] font-medium text-base-content/75">
-                      {{ reason|capfirst }}
-                    </span>
-                  {% endfor %}
-                </div>
-              {% endif %}
-            {% endwith %}
-          {% endif %}
-        {% endif %}
-      </a>
-    {% empty %}
-      <div class="px-4 py-12 text-center text-base-content/50">
-        {% translate "No collections match the current filters." %}
+        <div class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">
+          <a href="{{ sort_lang_url }}"
+             hx-get="{{ sort_lang_url }}"
+             hx-target="#faceted-results"
+             hx-swap="outerHTML"
+             hx-push-url="true"
+             class="hover:text-primary cursor-pointer inline-flex items-center gap-2 uppercase tracking-widest">
+            {% translate "Languages" %}
+            {% if current_sort == 'language' %}
+              <span class="text-primary">{% if current_order == 'asc' %}&#9650;{% else %}&#9660;{% endif %}</span>
+            {% endif %}
+          </a>
+        </div>
+        <div class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">{% translate "Description" %}</div>
+        <div class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">{% translate "Location" %}</div>
+        <div class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">{% translate "Bundles" %}</div>
       </div>
-    {% endfor %}
-  </div>
-  <!-- Desktop table view -->
-  <div class="hidden lg:block overflow-x-auto">
-    <table class="min-w-full text-sm">
-      <thead class="bg-base-200 sticky top-0 z-10">
-        <tr class="text-left">
-          <th scope="col" class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">
-            {% facet_sort_url "name" as sort_name_url %}
-            <a href="{{ sort_name_url }}"
-               hx-get="{{ sort_name_url }}"
-               hx-target="#faceted-results"
-               hx-swap="outerHTML"
-               hx-push-url="true"
-               class="hover:text-primary cursor-pointer inline-flex items-center gap-2 uppercase tracking-widest">
-              {% translate "Collection" %}
-              {% if current_sort == 'name' %}
-                <span class="text-primary">{% if current_order == 'asc' %}&#9650;{% else %}&#9660;{% endif %}</span>
-              {% endif %}
-            </a>
-          </th>
-          <th scope="col" class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">
-            {% facet_sort_url "language" as sort_lang_url %}
-            <a href="{{ sort_lang_url }}"
-               hx-get="{{ sort_lang_url }}"
-               hx-target="#faceted-results"
-               hx-swap="outerHTML"
-               hx-push-url="true"
-               class="hover:text-primary cursor-pointer inline-flex items-center gap-2 uppercase tracking-widest">
-              {% translate "Languages" %}
-              {% if current_sort == 'language' %}
-                <span class="text-primary">{% if current_order == 'asc' %}&#9650;{% else %}&#9660;{% endif %}</span>
-              {% endif %}
-            </a>
-          </th>
-          <th scope="col" class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">{% translate "Description" %}</th>
-          <th scope="col" class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">{% translate "Location" %}</th>
-          <th scope="col" class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">{% translate "Bundles" %}</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-base-200">
+
+      <div class="divide-y divide-base-200 lg:min-w-[72rem]">
         {% for collection in collections %}
-          <tr class="hover:bg-base-200 transition-colors">
-            <td class="px-6 py-5 align-top">
-              <div class="space-y-1">
+          {% with gi=collection.get_general_info %}
+            <div class="grid gap-3 px-4 py-4 transition-colors hover:bg-base-200 lg:grid-cols-[minmax(18rem,2fr)_minmax(12rem,1fr)_minmax(16rem,1.4fr)_minmax(12rem,1fr)_8rem] lg:gap-0 lg:px-0 lg:py-0">
+              <div class="min-w-0 space-y-1 lg:px-6 lg:py-5">
                 <a href="{% url 'explorer:collection_detail_by_handle' handle=collection.handle_path %}{% back_query %}"
-                   class="text-base-content hover:text-primary font-semibold">
-                  {% if collection.get_general_info.display_title %}
-                    {{ collection.get_general_info.display_title|highlight_query:search_query }}
-                  {% else %}
-                    {{ collection.identifier|highlight_query:search_query }}
-                  {% endif %}
+                   class="inline-flex max-w-full items-center gap-2 text-base-content hover:text-primary font-semibold">
+                  <span class="truncate">
+                    {% if gi.display_title %}
+                      {{ gi.display_title|highlight_query:search_query }}
+                    {% else %}
+                      {{ collection.identifier|highlight_query:search_query }}
+                    {% endif %}
+                  </span>
+                  <span class="text-base-content/30 lg:hidden">&#8594;</span>
                 </a>
                 <div class="text-xs text-base-content/50 font-mono">{{ collection.identifier }}</div>
-                {% with keywords=collection.get_general_info.keywords.all %}
+                {% with keywords=gi.keywords.all %}
                   {% if keywords %}
                     <div class="mt-2 flex flex-wrap gap-1.5">
                       {% for keyword in keywords|slice:":3" %}
@@ -200,60 +114,63 @@
                   {% endif %}
                 {% endif %}
               </div>
-            </td>
-            <td class="px-6 py-5 align-top">
-              {% if collection.get_general_info and collection.get_general_info.object_languages.all %}
-                <div class="flex flex-wrap gap-1.5">
-                  {% for language in collection.get_general_info.object_languages.all %}
-                    {% include "explorer/partials/language_chip.html" with language=language size="sm" %}
-                  {% endfor %}
-                </div>
-              {% endif %}
-            </td>
-            <td class="px-6 py-5 align-top text-sm text-base-content/70 max-w-xs">
-              {% if collection.get_general_info and collection.get_general_info.description %}
-                <span class="cursor-help" title="{{ collection.get_general_info.description }}">{{ collection.get_general_info.description|truncatewords:12|highlight_query:search_query }}</span>
-              {% endif %}
-            </td>
-	            <td class="px-6 py-5 align-top text-sm text-base-content/70">
-	              {% with gi=collection.get_general_info %}
-	                {% if gi and gi.location %}
-	                  {% if gi.location.geo_location %}
-	                    <button
-	                      type="button"
-	                      data-map-modal-trigger
-	                      class="text-primary hover:underline transition-colors"
-	                      hx-get="{% url 'explorer:map_popup' %}?geo={{ gi.location.geo_location }}&title={% if gi.location.region_facet %}{{ gi.location.region_facet|urlencode }}{% endif %}{% if gi.location.region_facet and gi.location.country_facet %}, {% endif %}{% if gi.location.country_facet %}{{ gi.location.country_facet|urlencode }}{% endif %}"
-	                      hx-target="#map-modal-content"
-	                      hx-swap="innerHTML"
-	                      title="{% translate 'Show on map' %}"
-	                    >
-	                      {% if gi.location.region_facet %}{{ gi.location.region_facet }}{% endif %}{% if gi.location.region_facet and gi.location.country_facet %}, {% endif %}{% if gi.location.country_facet %}{{ gi.location.country_facet }}{% endif %}
-	                    </button>
-	                  {% else %}
-	                    {% if gi.location.region_facet %}{{ gi.location.region_facet }}{% endif %}{% if gi.location.region_facet and gi.location.country_facet %}, {% endif %}{% if gi.location.country_facet %}{{ gi.location.country_facet }}{% endif %}
-	                  {% endif %}
-	                {% endif %}
-	              {% endwith %}
-	            </td>
-            <td class="px-6 py-5 align-top text-sm text-base-content/70">
-              <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-xs font-semibold text-base-content/70">
-                {{ collection.bundles_count }}
-              </span>
-            </td>
-          </tr>
-        {% empty %}
-          <tr>
-            <td colspan="5" class="px-6 py-12 text-center text-base-content/50">
-              {% translate "No collections match the current filters." %}
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div><!-- /desktop table -->
 
-  <!-- Pagination -->
+              <div class="order-3 space-y-1.5 lg:order-none lg:px-6 lg:py-5">
+                <span class="text-[11px] font-semibold uppercase tracking-wide text-base-content/50 lg:hidden">{% translate "Languages" %}</span>
+                {% if gi and gi.object_languages.all %}
+                  <div class="flex flex-wrap gap-1.5">
+                    {% for language in gi.object_languages.all %}
+                      {% include "explorer/partials/language_chip.html" with language=language size="sm" %}
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+
+              <div class="order-4 space-y-1 text-sm text-base-content/70 lg:order-none lg:px-6 lg:py-5">
+                <span class="text-[11px] font-semibold uppercase tracking-wide text-base-content/50 lg:hidden">{% translate "Description" %}</span>
+                {% if gi and gi.description %}
+                  <span class="line-clamp-2 cursor-help lg:line-clamp-none" title="{{ gi.description }}">{{ gi.description|truncatewords:12|highlight_query:search_query }}</span>
+                {% endif %}
+              </div>
+
+              <div class="order-5 space-y-1 text-sm text-base-content/70 lg:order-none lg:px-6 lg:py-5">
+                <span class="text-[11px] font-semibold uppercase tracking-wide text-base-content/50 lg:hidden">{% translate "Location" %}</span>
+                {% if gi and gi.location %}
+                  {% if gi.location.geo_location %}
+                    <button
+                      type="button"
+                      data-map-modal-trigger
+                      class="text-primary hover:underline transition-colors"
+                      hx-get="{% url 'explorer:map_popup' %}?geo={{ gi.location.geo_location }}&title={% if gi.location.region_facet %}{{ gi.location.region_facet|urlencode }}{% endif %}{% if gi.location.region_facet and gi.location.country_facet %}, {% endif %}{% if gi.location.country_facet %}{{ gi.location.country_facet|urlencode }}{% endif %}"
+                      hx-target="#map-modal-content"
+                      hx-swap="innerHTML"
+                      title="{% translate 'Show on map' %}"
+                    >
+                      {% if gi.location.region_facet %}{{ gi.location.region_facet }}{% endif %}{% if gi.location.region_facet and gi.location.country_facet %}, {% endif %}{% if gi.location.country_facet %}{{ gi.location.country_facet }}{% endif %}
+                    </button>
+                  {% else %}
+                    {% if gi.location.region_facet %}{{ gi.location.region_facet }}{% endif %}{% if gi.location.region_facet and gi.location.country_facet %}, {% endif %}{% if gi.location.country_facet %}{{ gi.location.country_facet }}{% endif %}
+                  {% endif %}
+                {% endif %}
+              </div>
+
+              <div class="order-2 flex items-center gap-2 lg:order-none lg:block lg:px-6 lg:py-5">
+                <span class="text-[11px] font-semibold uppercase tracking-wide text-base-content/50 lg:hidden">{% translate "Bundles" %}</span>
+                <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-xs font-semibold text-base-content/70">
+                  {{ collection.bundles_count }}
+                </span>
+              </div>
+            </div>
+          {% endwith %}
+        {% empty %}
+          <div class="px-4 py-12 text-center text-base-content/50">
+            {% translate "No collections match the current filters." %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
   {% if is_paginated %}
     <div class="flex items-center justify-between px-4 py-3 border-t border-base-300 bg-base-200">
       <div class="text-xs text-base-content/60">

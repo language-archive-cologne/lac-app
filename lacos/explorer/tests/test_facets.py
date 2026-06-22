@@ -10,6 +10,7 @@ from django.db.models import CharField, OuterRef, Subquery
 from django.db.models.functions import Cast
 from django.http import QueryDict
 from django.test import RequestFactory
+from django.urls import reverse
 
 from lacos.blam.models import Bundle, Collection
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
@@ -495,6 +496,20 @@ def test_faceted_search_page_loads(client):
     """The /search/ page should render without errors."""
     response = client.get("/search/")
     assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_faceted_search_renders_one_result_row_per_collection(client):
+    collection = _create_collection("C1", "Alpha")
+
+    response = client.get("/search/")
+
+    assert response.status_code == 200
+    detail_path = reverse(
+        "explorer:collection_detail_by_handle",
+        kwargs={"handle": collection.handle_path},
+    )
+    assert response.content.decode("utf-8").count(detail_path) == 1
 
 
 @pytest.mark.django_db
