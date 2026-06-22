@@ -24,6 +24,8 @@ from lacos.blam.models.collection.collection_publication_info import CollectionC
 from lacos.blam.models.collection.collection_publication_info import CollectionPublicationInfo
 from lacos.explorer.search import search_archives
 from lacos.explorer.search_indexing import rebuild_all_search_vectors
+from lacos.explorer.text_search import build_fts_query
+from lacos.explorer.text_search import searchable_words
 from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 
 
@@ -217,6 +219,17 @@ def test_bundle_search_matches_topics_and_parent_collection():
 @pytest.mark.django_db
 def test_search_ignores_blank_terms():
     assert search_archives("   ") == []
+
+
+def test_build_fts_query_ignores_one_character_terms():
+    assert searchable_words("a") == []
+    assert build_fts_query("a") is None
+    assert search_archives("a") == []
+
+
+def test_build_fts_query_keeps_specific_terms_after_short_words():
+    assert searchable_words("a language") == ["language"]
+    assert build_fts_query("a language") is not None
 
 
 @pytest.mark.django_db

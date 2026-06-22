@@ -23,6 +23,8 @@ from lacos.blam.models.collection.collection_general_info import (
 from lacos.blam.models.collection.collection_publication_info import (
     CollectionPublicationInfo,
 )
+from lacos.explorer.facets import FACET_MAX_SELECTED_VALUES
+from lacos.explorer.facets import FACET_MAX_TOTAL_SELECTED_VALUES
 from lacos.explorer.facets import FacetService
 from lacos.explorer.models import BundleFileTypeFacet
 from lacos.explorer.search_indexing import update_collection_search_vector
@@ -91,6 +93,60 @@ def _make_params(**kwargs) -> QueryDict:
         else:
             qd[key] = value
     return qd
+
+
+@pytest.mark.django_db
+def test_facet_selection_values_are_capped_per_facet():
+    values = [f"lang-{i}" for i in range(FACET_MAX_SELECTED_VALUES + 3)]
+
+    result = FacetService().search(
+        _make_params(language=values),
+        _collection_qs().none(),
+    )
+
+    assert [
+        active_filter["value"] for active_filter in result.active_filters
+    ] == values[:FACET_MAX_SELECTED_VALUES]
+
+
+@pytest.mark.django_db
+def test_facet_selection_values_are_capped_across_request():
+    values = [f"value-{i}" for i in range(FACET_MAX_SELECTED_VALUES + 3)]
+    years = [str(2000 + i) for i in range(FACET_MAX_SELECTED_VALUES + 3)]
+    params = _make_params(
+        keyword=values,
+        language=values,
+        year=years,
+        country=values,
+        region=values,
+        license=values,
+    )
+
+    result = FacetService().search(params, _collection_qs().none())
+
+    active_filters_by_name: dict[str, list[str]] = {}
+    for active_filter in result.active_filters:
+        active_filters_by_name.setdefault(active_filter["facet_name"], []).append(
+            active_filter["value"],
+        )
+
+    assert len(result.active_filters) == FACET_MAX_TOTAL_SELECTED_VALUES
+    assert all(
+        len(active_values) <= FACET_MAX_SELECTED_VALUES
+        for active_values in active_filters_by_name.values()
+    )
+
+
+@pytest.mark.django_db
+def test_invalid_year_facet_values_are_ignored():
+    result = FacetService().search(
+        _make_params(year=["not-a-year", "2024"]),
+        _collection_qs().none(),
+    )
+
+    assert [
+        active_filter["value"] for active_filter in result.active_filters
+    ] == ["2024"]
 
 
 @pytest.mark.django_db

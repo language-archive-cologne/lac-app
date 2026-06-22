@@ -8,6 +8,8 @@ import unicodedata
 from django.contrib.postgres.search import SearchQuery
 from django.db.models import QuerySet
 
+MIN_SEARCH_TOKEN_LENGTH = 2
+
 
 def sanitize_search_term(term: str) -> str:
     """Normalize and sanitize a search term for use in tsquery.
@@ -17,6 +19,16 @@ def sanitize_search_term(term: str) -> str:
     """
     normalized = unicodedata.normalize("NFC", term.strip())
     return re.sub(r"[^\w\s]", " ", normalized, flags=re.UNICODE)
+
+
+def searchable_words(search_term: str) -> list[str]:
+    """Return normalized words that are specific enough for prefix search."""
+    sanitized = sanitize_search_term(search_term)
+    return [
+        word.lower()
+        for word in sanitized.split()
+        if len(word) >= MIN_SEARCH_TOKEN_LENGTH
+    ]
 
 
 def _expand_prefix_variants(word: str) -> list[str]:
@@ -35,8 +47,7 @@ def build_fts_query(search_term: str) -> SearchQuery | None:
 
     Returns None if the search term contains no searchable words.
     """
-    sanitized = sanitize_search_term(search_term)
-    words = [word.lower() for word in sanitized.split()]
+    words = searchable_words(search_term)
     if not words:
         return None
     prefix_terms = " & ".join(

@@ -166,11 +166,14 @@ def apply_field_scoped_search(
 
     Builds one SearchVector over the union of the selected definitions' ORM
     field paths and filters with a prefix FTS query. Returns ``qs`` unchanged
-    when the term is empty or none of the keys resolve to fields.
+    when the term is empty or none of the keys resolve to fields. Returns an
+    empty queryset when a non-empty term has no searchable tokens.
     """
+    if not term.strip():
+        return qs
     fts_query = build_fts_query(term)
     if fts_query is None:
-        return qs
+        return qs.none()
     field_map = {d.key: d.orm_fields for d in definitions}
     orm_fields: list[str] = []
     for key in field_keys:

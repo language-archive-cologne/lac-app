@@ -23,6 +23,8 @@ FACET_CACHE_KEY = "explorer:facets:base"
 BUNDLE_FACET_CACHE_KEY = "explorer:facets:bundles:base"
 FACET_CACHE_TIMEOUT = 60 * 10  # 10 minutes
 FACET_MAX_VALUES = 30  # Max values shown per facet (selected values always included)
+FACET_MAX_SELECTED_VALUES = 10
+FACET_MAX_TOTAL_SELECTED_VALUES = 30
 
 
 @dataclass(frozen=True)
@@ -77,6 +79,7 @@ class FacetDefinition:
     allowed_values: frozenset[str] | None = None
     sort_alphabetically: bool = False
     show_all: bool = False
+    integer_values: bool = False
 
 
 FACET_DEFINITIONS: list[FacetDefinition] = [
@@ -111,6 +114,7 @@ FACET_DEFINITIONS: list[FacetDefinition] = [
         value_field="publication_info__publication_year",
         label_field="publication_info__publication_year",
         filter_lookup="publication_info__publication_year__in",
+        integer_values=True,
     ),
     FacetDefinition(
         name="country",
@@ -188,6 +192,7 @@ BUNDLE_FACET_DEFINITIONS: list[FacetDefinition] = [
         value_field="publication_info__publication_year",
         label_field="publication_info__publication_year",
         filter_lookup="publication_info__publication_year__in",
+        integer_values=True,
     ),
     FacetDefinition(
         name="country",
@@ -297,15 +302,22 @@ class FacetService:
         )
 
     def _parse_selections(self, params: QueryDict) -> dict[str, list[str]]:
-        """Extract selected facet values from query params, deduplicated."""
+        """Extract selected facet values from query params, deduplicated and capped."""
         selections: dict[str, list[str]] = {}
+        remaining_values = FACET_MAX_TOTAL_SELECTED_VALUES
         for defn in self.definitions:
+            if remaining_values <= 0:
+                break
             raw_values = params.getlist(defn.name)
             cleaned = list(dict.fromkeys(v.strip() for v in raw_values if v.strip()))
             if defn.allowed_values is not None:
                 cleaned = [v for v in cleaned if v in defn.allowed_values]
+            if defn.integer_values:
+                cleaned = [v for v in cleaned if v.isdigit()]
             if cleaned:
-                selections[defn.name] = cleaned
+                limit = min(FACET_MAX_SELECTED_VALUES, remaining_values)
+                selections[defn.name] = cleaned[:limit]
+                remaining_values -= len(selections[defn.name])
         return selections
 
     def _apply_filters(

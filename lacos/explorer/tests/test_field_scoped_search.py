@@ -79,6 +79,16 @@ def test_empty_term_returns_qs_unchanged():
 
 
 @pytest.mark.django_db
+def test_non_searchable_field_term_returns_no_results():
+    _collection("C1", "Anything")
+    base = Collection.objects.all()
+
+    out = apply_field_scoped_search(base, "a", ["title"], COLLECTION_FIELD_DEFINITIONS)
+
+    assert list(out) == []
+
+
+@pytest.mark.django_db
 def test_no_resolvable_fields_returns_qs_unchanged():
     _collection("C1", "Anything")
     base = Collection.objects.all()
