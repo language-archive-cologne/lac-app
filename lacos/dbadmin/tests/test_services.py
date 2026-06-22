@@ -1,5 +1,9 @@
 import pytest
 
+from lacos.dbadmin.postgres_observability import (
+    PgStatStatementsService,
+    _is_pg_stat_statements_preloaded,
+)
 from lacos.dbadmin.services import DatabaseStatsService
 
 
@@ -41,3 +45,20 @@ class TestDatabaseStatsService:
     def test_get_health_warnings_returns_list(self):
         warnings = DatabaseStatsService.get_health_warnings()
         assert isinstance(warnings, list)
+
+    def test_get_pg_stat_statements_summary_returns_expected_keys(self):
+        summary = PgStatStatementsService.get_summary()
+
+        assert "available" in summary
+        assert "preloaded" in summary
+        assert "extension_installed" in summary
+        assert "top_queries" in summary
+        assert "error" in summary
+
+
+def test_pg_stat_statements_preload_detection_allows_multiple_libraries():
+    assert _is_pg_stat_statements_preloaded("pg_cron, pg_stat_statements")
+
+
+def test_pg_stat_statements_preload_detection_rejects_missing_library():
+    assert not _is_pg_stat_statements_preloaded("pg_cron")

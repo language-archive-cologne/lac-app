@@ -80,6 +80,51 @@
     </div>
 </div>
 
+<!-- Query Stats -->
+<div class="mt-6">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+        <h3 class="text-lg font-semibold">Slow Queries</h3>
+        <div class="flex flex-wrap gap-2 text-xs">
+            <span class="badge badge-sm {% if query_stats.preloaded %}badge-success{% else %}badge-warning{% endif %}">preload {% if query_stats.preloaded %}on{% else %}off{% endif %}</span>
+            <span class="badge badge-sm {% if query_stats.extension_installed %}badge-success{% else %}badge-warning{% endif %}">extension {% if query_stats.extension_installed %}on{% else %}off{% endif %}</span>
+        </div>
+    </div>
+    {% if query_stats.available %}
+        {% if query_stats.top_queries %}
+            <div class="overflow-x-auto">
+                <table class="table table-sm table-zebra">
+                    <thead>
+                        <tr>
+                            <th class="text-right">Calls</th>
+                            <th class="text-right">Total ms</th>
+                            <th class="text-right">Mean ms</th>
+                            <th class="text-right">Rows</th>
+                            <th>Query</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for query in query_stats.top_queries %}
+                        <tr>
+                            <td class="text-right font-mono text-xs">{{ query.calls|intcomma }}</td>
+                            <td class="text-right font-mono text-xs">{{ query.total_exec_time_ms }}</td>
+                            <td class="text-right font-mono text-xs">{{ query.mean_exec_time_ms }}</td>
+                            <td class="text-right font-mono text-xs">{{ query.rows|intcomma }}</td>
+                            <td class="font-mono text-xs whitespace-normal break-words">{{ query.query }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="text-sm text-base-content/60">No captured query statistics yet.</p>
+        {% endif %}
+    {% else %}
+        <div class="alert alert-warning alert-sm">
+            <span class="text-sm">pg_stat_statements is not active{% if query_stats.error %}: {{ query_stats.error }}{% endif %}</span>
+        </div>
+    {% endif %}
+</div>
+
 <!-- Table Sizes -->
 <div class="mt-6">
     <h3 class="text-lg font-semibold mb-3">Table Sizes</h3>

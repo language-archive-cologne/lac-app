@@ -13,6 +13,7 @@ from django.views import View
 from django.views.generic import TemplateView
 
 from lacos.blam.services.cleanup_service import CleanupService
+from lacos.dbadmin.postgres_observability import PgStatStatementsService
 from lacos.dbadmin.services import DatabaseStatsService
 from lacos.blam.tasks import (
     backup_database_task,
@@ -441,6 +442,7 @@ class OverviewStatsView(SuperuserRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         pg_stats = DatabaseStatsService.get_pg_stats()
         table_sizes = DatabaseStatsService.get_table_sizes()
+        query_stats = PgStatStatementsService.get_summary()
         health_warnings = DatabaseStatsService.get_health_warnings()
         backup_summary = DatabaseStatsService.get_backup_summary()
         html = render_to_string(
@@ -448,6 +450,7 @@ class OverviewStatsView(SuperuserRequiredMixin, View):
             {
                 "pg_stats": pg_stats,
                 "table_sizes": table_sizes,
+                "query_stats": query_stats,
                 "health_warnings": health_warnings,
                 "backup_summary": backup_summary,
             },

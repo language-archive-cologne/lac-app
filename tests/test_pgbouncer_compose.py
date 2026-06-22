@@ -52,6 +52,16 @@ def test_pgbouncer_compose_does_not_special_case_oai_routes(compose_file: str):
     assert "/oai/" not in _compose_path(compose_file).read_text()
 
 
+@pytest.mark.parametrize(
+    "compose_file",
+    ["docker-compose.local.yml", "docker-compose.dev.yml", "docker-compose.production.yml"],
+)
+def test_postgres_preloads_pg_stat_statements(compose_file: str):
+    postgres_block = "\n".join(_service_block(_compose_path(compose_file), "postgres"))
+
+    assert "shared_preload_libraries=pg_stat_statements" in postgres_block
+
+
 def test_pgbouncer_keeps_production_logs_operational_but_not_per_connection():
     template = (
         Path(__file__).resolve().parents[1]
