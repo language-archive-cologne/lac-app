@@ -24,7 +24,7 @@ services:
         max-size: "10m"
         max-file: "3"
     depends_on:
-      - postgres
+      - pgbouncer
       - redis
     volumes:
       - .:/app:z
@@ -35,6 +35,10 @@ services:
       - ./.envs/.production/.postgres
       - ./.envs/.production/.storage
     environment:
+      POSTGRES_HOST: pgbouncer
+      POSTGRES_PORT: "6432"
+      CONN_MAX_AGE: "0"
+      DISABLE_SERVER_SIDE_CURSORS: "true"
       SAML_LOGIN_ENABLED: "true"
       SAML_DJANGO_USER_MAIN_ATTRIBUTE: "username"
       SAML_USE_NAME_ID_AS_USERNAME: "false"
@@ -61,6 +65,35 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
       - "${S3_HOSTNAME}:${S3_IP}"
+
+  pgbouncer:
+    build:
+      context: .
+      dockerfile: ./compose/production/pgbouncer/Dockerfile
+    image: lacos_production_pgbouncer
+    container_name: lacos_production_pgbouncer
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      - postgres
+    env_file:
+      - ./.envs/.production/.postgres
+    environment:
+      PGBOUNCER_SERVER_HOST: postgres
+      PGBOUNCER_SERVER_PORT: "5432"
+      PGBOUNCER_POOL_MODE: transaction
+      PGBOUNCER_MAX_CLIENT_CONN: "500"
+      PGBOUNCER_DEFAULT_POOL_SIZE: "30"
+      PGBOUNCER_RESERVE_POOL_SIZE: "10"
+      PGBOUNCER_QUERY_TIMEOUT: "300"
+    ports:
+      - '127.0.0.1:6434:6432'
+    networks:
+      - lacos_production_network
 
   postgres:
     build:
@@ -119,6 +152,7 @@ services:
         max-file: "3"
     depends_on:
       - django
+      - pgbouncer
       - redis
     volumes:
       - .:/app:z
@@ -134,6 +168,10 @@ services:
       - ./.envs/.production/.postgres
       - ./.envs/.production/.storage
     environment:
+      POSTGRES_HOST: pgbouncer
+      POSTGRES_PORT: "6432"
+      CONN_MAX_AGE: "0"
+      DISABLE_SERVER_SIDE_CURSORS: "true"
       SAML_LOGIN_ENABLED: "true"
       SAML_DJANGO_USER_MAIN_ATTRIBUTE: "username"
       SAML_USE_NAME_ID_AS_USERNAME: "false"

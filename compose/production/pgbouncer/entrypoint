@@ -1,0 +1,54 @@
+#!/bin/sh
+
+set -eu
+
+: "${POSTGRES_USER:=postgres}"
+: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
+: "${POSTGRES_DB:?POSTGRES_DB is required}"
+: "${PGBOUNCER_SERVER_HOST:=postgres}"
+: "${PGBOUNCER_SERVER_PORT:=5432}"
+: "${PGBOUNCER_LISTEN_ADDR:=0.0.0.0}"
+: "${PGBOUNCER_LISTEN_PORT:=6432}"
+: "${PGBOUNCER_POOL_MODE:=transaction}"
+: "${PGBOUNCER_MAX_CLIENT_CONN:=500}"
+: "${PGBOUNCER_DEFAULT_POOL_SIZE:=30}"
+: "${PGBOUNCER_RESERVE_POOL_SIZE:=10}"
+: "${PGBOUNCER_RESERVE_POOL_TIMEOUT:=5}"
+: "${PGBOUNCER_SERVER_IDLE_TIMEOUT:=60}"
+: "${PGBOUNCER_QUERY_TIMEOUT:=300}"
+: "${PGBOUNCER_AUTH_TYPE:=plain}"
+
+escape_userlist_value() {
+    printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+runtime_dir=/tmp/pgbouncer
+mkdir -p "$runtime_dir"
+
+escaped_user=$(escape_userlist_value "$POSTGRES_USER")
+escaped_password=$(escape_userlist_value "$POSTGRES_PASSWORD")
+printf '"%s" "%s"\n' "$escaped_user" "$escaped_password" > "$runtime_dir/userlist.txt"
+
+export POSTGRES_DB
+export POSTGRES_USER
+export PGBOUNCER_AUTH_TYPE
+export PGBOUNCER_DEFAULT_POOL_SIZE
+export PGBOUNCER_LISTEN_ADDR
+export PGBOUNCER_LISTEN_PORT
+export PGBOUNCER_MAX_CLIENT_CONN
+export PGBOUNCER_POOL_MODE
+export PGBOUNCER_QUERY_TIMEOUT
+export PGBOUNCER_RESERVE_POOL_SIZE
+export PGBOUNCER_RESERVE_POOL_TIMEOUT
+export PGBOUNCER_SERVER_HOST
+export PGBOUNCER_SERVER_IDLE_TIMEOUT
+export PGBOUNCER_SERVER_PORT
+
+envsubst < /etc/pgbouncer/pgbouncer.ini.template > "$runtime_dir/pgbouncer.ini"
+chown -R nobody:nobody "$runtime_dir"
+
+until nc -z "$PGBOUNCER_SERVER_HOST" "$PGBOUNCER_SERVER_PORT"; do
+    sleep 1
+done
+
+exec pgbouncer "$runtime_dir/pgbouncer.ini"

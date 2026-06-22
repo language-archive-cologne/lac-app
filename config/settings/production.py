@@ -4,6 +4,7 @@ from .base import DATABASES
 from .base import INSTALLED_APPS
 from .base import REDIS_URL
 from .base import env
+from .database import configure_database_connections
 
 # GENERAL
 # ------------------------------------------------------------------------------
@@ -22,7 +23,7 @@ ALLOWED_HOSTS = list(
 
 # DATABASES
 # ------------------------------------------------------------------------------
-DATABASES["default"]["CONN_MAX_AGE"] = env.int("CONN_MAX_AGE", default=60)
+configure_database_connections(DATABASES["default"], env)
 
 # CACHES
 # ------------------------------------------------------------------------------

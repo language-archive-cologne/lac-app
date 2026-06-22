@@ -22,8 +22,8 @@ services:
         max-size: "10m"
         max-file: "3"
     depends_on:
-      postgres:
-        condition: service_healthy
+      pgbouncer:
+        condition: service_started
       minio:
         condition: service_healthy
     volumes:
@@ -34,6 +34,10 @@ services:
       - ./.envs/.local/.postgres
       - ./.envs/.local/.storage
     environment:
+      POSTGRES_HOST: pgbouncer
+      POSTGRES_PORT: "6432"
+      CONN_MAX_AGE: "0"
+      DISABLE_SERVER_SIDE_CURSORS: "true"
       SAML_LOGIN_ENABLED: "true"
       SAML_DJANGO_USER_MAIN_ATTRIBUTE: "username"
       SAML_USE_NAME_ID_AS_USERNAME: "false"
@@ -44,6 +48,34 @@ services:
     ports:
       - '127.0.0.1:8101:8000'
     command: /bin/bash -lc "python manage.py migrate && uvicorn config.asgi:application --host 0.0.0.0 --reload --reload-include '*.html' --no-access-log"
+    networks:
+      - lacos_network_ws
+
+  pgbouncer:
+    build:
+      context: .
+      dockerfile: ./compose/production/pgbouncer/Dockerfile
+    image: lacos_local_pgbouncer
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ./.envs/.local/.postgres
+    environment:
+      PGBOUNCER_SERVER_HOST: postgres
+      PGBOUNCER_SERVER_PORT: "5432"
+      PGBOUNCER_POOL_MODE: transaction
+      PGBOUNCER_MAX_CLIENT_CONN: "500"
+      PGBOUNCER_DEFAULT_POOL_SIZE: "30"
+      PGBOUNCER_RESERVE_POOL_SIZE: "10"
+      PGBOUNCER_QUERY_TIMEOUT: "300"
+    ports:
+      - "127.0.0.1:6431:6432"
     networks:
       - lacos_network_ws
 
@@ -134,6 +166,7 @@ services:
         max-file: "3"
     depends_on:
       - django
+      - pgbouncer
       - redis
     volumes:
       - .:/app:z
@@ -149,6 +182,10 @@ services:
       - ./.envs/.local/.postgres
       - ./.envs/.local/.storage
     environment:
+      POSTGRES_HOST: pgbouncer
+      POSTGRES_PORT: "6432"
+      CONN_MAX_AGE: "0"
+      DISABLE_SERVER_SIDE_CURSORS: "true"
       SAML_LOGIN_ENABLED: "true"
       SAML_DJANGO_USER_MAIN_ATTRIBUTE: "username"
       SAML_USE_NAME_ID_AS_USERNAME: "false"

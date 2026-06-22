@@ -1,8 +1,10 @@
 # ruff: noqa: E501
 from .base import *  # noqa: F403
+from .base import DATABASES
 from .base import INSTALLED_APPS
 from .base import MIDDLEWARE
 from .base import env
+from .database import configure_database_connections
 
 # GENERAL
 # ------------------------------------------------------------------------------
@@ -15,6 +17,10 @@ SECRET_KEY = env(
 )
 # https://docs.djangoproject.com/en/dev/ref/settings/#allowed-hosts
 ALLOWED_HOSTS = ["localhost", "0.0.0.0", "127.0.0.1"]  # noqa: S104
+
+# DATABASES
+# ------------------------------------------------------------------------------
+configure_database_connections(DATABASES["default"], env, conn_max_age_default=0)
 
 # CACHES
 # ------------------------------------------------------------------------------
