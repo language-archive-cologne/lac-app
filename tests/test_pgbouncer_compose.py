@@ -67,6 +67,19 @@ def test_pgbouncer_keeps_production_logs_operational_but_not_per_connection():
     assert "stats_period = 60" in template
 
 
+def test_pgbouncer_entrypoint_keeps_docker_dns_readable_after_privilege_drop():
+    entrypoint = (
+        Path(__file__).resolve().parents[1]
+        / "compose"
+        / "production"
+        / "pgbouncer"
+        / "entrypoint"
+    ).read_text()
+
+    assert 'chmod a+r /etc/resolv.conf' in entrypoint
+    assert 'exec pgbouncer "$runtime_dir/pgbouncer.ini"' in entrypoint
+
+
 def _compose_path(compose_file: str) -> Path:
     return Path(__file__).resolve().parents[1] / compose_file
 
