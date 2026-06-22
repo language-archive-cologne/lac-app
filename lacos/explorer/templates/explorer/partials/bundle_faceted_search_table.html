@@ -1,7 +1,6 @@
 {% load i18n %}
 {% load explorer_extras %}
 <div class="rounded-2xl border border-base-300 bg-base-100 shadow-sm overflow-hidden">
-  <!-- Header bar -->
   <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-base-300 bg-base-200">
     <div class="flex items-center gap-3 text-xs text-base-content/60">
       <span class="font-semibold uppercase tracking-widest">{{ total_count }} {% translate "bundles" %}</span>
@@ -18,188 +17,72 @@
       </span>
     </div>
   </div>
-  <!-- Mobile card view -->
-  <div class="lg:hidden divide-y divide-base-200">
-    {% for bundle in bundles %}
-      {% with gi=bundle.get_general_info si=bundle.get_structural_info %}
-      <a href="{% url 'explorer:bundle_detail_by_handle' handle=bundle.handle_path %}{% back_query %}" class="block px-4 py-4 hover:bg-base-200 transition-colors">
-        <div class="flex items-start justify-between gap-3">
-          <div class="min-w-0 flex-1">
-            <h3 class="font-semibold text-base-content leading-snug">
-              {% if gi and gi.display_title %}
-                {{ gi.display_title|highlight_query:search_query }}
-              {% else %}
-                {{ bundle.identifier|highlight_query:search_query }}
-              {% endif %}
-            </h3>
-            <div class="mt-1 space-y-0.5">
-              {% if si and si.is_member_of_collection %}
-                {% with coll=si.is_member_of_collection coll_gi=si.is_member_of_collection.get_general_info %}
-                  <p class="text-xs">
-                    <span class="uppercase tracking-wide font-semibold text-base-content/50">{% translate "Part of" %}</span>
-                    <span class="ml-1 font-medium text-base-content/75">
-                      {% if coll_gi and coll_gi.display_title %}
-                        {{ coll_gi.display_title|truncatewords:6 }}
-                      {% else %}
-                        {{ coll.identifier }}
-                      {% endif %}
-                    </span>
-                  </p>
-                {% endwith %}
-              {% endif %}
-              <div class="text-xs text-base-content/50 font-mono">{{ bundle.identifier }}</div>
-            </div>
-          </div>
-          <svg class="w-4 h-4 text-base-content/30 shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-          </svg>
-        </div>
-        <div class="mt-2 flex flex-wrap items-center gap-1.5">
-          {% if bundle.acl_access_level == 'public' %}
-            <span class="badge badge-success badge-xs">{% translate "Public" %}</span>
-          {% elif bundle.acl_access_level == 'academic' %}
-            <span class="badge badge-warning badge-xs">{% translate "Academic" %}</span>
-          {% elif bundle.acl_access_level %}
-            <span class="badge badge-xs bg-amber-600 text-white border-amber-600">{% translate "Restricted" %}</span>
-          {% endif %}
-          {% if gi and gi.object_languages.all %}
-            {% for language in gi.object_languages.all %}
-              {% include "explorer/partials/language_chip.html" with language=language size="sm" %}
-            {% endfor %}
-          {% endif %}
-        </div>
-        {% if gi and gi.description %}
-          <p class="mt-1.5 text-xs text-base-content/60 line-clamp-2">{{ gi.description|truncatewords:20|highlight_query:search_query }}</p>
-        {% endif %}
-        {% if gi %}
-          {% with keywords=gi.keywords.all %}
-            {% if keywords %}
-              <div class="mt-2 flex flex-wrap gap-1">
-                {% for keyword in keywords|slice:":3" %}
-                  <span class="inline-flex max-w-[10rem] items-center rounded-full border border-base-300 bg-base-200 px-1.5 py-0.5 text-xs text-base-content/60">
-                    <span class="truncate">{{ keyword.value|highlight_query:search_query }}</span>
-                  </span>
-                {% endfor %}
-                {% if keywords|length > 3 %}
-                  <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-1.5 py-0.5 text-xs font-semibold text-base-content/50">+{{ keywords|length|add:"-3" }}</span>
-                {% endif %}
-              </div>
+
+  {% facet_sort_url "name" as sort_name_url %}
+  {% facet_sort_url "language" as sort_lang_url %}
+  {% facet_sort_url "collection" as sort_coll_url %}
+  <div class="overflow-x-auto">
+    <div class="min-w-full text-sm">
+      <div class="hidden lg:grid lg:min-w-[72rem] lg:grid-cols-[minmax(18rem,2fr)_8rem_minmax(12rem,1fr)_minmax(16rem,1.4fr)_minmax(12rem,1fr)] bg-base-200 sticky top-0 z-10">
+        <div class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">
+          <a href="{{ sort_name_url }}"
+             hx-get="{{ sort_name_url }}"
+             hx-target="#faceted-results"
+             hx-swap="outerHTML"
+             hx-push-url="true"
+             class="hover:text-primary cursor-pointer inline-flex items-center gap-2 uppercase tracking-widest">
+            {% translate "Bundle" %}
+            {% if current_sort == 'name' %}
+              <span class="text-primary">{% if current_order == 'asc' %}&#9650;{% else %}&#9660;{% endif %}</span>
             {% endif %}
-          {% endwith %}
-        {% endif %}
-        {% if search_query %}
-          {% if searched_field_labels %}
-            <div class="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
-              <span class="text-[11px] uppercase tracking-wide text-base-content/50">{% translate "Matched in" %}</span>
-              {% for label in searched_field_labels %}
-                <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-[11px] font-medium text-base-content/75">
-                  {{ label }}
-                </span>
-              {% endfor %}
-            </div>
-          {% else %}
-            {% with reasons=bundle|bundle_match_reasons:search_query|split_csv %}
-              {% if reasons %}
-                <div class="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
-                  <span class="text-[11px] uppercase tracking-wide text-base-content/50">{% translate "Matched in" %}</span>
-                  {% for reason in reasons %}
-                    <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-[11px] font-medium text-base-content/75">
-                      {{ reason|capfirst }}
-                    </span>
-                  {% endfor %}
-                </div>
-              {% endif %}
-            {% endwith %}
-          {% endif %}
-        {% endif %}
-      </a>
-      {% endwith %}
-    {% empty %}
-      <div class="px-4 py-12 text-center text-base-content/50">
-        {% translate "No bundles match the current filters." %}
+          </a>
+        </div>
+        <div class="px-4 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">{% translate "Access" %}</div>
+        <div class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">
+          <a href="{{ sort_lang_url }}"
+             hx-get="{{ sort_lang_url }}"
+             hx-target="#faceted-results"
+             hx-swap="outerHTML"
+             hx-push-url="true"
+             class="hover:text-primary cursor-pointer inline-flex items-center gap-2 uppercase tracking-widest">
+            {% translate "Languages" %}
+            {% if current_sort == 'language' %}
+              <span class="text-primary">{% if current_order == 'asc' %}&#9650;{% else %}&#9660;{% endif %}</span>
+            {% endif %}
+          </a>
+        </div>
+        <div class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">{% translate "Description" %}</div>
+        <div class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">
+          <a href="{{ sort_coll_url }}"
+             hx-get="{{ sort_coll_url }}"
+             hx-target="#faceted-results"
+             hx-swap="outerHTML"
+             hx-push-url="true"
+             class="hover:text-primary cursor-pointer inline-flex items-center gap-2 uppercase tracking-widest">
+            {% translate "Collection" %}
+            {% if current_sort == 'collection' %}
+              <span class="text-primary">{% if current_order == 'asc' %}&#9650;{% else %}&#9660;{% endif %}</span>
+            {% endif %}
+          </a>
+        </div>
       </div>
-    {% endfor %}
-  </div>
-  <!-- Desktop table view -->
-  <div class="hidden lg:block overflow-x-auto">
-    <table class="min-w-full text-sm">
-      <thead class="bg-base-200 sticky top-0 z-10">
-        <tr class="text-left">
-          <th scope="col" class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">
-            {% facet_sort_url "name" as sort_name_url %}
-            <a href="{{ sort_name_url }}"
-               hx-get="{{ sort_name_url }}"
-               hx-target="#faceted-results"
-               hx-swap="outerHTML"
-               hx-push-url="true"
-               class="hover:text-primary cursor-pointer inline-flex items-center gap-2 uppercase tracking-widest">
-              {% translate "Bundle" %}
-              {% if current_sort == 'name' %}
-                <span class="text-primary">{% if current_order == 'asc' %}&#9650;{% else %}&#9660;{% endif %}</span>
-              {% endif %}
-            </a>
-          </th>
-          <th scope="col" class="px-4 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">{% translate "Access" %}</th>
-          <th scope="col" class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">
-            {% facet_sort_url "language" as sort_lang_url %}
-            <a href="{{ sort_lang_url }}"
-               hx-get="{{ sort_lang_url }}"
-               hx-target="#faceted-results"
-               hx-swap="outerHTML"
-               hx-push-url="true"
-               class="hover:text-primary cursor-pointer inline-flex items-center gap-2 uppercase tracking-widest">
-              {% translate "Languages" %}
-              {% if current_sort == 'language' %}
-                <span class="text-primary">{% if current_order == 'asc' %}&#9650;{% else %}&#9660;{% endif %}</span>
-              {% endif %}
-            </a>
-          </th>
-          <th scope="col" class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">{% translate "Description" %}</th>
-          <th scope="col" class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">
-            {% facet_sort_url "collection" as sort_coll_url %}
-            <a href="{{ sort_coll_url }}"
-               hx-get="{{ sort_coll_url }}"
-               hx-target="#faceted-results"
-               hx-swap="outerHTML"
-               hx-push-url="true"
-               class="hover:text-primary cursor-pointer inline-flex items-center gap-2 uppercase tracking-widest">
-              {% translate "Collection" %}
-              {% if current_sort == 'collection' %}
-                <span class="text-primary">{% if current_order == 'asc' %}&#9650;{% else %}&#9660;{% endif %}</span>
-              {% endif %}
-            </a>
-          </th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-base-200">
+
+      <div class="divide-y divide-base-200 lg:min-w-[72rem]">
         {% for bundle in bundles %}
           {% with gi=bundle.get_general_info si=bundle.get_structural_info %}
-          <tr class="hover:bg-base-200 transition-colors">
-            <td class="px-6 py-5 align-top">
-              <div class="space-y-1">
+            <div class="grid gap-3 px-4 py-4 transition-colors hover:bg-base-200 lg:grid-cols-[minmax(18rem,2fr)_8rem_minmax(12rem,1fr)_minmax(16rem,1.4fr)_minmax(12rem,1fr)] lg:gap-0 lg:px-0 lg:py-0">
+              <div class="min-w-0 space-y-1 lg:px-6 lg:py-5">
                 <a href="{% url 'explorer:bundle_detail_by_handle' handle=bundle.handle_path %}{% back_query %}"
-                   class="text-base-content hover:text-primary font-semibold">
-                  {% if gi and gi.display_title %}
-                    {{ gi.display_title|highlight_query:search_query }}
-                  {% else %}
-                    {{ bundle.identifier|highlight_query:search_query }}
-                  {% endif %}
+                   class="inline-flex max-w-full items-center gap-2 text-base-content hover:text-primary font-semibold">
+                  <span class="truncate">
+                    {% if gi and gi.display_title %}
+                      {{ gi.display_title|highlight_query:search_query }}
+                    {% else %}
+                      {{ bundle.identifier|highlight_query:search_query }}
+                    {% endif %}
+                  </span>
+                  <span class="text-base-content/30 lg:hidden">&#8594;</span>
                 </a>
-                {% if si and si.is_member_of_collection %}
-                  {% with coll=si.is_member_of_collection coll_gi=si.is_member_of_collection.get_general_info %}
-                    <p class="mt-1 text-xs">
-                      <span class="uppercase tracking-wide font-semibold text-base-content/50">{% translate "Part of" %}</span>
-                      <a href="{% url 'explorer:collection_detail_by_handle' handle=coll.handle_path %}{% back_query %}"
-                         class="ml-1 font-medium text-base-content/75 hover:text-base-content hover:underline">
-                        {% if coll_gi and coll_gi.display_title %}
-                          {{ coll_gi.display_title|truncatewords:6 }}
-                        {% else %}
-                          {{ coll.identifier }}
-                        {% endif %}
-                      </a>
-                    </p>
-                  {% endwith %}
-                {% endif %}
                 <div class="text-xs text-base-content/50 font-mono">{{ bundle.identifier }}</div>
                 {% if gi %}
                   {% with keywords=gi.keywords.all %}
@@ -246,58 +129,62 @@
                   {% endif %}
                 {% endif %}
               </div>
-            </td>
-            <td class="px-4 py-5 align-top">
-              {% if bundle.acl_access_level == 'public' %}
-                <span class="badge badge-success badge-sm">{% translate "Public" %}</span>
-              {% elif bundle.acl_access_level == 'academic' %}
-                <span class="badge badge-warning badge-sm">{% translate "Academic" %}</span>
-              {% elif bundle.acl_access_level %}
-                <span class="badge bg-amber-600 text-white border-amber-600 badge-sm">{% translate "Restricted" %}</span>
-              {% endif %}
-            </td>
-            <td class="px-6 py-5 align-top">
-              {% if gi and gi.object_languages.all %}
-                <div class="flex flex-wrap gap-1.5">
-                  {% for language in gi.object_languages.all %}
-                    {% include "explorer/partials/language_chip.html" with language=language size="sm" %}
-                  {% endfor %}
-                </div>
-              {% endif %}
-            </td>
-            <td class="px-6 py-5 align-top text-sm text-base-content/70 max-w-xs">
-              {% if gi and gi.description %}
-                <span class="cursor-help" title="{{ gi.description }}">{{ gi.description|truncatewords:12|highlight_query:search_query }}</span>
-              {% endif %}
-            </td>
-            <td class="px-6 py-5 align-top text-sm text-base-content/70">
-              {% if si and si.is_member_of_collection %}
-                {% with coll=si.is_member_of_collection coll_gi=si.is_member_of_collection.get_general_info %}
-                  <a href="{% url 'explorer:collection_detail_by_handle' handle=coll.handle_path %}{% back_query %}"
-                     class="hover:text-primary">
-                    {% if coll_gi and coll_gi.display_title %}
-                      {{ coll_gi.display_title|truncatewords:6 }}
-                    {% else %}
-                      {{ coll.identifier }}
-                    {% endif %}
-                  </a>
-                {% endwith %}
-              {% endif %}
-            </td>
-          </tr>
+
+              <div class="order-3 flex items-center gap-2 lg:order-none lg:block lg:px-4 lg:py-5">
+                <span class="text-[11px] font-semibold uppercase tracking-wide text-base-content/50 lg:hidden">{% translate "Access" %}</span>
+                {% if bundle.acl_access_level == 'public' %}
+                  <span class="badge badge-success badge-sm">{% translate "Public" %}</span>
+                {% elif bundle.acl_access_level == 'academic' %}
+                  <span class="badge badge-warning badge-sm">{% translate "Academic" %}</span>
+                {% elif bundle.acl_access_level %}
+                  <span class="badge bg-amber-600 text-white border-amber-600 badge-sm">{% translate "Restricted" %}</span>
+                {% endif %}
+              </div>
+
+              <div class="order-4 space-y-1.5 lg:order-none lg:px-6 lg:py-5">
+                <span class="text-[11px] font-semibold uppercase tracking-wide text-base-content/50 lg:hidden">{% translate "Languages" %}</span>
+                {% if gi and gi.object_languages.all %}
+                  <div class="flex flex-wrap gap-1.5">
+                    {% for language in gi.object_languages.all %}
+                      {% include "explorer/partials/language_chip.html" with language=language size="sm" %}
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+
+              <div class="order-5 space-y-1 text-sm text-base-content/70 lg:order-none lg:px-6 lg:py-5">
+                <span class="text-[11px] font-semibold uppercase tracking-wide text-base-content/50 lg:hidden">{% translate "Description" %}</span>
+                {% if gi and gi.description %}
+                  <span class="line-clamp-2 cursor-help lg:line-clamp-none" title="{{ gi.description }}">{{ gi.description|truncatewords:12|highlight_query:search_query }}</span>
+                {% endif %}
+              </div>
+
+              <div class="order-2 space-y-1 text-sm text-base-content/70 lg:order-none lg:px-6 lg:py-5">
+                <span class="text-[11px] font-semibold uppercase tracking-wide text-base-content/50 lg:hidden">{% translate "Part of" %}</span>
+                {% if si and si.is_member_of_collection %}
+                  {% with coll=si.is_member_of_collection coll_gi=si.is_member_of_collection.get_general_info %}
+                    <a href="{% url 'explorer:collection_detail_by_handle' handle=coll.handle_path %}{% back_query %}"
+                       class="hover:text-primary">
+                      {% if coll_gi and coll_gi.display_title %}
+                        {{ coll_gi.display_title|truncatewords:6 }}
+                      {% else %}
+                        {{ coll.identifier }}
+                      {% endif %}
+                    </a>
+                  {% endwith %}
+                {% endif %}
+              </div>
+            </div>
           {% endwith %}
         {% empty %}
-          <tr>
-            <td colspan="5" class="px-6 py-12 text-center text-base-content/50">
-              {% translate "No bundles match the current filters." %}
-            </td>
-          </tr>
+          <div class="px-4 py-12 text-center text-base-content/50">
+            {% translate "No bundles match the current filters." %}
+          </div>
         {% endfor %}
-      </tbody>
-    </table>
+      </div>
+    </div>
   </div>
 
-  <!-- Pagination -->
   {% if is_paginated %}
     <div class="flex items-center justify-between px-4 py-3 border-t border-base-300 bg-base-200">
       <div class="text-xs text-base-content/60">

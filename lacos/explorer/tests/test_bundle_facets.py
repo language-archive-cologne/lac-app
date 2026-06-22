@@ -6,6 +6,7 @@ import re
 
 import pytest
 from django.http import QueryDict
+from django.urls import reverse
 
 from lacos.blam.models import Bundle, Collection
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
@@ -326,6 +327,21 @@ def test_bundle_faceted_search_page_loads(client):
     """The /search/bundles/ page should render without errors."""
     response = client.get("/search/bundles/")
     assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_bundle_faceted_search_renders_one_result_row_per_bundle(client):
+    coll = _create_collection("C1", "Test Collection")
+    bundle = _create_bundle("B1", "Alpha", coll)
+
+    response = client.get("/search/bundles/")
+
+    assert response.status_code == 200
+    detail_path = reverse(
+        "explorer:bundle_detail_by_handle",
+        kwargs={"handle": bundle.handle_path},
+    )
+    assert response.content.decode("utf-8").count(detail_path) == 1
 
 
 @pytest.mark.django_db
