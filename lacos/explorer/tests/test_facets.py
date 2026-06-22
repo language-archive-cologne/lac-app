@@ -499,6 +499,19 @@ def test_faceted_search_page_loads(client):
 
 
 @pytest.mark.django_db
+def test_faceted_search_paginates_twenty_five_results(client):
+    for index in range(26):
+        _create_collection(f"C{index:02d}", f"Collection {index:02d}")
+
+    response = client.get("/search/")
+
+    assert response.status_code == 200
+    assert len(response.context["collections"]) == 25
+    assert response.context["paginator"].per_page == 25
+    assert response.context["is_paginated"] is True
+
+
+@pytest.mark.django_db
 def test_faceted_search_renders_one_result_row_per_collection(client):
     collection = _create_collection("C1", "Alpha")
 

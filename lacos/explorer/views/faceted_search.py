@@ -26,7 +26,7 @@ class FacetedSearchView(ListView):
     model = Collection
     template_name = "faceted_search.html"
     context_object_name = "collections"
-    paginate_by = 50
+    paginate_by = 25
     _faceted_result: FacetedSearchResult | None = None
     _search_in: list[str] = []
 

@@ -331,6 +331,20 @@ def test_bundle_faceted_search_page_loads(client):
 
 
 @pytest.mark.django_db
+def test_bundle_faceted_search_paginates_twenty_five_results(client):
+    coll = _create_collection("C1", "Test Collection")
+    for index in range(26):
+        _create_bundle(f"B{index:02d}", f"Bundle {index:02d}", coll)
+
+    response = client.get("/search/bundles/")
+
+    assert response.status_code == 200
+    assert len(response.context["bundles"]) == 25
+    assert response.context["paginator"].per_page == 25
+    assert response.context["is_paginated"] is True
+
+
+@pytest.mark.django_db
 def test_bundle_faceted_search_renders_one_result_row_per_bundle(client):
     coll = _create_collection("C1", "Test Collection")
     bundle = _create_bundle("B1", "Alpha", coll)

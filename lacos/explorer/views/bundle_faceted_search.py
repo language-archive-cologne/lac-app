@@ -32,7 +32,7 @@ class BundleFacetedSearchView(ListView):
     model = Bundle
     template_name = "bundle_faceted_search.html"
     context_object_name = "bundles"
-    paginate_by = 50
+    paginate_by = 25
     _faceted_result: FacetedSearchResult | None = None
     _search_in: list[str] = []
 
