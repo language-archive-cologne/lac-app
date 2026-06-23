@@ -43,6 +43,10 @@ from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
 from lacos.explorer.collection_structured_data import build_collection_json_ld
 
 PUBLIC_BASE_URL = "https://lac.uni-koeln.de"
+# The live serving host in production (PUBLIC_BASE_URL is lacos there). Used to
+# prove the @id/url split: @id stays on the permanent lac URL, url follows the
+# live host.
+LIVE_BASE_URL = "https://lacos.uni-koeln.de"
 
 
 class _JsonLdScriptParser(HTMLParser):
@@ -302,6 +306,35 @@ def test_dataset_subject_of_and_record_nodes():
         "@id": "https://lac.uni-koeln.de/#org",
         "name": "Language Archive Cologne",
     }
+
+
+@pytest.mark.django_db
+def test_org_and_catalog_ids_stay_permanent_when_served_from_live_host():
+    """@id is the permanent identifier (lac); url is the live address (lacos).
+
+    In production PUBLIC_BASE_URL is the live host (lacos), but the graph @id of
+    the org/catalog nodes must stay on the permanent lac URL so Google
+    consolidates the same entity across all pages (issues #151 dd2, #153). url
+    must still point at the live host that actually serves the page.
+    """
+    collection = _build_rich_collection("hdl:11341/permanent-id")
+    pub_info = collection.get_publication_info
+    admin_info = collection.get_administrative_info
+    structural_info = collection.structural_info.first()
+    data = build_collection_json_ld(
+        collection,
+        public_base_url=LIVE_BASE_URL,
+        access_level="public",
+        publication_info=pub_info,
+        metadata_files=list(structural_info.additional_metadata_files.all()),
+        licenses=list(admin_info.licenses.all()),
+    )
+
+    assert data["publisher"]["@id"] == "https://lac.uni-koeln.de/#org"
+    assert data["includedInDataCatalog"]["@id"] == "https://lac.uni-koeln.de/#catalog"
+    assert data["sdPublisher"]["@id"] == "https://lac.uni-koeln.de/#org"
+    assert data["publisher"]["url"] == "https://lacos.uni-koeln.de/"
+    assert data["includedInDataCatalog"]["url"] == "https://lacos.uni-koeln.de/"
 
 
 @pytest.mark.django_db

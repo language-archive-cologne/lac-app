@@ -53,6 +53,10 @@ from lacos.blam.models.collection.collection_structural_info import (
 from lacos.explorer.bundle_structured_data import build_bundle_json_ld
 
 PUBLIC_BASE_URL = "https://lac.uni-koeln.de"
+# The live serving host in production (PUBLIC_BASE_URL is lacos there). Used to
+# prove the @id/url split: @id stays on the permanent lac URL, url follows the
+# live host.
+LIVE_BASE_URL = "https://lacos.uni-koeln.de"
 
 
 class _JsonLdScriptParser(HTMLParser):
@@ -243,6 +247,42 @@ def test_bundle_dataset_core_and_is_part_of():
         "latitude": 52.0,
         "longitude": 13.0,
     }
+
+
+@pytest.mark.django_db
+def test_org_and_catalog_ids_stay_permanent_when_served_from_live_host():
+    """@id is the permanent identifier (lac); url is the live address (lacos).
+
+    The publisher/catalog/sdPublisher nodes re-emitted on bundle pages must
+    carry the same permanent @id as the catalogue root (issues #151 dd2, #153),
+    while url and the isPartOf landing url follow the live serving host.
+    """
+    collection = _create_collection("hdl:11341/parent-permanent")
+    bundle = _create_bundle(collection, "hdl:11341/bundle-permanent")
+    pub_info = bundle.publication_info.first()
+    admin_info = bundle.administrative_info.first()
+    data = build_bundle_json_ld(
+        bundle,
+        public_base_url=LIVE_BASE_URL,
+        access_level="public",
+        collection=collection,
+        publication_info=pub_info,
+        media_resources=[],
+        licenses=list(admin_info.licenses.all()),
+    )
+
+    assert data["publisher"]["@id"] == "https://lac.uni-koeln.de/#org"
+    assert data["includedInDataCatalog"]["@id"] == "https://lac.uni-koeln.de/#catalog"
+    assert data["sdPublisher"]["@id"] == "https://lac.uni-koeln.de/#org"
+    assert data["publisher"]["url"] == "https://lacos.uni-koeln.de/"
+    assert data["includedInDataCatalog"]["url"] == "https://lacos.uni-koeln.de/"
+    assert data["isPartOf"]["url"] == (
+        "https://lacos.uni-koeln.de"
+        + reverse(
+            "explorer:collection_detail_by_handle",
+            kwargs={"handle": "11341/parent-permanent"},
+        )
+    )
 
 
 @pytest.mark.django_db

@@ -39,9 +39,12 @@ def build_organization_node(root_url: str, depth: str = ORG_DEPTH_FULL) -> dict:
     - ``full``: adds contact, location, certification, genealogy, and membership
       data (used on the catalogue root page only).
 
-    ``root_url`` must already carry its trailing slash.
+    ``@id`` is always the permanent identifier (``PERMANENT_ROOT_URL``) so the
+    same organization node consolidates across every page (issues #151 dd2,
+    #153), independent of the live host. ``url`` follows ``root_url`` (the live
+    serving host, which ``must`` already carry its trailing slash).
     """
-    organization_id = f"{root_url}#org"
+    organization_id = f"{PERMANENT_ROOT_URL}#org"
     node = {
         "@type": "ArchiveOrganization",
         "@id": organization_id,
@@ -94,7 +97,7 @@ def build_organization_node(root_url: str, depth: str = ORG_DEPTH_FULL) -> dict:
         },
     }
     node["archiveHeld"] = {
-        "@id": f"{root_url}#catalog",
+        "@id": f"{PERMANENT_ROOT_URL}#catalog",
     }
     node["parentOrganization"] = {
         "@type": "Organization",
@@ -128,10 +131,14 @@ def build_organization_node(root_url: str, depth: str = ORG_DEPTH_FULL) -> dict:
 
 
 def build_data_catalog_node(root_url: str) -> dict:
-    """Minimal ``DataCatalog`` node for ``includedInDataCatalog`` references."""
+    """Minimal ``DataCatalog`` node for ``includedInDataCatalog`` references.
+
+    ``@id`` is the permanent identifier (``PERMANENT_ROOT_URL``) so it matches
+    the catalogue root node across pages; ``url`` is the live serving host.
+    """
     return {
         "@type": "DataCatalog",
-        "@id": f"{root_url}#catalog",
+        "@id": f"{PERMANENT_ROOT_URL}#catalog",
         "name": ORGANIZATION_NAME,
         "url": root_url,
     }
