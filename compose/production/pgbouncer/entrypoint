@@ -17,6 +17,7 @@ set -eu
 : "${PGBOUNCER_SERVER_IDLE_TIMEOUT:=60}"
 : "${PGBOUNCER_QUERY_TIMEOUT:=300}"
 : "${PGBOUNCER_AUTH_TYPE:=plain}"
+: "${PGBOUNCER_INCLUDE_TEST_DATABASES:=0}"
 
 if [ "$(id -u)" = "0" ] && [ -f /etc/resolv.conf ]; then
     chmod a+r /etc/resolv.conf
@@ -24,6 +25,24 @@ fi
 
 escape_userlist_value() {
     printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+append_test_database_mappings() {
+    tmp_file="${runtime_dir}/pgbouncer.ini.tmp"
+    awk \
+        -v db="$POSTGRES_DB" \
+        -v host="$PGBOUNCER_SERVER_HOST" \
+        -v port="$PGBOUNCER_SERVER_PORT" \
+        -v user="$POSTGRES_USER" \
+        '
+        /^\[pgbouncer\]$/ {
+            print "test_" db " = host=" host " port=" port " dbname=test_" db " user=" user
+            print "postgres = host=" host " port=" port " dbname=postgres user=" user
+            print ""
+        }
+        { print }
+        ' "$runtime_dir/pgbouncer.ini" > "$tmp_file"
+    mv "$tmp_file" "$runtime_dir/pgbouncer.ini"
 }
 
 runtime_dir=/tmp/pgbouncer
@@ -49,6 +68,9 @@ export PGBOUNCER_SERVER_IDLE_TIMEOUT
 export PGBOUNCER_SERVER_PORT
 
 envsubst < /etc/pgbouncer/pgbouncer.ini.template > "$runtime_dir/pgbouncer.ini"
+if [ "$PGBOUNCER_INCLUDE_TEST_DATABASES" = "1" ]; then
+    append_test_database_mappings
+fi
 chown -R nobody:nobody "$runtime_dir"
 
 until nc -z "$PGBOUNCER_SERVER_HOST" "$PGBOUNCER_SERVER_PORT"; do

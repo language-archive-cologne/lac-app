@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import date
 import re
 
 import pytest
 from django.contrib.contenttypes.models import ContentType
+from django.core.cache import cache
 from django.db.models import CharField, OuterRef, Subquery
 from django.db.models.functions import Cast
 from django.http import QueryDict
@@ -13,8 +15,12 @@ from django.test import RequestFactory
 from django.urls import reverse
 
 from lacos.blam.models import Bundle, Collection
-from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
+from lacos.blam.models.base_indentifiers import AccessTypeChoices, IdentifierTypeChoices
 from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
+from lacos.blam.models.collection.collection_administrative_info import (
+    CollectionAdministrativeInfo,
+    CollectionLicense,
+)
 from lacos.blam.models.collection.collection_general_info import (
     CollectionGeneralInfo,
     CollectionKeyword,
@@ -24,6 +30,8 @@ from lacos.blam.models.collection.collection_general_info import (
 from lacos.blam.models.collection.collection_publication_info import (
     CollectionPublicationInfo,
 )
+
+from lacos.explorer.facets import FACET_CACHE_KEY
 from lacos.explorer.facets import FACET_MAX_SELECTED_VALUES
 from lacos.explorer.facets import FACET_MAX_TOTAL_SELECTED_VALUES
 from lacos.explorer.facets import FacetService
@@ -586,3 +594,207 @@ def test_faceted_search_template_resets_loading_on_history_restore(client):
     assert "htmx:historyCacheMissLoadError" in page
     assert "window.addEventListener('pageshow'" in page
     assert "setLoading(false)" in page
+
+
+# ---------------------------------------------------------------------------
+# Filtered-path facet caching
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def compute_counter(monkeypatch):
+    """Count how many times facets are actually computed (vs served from cache)."""
+    calls = {"n": 0}
+    original = FacetService._compute_facets
+
+    def counting(self, base_qs, selections):
+        calls["n"] += 1
+        return original(self, base_qs, selections)
+
+    monkeypatch.setattr(FacetService, "_compute_facets", counting)
+    return calls
+
+
+def _collection_with_keywords(identifier: str, *keywords: str):
+    collection = _create_collection(identifier, identifier)
+    general_info = collection.general_info.first()
+    for value in keywords:
+        general_info.keywords.add(CollectionKeyword.objects.create(value=value))
+    return collection
+
+
+@pytest.fixture
+def explorer_cache_invalidations(monkeypatch):
+    """Count signal-driven explorer cache invalidations."""
+    from lacos.blam import signals as blam_signals
+
+    calls = {"n": 0}
+
+    def counting_invalidation():
+        calls["n"] += 1
+
+    monkeypatch.setattr(
+        blam_signals,
+        "_invalidate_explorer_caches",
+        counting_invalidation,
+    )
+    return calls
+
+
+@pytest.mark.django_db
+def test_filtered_facets_are_served_from_cache(compute_counter):
+    cache.clear()
+    _collection_with_keywords("C1", "phonology")
+    service = FacetService()
+
+    service.search(
+        _make_params(keyword=["phonology"]), _collection_qs(), cache_key=FACET_CACHE_KEY
+    )
+    service.search(
+        _make_params(keyword=["phonology"]), _collection_qs(), cache_key=FACET_CACHE_KEY
+    )
+
+    assert compute_counter["n"] == 1
+
+
+@pytest.mark.django_db
+def test_filtered_facet_cache_key_is_selection_order_independent(compute_counter):
+    cache.clear()
+    _collection_with_keywords("C1", "aa", "bb")
+    service = FacetService()
+
+    service.search(
+        _make_params(keyword=["aa", "bb"]), _collection_qs(), cache_key=FACET_CACHE_KEY
+    )
+    service.search(
+        _make_params(keyword=["bb", "aa"]), _collection_qs(), cache_key=FACET_CACHE_KEY
+    )
+
+    assert compute_counter["n"] == 1
+
+
+@pytest.mark.django_db
+def test_invalidate_cache_busts_filtered_facet_cache(compute_counter):
+    cache.clear()
+    _collection_with_keywords("C1", "phonology")
+    service = FacetService()
+
+    service.search(
+        _make_params(keyword=["phonology"]), _collection_qs(), cache_key=FACET_CACHE_KEY
+    )
+    service.search(
+        _make_params(keyword=["phonology"]), _collection_qs(), cache_key=FACET_CACHE_KEY
+    )
+    assert compute_counter["n"] == 1
+
+    FacetService.invalidate_cache()
+    service.search(
+        _make_params(keyword=["phonology"]), _collection_qs(), cache_key=FACET_CACHE_KEY
+    )
+    assert compute_counter["n"] == 2
+
+
+@pytest.mark.django_db
+def test_distinct_filtered_selections_are_cached_separately(compute_counter):
+    cache.clear()
+    _collection_with_keywords("C1", "phonology", "lexicon")
+    service = FacetService()
+
+    service.search(
+        _make_params(keyword=["phonology"]), _collection_qs(), cache_key=FACET_CACHE_KEY
+    )
+    service.search(
+        _make_params(keyword=["lexicon"]), _collection_qs(), cache_key=FACET_CACHE_KEY
+    )
+
+    assert compute_counter["n"] == 2
+
+
+@pytest.mark.django_db
+def test_collection_keyword_m2m_change_invalidates_facet_cache(
+    explorer_cache_invalidations,
+):
+    collection = _create_collection("C1", "Alpha")
+    general_info = collection.general_info.first()
+    keyword = CollectionKeyword.objects.create(value="phonology")
+    explorer_cache_invalidations["n"] = 0
+
+    general_info.keywords.add(keyword)
+
+    assert explorer_cache_invalidations["n"] == 1
+
+
+@pytest.mark.django_db
+def test_collection_language_m2m_change_invalidates_facet_cache(
+    explorer_cache_invalidations,
+):
+    collection = _create_collection("C1", "Alpha")
+    general_info = collection.general_info.first()
+    language = CollectionObjectLanguage.objects.create(
+        display_name="Akan",
+        name="Akan",
+        iso_639_3_code="aka",
+        glottolog_code="akan1250",
+    )
+    explorer_cache_invalidations["n"] = 0
+
+    general_info.object_languages.add(language)
+
+    assert explorer_cache_invalidations["n"] == 1
+
+
+@pytest.mark.django_db
+def test_collection_license_m2m_change_invalidates_facet_cache(
+    explorer_cache_invalidations,
+):
+    collection = _create_collection("C1", "Alpha")
+    admin_info = CollectionAdministrativeInfo.objects.create(
+        collection=collection,
+        access_level="public",
+        availability_date=date.today(),
+    )
+    license_obj = CollectionLicense.objects.create(
+        license_name="CC BY 4.0",
+        license_identifier="https://creativecommons.org/licenses/by/4.0/",
+        access=AccessTypeChoices.OPEN,
+    )
+    explorer_cache_invalidations["n"] = 0
+
+    admin_info.licenses.add(license_obj)
+
+    assert explorer_cache_invalidations["n"] == 1
+
+
+@pytest.mark.django_db
+def test_collection_publication_info_change_invalidates_facet_cache(
+    explorer_cache_invalidations,
+):
+    collection = _create_collection("C1", "Alpha")
+    explorer_cache_invalidations["n"] = 0
+
+    publication_info = CollectionPublicationInfo.objects.create(
+        collection=collection,
+        publication_year=2024,
+        data_provider="LAC",
+    )
+    assert explorer_cache_invalidations["n"] == 1
+
+    publication_info.delete()
+    assert explorer_cache_invalidations["n"] == 2
+
+
+@pytest.mark.django_db
+def test_acl_permission_change_invalidates_facet_cache(explorer_cache_invalidations):
+    collection = _create_collection("C1", "Alpha")
+    collection_ct = ContentType.objects.get_for_model(Collection)
+    explorer_cache_invalidations["n"] = 0
+
+    permission = ACLPermissions.objects.create(
+        content_type=collection_ct,
+        object_id=str(collection.pk),
+        access_level="public",
+    )
+    assert explorer_cache_invalidations["n"] == 1
+
+    permission.delete()
+    assert explorer_cache_invalidations["n"] == 2

@@ -8,8 +8,11 @@ from .models.bundle.bundle_publication_info import BundlePublicationInfo
 from .models.bundle.bundle_structural_info import BundleStructuralInfo, MediaResource, WrittenResource, OtherResource
 from .models.bundle.bundle_repository import Bundle
 from .models.collection.collection_repository import Collection
+from .models.collection.collection_administrative_info import CollectionAdministrativeInfo
 from .models.collection.collection_general_info import CollectionGeneralInfo, CollectionLocation
+from .models.collection.collection_publication_info import CollectionPublicationInfo
 from lacos.storage.models import S3ResourceLocation
+from lacos.storage.models.acl_permissions import ACLPermissions
 from django.contrib.contenttypes.models import ContentType
 
 logger = logging.getLogger(__name__)
@@ -25,6 +28,11 @@ def _invalidate_explorer_caches():
     cache.delete("explorer:language_count")
     FacetService.invalidate_cache()
     logger.debug("Explorer caches invalidated")
+
+
+def _is_post_m2m_action(action: str | None) -> bool:
+    """Return whether an m2m_changed action represents committed data."""
+    return action in {"post_add", "post_remove", "post_clear"}
 
 
 
@@ -226,6 +234,47 @@ def invalidate_cache_on_general_info_save(sender, instance, **kwargs):
 @receiver(post_delete, sender=CollectionLocation)
 def invalidate_cache_on_location_change(sender, instance, **kwargs):
     """Invalidate explorer caches when collection location changes."""
+    _invalidate_explorer_caches()
+
+
+@receiver(post_save, sender=CollectionPublicationInfo)
+@receiver(post_delete, sender=CollectionPublicationInfo)
+def invalidate_cache_on_collection_publication_info_change(sender, instance, **kwargs):
+    """Invalidate explorer caches when collection publication info changes."""
+    _invalidate_explorer_caches()
+
+
+@receiver(post_save, sender=CollectionAdministrativeInfo)
+@receiver(post_delete, sender=CollectionAdministrativeInfo)
+def invalidate_cache_on_collection_admin_info_change(sender, instance, **kwargs):
+    """Invalidate explorer caches when collection administrative info changes."""
+    _invalidate_explorer_caches()
+
+
+@receiver(m2m_changed, sender=CollectionGeneralInfo.keywords.through)
+@receiver(m2m_changed, sender=CollectionGeneralInfo.object_languages.through)
+def invalidate_cache_on_collection_general_info_m2m_change(
+    sender,
+    instance,
+    action,
+    **kwargs,
+):
+    """Invalidate explorer caches when collection keywords or languages change."""
+    if _is_post_m2m_action(action):
+        _invalidate_explorer_caches()
+
+
+@receiver(m2m_changed, sender=CollectionAdministrativeInfo.licenses.through)
+def invalidate_cache_on_collection_licenses_change(sender, instance, action, **kwargs):
+    """Invalidate explorer caches when collection licenses change."""
+    if _is_post_m2m_action(action):
+        _invalidate_explorer_caches()
+
+
+@receiver(post_save, sender=ACLPermissions)
+@receiver(post_delete, sender=ACLPermissions)
+def invalidate_cache_on_acl_permission_change(sender, instance, **kwargs):
+    """Invalidate explorer caches when indexed access levels change."""
     _invalidate_explorer_caches()
 
 
