@@ -9,8 +9,9 @@ from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import (
     BundleAdditionalMetadataFile,
     BundleResources,
-    WrittenResource,
     BundleStructuralInfo,
+    MediaResource,
+    WrittenResource,
 )
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.blam.models.collection.collection_structural_info import (
@@ -18,6 +19,7 @@ from lacos.blam.models.collection.collection_structural_info import (
     CollectionStructuralInfo,
 )
 from lacos.explorer.services.imdi_access import build_imdi_access_token
+from lacos.explorer.views.bundles import ResourceAccessView
 
 
 class _FakeS3Body:
@@ -34,6 +36,16 @@ class _FakeS3Client:
 
     def get_object(self, **_kwargs):
         return {"Body": _FakeS3Body(self._payload)}
+
+
+class _FakeDerivativeS3Client:
+    def __init__(self, existing_keys):
+        self.existing_keys = set(existing_keys)
+
+    def head_object(self, **kwargs):
+        if kwargs["Key"] not in self.existing_keys:
+            raise RuntimeError("missing sidecar")
+        return {}
 
 
 def test_resource_modal_htmx_fragments_do_not_include_inline_scripts():
@@ -103,6 +115,87 @@ def test_elan_annotation_data_times_are_not_localized():
     assert 'data-annotation-end="154.670"' in page
     assert 'data-annotation-start="153,740"' not in page
     assert 'data-annotation-end="154,670"' not in page
+
+
+@pytest.mark.django_db
+def test_elan_context_prefers_fallback_audio_with_sidecars(monkeypatch):
+    bundle = Bundle.objects.create(identifier="hdl:test/bundle-elan-sidecars")
+    resources = BundleResources.objects.create(bundle=bundle)
+    elan = WrittenResource.objects.create(
+        file_pid="hdl:test/elan",
+        file_name="quis_focus_sp.eaf",
+        mime_type="text/xml",
+    )
+    external_speaker_audio = MediaResource.objects.create(
+        file_pid="hdl:test/extsp",
+        file_name="quis_focus_sp_extsp.wav",
+        mime_type="audio/x-wav",
+    )
+    internal_speaker_audio = MediaResource.objects.create(
+        file_pid="hdl:test/int",
+        file_name="quis_focus_sp_int.wav",
+        mime_type="audio/x-wav",
+    )
+    resources.bundle_written_resources.add(elan)
+    resources.bundle_media_resources.add(external_speaker_audio, internal_speaker_audio)
+
+    audio_keys = {
+        external_speaker_audio.id: (
+            "collection/bundle/v1/content/quis_focus_sp_extsp.wav"
+        ),
+        internal_speaker_audio.id: "collection/bundle/v1/content/quis_focus_sp_int.wav",
+    }
+    internal_pitch_key = (
+        "collection/bundle/v1/derivatives/quis_focus_sp_int.wav.pitch.bin"
+    )
+    internal_peaks_key = (
+        "collection/bundle/v1/derivatives/quis_focus_sp_int.wav.peaks.json"
+    )
+    internal_spectrogram_key = (
+        "collection/bundle/v1/derivatives/quis_focus_sp_int.wav.spectrogram.bin"
+    )
+    service = SimpleNamespace(
+        s3_client=_FakeDerivativeS3Client(
+            {internal_peaks_key, internal_pitch_key, internal_spectrogram_key},
+        ),
+        generate_presigned_url=lambda _bucket, key: f"https://example.test/{key}",
+    )
+
+    monkeypatch.setattr(
+        "lacos.explorer.views.bundles.parse_elan_document",
+        lambda *_args, **_kwargs: {
+            "annotations": [],
+            "media_files": [],
+            "tier_headers": [],
+        },
+    )
+
+    def fake_resolve(_service, resource, *_args, **_kwargs):
+        key = audio_keys.get(resource.id)
+        if key is None:
+            return None
+        return {
+            "bucket": "bucket-a",
+            "key": key,
+            "url": f"https://example.test/{resource.file_name}",
+        }
+
+    monkeypatch.setattr(
+        "lacos.explorer.views.bundles.resolve_resource_to_presigned",
+        fake_resolve,
+    )
+
+    context = ResourceAccessView()._build_elan_context(
+        service,
+        bundle,
+        elan,
+        collection_for_path=None,
+        bucket_name="bucket-a",
+        object_key="collection/bundle/v1/content/quis_focus_sp.eaf",
+    )
+
+    assert context["audio_file_name"] == "quis_focus_sp_int.wav"
+    assert context["audio_key"] == audio_keys[internal_speaker_audio.id]
 
 
 @pytest.mark.django_db

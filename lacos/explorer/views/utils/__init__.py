@@ -13,6 +13,7 @@ from .elan import (
     parse_elan_document,
     parse_elan_text,
     pick_elan_audio_resource,
+    pick_elan_audio_resources,
 )
 from .location import (
     get_formatted_location,
@@ -63,6 +64,7 @@ __all__ = [
     "parse_elan_document",
     "parse_elan_text",
     "pick_elan_audio_resource",
+    "pick_elan_audio_resources",
     # Location utilities
     "get_formatted_location",
     "get_location_from_coordinates",

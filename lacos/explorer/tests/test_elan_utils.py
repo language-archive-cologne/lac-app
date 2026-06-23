@@ -6,6 +6,7 @@ from lacos.blam.models.bundle.bundle_structural_info import MediaResource
 from lacos.blam.models.bundle.bundle_structural_info import WrittenResource
 from lacos.explorer.views.utils.elan import parse_elan_text
 from lacos.explorer.views.utils.elan import pick_elan_audio_resource
+from lacos.explorer.views.utils.elan import pick_elan_audio_resources
 
 
 def test_parse_elan_text_aligns_independent_tiers_with_same_interval():
@@ -245,3 +246,31 @@ def test_pick_elan_audio_resource_falls_back_to_prefixed_audio_without_declared_
     result = pick_elan_audio_resource(bundle, elan, {"media_files": []})
 
     assert result == external_speaker_audio
+
+
+@pytest.mark.django_db
+def test_pick_elan_audio_resources_returns_all_prefixed_audio_candidates():
+    elan = WrittenResource.objects.create(
+        file_name="quis_focus_sp.eaf",
+        file_pid="hdl:11341/0000-0000-0000-3235",
+        mime_type="text/xml",
+    )
+    external_speaker_audio = MediaResource.objects.create(
+        file_name="quis_focus_sp_extsp.wav",
+        file_pid="hdl:11341/0000-0000-0000-3233",
+        mime_type="audio/x-wav",
+    )
+    internal_speaker_audio = MediaResource.objects.create(
+        file_name="quis_focus_sp_int.wav",
+        file_pid="hdl:11341/0000-0000-0000-3234",
+        mime_type="audio/x-wav",
+    )
+    bundle = _bundle_with_resources(
+        internal_speaker_audio,
+        external_speaker_audio,
+        elan,
+    )
+
+    result = pick_elan_audio_resources(bundle, elan, {"media_files": []})
+
+    assert result == [external_speaker_audio, internal_speaker_audio]

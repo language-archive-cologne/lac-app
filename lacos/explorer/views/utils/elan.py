@@ -244,8 +244,8 @@ def parse_elan_text(elan_text: str) -> dict:
     }
 
 
-def pick_elan_audio_resource(bundle, target_resource, elan_data: dict):
-    """Choose the most relevant audio resource for an ELAN file."""
+def pick_elan_audio_resources(bundle, target_resource, elan_data: dict) -> list[object]:
+    """Return audio resources ordered by relevance for an ELAN file."""
     referenced_stems = {
         stem
         for candidate in elan_data.get("media_files", [])
@@ -255,7 +255,7 @@ def pick_elan_audio_resource(bundle, target_resource, elan_data: dict):
     target_file_name = getattr(target_resource, "file_name", None)
     fallback_stem = Path(target_file_name).stem.lower() if target_file_name else ""
     if not referenced_stems and not fallback_stem:
-        return None
+        return []
 
     target_resource_key = (
         target_resource.__class__,
@@ -288,14 +288,13 @@ def pick_elan_audio_resource(bundle, target_resource, elan_data: dict):
         )
 
     if referenced_stems:
-        matches = sorted_matches(referenced_stems)
-        return matches[0] if matches else None
+        return sorted_matches(referenced_stems)
 
     exact_matches = sorted_matches({fallback_stem})
     if exact_matches:
-        return exact_matches[0]
+        return exact_matches
 
-    prefix_matches = sorted(
+    return sorted(
         [
             resource
             for resource in audio_resources
@@ -307,4 +306,8 @@ def pick_elan_audio_resource(bundle, target_resource, elan_data: dict):
         ),
     )
 
-    return prefix_matches[0] if prefix_matches else None
+
+def pick_elan_audio_resource(bundle, target_resource, elan_data: dict):
+    """Choose the most relevant audio resource for an ELAN file."""
+    matches = pick_elan_audio_resources(bundle, target_resource, elan_data)
+    return matches[0] if matches else None

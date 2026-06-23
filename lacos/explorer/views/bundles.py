@@ -60,7 +60,7 @@ from .utils import (
     load_markdown_preview,
     load_xml_preview,
     parse_elan_document,
-    pick_elan_audio_resource,
+    pick_elan_audio_resources,
     prepare_resource_lists,
     render_imdi_modal_response,
     resolve_existing_object,
@@ -686,28 +686,45 @@ class ResourceAccessView(View):
             object_key,
         )
 
-        audio_resource = pick_elan_audio_resource(
-            bundle,
-            resource,
-            elan_data,
-        )
+        audio_candidates = pick_elan_audio_resources(bundle, resource, elan_data)
 
         audio_url = None
         audio_file_name = None
         audio_bucket = None
         audio_key = None
-        if audio_resource:
-            audio_resolution = resolve_resource_to_presigned(
+        audio_resolution = None
+        audio_resource = None
+        best_score = -1
+        for candidate in audio_candidates:
+            candidate_resolution = resolve_resource_to_presigned(
                 resource_service,
-                audio_resource,
+                candidate,
                 bundle,
                 collection_for_path,
             )
-            if audio_resolution:
-                audio_url = audio_resolution['url']
-                audio_file_name = getattr(audio_resource, 'file_name', '')
-                audio_bucket = audio_resolution['bucket']
-                audio_key = audio_resolution['key']
+            if not candidate_resolution:
+                continue
+
+            if elan_data.get('media_files'):
+                audio_resource = candidate
+                audio_resolution = candidate_resolution
+                break
+
+            score = self._sidecar_score(
+                resource_service,
+                candidate_resolution['bucket'],
+                candidate_resolution['key'],
+            )
+            if score > best_score:
+                best_score = score
+                audio_resource = candidate
+                audio_resolution = candidate_resolution
+
+        if audio_resource and audio_resolution:
+            audio_url = audio_resolution['url']
+            audio_file_name = getattr(audio_resource, 'file_name', '')
+            audio_bucket = audio_resolution['bucket']
+            audio_key = audio_resolution['key']
 
         return {
             'annotations': elan_data.get('annotations', []),
@@ -718,6 +735,18 @@ class ResourceAccessView(View):
             'audio_key': audio_key,
             'tier_headers': elan_data.get('tier_headers', []),
         }
+
+    def _sidecar_score(self, resource_service, bucket_name, object_key):
+        """Return a small relevance score for available audio derivatives."""
+        if not self._resolve_peaks_url(resource_service, bucket_name, object_key):
+            return 0
+
+        score = 1
+        if self._spectrogram_data_exists(resource_service, bucket_name, object_key):
+            score += 1
+        if self._pitch_data_exists(resource_service, bucket_name, object_key):
+            score += 1
+        return score
 
     def _render_htmx_modal(
         self, request, resource, mime_type, detected_media_type, source_mime_type,
