@@ -1,6 +1,7 @@
 {% extends "explorer_base.html" %}
 {% load i18n %}
 {% load static %}
+{% load explorer_extras %}
 
 {% block title %}{{ resource_name }} - {% translate "Resource" %} - {{ block.super }}{% endblock title %}
 
@@ -21,9 +22,9 @@
   <div class="flex items-center gap-2 mb-4 text-sm text-base-content/70">
     <span class="font-mono">{{ resource.file_pid }}</span>
     <button type="button"
-            data-copy-text="{{ resource.file_pid }}"
+            data-copy-text="{{ resource.file_pid|handle_resolver_url }}"
             class="btn btn-xs btn-ghost btn-square"
-            title="{% translate 'Copy handle' %}">
+            title="{% translate 'Copy handle URL' %}">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
       </svg>
@@ -33,7 +34,8 @@
 
   <!-- Resource viewer -->
   <style>[data-standalone-viewer] [data-modal-close],
-  [data-standalone-viewer] [data-expand-fullpage] { display: none; }</style>
+  [data-standalone-viewer] [data-expand-fullpage],
+  [data-standalone-viewer] [data-modal-resource-handle] { display: none; }</style>
   <div class="bg-base-100 shadow rounded-2xl p-6 border border-base-300">
     <div id="resource-viewer-content" data-resource-container data-standalone-viewer>
       {% include "explorer/partials/resource_modal_content.html" %}

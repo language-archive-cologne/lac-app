@@ -139,6 +139,16 @@ def strip_hdl(value):
 
 @register.filter
 @stringfilter
+def handle_resolver_url(value):
+    """Return an actionable Handle resolver URL for hdl: identifiers."""
+    value = value.strip()
+    if value.startswith("hdl:"):
+        return f"https://hdl.handle.net/{value[4:]}"
+    return value
+
+
+@register.filter
+@stringfilter
 def urlize_text(text):
     """
     Convert plain text URLs and DOIs in the text to clickable links.

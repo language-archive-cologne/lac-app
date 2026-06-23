@@ -22,6 +22,10 @@ from lacos.blam.models.bundle.bundle_structural_info import (
 )
 from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo, CollectionLocation
 from lacos.blam.models.collection.collection_repository import Collection
+from lacos.blam.models.collection.collection_structural_info import (
+    CollectionAdditionalMetadataFile,
+    CollectionStructuralInfo,
+)
 
 
 def _create_collection(identifier="hdl:11341/test-clean-url-col"):
@@ -74,6 +78,21 @@ def _create_bundle_metadata_file(bundle, file_pid="hdl:11341/test-clean-url-meta
         is_metadata_for="bundle",
     )
     bundle.structural_info.first().additional_metadata_files.add(metadata_file)
+    return metadata_file
+
+
+def _create_collection_metadata_file(
+    collection,
+    file_pid="hdl:11341/test-clean-url-collection-meta",
+):
+    structural_info = CollectionStructuralInfo.objects.create(collection=collection)
+    metadata_file = CollectionAdditionalMetadataFile.objects.create(
+        file_name="collection-metadata.xml",
+        file_pid=file_pid,
+        mime_type="application/xml",
+        is_metadata_for="collection",
+    )
+    structural_info.additional_metadata_files.add(metadata_file)
     return metadata_file
 
 
@@ -224,6 +243,118 @@ def test_bundle_page_resource_links_use_direct_resource_pid_route(client, monkey
     html = response.content.decode("utf-8")
     assert f'/resource/{pid_clean}/?action=play' in html
     assert f"/resource/{bundle.pk}/{resource.id}/?action=play" not in html
+
+
+@pytest.mark.django_db
+def test_collection_detail_copy_buttons_use_handle_resolver_urls(client, monkeypatch):
+    collection = _create_collection()
+    bundle = _create_bundle(collection)
+    metadata_file = _create_collection_metadata_file(
+        collection,
+        file_pid="hdl:11341/test-collection-copy-meta",
+    )
+
+    monkeypatch.setattr(
+        "lacos.explorer.views.collections.ACLEvaluationService.evaluate",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            allowed=True,
+            access_level="public",
+        ),
+    )
+
+    response = client.get(
+        reverse(
+            "explorer:collection_detail_by_handle",
+            kwargs={"handle": collection.handle_path},
+        )
+    )
+
+    assert response.status_code == 200
+    html = response.content.decode("utf-8")
+    assert collection.identifier in html
+    assert f'data-copy-text="{collection.handle_url}"' in html
+    assert bundle.identifier in html
+    assert f'data-copy-text="{bundle.handle_url}"' in html
+    assert metadata_file.file_pid in html
+    assert 'data-copy-text="https://hdl.handle.net/11341/test-collection-copy-meta"' in html
+
+
+@pytest.mark.django_db
+def test_bundle_detail_resource_copy_buttons_use_handle_resolver_urls(client, monkeypatch):
+    collection = _create_collection()
+    bundle = _create_bundle(collection)
+    resource = _create_resource(
+        bundle,
+        file_pid="hdl:11341/test-bundle-resource-copy",
+    )
+    metadata_file = _create_bundle_metadata_file(
+        bundle,
+        file_pid="hdl:11341/test-bundle-meta-copy",
+    )
+
+    monkeypatch.setattr(
+        "lacos.explorer.views.bundles.ACLEvaluationService.evaluate",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            allowed=True,
+            access_level="public",
+        ),
+    )
+
+    response = client.get(
+        reverse(
+            "explorer:bundle_detail_by_handle",
+            kwargs={"handle": bundle.handle_path},
+        )
+    )
+
+    assert response.status_code == 200
+    html = response.content.decode("utf-8")
+    assert resource.file_pid in html
+    assert 'data-copy-text="https://hdl.handle.net/11341/test-bundle-resource-copy"' in html
+    assert metadata_file.file_pid in html
+    assert 'data-copy-text="https://hdl.handle.net/11341/test-bundle-meta-copy"' in html
+
+
+@pytest.mark.django_db
+def test_resource_detail_copy_button_uses_handle_resolver_url(client, monkeypatch):
+    collection = _create_collection()
+    bundle = _create_bundle(collection)
+    resource = _create_resource(
+        bundle,
+        file_pid="hdl:11341/0000-0000-0000-3235",
+    )
+    resource.file_name = "resource.bin"
+    resource.mime_type = "application/octet-stream"
+    resource.save(update_fields=["file_name", "mime_type"])
+
+    monkeypatch.setattr(
+        "lacos.explorer.views.bundles.ACLEvaluationService.evaluate",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            allowed=True,
+            access_level="public",
+        ),
+    )
+    monkeypatch.setattr(
+        "lacos.explorer.views.bundles.resolve_resource_to_presigned",
+        lambda *_args, **_kwargs: {
+            "bucket": "test-bucket",
+            "key": "resource.bin",
+            "url": "https://example.test/resource.bin",
+        },
+    )
+    monkeypatch.setattr(
+        "lacos.explorer.views.bundles.ResourceMappingService.generate_presigned_url",
+        lambda *_args, **_kwargs: "https://example.test/download.bin",
+    )
+
+    response = client.get(
+        reverse("resource_by_handle", kwargs={"handle_id": resource.file_pid[4:]})
+    )
+
+    assert response.status_code == 200
+    html = response.content.decode("utf-8")
+    assert resource.file_pid in html
+    assert 'data-copy-text="https://hdl.handle.net/11341/0000-0000-0000-3235"' in html
 
 
 # --- Backward-compat redirects ---

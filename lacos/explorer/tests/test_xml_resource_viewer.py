@@ -79,6 +79,25 @@ def test_resource_modal_htmx_fragments_do_not_include_inline_scripts():
     assert 'data-subtitle-url="https://example.test/interview.srt"' in video_page
 
 
+def test_resource_modal_handle_copy_uses_resolver_url():
+    page = render_to_string(
+        "explorer/partials/resource_modal_content.html",
+        {
+            "resource": SimpleNamespace(
+                file_pid="hdl:11341/0000-0000-0000-3235",
+            ),
+            "resource_name": "resource.bin",
+            "media_type": None,
+            "mime_type": "application/octet-stream",
+            "preview_url": "https://example.test/resource.bin",
+            "download_url": "https://example.test/download",
+        },
+    )
+
+    assert "hdl:11341/0000-0000-0000-3235" in page
+    assert 'data-copy-text="https://hdl.handle.net/11341/0000-0000-0000-3235"' in page
+
+
 def test_elan_annotation_data_times_are_not_localized():
     context = {
         "resource_name": "session.eaf",

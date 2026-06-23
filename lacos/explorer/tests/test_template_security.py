@@ -4,7 +4,7 @@ import pytest
 from django.contrib.staticfiles import finders
 from django.urls import reverse
 
-from lacos.explorer.templatetags.explorer_extras import urlize_text
+from lacos.explorer.templatetags.explorer_extras import handle_resolver_url, urlize_text
 from lacos.explorer.tests.test_collection_list_query_optimization import _build_collection_graph
 
 
@@ -14,6 +14,24 @@ def test_urlize_text_escapes_html_before_linkifying():
     assert "<img" not in rendered
     assert "&lt;img src=x onerror=alert(1)&gt;" in rendered
     assert 'href="https://example.com"' in rendered
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (
+            "hdl:11341/0000-0000-0000-3235",
+            "https://hdl.handle.net/11341/0000-0000-0000-3235",
+        ),
+        (
+            "https://hdl.handle.net/11341/0000-0000-0000-3235",
+            "https://hdl.handle.net/11341/0000-0000-0000-3235",
+        ),
+        ("doi:10.1234/example", "doi:10.1234/example"),
+    ],
+)
+def test_handle_resolver_url_filter_normalizes_hdl_values(value, expected):
+    assert handle_resolver_url(value) == expected
 
 
 @pytest.mark.django_db
@@ -47,7 +65,8 @@ def test_collection_list_map_triggers_use_delegated_modal_js(client):
     assert 'src="/static/js/src/explorer-copy.js"' in page
     assert 'id="map-modal"' in page
     assert "data-map-modal-trigger" in page
-    assert 'data-copy-text="hdl:test/query-opt-92"' in page
+    assert 'data-copy-text="https://hdl.handle.net/test/query-opt-92"' in page
+    assert ">hdl:test/query-opt-92<" in page
     assert "onclick=\"navigator.clipboard" not in page
     assert "hx-on::after-request" not in page
     assert "hx-on::before-request" not in page
