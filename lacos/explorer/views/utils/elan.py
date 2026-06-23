@@ -2,6 +2,7 @@
 
 import logging
 from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Optional
 from urllib.parse import unquote
 from xml.etree import ElementTree as ET
@@ -15,8 +16,14 @@ logger = logging.getLogger(__name__)
 
 def _media_reference_stem(reference: str) -> str:
     """Extract a normalized filename stem from an ELAN media reference."""
-    candidate_name = Path(unquote(reference)).name
+    normalized_reference = unquote(reference).replace("\\", "/")
+    candidate_name = PurePosixPath(normalized_reference).name
     return Path(candidate_name).stem.lower()
+
+
+def _resource_file_stem(resource) -> str:
+    """Return a normalized resource file stem for audio matching."""
+    return Path(getattr(resource, "file_name", "") or "").stem.lower()
 
 
 def _merge_annotations_by_time(annotations: list[dict]) -> list[dict]:
@@ -102,11 +109,16 @@ def parse_elan_text(elan_text: str) -> dict:
             timeslots[slot_id] = None
 
     media_files: list[str] = []
-    for descriptor in root.findall("./HEADER/MEDIA_DESCRIPTOR"):
-        relative = descriptor.attrib.get("RELATIVE_MEDIA_URL")
-        media_url = relative or descriptor.attrib.get("MEDIA_URL")
-        if media_url:
-            media_files.append(media_url.strip())
+    for header in root.findall("./HEADER"):
+        media_file = header.attrib.get("MEDIA_FILE")
+        if media_file:
+            media_files.append(media_file.strip())
+
+        for descriptor in header.findall("MEDIA_DESCRIPTOR"):
+            relative = descriptor.attrib.get("RELATIVE_MEDIA_URL")
+            media_url = relative or descriptor.attrib.get("MEDIA_URL")
+            if media_url:
+                media_files.append(media_url.strip())
 
     tier_headers: dict[str, None] = {}
     annotations_map: dict[str, dict] = {}
@@ -240,19 +252,16 @@ def pick_elan_audio_resource(bundle, target_resource, elan_data: dict):
         if candidate and (stem := _media_reference_stem(candidate))
     }
 
-    fallback_stems = set()
-    if not referenced_stems and getattr(target_resource, "file_name", None):
-        fallback_stems.add(Path(target_resource.file_name).stem.lower())
-
-    target_stems = referenced_stems or fallback_stems
-    if not target_stems:
+    target_file_name = getattr(target_resource, "file_name", None)
+    fallback_stem = Path(target_file_name).stem.lower() if target_file_name else ""
+    if not referenced_stems and not fallback_stem:
         return None
 
     target_resource_key = (
         target_resource.__class__,
         getattr(target_resource, "id", None),
     )
-    matches: list[object] = []
+    audio_resources: list[object] = []
 
     for resource in iter_bundle_resources(bundle):
         resource_key = (resource.__class__, getattr(resource, "id", None))
@@ -263,8 +272,39 @@ def pick_elan_audio_resource(bundle, target_resource, elan_data: dict):
         if not lowered_mime.startswith("audio/"):
             continue
 
-        resource_stem = Path(resource.file_name).stem.lower()
-        if resource_stem in target_stems:
-            matches.append(resource)
+        audio_resources.append(resource)
 
-    return matches[0] if matches else None
+    def sorted_matches(stems: set[str]) -> list[object]:
+        return sorted(
+            [
+                resource
+                for resource in audio_resources
+                if _resource_file_stem(resource) in stems
+            ],
+            key=lambda resource: (
+                _resource_file_stem(resource),
+                getattr(resource, "file_name", "") or "",
+            ),
+        )
+
+    if referenced_stems:
+        matches = sorted_matches(referenced_stems)
+        return matches[0] if matches else None
+
+    exact_matches = sorted_matches({fallback_stem})
+    if exact_matches:
+        return exact_matches[0]
+
+    prefix_matches = sorted(
+        [
+            resource
+            for resource in audio_resources
+            if _resource_file_stem(resource).startswith(f"{fallback_stem}_")
+        ],
+        key=lambda resource: (
+            _resource_file_stem(resource),
+            getattr(resource, "file_name", "") or "",
+        ),
+    )
+
+    return prefix_matches[0] if prefix_matches else None

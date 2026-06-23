@@ -94,6 +94,19 @@ def test_parse_elan_text_keeps_independent_tiers_with_different_intervals_separa
     ]
 
 
+def test_parse_elan_text_reads_legacy_header_media_file():
+    elan_text = """
+    <ANNOTATION_DOCUMENT>
+      <HEADER MEDIA_FILE="file:///archive/session.wav" TIME_UNITS="milliseconds" />
+      <TIME_ORDER />
+    </ANNOTATION_DOCUMENT>
+    """
+
+    result = parse_elan_text(elan_text)
+
+    assert result["media_files"] == ["file:///archive/session.wav"]
+
+
 def _bundle_with_resources(*resources):
     bundle = Bundle.objects.create(identifier="BND-ELAN-AUDIO")
     resource_container = BundleResources.objects.create(bundle=bundle)
@@ -130,6 +143,29 @@ def test_pick_elan_audio_resource_matches_referenced_media_file():
         bundle,
         elan,
         {"media_files": ["file:///archive/session.wav"]},
+    )
+
+    assert result == audio
+
+
+@pytest.mark.django_db
+def test_pick_elan_audio_resource_matches_windows_referenced_media_file():
+    elan = WrittenResource.objects.create(
+        file_name="session.eaf",
+        file_pid="hdl:11341/00-ELAN",
+        mime_type="text/x-eaf+xml",
+    )
+    audio = MediaResource.objects.create(
+        file_name="session.wav",
+        file_pid="hdl:11341/00-WAV",
+        mime_type="audio/wav",
+    )
+    bundle = _bundle_with_resources(audio, elan)
+
+    result = pick_elan_audio_resource(
+        bundle,
+        elan,
+        {"media_files": [r"C:\archive\session.wav"]},
     )
 
     assert result == audio
@@ -175,3 +211,37 @@ def test_pick_elan_audio_resource_falls_back_to_same_stem_without_declared_media
     result = pick_elan_audio_resource(bundle, elan, {"media_files": []})
 
     assert result == audio
+
+
+@pytest.mark.django_db
+def test_pick_elan_audio_resource_falls_back_to_prefixed_audio_without_declared_media():
+    elan = WrittenResource.objects.create(
+        file_name="quis_focus_sp.eaf",
+        file_pid="hdl:11341/0000-0000-0000-3235",
+        mime_type="text/xml",
+    )
+    external_speaker_audio = MediaResource.objects.create(
+        file_name="quis_focus_sp_extsp.wav",
+        file_pid="hdl:11341/0000-0000-0000-3233",
+        mime_type="audio/x-wav",
+    )
+    internal_speaker_audio = MediaResource.objects.create(
+        file_name="quis_focus_sp_int.wav",
+        file_pid="hdl:11341/0000-0000-0000-3234",
+        mime_type="audio/x-wav",
+    )
+    unrelated_audio = MediaResource.objects.create(
+        file_name="other_session.wav",
+        file_pid="hdl:11341/00-OTHER",
+        mime_type="audio/wav",
+    )
+    bundle = _bundle_with_resources(
+        internal_speaker_audio,
+        unrelated_audio,
+        external_speaker_audio,
+        elan,
+    )
+
+    result = pick_elan_audio_resource(bundle, elan, {"media_files": []})
+
+    assert result == external_speaker_audio
