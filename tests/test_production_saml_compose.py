@@ -6,6 +6,8 @@ CLARIN_PROXY_IDP_METADATA_URL = (
 DFN_EDUGAIN_METADATA_URL = (
     "https://www.aai.dfn.de/fileadmin/metadata/dfn-aai-edugain+idp-metadata.xml"
 )
+DFN_MDQ_URL = "https://mdq.aai.dfn.de/"
+CLARIN_EDUGAIN_DISCOVERY_URL = "https://discovery.clarin.eu/feed/edugain"
 
 
 def _production_compose_path() -> Path:
@@ -53,14 +55,14 @@ def _indent(line: str) -> int:
     return len(line) - len(line.lstrip(" "))
 
 
-def test_production_django_uses_clarin_proxy_idp_without_local_idp_fallback():
+def test_production_django_uses_clarin_edugain_discovery_without_local_picker():
     env = _service_environment("django")
 
     assert env["SAML_IDP_METADATA_REMOTE"] == CLARIN_PROXY_IDP_METADATA_URL
     assert env["SAML_DIRECT_IDP_SELECTION_ENABLED"] == "false"
-    assert env["SAML_METADATA_MDQ_URL"] == ""
+    assert env["SAML_METADATA_MDQ_URL"] == DFN_MDQ_URL
     assert env["EDUGAIN_METADATA_URL"] == DFN_EDUGAIN_METADATA_URL
-    assert env["SAML2_DISCO_URL"] == ""
+    assert env["SAML2_DISCO_URL"] == CLARIN_EDUGAIN_DISCOVERY_URL
 
 
 def test_production_huey_uses_same_saml_sources_as_django():
