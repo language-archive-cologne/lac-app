@@ -10,6 +10,7 @@ from django.core.exceptions import PermissionDenied
 from django.test import RequestFactory
 from django.urls import resolve
 from django.urls import reverse
+from saml2.mdstore import MetaDataMDX
 
 from lacos.users.adapters import TRUSTED_SAML_SESSION_KEY
 from lacos.users.backends import LacosSaml2Backend
@@ -540,6 +541,74 @@ def test_saml2_login_accepts_clarin_entity_id_return_parameter(client, settings)
         "/saml2/login/?next=%2Fusers%2F~redirect%2F"
         "&idp=https%3A%2F%2Flogin.uni-koeln.de%2Fidp%2Fshibboleth"
     )
+
+
+def test_saml2_login_config_prefers_loaded_remote_metadata_for_selected_idp(
+    monkeypatch,
+):
+    selected_idp = "https://idm.clarin.eu"
+    conf = _build_saml_config_with_metadata_sources(
+        remote_entity_ids={selected_idp},
+        mdq_entity_ids=set(),
+    )
+    request = RequestFactory().get("/saml2/login/", {"idp": selected_idp})
+    view = LacosLoginView()
+
+    monkeypatch.setattr(
+        "lacos.users.saml_views.LoginView.get_sp_config",
+        lambda *_args, **_kwargs: conf,
+    )
+
+    resolved_conf = view.get_sp_config(request)
+
+    assert resolved_conf is conf
+    assert list(conf.metadata.metadata) == ["remote"]
+
+
+def test_saml2_login_config_keeps_mdq_for_selected_idp_not_in_remote_metadata(
+    monkeypatch,
+):
+    selected_idp = "https://idp.example.org/idp/shibboleth"
+    conf = _build_saml_config_with_metadata_sources(
+        remote_entity_ids={"https://idm.clarin.eu"},
+        mdq_entity_ids={selected_idp},
+    )
+    request = RequestFactory().get("/saml2/login/", {"idp": selected_idp})
+    view = LacosLoginView()
+
+    monkeypatch.setattr(
+        "lacos.users.saml_views.LoginView.get_sp_config",
+        lambda *_args, **_kwargs: conf,
+    )
+
+    resolved_conf = view.get_sp_config(request)
+
+    assert resolved_conf is conf
+    assert list(conf.metadata.metadata) == ["remote", "mdq"]
+
+
+def _build_saml_config_with_metadata_sources(
+    *,
+    remote_entity_ids: set[str],
+    mdq_entity_ids: set[str],
+) -> SimpleNamespace:
+    class FakeMetadataSource:
+        def __init__(self, entity_ids: set[str]) -> None:
+            self.entity_ids = entity_ids
+
+        def __getitem__(self, entity_id: str) -> dict:
+            if entity_id not in self.entity_ids:
+                raise KeyError(entity_id)
+            return {}
+
+    class FakeMdqMetadataSource(FakeMetadataSource, MetaDataMDX):
+        pass
+
+    metadata_sources = {
+        "remote": FakeMetadataSource(remote_entity_ids),
+        "mdq": FakeMdqMetadataSource(mdq_entity_ids),
+    }
+    return SimpleNamespace(metadata=SimpleNamespace(metadata=metadata_sources))
 
 
 @pytest.mark.django_db

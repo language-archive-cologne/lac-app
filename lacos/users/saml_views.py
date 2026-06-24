@@ -13,6 +13,7 @@ from djangosaml2.views import AssertionConsumerServiceView
 from djangosaml2.views import LoginView
 from djangosaml2.views import MetadataView
 from djangosaml2.views import _set_subject_id
+from saml2.mdstore import MetaDataMDX
 
 from lacos.users.saml_logging import build_acs_failure_log_context
 from lacos.users.saml_metadata import add_request_initiator
@@ -20,12 +21,23 @@ from lacos.users.saml_metadata import add_request_initiator
 if TYPE_CHECKING:
     from django.http import HttpRequest
     from django.http import HttpResponse
+    from saml2.config import SPConfig
 
 logger = logging.getLogger(__name__)
 
 
 class LacosLoginView(LoginView):
     """Accept CLARIN Discovery's selected IdP return parameter."""
+
+    def get_sp_config(self, request: HttpRequest) -> SPConfig:
+        conf = super().get_sp_config(request)
+        selected_idp = request.GET.get("idp")
+        if selected_idp and _metadata_contains_selected_idp_without_mdq(
+            conf,
+            selected_idp,
+        ):
+            _remove_mdq_metadata_stores(conf)
+        return conf
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         selected_entity_id = request.GET.get("entityID")
@@ -37,6 +49,32 @@ class LacosLoginView(LoginView):
             return redirect(f"{request.path}?{urlencode(params, doseq=True)}")
 
         return super().get(request, *args, **kwargs)
+
+
+def _metadata_contains_selected_idp_without_mdq(
+    conf: SPConfig,
+    selected_idp: str,
+) -> bool:
+    metadata_sources = getattr(getattr(conf, "metadata", None), "metadata", {})
+    for metadata_source in metadata_sources.values():
+        if isinstance(metadata_source, MetaDataMDX):
+            continue
+        try:
+            metadata_source[selected_idp]
+        except KeyError:
+            continue
+        else:
+            return True
+    return False
+
+
+def _remove_mdq_metadata_stores(conf: SPConfig) -> None:
+    metadata_sources = getattr(getattr(conf, "metadata", None), "metadata", None)
+    if not isinstance(metadata_sources, dict):
+        return
+    for source_key, metadata_source in list(metadata_sources.items()):
+        if isinstance(metadata_source, MetaDataMDX):
+            del metadata_sources[source_key]
 
 
 class LacosMetadataView(MetadataView):
