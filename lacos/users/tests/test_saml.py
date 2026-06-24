@@ -18,6 +18,7 @@ from lacos.users.models import SamlIdp
 from lacos.users.models import User
 from lacos.users.saml import sync_user_from_saml
 from lacos.users.saml_views import LacosAssertionConsumerServiceView
+from lacos.users.saml_views import LacosLoginView
 from lacos.users.saml_views import LacosMetadataView
 from lacos.users.tests.factories import UserFactory
 
@@ -344,6 +345,12 @@ def test_saml2_acs_route_uses_lacos_view():
     assert match.func.view_class is LacosAssertionConsumerServiceView
 
 
+def test_saml2_login_route_uses_lacos_view():
+    match = resolve("/saml2/login/")
+
+    assert match.func.view_class is LacosLoginView
+
+
 def test_saml2_metadata_route_uses_lacos_view():
     match = resolve("/saml2/metadata/")
 
@@ -512,6 +519,27 @@ def test_saml2_login_redirects_to_discovery_service(client, settings):
     assert response.status_code == HTTPStatus.FOUND
     location = response.headers["Location"]
     assert location.startswith(disco_url)
+
+
+@pytest.mark.django_db
+def test_saml2_login_accepts_clarin_entity_id_return_parameter(client, settings):
+    settings.SAML2_DISCO_URL = "https://discovery.clarin.eu/feed/edugain"
+    selected_idp = "https://login.uni-koeln.de/idp/shibboleth"
+
+    response = client.get(
+        "/saml2/login/",
+        {
+            "entityID": selected_idp,
+            "next": "/users/~redirect/",
+            "returnIDParam": "idp",
+        },
+    )
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.headers["Location"] == (
+        "/saml2/login/?next=%2Fusers%2F~redirect%2F"
+        "&idp=https%3A%2F%2Flogin.uni-koeln.de%2Fidp%2Fshibboleth"
+    )
 
 
 @pytest.mark.django_db

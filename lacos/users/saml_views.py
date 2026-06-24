@@ -7,7 +7,10 @@ from typing import Any
 from django.conf import settings
 from django.contrib import auth
 from django.core.exceptions import PermissionDenied
+from django.shortcuts import redirect
+from django.utils.http import urlencode
 from djangosaml2.views import AssertionConsumerServiceView
+from djangosaml2.views import LoginView
 from djangosaml2.views import MetadataView
 from djangosaml2.views import _set_subject_id
 
@@ -19,6 +22,21 @@ if TYPE_CHECKING:
     from django.http import HttpResponse
 
 logger = logging.getLogger(__name__)
+
+
+class LacosLoginView(LoginView):
+    """Accept CLARIN Discovery's selected IdP return parameter."""
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        selected_entity_id = request.GET.get("entityID")
+        if selected_entity_id and "idp" not in request.GET:
+            params = request.GET.copy()
+            params.pop("entityID", None)
+            params.pop("returnIDParam", None)
+            params["idp"] = selected_entity_id
+            return redirect(f"{request.path}?{urlencode(params, doseq=True)}")
+
+        return super().get(request, *args, **kwargs)
 
 
 class LacosMetadataView(MetadataView):
