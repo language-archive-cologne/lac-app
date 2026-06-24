@@ -3,6 +3,9 @@ from pathlib import Path
 CLARIN_PROXY_IDP_METADATA_URL = (
     "https://infra.clarin.eu/aai/prod_md_about_clarin_erics_proxy-idp.xml"
 )
+CLARIN_DIRECT_IDP_METADATA_URL = (
+    "https://infra.clarin.eu/aai/prod_md_about_clarin_erics_idp.xml"
+)
 DFN_EDUGAIN_METADATA_URL = (
     "https://www.aai.dfn.de/fileadmin/metadata/dfn-aai-edugain+idp-metadata.xml"
 )
@@ -55,10 +58,13 @@ def _indent(line: str) -> int:
     return len(line) - len(line.lstrip(" "))
 
 
-def test_production_django_uses_clarin_edugain_discovery_without_local_picker():
+def test_production_django_uses_clarin_edugain_discovery_sources_without_local_picker():
     env = _service_environment("django")
 
-    assert env["SAML_IDP_METADATA_REMOTE"] == CLARIN_PROXY_IDP_METADATA_URL
+    assert env["SAML_IDP_METADATA_REMOTE"].split(",") == [
+        CLARIN_PROXY_IDP_METADATA_URL,
+        CLARIN_DIRECT_IDP_METADATA_URL,
+    ]
     assert env["SAML_DIRECT_IDP_SELECTION_ENABLED"] == "false"
     assert env["SAML_METADATA_MDQ_URL"] == DFN_MDQ_URL
     assert env["EDUGAIN_METADATA_URL"] == DFN_EDUGAIN_METADATA_URL
