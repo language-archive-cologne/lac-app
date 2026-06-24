@@ -25,12 +25,14 @@ Key settings
   URLs.
 * ``SAML_DJANGO_USER_MAIN_ATTRIBUTE`` – defaults to ``username`` so users are
   looked up by ``eduPersonPrincipalName`` (ePPN).
-* ``SAML2_DISCO_URL`` – Discovery Service used when users choose institutional
-  sign-in. Production and local compose files point this at CLARIN's eduGAIN
-  feed, ``https://discovery.clarin.eu/feed/edugain``.
+* ``SAML2_DISCO_URL`` – optional external Discovery Service used when the SP
+  should hand off IdP selection itself. Production leaves this blank and trusts
+  the CLARIN SSO proxy metadata as the single IdP; the proxy opens CLARIN
+  Discovery for users.
 * ``SAML_IDP_METADATA_LOCAL`` / ``SAML_IDP_METADATA_REMOTE`` – IdP metadata
   sources. The repository ships a local fallback
-  ``shibboleth.xml`` for development.
+  ``shibboleth.xml`` for development. Production uses only
+  ``https://infra.clarin.eu/aai/prod_md_about_clarin_erics_proxy-idp.xml``.
 * The SP metadata advertises REFEDS Code of Conduct v2, REFEDS Research and
   Scholarship, and CLARIN member entity categories, matching LACOS' role as the
   KA3 successor service.
