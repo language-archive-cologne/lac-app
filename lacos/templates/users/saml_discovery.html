@@ -20,48 +20,6 @@
 
         <div class="divider text-sm">{% trans "or" %}</div>
 
-        {% if direct_idp_selection_enabled %}
-          <p class="text-base-content/70 mb-4">
-            {% trans "Choose an institution directly." %}
-          </p>
-
-          <div class="flex flex-col sm:flex-row gap-3 mb-4">
-            <input type="text"
-                   id="idp-search"
-                   name="search"
-                   placeholder="{% trans 'Search by name...' %}"
-                   class="input input-bordered flex-1"
-                   hx-get="{% url 'users:saml_discovery_idp_list' %}"
-                   hx-trigger="input changed delay:300ms, search"
-                   hx-target="#idp-results"
-                   hx-include="#country-select"
-                   autocomplete="off" />
-
-            <select id="country-select"
-                    name="country"
-                    class="select select-bordered w-full sm:w-48"
-                    hx-get="{% url 'users:saml_discovery_idp_list' %}"
-                    hx-trigger="change"
-                    hx-target="#idp-results"
-                    hx-include="#idp-search">
-              <option value="">{% trans "All countries" %}</option>
-              {% for c in countries %}
-                <option value="{{ c.code }}">{{ c.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-
-          {% if next %}
-            <input type="hidden" name="next" value="{{ next }}" id="next-url" />
-          {% endif %}
-
-          <div id="idp-results">
-            <p class="text-center text-base-content/50 py-8">{% trans "Type to search for your institution" %}</p>
-          </div>
-
-          <div class="divider text-sm">{% trans "or" %}</div>
-        {% endif %}
-
         <a href="{% url 'account_login' %}?credentials=1{% if next %}&amp;next={{ next|urlencode }}{% endif %}"
            class="btn btn-ghost btn-sm w-full">
           {% trans "Sign in with credentials" %}
