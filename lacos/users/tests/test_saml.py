@@ -541,6 +541,27 @@ def test_account_login_credentials_param_shows_local_form(client, settings):
 
 
 @pytest.mark.django_db
+def test_footer_staff_login_icon_shown_to_anonymous(client, settings):
+    settings.SAML_LOGIN_ENABLED = True
+
+    response = client.get(reverse("imprint"))
+
+    assert response.status_code == HTTPStatus.OK
+    assert "?credentials=1" in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_footer_staff_login_icon_hidden_when_authenticated(client, settings):
+    settings.SAML_LOGIN_ENABLED = True
+    client.force_login(UserFactory())
+
+    response = client.get(reverse("imprint"))
+
+    assert response.status_code == HTTPStatus.OK
+    assert "?credentials=1" not in response.content.decode()
+
+
+@pytest.mark.django_db
 def test_saml2_login_redirects_to_discovery_service(client, settings):
     disco_url = "https://wayf.aai.dfn.de/DFN-AAI/wayf"
     settings.SAML2_DISCO_URL = disco_url
