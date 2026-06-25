@@ -114,7 +114,7 @@ def _build_saml_login_url(
 
 
 class LoginView(AllauthLoginView):
-    """Redirect to SAML discovery when enabled, unless `?credentials=1` is set."""
+    """Redirect straight to CLARIN when enabled, unless `?credentials=1` is set."""
 
     def dispatch(self, request, *args, **kwargs):
         if (
@@ -122,7 +122,7 @@ class LoginView(AllauthLoginView):
             and request.method == "GET"
             and request.GET.get("credentials") != "1"
         ):
-            url = reverse("users:saml_discovery")
+            url = reverse("users:saml_login")
             next_url = _safe_next(request, request.GET.get("next"))
             if next_url:
                 url = f"{url}?{urlencode({'next': next_url})}"

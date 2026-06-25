@@ -1,4 +1,4 @@
-{% load static %}
+{% load static i18n %}
 <!-- Footer -->
 <footer class="bg-gradient-to-r from-[#003a54] via-[#005176] to-[#003a54] text-slate-300 mt-auto border-t border-[#004565]/70">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-5">
@@ -51,7 +51,18 @@
                     <li class="text-slate-400">© University of Cologne</li>
                 </ul>
             </nav>
-            {% if VERSION_COMMIT %}<span class="text-slate-500 text-xs font-mono">v:{{ VERSION_COMMIT }}</span>{% endif %}
+            <div class="flex items-center gap-3">
+                {% if SAML_LOGIN_ENABLED %}
+                <a href="{% url 'account_login' %}?credentials=1"
+                   title="{% translate 'Staff login' %}" aria-label="{% translate 'Staff login' %}"
+                   class="text-slate-500 hover:text-white transition-colors duration-200">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                    </svg>
+                </a>
+                {% endif %}
+                {% if VERSION_COMMIT %}<span class="text-slate-500 text-xs font-mono">v:{{ VERSION_COMMIT }}</span>{% endif %}
+            </div>
         </div>
     </div>
 </footer>

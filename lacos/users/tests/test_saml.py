@@ -511,6 +511,36 @@ def test_saml_login_view_strips_external_next(client, settings):
 
 
 @pytest.mark.django_db
+def test_account_login_redirects_straight_to_clarin(client, settings):
+    settings.SAML_LOGIN_ENABLED = True
+
+    response = client.get(reverse("account_login"))
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.headers["Location"] == reverse("users:saml_login")
+
+
+@pytest.mark.django_db
+def test_account_login_preserves_next_into_clarin_redirect(client, settings):
+    settings.SAML_LOGIN_ENABLED = True
+
+    response = client.get(reverse("account_login"), {"next": "/collections/"})
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.headers["Location"] == f"{reverse('users:saml_login')}?next=%2Fcollections%2F"
+
+
+@pytest.mark.django_db
+def test_account_login_credentials_param_shows_local_form(client, settings):
+    settings.SAML_LOGIN_ENABLED = True
+
+    response = client.get(reverse("account_login"), {"credentials": "1"})
+
+    assert response.status_code == HTTPStatus.OK
+    assert 'name="password"' in response.content.decode()
+
+
+@pytest.mark.django_db
 def test_saml2_login_redirects_to_discovery_service(client, settings):
     disco_url = "https://wayf.aai.dfn.de/DFN-AAI/wayf"
     settings.SAML2_DISCO_URL = disco_url

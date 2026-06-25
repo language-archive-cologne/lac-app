@@ -58,7 +58,7 @@
 
   {% if SAML_LOGIN_ENABLED %}
     <div class="divider text-sm">{% trans "or" %}</div>
-    <a href="{% url 'users:saml_discovery' %}{% if redirect_field_value %}?next={{ redirect_field_value|urlencode }}{% endif %}"
+    <a href="{% url 'users:saml_login' %}{% if redirect_field_value %}?next={{ redirect_field_value|urlencode }}{% endif %}"
        class="btn btn-ghost btn-sm w-full">
       {% trans "Sign in with university account" %}
     </a>
