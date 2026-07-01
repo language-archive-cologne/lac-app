@@ -51,6 +51,15 @@
       <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_field_value }}" />
     {% endif %}
 
+    {% if LOCAL_LOGIN_ALTCHA_ENABLED %}
+      <div class="form-control w-full mb-4">
+        <altcha-widget
+          name="altcha"
+          challengeurl="{% url 'storage:altcha_challenge' %}"
+        ></altcha-widget>
+      </div>
+    {% endif %}
+
     <div class="form-control mt-6">
       <button type="submit" class="btn btn-primary w-full">{% trans "Sign In" %}</button>
     </div>

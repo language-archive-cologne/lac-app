@@ -1,3 +1,5 @@
+import logging
+
 from allauth.account.views import LoginView as AllauthLoginView
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -10,10 +12,12 @@ from django.shortcuts import render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.http import urlencode
+from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_http_methods
 from django.views.generic import DetailView
 from django.views.generic import RedirectView
 
+from lacos.storage.services.altcha_service import get_altcha_service
 from lacos.users.models import SamlCountry
 from lacos.users.models import SamlIdp
 from lacos.users.models import User
@@ -21,6 +25,7 @@ from lacos.users.models import User
 from .adapters import TRUSTED_SAML_SESSION_KEY
 
 DIRECT_IDP_SELECTION_DISABLED_MESSAGE = "Direct SAML IdP selection is not enabled."
+logger = logging.getLogger(__name__)
 
 
 class UserDetailView(LoginRequiredMixin, DetailView):
@@ -128,6 +133,31 @@ class LoginView(AllauthLoginView):
                 url = f"{url}?{urlencode({'next': next_url})}"
             return redirect(url)
         return super().dispatch(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        if not self._altcha_verified(request):
+            form = self.get_form()
+            form.add_error(
+                None,
+                _("Please complete the bot verification and try again."),
+            )
+            return self.form_invalid(form)
+        return super().post(request, *args, **kwargs)
+
+    def _altcha_verified(self, request: HttpRequest) -> bool:
+        if not getattr(settings, "LOCAL_LOGIN_ALTCHA_ENABLED", True):
+            return True
+
+        payload = request.POST.get("altcha")
+        if not payload:
+            logger.info("Local login rejected without ALTCHA payload")
+            return False
+
+        is_valid, error = get_altcha_service().verify_solution_base64(payload)
+        if not is_valid:
+            logger.info("Local login rejected by ALTCHA", extra={"error": error})
+            return False
+        return True
 
 
 login_view = LoginView.as_view()

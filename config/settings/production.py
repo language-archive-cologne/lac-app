@@ -194,7 +194,12 @@ if not env.bool("DJANGO_USE_LOCAL_STATIC", default=False):
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "filters": {"require_debug_false": {"()": "django.utils.log.RequireDebugFalse"}},
+    "filters": {
+        "require_debug_false": {"()": "django.utils.log.RequireDebugFalse"},
+        "admin_email_rate_limit": {
+            "()": "lacos.common.admin_email_rate_limit.AdminEmailRateLimitFilter",
+        },
+    },
     "formatters": {
         "verbose": {
             "format": "%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d %(message)s",
@@ -207,7 +212,7 @@ LOGGING = {
     "handlers": {
         "mail_admins": {
             "level": "ERROR",
-            "filters": ["require_debug_false"],
+            "filters": ["require_debug_false", "admin_email_rate_limit"],
             "class": "django.utils.log.AdminEmailHandler",
         },
         "console": {

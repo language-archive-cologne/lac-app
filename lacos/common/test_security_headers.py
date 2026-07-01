@@ -3,12 +3,17 @@ from django.http import HttpResponse
 from django.test import RequestFactory
 
 from lacos.common.middleware import SecurityHeadersMiddleware
-from lacos.common.services.csp import (
-    build_csp_sha256,
-    collect_form_action_origins,
-    collect_inline_csp_hashes,
-)
+from lacos.common.services.csp import build_csp_sha256
+from lacos.common.services.csp import collect_form_action_origins
+from lacos.common.services.csp import collect_inline_csp_hashes
 from lacos.users.tests.factories import UserFactory
+
+
+def csp_directive_values(csp: str, directive_name: str) -> set[str]:
+    directive = next(
+        part for part in csp.split("; ") if part.startswith(f"{directive_name} ")
+    )
+    return set(directive.split()[1:])
 
 
 @pytest.mark.django_db
@@ -147,7 +152,10 @@ def test_csp_allows_configured_saml_form_action_origins(client, settings):
     response = client.get("/")
 
     csp = response.headers["Content-Security-Policy"]
-    assert "form-action 'self' https://idp.rrz.uni-koeln.de https://idp.example.org" in csp
+    form_action_values = csp_directive_values(csp, "form-action")
+    assert "'self'" in form_action_values
+    assert "https://idp.rrz.uni-koeln.de" in form_action_values
+    assert "https://idp.example.org" in form_action_values
     assert "form-action 'self' https:;" not in csp
 
 
@@ -184,10 +192,10 @@ def test_csp_allows_response_form_action_origins(settings):
     response = middleware(RequestFactory().get("/saml2/login/"))
 
     csp = response.headers["Content-Security-Policy"]
-    assert (
-        "form-action 'self' https://idp.rrz.uni-koeln.de "
-        "https://login.th-koeln.de"
-    ) in csp
+    form_action_values = csp_directive_values(csp, "form-action")
+    assert "'self'" in form_action_values
+    assert "https://idp.rrz.uni-koeln.de" in form_action_values
+    assert "https://login.th-koeln.de" in form_action_values
 
 
 @pytest.mark.django_db

@@ -7,6 +7,11 @@ def allauth_settings(request):
     """Expose some settings from django-allauth in templates."""
     return {
         "ACCOUNT_ALLOW_REGISTRATION": settings.ACCOUNT_ALLOW_REGISTRATION,
+        "LOCAL_LOGIN_ALTCHA_ENABLED": getattr(
+            settings,
+            "LOCAL_LOGIN_ALTCHA_ENABLED",
+            True,
+        ),
         "SAML_LOGIN_ENABLED": getattr(settings, "SAML_LOGIN_ENABLED", False),
     }
 

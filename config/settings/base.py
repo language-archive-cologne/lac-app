@@ -577,6 +577,24 @@ ACCOUNT_RATE_LIMITS = {
     "request_login_code": "5/m/ip,3/10m/key",
     "reset_password": "10/m/ip,5/15m/key",
 }
+LOCAL_LOGIN_ALTCHA_ENABLED = env.bool("LOCAL_LOGIN_ALTCHA_ENABLED", default=True)
+ADMIN_EMAIL_RATE_LIMIT_ENABLED = env.bool("ADMIN_EMAIL_RATE_LIMIT_ENABLED", default=True)
+ADMIN_EMAIL_RATE_LIMIT_WINDOW_SECONDS = env.int(
+    "ADMIN_EMAIL_RATE_LIMIT_WINDOW_SECONDS",
+    default=3600,
+)
+ADMIN_EMAIL_RATE_LIMIT_IDENTICAL_LIMIT = env.int(
+    "ADMIN_EMAIL_RATE_LIMIT_IDENTICAL_LIMIT",
+    default=3,
+)
+ADMIN_EMAIL_RATE_LIMIT_TOTAL_LIMIT = env.int(
+    "ADMIN_EMAIL_RATE_LIMIT_TOTAL_LIMIT",
+    default=20,
+)
+ADMIN_EMAIL_RATE_LIMIT_DISALLOWED_HOST_LIMIT = env.int(
+    "ADMIN_EMAIL_RATE_LIMIT_DISALLOWED_HOST_LIMIT",
+    default=1,
+)
 # https://docs.allauth.org/en/latest/account/configuration.html
 ACCOUNT_ADAPTER = "lacos.users.adapters.AccountAdapter"
 # https://docs.allauth.org/en/latest/account/forms.html
