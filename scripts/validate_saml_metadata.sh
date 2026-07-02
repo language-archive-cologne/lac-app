@@ -11,7 +11,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE_FILE_PATH="${SAML_PREFLIGHT_COMPOSE_FILE:-docker-compose.local.yml}"
 DJANGO_SERVICE="${SAML_PREFLIGHT_DJANGO_SERVICE:-django}"
 DJANGO_SETTINGS="${SAML_PREFLIGHT_DJANGO_SETTINGS:-config.settings.test}"
-BASE_URL="${SAML_PREFLIGHT_BASE_URL:-https://lacos.uni-koeln.de}"
+BASE_URL="${SAML_PREFLIGHT_BASE_URL:-https://lac.uni-koeln.de}"
 BASE_URL="${BASE_URL%/}"
 HOST_FROM_BASE="${BASE_URL#*://}"
 HOST_FROM_BASE="${HOST_FROM_BASE%%/*}"
@@ -47,7 +47,7 @@ Java, Ant, xmllint, and CLARIN tools run only inside a disposable Docker
 validator container. They are not installed into the LACOS app image.
 
 Useful environment variables:
-  SAML_PREFLIGHT_BASE_URL=https://lacos.uni-koeln.de
+  SAML_PREFLIGHT_BASE_URL=https://lac.uni-koeln.de
   SAML_PREFLIGHT_SP_KEY_FILE=/host/path/sp-key.pem
   SAML_PREFLIGHT_SP_CERT_FILE=/host/path/sp-cert.pem
   SAML_PREFLIGHT_FAIL_ON_QA_WARNINGS=0
