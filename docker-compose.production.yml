@@ -15,6 +15,7 @@ services:
       target: web-run-stage
       args:
         UV_LINK_MODE: copy
+        BUILD_ENVIRONMENT: production
     image: lacos_production_django
     container_name: lacos_production_django
     restart: unless-stopped
@@ -149,6 +150,7 @@ services:
       target: worker-run-stage
       args:
         UV_LINK_MODE: copy
+        BUILD_ENVIRONMENT: production
     image: lacos_production_huey
     container_name: lacos_production_huey
     restart: unless-stopped
