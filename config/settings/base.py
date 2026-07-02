@@ -7,6 +7,8 @@ from pathlib import Path
 
 import environ
 
+from .email import parse_admins
+
 BASE_DIR = Path(__file__).resolve(strict=True).parent.parent.parent
 # lacos/
 APPS_DIR = BASE_DIR / "lacos"
@@ -286,7 +288,7 @@ EMAIL_TIMEOUT = 5
 # Django Admin URL.
 ADMIN_URL = "admin/"
 # https://docs.djangoproject.com/en/dev/ref/settings/#admins
-ADMINS = [("""Francisco Mondaca""", "mondaca@uni-koeln.de")]
+ADMINS = parse_admins(env("DJANGO_ADMINS", default=""))
 # https://docs.djangoproject.com/en/dev/ref/settings/#managers
 MANAGERS = ADMINS
 # https://cookiecutter-django.readthedocs.io/en/latest/settings.html#other-environment-settings

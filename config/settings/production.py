@@ -143,10 +143,7 @@ else:
 # EMAIL
 # ------------------------------------------------------------------------------
 # https://docs.djangoproject.com/en/dev/ref/settings/#default-from-email
-DEFAULT_FROM_EMAIL = env(
-    "DJANGO_DEFAULT_FROM_EMAIL",
-    default="Language Archive Cologne <noreply@uni-koeln.de>",
-)
+DEFAULT_FROM_EMAIL = env("DJANGO_DEFAULT_FROM_EMAIL")
 # https://docs.djangoproject.com/en/dev/ref/settings/#server-email
 SERVER_EMAIL = env("DJANGO_SERVER_EMAIL", default=DEFAULT_FROM_EMAIL)
 # https://docs.djangoproject.com/en/dev/ref/settings/#email-subject-prefix
@@ -163,16 +160,15 @@ ADMIN_URL = env("DJANGO_ADMIN_URL")
 
 # SMTP relay (University of Cologne / ITCC)
 # ------------------------------------------------------------------------------
-# The production host sits inside the university network (UKLAN), so it may use
-# the in-network relay smtp.uni-koeln.de:25 with STARTTLS and without SMTP auth.
-# Leave EMAIL_HOST_USER/PASSWORD empty for the no-auth relay; to send from
-# outside UKLAN instead, point EMAIL_HOST at smtp-auth.uni-koeln.de:587 and set
-# credentials via the environment.
+# Configure the relay, sender, and optional SMTP auth in the deployment environment.
 # https://docs.djangoproject.com/en/dev/ref/settings/#email-backend
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = env("DJANGO_EMAIL_HOST", default="smtp.uni-koeln.de")
-EMAIL_PORT = env.int("DJANGO_EMAIL_PORT", default=25)
-EMAIL_USE_TLS = env.bool("DJANGO_EMAIL_USE_TLS", default=True)
+EMAIL_BACKEND = env(
+    "DJANGO_EMAIL_BACKEND",
+    default="django.core.mail.backends.smtp.EmailBackend",
+)
+EMAIL_HOST = env("DJANGO_EMAIL_HOST")
+EMAIL_PORT = env.int("DJANGO_EMAIL_PORT")
+EMAIL_USE_TLS = env.bool("DJANGO_EMAIL_USE_TLS")
 EMAIL_HOST_USER = env("DJANGO_EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = env("DJANGO_EMAIL_HOST_PASSWORD", default="")
 
