@@ -578,6 +578,16 @@ DOCKER_PRUNE_THRESHOLD_PERCENT = env.int("DOCKER_PRUNE_THRESHOLD_PERCENT", defau
 DOCKER_PRUNE_DOCKER_BIN = env("DOCKER_PRUNE_DOCKER_BIN", default="docker")
 DOCKER_PRUNE_CRON_MINUTE = env.int("DOCKER_PRUNE_CRON_MINUTE", default=0)
 
+# Background task retention
+# ------------------------------------------------------------------------------
+# Bounds the BackgroundTask table (frequent periodic tasks create a row per run).
+# Deletes rows older than the retention window daily, always keeping the most
+# recent row per task_name so the dashboard's "last run" signal is preserved.
+BACKGROUND_TASK_RETENTION_ENABLED = env.bool("BACKGROUND_TASK_RETENTION_ENABLED", default=True)
+BACKGROUND_TASK_RETENTION_DAYS = env.int("BACKGROUND_TASK_RETENTION_DAYS", default=30)
+BACKGROUND_TASK_RETENTION_CRON_HOUR = env.int("BACKGROUND_TASK_RETENTION_CRON_HOUR", default=4)
+BACKGROUND_TASK_RETENTION_CRON_MINUTE = env.int("BACKGROUND_TASK_RETENTION_CRON_MINUTE", default=30)
+
 # django-allauth
 # ------------------------------------------------------------------------------
 ACCOUNT_ALLOW_REGISTRATION = False

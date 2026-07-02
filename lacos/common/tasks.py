@@ -229,3 +229,9 @@ from lacos.common.docker_prune_tasks import (  # noqa: E402,F401
     prune_docker_resources,
     prune_docker_resources_periodic,
 )
+
+# Ensure background task retention tasks are registered with Huey.
+from lacos.common.background_task_retention_tasks import (  # noqa: E402,F401
+    cleanup_background_tasks,
+    cleanup_background_tasks_periodic,
+)
