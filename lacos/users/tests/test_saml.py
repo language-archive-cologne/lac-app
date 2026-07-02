@@ -32,7 +32,6 @@ def enable_saml(settings):
     settings.SAML_ATTRIBUTE_MAPPING = {
         "eduPersonPrincipalName": ("username",),
         "mail": ("email",),
-        "cn": ("name",),
     }
 
 
@@ -110,6 +109,50 @@ def test_sync_user_from_saml_preserves_profile_fields_when_optional_attrs_missin
     assert user.name == "Existing Name"
     assert user.email == "existing@example.com"
     assert user.acl_agent_uri == "urn:lacos:eppn:combined"
+
+
+def test_sync_user_from_saml_ignores_common_name_when_it_is_identifier():
+    user = User(name="")
+    attributes = {
+        "eduPersonPrincipalName": ["fmondac1@uni-koeln.de"],
+        "mail": ["fmondac1@uni-koeln.de"],
+        "cn": ["fmondac1@uni-koeln.de"],
+    }
+
+    sync_user_from_saml(
+        sender=None,
+        instance=user,
+        attributes=attributes,
+        created=True,
+        session_info={},
+    )
+
+    assert user.username == "fmondac1@uni-koeln.de"
+    assert user.email == "fmondac1@uni-koeln.de"
+    assert user.name == ""
+
+
+def test_sync_user_from_saml_clears_existing_identifier_display_name():
+    user = User(
+        username="fmondac1@uni-koeln.de",
+        email="fmondac1@uni-koeln.de",
+        name="fmondac1@uni-koeln.de",
+    )
+    attributes = {
+        "eduPersonPrincipalName": ["fmondac1@uni-koeln.de"],
+        "mail": ["fmondac1@uni-koeln.de"],
+        "cn": ["fmondac1@uni-koeln.de"],
+    }
+
+    sync_user_from_saml(
+        sender=None,
+        instance=user,
+        attributes=attributes,
+        created=False,
+        session_info={},
+    )
+
+    assert user.name == ""
 
 
 @pytest.mark.django_db

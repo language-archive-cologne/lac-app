@@ -10,6 +10,8 @@ from typing import Any, Mapping
 from django.conf import settings
 from djangosaml2.backends import Saml2Backend as _Saml2Backend
 
+from .saml import sync_profile_fields_from_saml
+
 logger = logging.getLogger(__name__)
 
 
@@ -48,7 +50,11 @@ class LacosSaml2Backend(_Saml2Backend):
         force_save: bool = False,
     ) -> Any:
         filtered_mapping = self._filter_attribute_mapping(attribute_mapping, user)
-        return super()._update_user(user, attributes, filtered_mapping, force_save)
+        user = super()._update_user(user, attributes, filtered_mapping, force_save)
+        updated_fields = sync_profile_fields_from_saml(user, attributes)
+        if updated_fields and getattr(user, "pk", None) is not None:
+            user.save(update_fields=sorted(updated_fields))
+        return user
 
     def authenticate(  # type: ignore[override]
         self,

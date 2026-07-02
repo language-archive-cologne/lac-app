@@ -59,6 +59,48 @@ def _extract_first(attributes: dict[str, Any], keys: Sequence[str]) -> str | Non
         if result:
             return result
     return None
+
+
+def _is_meaningful_common_name(
+    common_name: str,
+    username: str | None,
+    email: str | None,
+) -> bool:
+    normalized = common_name.casefold()
+    ignored_values = {
+        value.casefold()
+        for value in (username, email)
+        if value
+    }
+    if normalized in ignored_values:
+        return False
+    return "@" not in common_name
+
+
+def sync_profile_fields_from_saml(instance: User, attributes: dict[str, Any]) -> set[str]:
+    updated_fields: set[str] = set()
+
+    email = _extract_first(attributes, EMAIL_ATTR_KEYS)
+    if email and instance.email != email:
+        instance.email = email
+        updated_fields.add("email")
+
+    common_name = _extract_first(attributes, COMMON_NAME_ATTR_KEYS)
+    if common_name and _is_meaningful_common_name(
+        common_name,
+        instance.username,
+        instance.email,
+    ):
+        if instance.name != common_name:
+            instance.name = common_name
+            updated_fields.add("name")
+    elif instance.name in {instance.username, instance.email}:
+        instance.name = ""
+        updated_fields.add("name")
+
+    return updated_fields
+
+
 if pre_user_save is not None:  # pragma: no branch - guarded by import
 
     @receiver(pre_user_save)
@@ -84,13 +126,7 @@ if pre_user_save is not None:  # pragma: no branch - guarded by import
             # Always prefer the IdP-provided eppn/uid over NameID for consistency.
             instance.username = username
 
-        email = _extract_first(attributes, EMAIL_ATTR_KEYS)
-        if email:
-            instance.email = email
-
-        common_name = _extract_first(attributes, COMMON_NAME_ATTR_KEYS)
-        if common_name:
-            instance.name = common_name
+        sync_profile_fields_from_saml(instance, attributes)
 
         # Keep only the federated identifier required for login and ACL matching.
         if instance.username:
