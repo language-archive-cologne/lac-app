@@ -507,6 +507,23 @@ def test_saml_acs_failure_renders_friendly_error_page_and_logs_failure(
     assert "lac-helpdesk@uni-koeln.de" in content
 
 
+def test_saml_acs_failure_logs_at_error_level_for_admin_email(caplog):
+    request = RequestFactory().post("/saml2/acs/", {"SAMLResponse": "x"})
+    view = LacosAssertionConsumerServiceView()
+
+    with caplog.at_level(logging.INFO, logger="lacos.users.saml_views"):
+        view.handle_acs_failure(
+            request,
+            exception=PermissionDenied("No user could be authenticated."),
+            status=HTTPStatus.FORBIDDEN,
+        )
+
+    record = next(
+        record for record in caplog.records if record.message == "SAML ACS failure"
+    )
+    assert record.levelno == logging.ERROR
+
+
 @pytest.mark.django_db
 def test_saml_login_view_sets_session_marker(client, settings):
     settings.SAML_LOGIN_ENABLED = True

@@ -234,6 +234,16 @@ LOGGING = {
             "handlers": ["console"],
             "propagate": False,
         },
+        # SAML ACS failures log at ERROR (see saml_views.handle_acs_failure) so
+        # admins are emailed when institutional logins break. WARNING-level SAML
+        # diagnostics stay on the console; only ERROR crosses the mail_admins
+        # handler, and the rate-limit filter keeps bot-driven failures from
+        # flooding inboxes.
+        "lacos.users.saml_views": {
+            "level": "WARNING",
+            "handlers": ["console", "mail_admins"],
+            "propagate": False,
+        },
     },
 }
 

@@ -99,7 +99,7 @@ class LacosAssertionConsumerServiceView(AssertionConsumerServiceView):
         status: int = 403,
         **kwargs: Any,
     ) -> HttpResponse:
-        logger.warning(
+        logger.error(
             "SAML ACS failure",
             extra=build_acs_failure_log_context(
                 request,
