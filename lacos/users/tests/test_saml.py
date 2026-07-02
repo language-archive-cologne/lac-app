@@ -31,6 +31,8 @@ def enable_saml(settings):
     settings.SAML_DJANGO_USER_MAIN_ATTRIBUTE = "username"
     settings.SAML_ATTRIBUTE_MAPPING = {
         "eduPersonPrincipalName": ("username",),
+        "mail": ("email",),
+        "cn": ("name",),
     }
 
 
@@ -42,12 +44,12 @@ def _build_session_info(name_id: str, attributes: dict[str, list[str]]) -> dict:
     }
 
 
-def test_sync_user_from_saml_keeps_only_required_identifier():
+def test_sync_user_from_saml_uses_optional_admin_profile_attributes():
     user = User()
     attributes = {
         "eduPersonPrincipalName": ["user123"],
         "mail": ["user@example.com"],
-        "displayName": ["Test User"],
+        "cn": ["Test User"],
     }
     session_info = {"name_id": SimpleNamespace(text="persistent-id-123")}
 
@@ -60,19 +62,18 @@ def test_sync_user_from_saml_keeps_only_required_identifier():
     )
 
     assert user.username == "user123"
-    assert user.email == ""
-    assert user.name == ""
+    assert user.email == "user@example.com"
+    assert user.name == "Test User"
     assert user.saml_persistent_id in (None, "")
     assert user.acl_agent_uri == "urn:lacos:eppn:user123"
 
 
-def test_sync_user_from_saml_ignores_optional_profile_attributes():
-    user = User(name="")
+def test_sync_user_from_saml_uses_oid_profile_attribute_names():
+    user = User()
     attributes = {
-        "eduPersonPrincipalName": ["combined"],
-        "mail": ["combined@example.com"],
-        "givenName": ["Alice"],
-        "sn": ["Example"],
+        "urn:oid:1.3.6.1.4.1.5923.1.1.1.6": ["oid-user"],
+        "urn:oid:0.9.2342.19200300.100.1.3": ["oid@example.com"],
+        "urn:oid:2.5.4.3": ["OID User"],
     }
     session_info = {"name_id": SimpleNamespace(text="persistent-xyz")}
 
@@ -84,19 +85,40 @@ def test_sync_user_from_saml_ignores_optional_profile_attributes():
         session_info=session_info,
     )
 
-    assert user.username == "combined"
-    assert user.name == ""
-    assert user.email == ""
+    assert user.username == "oid-user"
+    assert user.name == "OID User"
+    assert user.email == "oid@example.com"
     assert user.saml_persistent_id in (None, "")
+    assert user.acl_agent_uri == "urn:lacos:eppn:oid-user"
+
+
+def test_sync_user_from_saml_preserves_profile_fields_when_optional_attrs_missing():
+    user = User(name="Existing Name", email="existing@example.com")
+    attributes = {
+        "eduPersonPrincipalName": ["combined"],
+    }
+
+    sync_user_from_saml(
+        sender=None,
+        instance=user,
+        attributes=attributes,
+        created=False,
+        session_info={},
+    )
+
+    assert user.username == "combined"
+    assert user.name == "Existing Name"
+    assert user.email == "existing@example.com"
+    assert user.acl_agent_uri == "urn:lacos:eppn:combined"
 
 
 @pytest.mark.django_db
-def test_backend_creates_user_with_required_identifier_only(settings):
+def test_backend_creates_user_with_optional_admin_profile_attributes(settings):
     backend = LacosSaml2Backend()
     attributes = {
         "eduPersonPrincipalName": ["backend-user"],
         "mail": ["backend@example.com"],
-        "displayName": ["Backend User"],
+        "cn": ["Backend User"],
     }
     session_info = _build_session_info("urn:persistent:abc123", attributes)
 
@@ -109,8 +131,8 @@ def test_backend_creates_user_with_required_identifier_only(settings):
 
     assert isinstance(user, User)
     assert user.username == "backend-user"
-    assert user.email == ""
-    assert user.name == ""
+    assert user.email == "backend@example.com"
+    assert user.name == "Backend User"
     assert user.saml_persistent_id in (None, "")
     assert user.acl_agent_uri == "urn:lacos:eppn:backend-user"
 
@@ -127,7 +149,7 @@ def test_backend_links_existing_user_by_username(settings):
     attributes = {
         "eduPersonPrincipalName": ["existing-user"],
         "mail": ["updated@example.com"],
-        "displayName": ["Updated Name"],
+        "cn": ["Updated Name"],
     }
     session_info = _build_session_info("urn:persistent:link-me", attributes)
 
@@ -141,8 +163,8 @@ def test_backend_links_existing_user_by_username(settings):
     assert user.pk == existing.pk
     user.refresh_from_db()
     assert user.username == "existing-user"
-    assert user.email == "old@example.com"
-    assert user.name == "Old Name"
+    assert user.email == "updated@example.com"
+    assert user.name == "Updated Name"
     assert user.saml_persistent_id == "urn:persistent:link-me"
 
 
@@ -152,7 +174,7 @@ def test_backend_creates_user_without_name_id_when_using_eppn(settings):
     attributes = {
         "eduPersonPrincipalName": ["eppn-user"],
         "mail": ["eppn@example.com"],
-        "displayName": ["Eppn User"],
+        "cn": ["Eppn User"],
     }
     session_info = {
         "issuer": "https://idp.test/shibboleth",
@@ -169,8 +191,8 @@ def test_backend_creates_user_without_name_id_when_using_eppn(settings):
 
     assert isinstance(user, User)
     assert user.username == "eppn-user"
-    assert user.email == ""
-    assert user.name == ""
+    assert user.email == "eppn@example.com"
+    assert user.name == "Eppn User"
     assert user.saml_persistent_id in (None, "")
     assert user.acl_agent_uri == "urn:lacos:eppn:eppn-user"
 

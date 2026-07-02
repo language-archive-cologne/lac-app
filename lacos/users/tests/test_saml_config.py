@@ -45,6 +45,17 @@ def test_saml_settings_publish_requested_attributes_for_clarin_proxy():
     assert sp_config["optional_attributes"] == ["mail", "cn"]
 
 
+def test_saml_attribute_mapping_uses_clarin_profile_attributes_for_admin_fields():
+    assert settings.SAML_ATTRIBUTE_MAPPING == {
+        "eduPersonPrincipalName": ("username",),
+        "urn:oid:1.3.6.1.4.1.5923.1.1.1.6": ("username",),
+        "mail": ("email",),
+        "urn:oid:0.9.2342.19200300.100.1.3": ("email",),
+        "cn": ("name",),
+        "urn:oid:2.5.4.3": ("name",),
+    }
+
+
 def test_saml_metadata_renders_required_and_optional_requested_attributes():
     conf = SPConfig().load(settings.SAML_CONFIG)
     root = fromstring(str(entity_descriptor(conf)))

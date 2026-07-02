@@ -25,6 +25,16 @@ USERNAME_ATTR_KEYS: tuple[str, ...] = (
     "uid",
     "urn:oid:0.9.2342.19200300.100.1.1",
 )
+EMAIL_ATTR_KEYS: tuple[str, ...] = (
+    "mail",
+    "urn:oid:0.9.2342.19200300.100.1.3",
+)
+COMMON_NAME_ATTR_KEYS: tuple[str, ...] = (
+    "cn",
+    "urn:oid:2.5.4.3",
+)
+
+
 def _coerce_first(value: Any) -> str | None:
     if value is None:
         return None
@@ -73,6 +83,14 @@ if pre_user_save is not None:  # pragma: no branch - guarded by import
         if username:
             # Always prefer the IdP-provided eppn/uid over NameID for consistency.
             instance.username = username
+
+        email = _extract_first(attributes, EMAIL_ATTR_KEYS)
+        if email:
+            instance.email = email
+
+        common_name = _extract_first(attributes, COMMON_NAME_ATTR_KEYS)
+        if common_name:
+            instance.name = common_name
 
         # Keep only the federated identifier required for login and ACL matching.
         if instance.username:

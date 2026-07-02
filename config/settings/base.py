@@ -790,6 +790,10 @@ if SAML_LOGIN_ENABLED:
     SAML_ATTRIBUTE_MAPPING = {
         "eduPersonPrincipalName": ("username",),
         "urn:oid:1.3.6.1.4.1.5923.1.1.1.6": ("username",),
+        "mail": ("email",),
+        "urn:oid:0.9.2342.19200300.100.1.3": ("email",),
+        "cn": ("name",),
+        "urn:oid:2.5.4.3": ("name",),
     }
     _saml_metadata = build_saml_metadata_sources(
         local_paths=SAML_METADATA_LOCAL,
