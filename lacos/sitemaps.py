@@ -1,11 +1,14 @@
 """Sitemap configuration for the Language Archive Cologne."""
 
+from urllib.parse import urlsplit
+
+from django.conf import settings
 from django.contrib.sitemaps import Sitemap
 from django.urls import reverse
 
-from lacos.blam.models import Bundle, Collection
+from lacos.blam.models import Bundle
+from lacos.blam.models import Collection
 from lacos.storage.services.exposure_policy_service import ExposurePolicyService
-
 
 # Slugs for user guide pages (only pages with MD files in lac-guidelines/texts/).
 # Use the title-aligned slugs so the sitemap lists canonical (non-redirecting) URLs.
@@ -18,7 +21,19 @@ USER_GUIDE_SLUGS = [
 ]
 
 
-class StaticSitemap(Sitemap):
+class PublicBaseUrlSitemap(Sitemap):
+    """Sitemap base class that emits the advertised public origin."""
+
+    def get_protocol(self, protocol=None):
+        parsed = urlsplit(settings.PUBLIC_BASE_URL)
+        return parsed.scheme or super().get_protocol(protocol)
+
+    def get_domain(self, site=None):
+        parsed = urlsplit(settings.PUBLIC_BASE_URL)
+        return parsed.netloc or super().get_domain(site)
+
+
+class StaticSitemap(PublicBaseUrlSitemap):
     """Sitemap for static pages."""
 
     priority = 0.5
@@ -45,7 +60,7 @@ class StaticSitemap(Sitemap):
         return reverse(item)
 
 
-class CollectionSitemap(Sitemap):
+class CollectionSitemap(PublicBaseUrlSitemap):
     """Sitemap for collection pages."""
 
     priority = 0.8
@@ -66,14 +81,15 @@ class CollectionSitemap(Sitemap):
 
     def location(self, obj):
         return reverse(
-            "explorer:collection_detail_by_handle", kwargs={"handle": obj.handle_path}
+            "explorer:collection_detail_by_handle",
+            kwargs={"handle": obj.handle_path},
         )
 
     def lastmod(self, obj):
         return obj.updated_at if hasattr(obj, "updated_at") else None
 
 
-class BundleSitemap(Sitemap):
+class BundleSitemap(PublicBaseUrlSitemap):
     """Sitemap for bundle pages."""
 
     priority = 0.7
@@ -94,7 +110,8 @@ class BundleSitemap(Sitemap):
 
     def location(self, obj):
         return reverse(
-            "explorer:bundle_detail_by_handle", kwargs={"handle": obj.handle_path}
+            "explorer:bundle_detail_by_handle",
+            kwargs={"handle": obj.handle_path},
         )
 
     def lastmod(self, obj):

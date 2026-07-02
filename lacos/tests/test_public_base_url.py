@@ -164,3 +164,25 @@ def test_robots_and_llms_use_public_base_url(client):
     llms_body = llms_response.content.decode("utf-8")
     assert "- [Collections](/collections/):" in llms_body
     assert "- Website: https://lac.uni-koeln.de" in llms_body
+
+
+@pytest.mark.django_db
+@override_settings(
+    PUBLIC_BASE_URL="https://lac.uni-koeln.de",
+    ALLOWED_HOSTS=["lacos.uni-koeln.de"],
+)
+def test_sitemap_uses_public_base_url_instead_of_request_host(client):
+    collection = _create_collection()
+    bundle = _create_bundle(collection)
+
+    response = client.get("/sitemap.xml", HTTP_HOST="lacos.uni-koeln.de")
+
+    assert response.status_code == HTTPStatus.OK
+    body = response.content.decode("utf-8")
+    assert "<loc>https://lac.uni-koeln.de/</loc>" in body
+    assert (
+        f"<loc>https://lac.uni-koeln.de/collections/{collection.handle_path}/</loc>"
+        in body
+    )
+    assert f"<loc>https://lac.uni-koeln.de/bundles/{bundle.handle_path}/</loc>" in body
+    assert "https://lacos.uni-koeln.de" not in body
