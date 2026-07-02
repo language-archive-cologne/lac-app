@@ -853,6 +853,7 @@ if SAML_LOGIN_ENABLED:
                 ),
                 "name_id_format": [SAML_DEFAULT_NAME_ID_FORMAT],
                 "required_attributes": ["eduPersonPrincipalName"],
+                "optional_attributes": ["mail", "cn"],
                 "ui_info": {
                     "display_name": [
                         {"text": "Language Archive Cologne", "lang": "en"},

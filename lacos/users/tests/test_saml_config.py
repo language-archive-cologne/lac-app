@@ -1,4 +1,7 @@
 from django.conf import settings
+from defusedxml.ElementTree import fromstring
+from saml2.config import SPConfig
+from saml2.metadata import entity_descriptor
 
 from lacos.users.saml_config import DEFAULT_MDQ_URL
 from lacos.users.saml_config import build_saml_endpoints
@@ -33,6 +36,42 @@ def test_saml_settings_publish_clarin_metadata_qa_fields():
         f"{settings.SAML_SP_BASE_URL.rstrip('/')}/saml2/login/"
     )
     assert expected_request_initiator_url == settings.SAML_REQUEST_INITIATOR_URL
+
+
+def test_saml_settings_publish_requested_attributes_for_clarin_proxy():
+    sp_config = settings.SAML_CONFIG["service"]["sp"]
+
+    assert sp_config["required_attributes"] == ["eduPersonPrincipalName"]
+    assert sp_config["optional_attributes"] == ["mail", "cn"]
+
+
+def test_saml_metadata_renders_required_and_optional_requested_attributes():
+    conf = SPConfig().load(settings.SAML_CONFIG)
+    root = fromstring(str(entity_descriptor(conf)))
+    namespace = {"md": "urn:oasis:names:tc:SAML:2.0:metadata"}
+
+    requested_attributes = {
+        attribute.get("FriendlyName"): {
+            "name": attribute.get("Name"),
+            "required": attribute.get("isRequired"),
+        }
+        for attribute in root.findall(".//md:RequestedAttribute", namespace)
+    }
+
+    assert requested_attributes == {
+        "eduPersonPrincipalName": {
+            "name": "urn:oid:1.3.6.1.4.1.5923.1.1.1.6",
+            "required": "true",
+        },
+        "mail": {
+            "name": "urn:oid:0.9.2342.19200300.100.1.3",
+            "required": "false",
+        },
+        "cn": {
+            "name": "urn:oid:2.5.4.3",
+            "required": "false",
+        },
+    }
 
 
 def test_saml_settings_publish_complete_contacts_for_metadata_qa():
