@@ -33,11 +33,14 @@
   <div id="collections-main-view" class="{% if search_query %}hidden{% endif %}">
     {% if collection_list %}
       <link rel="stylesheet" href="{% static 'vendor/js/maplibre-gl/maplibre-gl.css' %}" />
-      <script src="{% static 'vendor/js/maplibre-gl/maplibre-gl.js' %}"></script>
-      <script src="{% static 'vendor/js/pmtiles/pmtiles.js' %}"></script>
-      <script>
+      <script src="{% static 'vendor/js/maplibre-gl/maplibre-gl.js' %}" defer></script>
+      <script src="{% static 'vendor/js/pmtiles/pmtiles.js' %}" defer></script>
+      <script type="module">
         // Register pmtiles:// once. Re-registering is a no-op in pmtiles.js,
         // but guarding still avoids noise on hot reloads.
+        // NOTE: this is a module so it runs after the deferred vendor scripts
+        // above (defer + module scripts execute in document order after parsing),
+        // guaranteeing window.maplibregl / window.pmtiles are defined here.
         if (window.maplibregl && window.pmtiles && !window.__lacPmtilesRegistered) {
           const protocol = new pmtiles.Protocol();
           maplibregl.addProtocol('pmtiles', protocol.tile);

@@ -114,7 +114,10 @@ if env.bool("DJANGO_USE_LOCAL_STATIC", default=False):
             "OPTIONS": {"location": str(APPS_DIR / "media")},
         },
         "staticfiles": {
-            "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
+            # Manifest variant hashes filenames so WhiteNoise can serve them
+            # immutable with a 1-year cache (non-hashed files fall back to
+            # WHITENOISE_MAX_AGE, which defaults to 60s).
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
         },
     }
     MEDIA_URL = "/media/"
