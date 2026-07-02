@@ -223,3 +223,9 @@ from lacos.common.db_backup_tasks import (  # noqa: E402,F401
     backup_database_to_s3,
     backup_database_to_s3_periodic,
 )
+
+# Ensure Docker prune tasks are registered with Huey.
+from lacos.common.docker_prune_tasks import (  # noqa: E402,F401
+    prune_docker_resources,
+    prune_docker_resources_periodic,
+)

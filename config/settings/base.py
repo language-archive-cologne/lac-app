@@ -564,6 +564,20 @@ DB_BACKUP_RETENTION_DAYS = env.int("DB_BACKUP_RETENTION_DAYS", default=7)
 DB_BACKUP_CRON_HOUR = env.int("DB_BACKUP_CRON_HOUR", default=2)
 DB_BACKUP_CRON_MINUTE = env.int("DB_BACKUP_CRON_MINUTE", default=0)
 
+# Docker prune configuration
+# ------------------------------------------------------------------------------
+# Threshold-gated Docker cleanup run hourly from the Huey worker (which mounts the
+# host Docker socket in production). Only prunes when disk usage on
+# DOCKER_PRUNE_PATH is at or above the threshold, so build cache stays warm during
+# normal operation and is reclaimed only when space is tight.
+DOCKER_PRUNE_ENABLED = env.bool("DOCKER_PRUNE_ENABLED", default=True)
+# Measure the host disk via the bind-mounted project dir (BASE_DIR -> /app),
+# not the container root "/", which does not reflect the host's /var/lib/docker.
+DOCKER_PRUNE_PATH = env("DOCKER_PRUNE_PATH", default=str(BASE_DIR))
+DOCKER_PRUNE_THRESHOLD_PERCENT = env.int("DOCKER_PRUNE_THRESHOLD_PERCENT", default=80)
+DOCKER_PRUNE_DOCKER_BIN = env("DOCKER_PRUNE_DOCKER_BIN", default="docker")
+DOCKER_PRUNE_CRON_MINUTE = env.int("DOCKER_PRUNE_CRON_MINUTE", default=0)
+
 # django-allauth
 # ------------------------------------------------------------------------------
 ACCOUNT_ALLOW_REGISTRATION = False
