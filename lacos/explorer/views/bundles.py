@@ -289,11 +289,24 @@ class BundleResourcesView(View):
             collection_for_path = bundle.structural_info.first().is_member_of_collection
 
         if resource_id:
-            return self._handle_resource_access(request, bundle, resource_id, collection_for_path)
+            return self._handle_resource_access(
+                request,
+                bundle,
+                resource_id,
+                collection_for_path,
+                policy,
+            )
 
         return self._handle_resource_list(request, bundle, acl_service, acl_result, collection_for_path)
 
-    def _handle_resource_access(self, request, bundle, resource_id, collection_for_path):
+    def _handle_resource_access(
+        self,
+        request,
+        bundle,
+        resource_id,
+        collection_for_path,
+        policy,
+    ):
         """Handle direct resource access by PID."""
         try:
             decoded_resource_id = unquote(resource_id)
@@ -990,7 +1003,9 @@ class BundleJsonLdView(MetadataExposureMixin, BundleLookupPermissionMixin, View)
             filename = general_info.display_title.replace(" ", "_")[:50]
         else:
             filename = str(bundle.id)[:8]
-        response["Content-Disposition"] = f'attachment; filename="{filename}.jsonld"'
+        response["Content-Disposition"] = build_content_disposition(
+            f"{filename}.jsonld"
+        )
 
         return response
 
@@ -1049,5 +1064,5 @@ class BundleXmlView(MetadataExposureMixin, BundleLookupPermissionMixin, View):
             filename = str(bundle.id)[:8]
 
         response = HttpResponse(xml_content, content_type="application/xml")
-        response["Content-Disposition"] = f'attachment; filename="{filename}.xml"'
+        response["Content-Disposition"] = build_content_disposition(f"{filename}.xml")
         return response

@@ -2,14 +2,15 @@
 
 import logging
 import os
+import re
 import unicodedata
 import xml.dom.minidom
 from collections.abc import Sequence
 from pathlib import PurePosixPath
 from typing import Optional, Tuple
-from urllib.parse import quote
 
 from botocore.exceptions import ClientError
+from django.utils.http import content_disposition_header
 
 from lacos.blam.models.bundle.bundle_structural_info import BundleAdditionalMetadataFile
 from lacos.blam.models.collection.collection_structural_info import (
@@ -22,23 +23,24 @@ from lacos.storage.services.file_discovery_service import FileDiscoveryService
 logger = logging.getLogger(__name__)
 
 
+def _safe_download_filename(file_name: str) -> str:
+    normalized = unicodedata.normalize("NFKC", file_name)
+    without_separators = normalized.replace("/", "_").replace("\\", "_")
+    without_controls = "".join(
+        " " if unicodedata.category(character).startswith("C") else character
+        for character in without_separators
+    )
+    collapsed = re.sub(r"\s+", " ", without_controls).strip()
+    return collapsed or "download"
+
+
 def build_content_disposition(file_name: Optional[str]) -> str:
     """Build a Content-Disposition header value for file downloads."""
     if not file_name:
         return "attachment"
 
-    try:
-        ascii_filename = file_name.encode("ascii", "ignore").decode("ascii")
-    except Exception:
-        ascii_filename = "download"
-
-    ascii_filename = ascii_filename or "download"
-    disposition = f'attachment; filename="{ascii_filename}"'
-
-    if ascii_filename != file_name:
-        disposition += f"; filename*=UTF-8''{quote(file_name)}"
-
-    return disposition
+    safe_filename = _safe_download_filename(str(file_name))
+    return content_disposition_header(as_attachment=True, filename=safe_filename)
 
 
 def resolve_existing_object(

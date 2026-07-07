@@ -8,6 +8,7 @@ from lacos.blam.models.bundle.bundle_structural_info import BundleAdditionalMeta
 from lacos.blam.models.collection.collection_structural_info import (
     CollectionAdditionalMetadataFile,
 )
+from lacos.explorer.views.utils.storage import build_content_disposition
 from lacos.explorer.views.utils.storage import load_xml_preview, resolve_resource_to_presigned
 from lacos.explorer.views.utils.storage import resolve_collection_metadata_to_presigned
 from lacos.explorer.views.utils.storage import load_markdown_preview
@@ -23,6 +24,18 @@ def _not_found_error():
         },
         "HeadObject",
     )
+
+
+def test_build_content_disposition_removes_header_unsafe_characters():
+    disposition = build_content_disposition(
+        'Panegyric in Honour\nof "Gundo"/Naa\\Salamatu.xml',
+    )
+
+    assert "\n" not in disposition
+    assert "\r" not in disposition
+    assert "attachment;" in disposition
+    assert "Panegyric in Honour of" in disposition
+    assert "_Naa_Salamatu.xml" in disposition
 
 
 def test_resolve_resource_to_presigned_syncs_resolved_location(monkeypatch):

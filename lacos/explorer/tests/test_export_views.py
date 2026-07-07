@@ -188,6 +188,24 @@ def test_bundle_jsonld_htmx_returns_html():
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("extension", ["jsonld", "xml"])
+def test_bundle_metadata_download_sanitizes_newline_title_for_header(extension):
+    bundle = _create_bundle()
+    general_info = bundle.general_info.first()
+    general_info.display_title = "Panegyric in Honour of Gundo Naa Salamatu\n________"
+    general_info.save(update_fields=["display_title"])
+
+    response = Client().get(f"/bundles/{bundle.identifier}/metadata.{extension}")
+
+    assert response.status_code == 200
+    disposition = response["Content-Disposition"]
+    assert "\n" not in disposition
+    assert "\r" not in disposition
+    assert disposition.startswith("attachment;")
+    assert f".{extension}" in disposition
+
+
+@pytest.mark.django_db
 def test_bundle_jsonld_uses_metadata_creator_order():
     bundle = _create_bundle(with_publication=False)
     pub_info = BundlePublicationInfo.objects.create(
@@ -273,6 +291,26 @@ def test_collection_jsonld_htmx_returns_html():
     )
     assert response.status_code == 200
     assert b"metadata-content" in response.content
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("extension", ["jsonld", "xml"])
+def test_collection_metadata_download_sanitizes_newline_title_for_header(extension):
+    collection = _create_collection()
+    general_info = collection.general_info.first()
+    general_info.display_title = "Collection Title\nWith Unsafe Header Text"
+    general_info.save(update_fields=["display_title"])
+
+    response = Client().get(
+        f"/collections/{collection.identifier}/metadata.{extension}"
+    )
+
+    assert response.status_code == 200
+    disposition = response["Content-Disposition"]
+    assert "\n" not in disposition
+    assert "\r" not in disposition
+    assert disposition.startswith("attachment;")
+    assert f".{extension}" in disposition
 
 
 @pytest.mark.django_db

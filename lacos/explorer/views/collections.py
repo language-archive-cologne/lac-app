@@ -33,9 +33,6 @@ from lacos.blam.models.collection.collection_publication_info import (
     CollectionPublicationInfo,
     CollectionPublicationInfoCreator,
 )
-from lacos.blam.models.collection.collection_structural_info import (
-    CollectionAdditionalMetadataFile,
-)
 from lacos.explorer.glottolog import lookup_glottolog_entry
 from lacos.explorer.head_metadata import build_collection_head_metadata
 from lacos.explorer.map_utils import get_collection_map_markers
@@ -1229,7 +1226,9 @@ class CollectionJsonLdView(MetadataExposureMixin, CollectionLookupPermissionMixi
             filename = general_info.display_title.replace(" ", "_")[:50]
         else:
             filename = str(collection.id)[:8]
-        response["Content-Disposition"] = f'attachment; filename="{filename}.jsonld"'
+        response["Content-Disposition"] = build_content_disposition(
+            f"{filename}.jsonld"
+        )
 
         return response
 
@@ -1291,5 +1290,5 @@ class CollectionXmlView(MetadataExposureMixin, CollectionLookupPermissionMixin, 
             filename = str(collection.id)[:8]
 
         response = HttpResponse(xml_content, content_type="application/xml")
-        response["Content-Disposition"] = f'attachment; filename="{filename}.xml"'
+        response["Content-Disposition"] = build_content_disposition(f"{filename}.xml")
         return response
