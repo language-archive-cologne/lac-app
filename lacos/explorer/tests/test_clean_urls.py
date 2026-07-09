@@ -355,6 +355,9 @@ def test_resource_detail_copy_button_uses_handle_resolver_url(client, monkeypatc
     html = response.content.decode("utf-8")
     assert resource.file_pid in html
     assert 'data-copy-text="https://hdl.handle.net/11341/0000-0000-0000-3235"' in html
+    assert 'id="resource-viewer-content"' in html
+    assert 'id="resource-modal"' not in html
+    assert 'id="resource-modal-content"' not in html
 
 
 # --- Backward-compat redirects ---
