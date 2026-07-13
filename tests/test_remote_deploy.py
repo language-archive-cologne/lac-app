@@ -65,7 +65,11 @@ def deployment_repo(tmp_path: Path) -> dict[str, Path | str]:
     fake_bin.mkdir()
     docker_log = tmp_path / "docker.log"
     fake_docker = fake_bin / "docker"
-    fake_docker.write_text('#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$DOCKER_LOG"\n')
+    fake_docker.write_text(
+        "#!/bin/sh\n"
+        'if [ "${DOCKER_CONSUME_STDIN:-0}" = 1 ]; then cat >/dev/null; fi\n'
+        'printf \'%s\\n\' "$*" >> "$DOCKER_LOG"\n',
+    )
     fake_docker.chmod(0o755)
     docker_socket = tmp_path / "docker.sock"
     docker_socket.touch()
@@ -86,6 +90,8 @@ def _deploy(
     commit: str,
     mode: str = "full",
     expected_user: str | None = None,
+    *,
+    stream_with_stdin_consumer: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     deployment = Path(repo["deployment"])
     current_user = subprocess.run(
@@ -98,25 +104,32 @@ def _deploy(
     env.update(
         {
             "PATH": f"{repo['fake_bin']}:{env['PATH']}",
+            "DOCKER_CONSUME_STDIN": "1" if stream_with_stdin_consumer else "0",
             "DOCKER_LOG": str(repo["docker_log"]),
             "DOCKER_SOCKET": str(repo["docker_socket"]),
         },
     )
+    script_args = [
+        str(deployment),
+        "docker-compose.dev.yml",
+        "dev",
+        commit,
+        mode,
+        expected_user or current_user,
+    ]
+    if stream_with_stdin_consumer:
+        command = ["bash", "-s", "--", *script_args]
+        script_input = DEPLOY_SCRIPT.read_text()
+    else:
+        command = ["bash", str(DEPLOY_SCRIPT), *script_args]
+        script_input = None
     return subprocess.run(
-        [
-            "bash",
-            str(DEPLOY_SCRIPT),
-            str(deployment),
-            "docker-compose.dev.yml",
-            "dev",
-            commit,
-            mode,
-            expected_user or current_user,
-        ],
+        command,
         env=env,
         check=False,
         capture_output=True,
         text=True,
+        input=script_input,
     )
 
 
@@ -149,6 +162,27 @@ def test_fast_deploy_preserves_the_controlled_restart_order(deployment_repo):
         "compose -f docker-compose.dev.yml up -d --no-build huey",
         "compose -f docker-compose.dev.yml restart django",
     ]
+
+
+def test_streamed_deploy_prevents_docker_from_consuming_the_script(
+    deployment_repo,
+):
+    result = _deploy(
+        deployment_repo,
+        str(deployment_repo["second_commit"]),
+        mode="fast",
+        stream_with_stdin_consumer=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    commands = Path(deployment_repo["docker_log"]).read_text().splitlines()
+    assert commands == [
+        "compose -f docker-compose.dev.yml --profile build run --rm --no-deps theme",
+        "compose -f docker-compose.dev.yml stop -t 30 huey",
+        "compose -f docker-compose.dev.yml up -d --no-build huey",
+        "compose -f docker-compose.dev.yml restart django",
+    ]
+    assert "[deploy] Deployed" in result.stdout
 
 
 @pytest.mark.parametrize("commit", ["abc", "A" * 40, "g" * 40, "a" * 39])

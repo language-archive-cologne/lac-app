@@ -59,16 +59,16 @@ export DOCKER_GID
 DOCKER_GID="$(stat -c '%g' "${docker_socket}")"
 
 log "Building static theme assets"
-docker compose -f "${compose_file}" --profile build run --rm --no-deps theme
+docker compose -f "${compose_file}" --profile build run --rm --no-deps theme </dev/null
 
 if [[ "${mode}" == "full" ]]; then
   log "Rebuilding Django and Huey"
-  docker compose -f "${compose_file}" up -d --build --force-recreate huey django
+  docker compose -f "${compose_file}" up -d --build --force-recreate huey django </dev/null
 else
   log "Restarting Django and Huey without rebuilding images"
-  docker compose -f "${compose_file}" stop -t 30 huey
-  docker compose -f "${compose_file}" up -d --no-build huey
-  docker compose -f "${compose_file}" restart django
+  docker compose -f "${compose_file}" stop -t 30 huey </dev/null
+  docker compose -f "${compose_file}" up -d --no-build huey </dev/null
+  docker compose -f "${compose_file}" restart django </dev/null
 fi
 
 log "Deployed ${commit}"
