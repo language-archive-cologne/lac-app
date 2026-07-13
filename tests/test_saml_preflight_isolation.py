@@ -58,6 +58,7 @@ def test_saml_preflight_uses_and_removes_an_isolated_worktree(tmp_path: Path):
         "set -eu\n"
         "test -L .envs\n"
         "test -L .env\n"
+        'test "$SAML_PREFLIGHT_BASE_URL" = https://lac.uni-koeln.de\n'
         'test "$(cat live-file.txt)" = changed\n'
         'mkdir -p "$SAML_PREFLIGHT_WORK_DIR"\n'
         "printf '<EntityDescriptor />\\n' > "

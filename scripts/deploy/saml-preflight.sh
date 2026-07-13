@@ -79,7 +79,7 @@ export SAML_PREFLIGHT_COMPOSE_FILE=docker-compose.production.yml
 export SAML_PREFLIGHT_DJANGO_SETTINGS=config.settings.production
 export SAML_PREFLIGHT_SP_KEY_FILE=/etc/shibboleth/prod-sp-key.pem
 export SAML_PREFLIGHT_SP_CERT_FILE=/etc/shibboleth/prod-sp-cert.pem
-export SAML_PREFLIGHT_BASE_URL=https://lacos.uni-koeln.de
+export SAML_PREFLIGHT_BASE_URL=https://lac.uni-koeln.de
 export SAML_PREFLIGHT_KEEP_WORK_DIR=1
 export SAML_PREFLIGHT_WORK_DIR="${worktree_path}/.tmp/saml-preflight"
 

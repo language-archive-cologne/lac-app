@@ -75,8 +75,8 @@ The `Accept-Ranges` header is important because PMTiles reads byte ranges from t
 Production should use:
 
 ```text
-EXPLORER_MAP_PMTILES_URL=https://lacos.uni-koeln.de/map-assets/ne.pmtiles
-EXPLORER_MAP_GLYPHS_URL=https://lacos.uni-koeln.de/map-assets/glyphs
+EXPLORER_MAP_PMTILES_URL=https://lac.uni-koeln.de/map-assets/ne.pmtiles
+EXPLORER_MAP_GLYPHS_URL=https://lac.uni-koeln.de/map-assets/glyphs
 EXPLORER_MAIN_MAP_STYLE_URL=/maps/style/natural-earth-c.json
 EXPLORER_MAIN_MAP_DARK_STYLE_URL=/maps/style/natural-earth-c.json
 ```
@@ -106,8 +106,8 @@ Do not describe these helper scripts as the production deployment path. Producti
 ## Verification
 
 ```bash
-curl -I https://lacos.uni-koeln.de/map-assets/ne.pmtiles
-curl -I "https://lacos.uni-koeln.de/map-assets/glyphs/Noto%20Sans%20Regular/0-255.pbf"
+curl -I https://lac.uni-koeln.de/map-assets/ne.pmtiles
+curl -I "https://lac.uni-koeln.de/map-assets/glyphs/Noto%20Sans%20Regular/0-255.pbf"
 ```
 
 Then open the collection explorer and check the browser network tab. Map-related requests should go only to LACOS controlled hosts, not to Google Maps, Mapbox, OpenStreetMap tile servers, OpenFreeMap, or MapLibre demo tiles.
