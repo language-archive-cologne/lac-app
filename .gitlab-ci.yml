@@ -8,16 +8,8 @@ stages:
   tags:
     - charch
   before_script:
-    - apk add --no-cache openssh-client curl bind-tools busybox-extras
-    - eval $(ssh-agent -s)
-    - mkdir -p ~/.ssh
-    - chmod 700 ~/.ssh
-    - cp "$SSH_PRIVATE_KEY" ~/.ssh/deploy_key
-    - chmod 600 ~/.ssh/deploy_key
-    - ssh-add ~/.ssh/deploy_key
-    - 'echo "Runner public IP: $(curl -s --connect-timeout 2 --max-time 5 https://ifconfig.me || true)"'
-    - nslookup $DEPLOY_HOST || true
-    - nc -vz -w 5 $DEPLOY_HOST 22 || true
+    - apk add --no-cache bash openssh-client
+    - scripts/ci/configure-ssh.sh
   environment:
     name: development
     url: https://dev.lacos.uni-koeln.de
@@ -25,29 +17,22 @@ stages:
 clarin_saml_metadata_preflight:
   extends: .deploy_base
   stage: validate
+  resource_group: lacos-production
   environment:
     name: production
     url: https://lacos.uni-koeln.de
   before_script:
-    - apk add --no-cache openssh-client curl bind-tools busybox-extras bash git openjdk17-jre-headless apache-ant libxml2-utils openssl unzip wget ca-certificates coreutils
-    - eval $(ssh-agent -s)
-    - mkdir -p ~/.ssh
-    - chmod 700 ~/.ssh
-    - cp "$SSH_PRIVATE_KEY" ~/.ssh/deploy_key
-    - chmod 600 ~/.ssh/deploy_key
-    - ssh-add ~/.ssh/deploy_key
-    - 'echo "Runner public IP: $(curl -s --connect-timeout 2 --max-time 5 https://ifconfig.me || true)"'
-    - nslookup $DEPLOY_HOST || true
-    - nc -vz -w 5 $DEPLOY_HOST 22 || true
+    - apk add --no-cache bash openssh-client git openjdk17-jre-headless apache-ant libxml2-utils openssl unzip wget ca-certificates coreutils
+    - scripts/ci/configure-ssh.sh
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
   script:
-    - ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd /opt/lacos/lac-app-production && git fetch origin main && git checkout main && git reset --hard origin/main && export DOCKER_GID=\$(stat -c '%g' /var/run/docker.sock) && SAML_PREFLIGHT_COMPOSE_FILE=docker-compose.production.yml SAML_PREFLIGHT_DJANGO_SETTINGS=config.settings.production SAML_PREFLIGHT_SP_KEY_FILE=/etc/shibboleth/prod-sp-key.pem SAML_PREFLIGHT_SP_CERT_FILE=/etc/shibboleth/prod-sp-cert.pem SAML_PREFLIGHT_BASE_URL=https://lacos.uni-koeln.de SAML_PREFLIGHT_KEEP_WORK_DIR=1 scripts/validate_saml_metadata.sh --generate-only"
-    - scp -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST:/opt/lacos/lac-app-production/.tmp/saml-preflight/metadata.xml saml-metadata.xml
+    - scripts/ci/remote-saml-preflight.sh "$CI_COMMIT_SHA" > saml-metadata.xml
     - scripts/validate_saml_metadata_file.sh saml-metadata.xml
 
 deploy_dev_full:
   extends: .deploy_base
+  resource_group: lacos-development
   rules:
     - if: '$CI_COMMIT_BRANCH == "dev"'
       changes:
@@ -57,10 +42,11 @@ deploy_dev_full:
         - "compose/**/*"
         - "**/migrations/**/*"
   script:
-    - ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd /opt/lacos/lac-app && git fetch origin dev && git checkout dev && git reset --hard origin/dev && export DOCKER_GID=\$(stat -c '%g' /var/run/docker.sock) && docker compose -f docker-compose.dev.yml --profile build run --rm --no-deps theme && docker compose -f docker-compose.dev.yml up -d --build --force-recreate huey django"
+    - scripts/ci/remote-deploy.sh development full "$CI_COMMIT_SHA"
 
 deploy_dev_fast:
   extends: .deploy_base
+  resource_group: lacos-development
   rules:
     - if: '$CI_COMMIT_BRANCH == "dev"'
       changes:
@@ -72,10 +58,11 @@ deploy_dev_fast:
       when: never
     - if: '$CI_COMMIT_BRANCH == "dev"'
   script:
-    - ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd /opt/lacos/lac-app && git fetch origin dev && git checkout dev && git reset --hard origin/dev && export DOCKER_GID=\$(stat -c '%g' /var/run/docker.sock) && docker compose -f docker-compose.dev.yml --profile build run --rm --no-deps theme && docker compose -f docker-compose.dev.yml stop -t 30 huey && docker compose -f docker-compose.dev.yml up -d --no-build huey && docker compose -f docker-compose.dev.yml restart django"
+    - scripts/ci/remote-deploy.sh development fast "$CI_COMMIT_SHA"
 
 deploy_prod_full:
   extends: .deploy_base
+  resource_group: lacos-production
   environment:
     name: production
     url: https://lacos.uni-koeln.de
@@ -88,10 +75,11 @@ deploy_prod_full:
         - "compose/**/*"
         - "**/migrations/**/*"
   script:
-    - ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd /opt/lacos/lac-app-production && git fetch origin main && git checkout main && git reset --hard origin/main && export DOCKER_GID=\$(stat -c '%g' /var/run/docker.sock) && docker compose -f docker-compose.production.yml --profile build run --rm --no-deps theme && docker compose -f docker-compose.production.yml up -d --build --force-recreate huey django"
+    - scripts/ci/remote-deploy.sh production full "$CI_COMMIT_SHA"
 
 deploy_prod_fast:
   extends: .deploy_base
+  resource_group: lacos-production
   environment:
     name: production
     url: https://lacos.uni-koeln.de
@@ -106,7 +94,7 @@ deploy_prod_fast:
       when: never
     - if: '$CI_COMMIT_BRANCH == "main"'
   script:
-    - ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "cd /opt/lacos/lac-app-production && git fetch origin main && git checkout main && git reset --hard origin/main && export DOCKER_GID=\$(stat -c '%g' /var/run/docker.sock) && docker compose -f docker-compose.production.yml --profile build run --rm --no-deps theme && docker compose -f docker-compose.production.yml stop -t 30 huey && docker compose -f docker-compose.production.yml up -d --no-build huey && docker compose -f docker-compose.production.yml restart django"
+    - scripts/ci/remote-deploy.sh production fast "$CI_COMMIT_SHA"
 
 # Docker cleanup is handled by a threshold-gated Huey periodic task
 # (lacos/common/docker_prune_tasks.py), not by CI.
