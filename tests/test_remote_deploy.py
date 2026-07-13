@@ -43,6 +43,8 @@ def deployment_repo(tmp_path: Path) -> dict[str, Path | str]:
     _git("config", "user.name", "CI Test", cwd=source)
     _git("config", "user.email", "ci@example.test", cwd=source)
     (source / "docker-compose.dev.yml").write_text("services: {}\n")
+    (source / "theme" / "static" / "css").mkdir(parents=True)
+    (source / "theme" / "static" / "css" / ".gitkeep").touch()
     (source / "version.txt").write_text("one\n")
     _git("add", ".", cwd=source)
     _git("commit", "-m", "initial", cwd=source)
@@ -91,7 +93,7 @@ def _deploy(
     mode: str = "full",
     expected_user: str | None = None,
     *,
-    stream_with_stdin_consumer: bool = False,
+    scenario: str = "normal",
 ) -> subprocess.CompletedProcess[str]:
     deployment = Path(repo["deployment"])
     current_user = subprocess.run(
@@ -104,7 +106,7 @@ def _deploy(
     env.update(
         {
             "PATH": f"{repo['fake_bin']}:{env['PATH']}",
-            "DOCKER_CONSUME_STDIN": "1" if stream_with_stdin_consumer else "0",
+            "DOCKER_CONSUME_STDIN": "1" if scenario == "stream" else "0",
             "DOCKER_LOG": str(repo["docker_log"]),
             "DOCKER_SOCKET": str(repo["docker_socket"]),
         },
@@ -116,8 +118,11 @@ def _deploy(
         commit,
         mode,
         expected_user or current_user,
+        str(deployment / f".theme-output.{commit}.css"),
     ]
-    if stream_with_stdin_consumer:
+    if scenario != "missing-artifact":
+        Path(script_args[-1]).write_text("compiled theme\n")
+    if scenario == "stream":
         command = ["bash", "-s", "--", *script_args]
         script_input = DEPLOY_SCRIPT.read_text()
     else:
@@ -140,9 +145,14 @@ def test_full_deploy_resets_to_the_exact_pipeline_commit(deployment_repo):
     deployment = Path(deployment_repo["deployment"])
     assert _git("rev-parse", "HEAD", cwd=deployment) == deployment_repo["second_commit"]
     assert (deployment / "version.txt").read_text() == "two\n"
+    assert (deployment / "theme/static/css/output.css").read_text() == (
+        "compiled theme\n"
+    )
+    assert not (
+        deployment / f".theme-output.{deployment_repo['second_commit']}.css"
+    ).exists()
     commands = Path(deployment_repo["docker_log"]).read_text().splitlines()
     assert commands == [
-        "compose -f docker-compose.dev.yml --profile build run --rm --no-deps theme",
         "compose -f docker-compose.dev.yml up -d --build --force-recreate huey django",
     ]
 
@@ -157,7 +167,6 @@ def test_fast_deploy_preserves_the_controlled_restart_order(deployment_repo):
     assert result.returncode == 0, result.stderr
     commands = Path(deployment_repo["docker_log"]).read_text().splitlines()
     assert commands == [
-        "compose -f docker-compose.dev.yml --profile build run --rm --no-deps theme",
         "compose -f docker-compose.dev.yml stop -t 30 huey",
         "compose -f docker-compose.dev.yml up -d --no-build huey",
         "compose -f docker-compose.dev.yml restart django",
@@ -171,18 +180,33 @@ def test_streamed_deploy_prevents_docker_from_consuming_the_script(
         deployment_repo,
         str(deployment_repo["second_commit"]),
         mode="fast",
-        stream_with_stdin_consumer=True,
+        scenario="stream",
     )
 
     assert result.returncode == 0, result.stderr
     commands = Path(deployment_repo["docker_log"]).read_text().splitlines()
     assert commands == [
-        "compose -f docker-compose.dev.yml --profile build run --rm --no-deps theme",
         "compose -f docker-compose.dev.yml stop -t 30 huey",
         "compose -f docker-compose.dev.yml up -d --no-build huey",
         "compose -f docker-compose.dev.yml restart django",
     ]
     assert "[deploy] Deployed" in result.stdout
+
+
+def test_deploy_rejects_a_missing_theme_artifact_without_touching_checkout(
+    deployment_repo,
+):
+    result = _deploy(
+        deployment_repo,
+        str(deployment_repo["second_commit"]),
+        scenario="missing-artifact",
+    )
+
+    assert result.returncode != 0
+    assert "Theme artifact is missing or empty" in result.stderr
+    deployment = Path(deployment_repo["deployment"])
+    assert _git("rev-parse", "HEAD", cwd=deployment) == deployment_repo["first_commit"]
+    assert not Path(deployment_repo["docker_log"]).exists()
 
 
 @pytest.mark.parametrize("commit", ["abc", "A" * 40, "g" * 40, "a" * 39])

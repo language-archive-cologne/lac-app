@@ -14,6 +14,25 @@ stages:
     name: development
     url: https://dev.lacos.uni-koeln.de
 
+theme_build:
+  stage: validate
+  image: node:22-alpine
+  tags:
+    - charch
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "main"'
+  script:
+    - cd theme/static_src
+    - npm ci --no-audit --no-fund
+    - npm audit --audit-level=high
+    - npm run build
+    - test -s ../static/css/output.css
+  artifacts:
+    name: "theme-${CI_COMMIT_SHA}"
+    paths:
+      - theme/static/css/output.css
+    expire_in: 1 day
+
 clarin_saml_metadata_preflight:
   extends: .deploy_base
   stage: validate
@@ -34,7 +53,7 @@ deploy_dev_full:
   extends: .deploy_base
   resource_group: lacos-development
   rules:
-    - if: '$CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_COMMIT_BRANCH == "dev" && $CI_PIPELINE_SOURCE != "schedule"'
       changes:
         - "requirements/**/*"
         - "docker-compose.dev.yml"
@@ -48,7 +67,7 @@ deploy_dev_fast:
   extends: .deploy_base
   resource_group: lacos-development
   rules:
-    - if: '$CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_COMMIT_BRANCH == "dev" && $CI_PIPELINE_SOURCE != "schedule"'
       changes:
         - "requirements/**/*"
         - "docker-compose.dev.yml"
@@ -56,7 +75,7 @@ deploy_dev_fast:
         - "compose/**/*"
         - "**/migrations/**/*"
       when: never
-    - if: '$CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_COMMIT_BRANCH == "dev" && $CI_PIPELINE_SOURCE != "schedule"'
   script:
     - scripts/ci/remote-deploy.sh development fast "$CI_COMMIT_SHA"
 
@@ -67,7 +86,7 @@ deploy_prod_full:
     name: production
     url: https://lacos.uni-koeln.de
   rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE != "schedule"'
       changes:
         - "requirements/**/*"
         - "docker-compose.production.yml"
@@ -84,7 +103,7 @@ deploy_prod_fast:
     name: production
     url: https://lacos.uni-koeln.de
   rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE != "schedule"'
       changes:
         - "requirements/**/*"
         - "docker-compose.production.yml"
@@ -92,7 +111,7 @@ deploy_prod_fast:
         - "compose/**/*"
         - "**/migrations/**/*"
       when: never
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE != "schedule"'
   script:
     - scripts/ci/remote-deploy.sh production fast "$CI_COMMIT_SHA"
 

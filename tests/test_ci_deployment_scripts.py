@@ -94,13 +94,19 @@ def test_configure_ssh_rejects_missing_file_variables(
 def test_remote_deploy_maps_development_to_its_dedicated_account(tmp_path: Path):
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
+    theme_artifact = tmp_path / "output.css"
+    theme_artifact.write_text("compiled theme\n")
     ssh_log = tmp_path / "ssh.log"
+    scp_log = tmp_path / "scp.log"
     stdin_log = tmp_path / "stdin.log"
     fake_ssh = fake_bin / "ssh"
+    fake_scp = fake_bin / "scp"
     fake_ssh.write_text(
         '#!/bin/sh\nprintf \'%s\\n\' "$*" > "$SSH_LOG"\ncat > "$STDIN_LOG"\n',
     )
+    fake_scp.write_text('#!/bin/sh\nprintf \'%s\\n\' "$*" > "$SCP_LOG"\n')
     fake_ssh.chmod(0o755)
+    fake_scp.chmod(0o755)
 
     commit = "a" * 40
     result = _run(
@@ -112,6 +118,8 @@ def test_remote_deploy_maps_development_to_its_dedicated_account(tmp_path: Path)
             "PATH": f"{fake_bin}:{os.environ['PATH']}",
             "HOME": str(tmp_path / "home"),
             "DEPLOY_USER": "lacos-dev-deploy",
+            "THEME_ARTIFACT_FILE": str(theme_artifact),
+            "SCP_LOG": str(scp_log),
             "SSH_LOG": str(ssh_log),
             "STDIN_LOG": str(stdin_log),
         },
@@ -127,6 +135,9 @@ def test_remote_deploy_maps_development_to_its_dedicated_account(tmp_path: Path)
     assert commit in invocation
     assert " fast " in f" {invocation} "
     assert "set -euo pipefail" in stdin_log.read_text()
+    upload = scp_log.read_text()
+    assert str(theme_artifact) in upload
+    assert f".theme-output.{commit}.css" in upload
 
 
 def test_remote_deploy_rejects_an_account_for_the_wrong_environment(tmp_path: Path):
@@ -143,6 +154,25 @@ def test_remote_deploy_rejects_an_account_for_the_wrong_environment(tmp_path: Pa
 
     assert result.returncode != 0
     assert "lacos-prod-deploy" in result.stderr
+
+
+def test_remote_deploy_rejects_a_missing_theme_artifact(tmp_path: Path):
+    missing_artifact = tmp_path / "missing.css"
+
+    result = _run(
+        REMOTE_DEPLOY,
+        "development",
+        "fast",
+        "a" * 40,
+        env={
+            "HOME": str(tmp_path / "home"),
+            "DEPLOY_USER": "lacos-dev-deploy",
+            "THEME_ARTIFACT_FILE": str(missing_artifact),
+        },
+    )
+
+    assert result.returncode != 0
+    assert "theme artifact is missing or empty" in result.stderr.lower()
 
 
 def test_remote_saml_preflight_uses_the_production_checkout_and_account(tmp_path: Path):

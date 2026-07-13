@@ -38,6 +38,20 @@ esac
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ssh_config="${SSH_CONFIG_FILE:-${HOME}/.ssh/config}"
+theme_artifact="${THEME_ARTIFACT_FILE:-${repo_root}/theme/static/css/output.css}"
+remote_theme_artifact="${deployment_dir}/.theme-output.${commit}.css"
+
+[[ -s "${theme_artifact}" ]] || die "Validated theme artifact is missing or empty: ${theme_artifact}"
+
+cleanup_upload() {
+  ssh -F "${ssh_config}" lac-deployment \
+    rm -f -- "${remote_theme_artifact}" >/dev/null 2>&1 || true
+}
+trap cleanup_upload EXIT
+
+scp -F "${ssh_config}" \
+  "${theme_artifact}" \
+  "lac-deployment:${remote_theme_artifact}"
 
 ssh -F "${ssh_config}" lac-deployment \
   bash -s -- \
@@ -47,4 +61,7 @@ ssh -F "${ssh_config}" lac-deployment \
   "${commit}" \
   "${mode}" \
   "${expected_user}" \
+  "${remote_theme_artifact}" \
   < "${repo_root}/scripts/deploy/deploy.sh"
+
+trap - EXIT
