@@ -6,7 +6,8 @@
 # a disposable validator container, not in the LACOS application image.
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DEFAULT_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="${SAML_PREFLIGHT_REPO_ROOT:-${DEFAULT_REPO_ROOT}}"
 
 COMPOSE_FILE_PATH="${SAML_PREFLIGHT_COMPOSE_FILE:-docker-compose.local.yml}"
 DJANGO_SERVICE="${SAML_PREFLIGHT_DJANGO_SERVICE:-django}"
@@ -21,6 +22,7 @@ TOOL_IMAGE="${SAML_PREFLIGHT_TOOL_IMAGE:-debian:bookworm-slim}"
 FAIL_ON_QA_WARNINGS="${SAML_PREFLIGHT_FAIL_ON_QA_WARNINGS:-1}"
 KEEP_WORK_DIR="${SAML_PREFLIGHT_KEEP_WORK_DIR:-0}"
 DOCKER_DNS_ARGS=()
+COMPOSE_RUN_ARGS=(--rm --interactive=false --no-TTY)
 SEEN_DNS_SERVERS=" "
 
 APP_WORK_DIR="/app/.tmp/saml-preflight"
@@ -29,6 +31,7 @@ APP_METADATA_FILE="${APP_WORK_DIR}/metadata.xml"
 APP_GENERATOR="${APP_WORK_DIR}/generate_saml_metadata.py"
 APP_KEY_FILE="${APP_WORK_DIR}/sp-key.pem"
 APP_CERT_FILE="${APP_WORK_DIR}/sp-cert.pem"
+COMPOSE_RUN_COMMAND=(python "${APP_GENERATOR}")
 
 log() {
   printf '[saml-preflight] %s\n' "$*"
@@ -87,6 +90,23 @@ trap cleanup EXIT
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1"
+}
+
+configure_compose_run_security() {
+  local root_generator="${SAML_PREFLIGHT_ROOT_GENERATOR:-0}"
+
+  [[ "${root_generator}" == "0" || "${root_generator}" == "1" ]] || {
+    die "SAML_PREFLIGHT_ROOT_GENERATOR must be 0 or 1"
+  }
+  [[ "${root_generator}" == "1" ]] || return 0
+
+  COMPOSE_RUN_ARGS+=(
+    --user 0:0
+    --cap-drop ALL
+    --cap-add DAC_OVERRIDE
+    --entrypoint python
+  )
+  COMPOSE_RUN_COMMAND=("${APP_GENERATOR}")
 }
 
 append_docker_dns_server() {
@@ -227,7 +247,7 @@ generate_metadata() {
   log "Generating metadata for ${BASE_URL}"
   (
     cd "${REPO_ROOT}"
-    docker compose -f "${COMPOSE_FILE_PATH}" run --rm \
+    docker compose -f "${COMPOSE_FILE_PATH}" run "${COMPOSE_RUN_ARGS[@]}" \
       -e "DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS}" \
       -e "SAML_LOGIN_ENABLED=true" \
       -e "SAML_SP_BASE_URL=${BASE_URL}" \
@@ -243,7 +263,7 @@ generate_metadata() {
       -e "SAML_PREFLIGHT_HOST=${HOST}" \
       -e "SAML_PREFLIGHT_OUTPUT=${APP_METADATA_FILE}" \
       "${DJANGO_SERVICE}" \
-      python "${APP_GENERATOR}"
+      "${COMPOSE_RUN_COMMAND[@]}"
   )
 
   [[ -s "${METADATA_FILE}" ]] || die "Metadata file was not generated"
@@ -398,6 +418,8 @@ main() {
   [[ "$#" -eq 0 ]] || die "Unknown arguments. Use --help for usage."
 
   require_command docker
+  [[ -d "${REPO_ROOT}" ]] || die "SAML preflight repository root does not exist: ${REPO_ROOT}"
+  configure_compose_run_security
 
   rm -rf "${WORK_DIR}"
   mkdir -p "${WORK_DIR}"
