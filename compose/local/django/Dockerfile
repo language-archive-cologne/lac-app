@@ -65,6 +65,9 @@ RUN groupadd --gid 1000 dev-user \
 COPY --from=python-build-stage /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=python-build-stage /usr/local/bin /usr/local/bin
 
+COPY ./compose/production/django/ensure-staticfiles-ownership /ensure-staticfiles-ownership
+RUN sed -i 's/\r$//g' /ensure-staticfiles-ownership && chmod +x /ensure-staticfiles-ownership
+
 COPY ./compose/production/django/entrypoint /entrypoint
 RUN sed -i 's/\r$//g' /entrypoint && chmod +x /entrypoint
 

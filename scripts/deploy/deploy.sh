@@ -86,12 +86,24 @@ theme_temporary=
 
 if [[ "${mode}" == "full" ]]; then
   log "Rebuilding Django and Huey"
-  docker compose -f "${compose_file}" up -d --build --force-recreate huey django </dev/null
+  docker compose -f "${compose_file}" up \
+    -d \
+    --build \
+    --force-recreate \
+    --wait \
+    --wait-timeout 120 \
+    huey django </dev/null
 else
   log "Restarting Django and Huey without rebuilding images"
   docker compose -f "${compose_file}" stop -t 30 huey </dev/null
   docker compose -f "${compose_file}" up -d --no-build huey </dev/null
-  docker compose -f "${compose_file}" restart django </dev/null
+  docker compose -f "${compose_file}" up \
+    -d \
+    --no-build \
+    --force-recreate \
+    --wait \
+    --wait-timeout 120 \
+    django </dev/null
 fi
 
 log "Deployed ${commit}"

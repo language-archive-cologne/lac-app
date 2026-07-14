@@ -153,7 +153,8 @@ def test_full_deploy_resets_to_the_exact_pipeline_commit(deployment_repo):
     ).exists()
     commands = Path(deployment_repo["docker_log"]).read_text().splitlines()
     assert commands == [
-        "compose -f docker-compose.dev.yml up -d --build --force-recreate huey django",
+        "compose -f docker-compose.dev.yml up -d --build --force-recreate "
+        "--wait --wait-timeout 120 huey django",
     ]
 
 
@@ -169,7 +170,8 @@ def test_fast_deploy_preserves_the_controlled_restart_order(deployment_repo):
     assert commands == [
         "compose -f docker-compose.dev.yml stop -t 30 huey",
         "compose -f docker-compose.dev.yml up -d --no-build huey",
-        "compose -f docker-compose.dev.yml restart django",
+        "compose -f docker-compose.dev.yml up -d --no-build --force-recreate "
+        "--wait --wait-timeout 120 django",
     ]
 
 
@@ -188,7 +190,8 @@ def test_streamed_deploy_prevents_docker_from_consuming_the_script(
     assert commands == [
         "compose -f docker-compose.dev.yml stop -t 30 huey",
         "compose -f docker-compose.dev.yml up -d --no-build huey",
-        "compose -f docker-compose.dev.yml restart django",
+        "compose -f docker-compose.dev.yml up -d --no-build --force-recreate "
+        "--wait --wait-timeout 120 django",
     ]
     assert "[deploy] Deployed" in result.stdout
 

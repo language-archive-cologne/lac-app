@@ -65,6 +65,12 @@ services:
     ports:
       - '127.0.0.1:8103:8000'
     command: /start-production
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8000), timeout=3).close()"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
     networks:
       - lacos_production_network
     dns:
