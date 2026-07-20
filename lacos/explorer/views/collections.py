@@ -42,6 +42,8 @@ from lacos.explorer.permissions import (
     MetadataExposureMixin,
     enforce_binary_exposure,
 )
+from lacos.explorer.resource_actions import ensure_supported_resource_action
+from lacos.explorer.resource_actions import resource_request_log_context
 from lacos.explorer.collection_structured_data import serialize_collection_json_ld
 from lacos.explorer.file_types import FILE_TYPE_LABELS
 from lacos.explorer.search import search_archives
@@ -821,13 +823,13 @@ class CollectionResourcesView(View):
             raise Http404("Resource ID required")
 
         action = request.GET.get('action', 'view')
+        metadata_file = None
 
         try:
             pid_candidates = hdl_pid_candidates(resource_id)
             decoded_resource_id = pid_candidates[0] if pid_candidates else unquote(resource_id)
 
             # Try to find the metadata file in the collection's additional metadata
-            metadata_file = None
             structural_info = collection.structural_info.first()
             if structural_info:
                 metadata_file = structural_info.additional_metadata_files.filter(
@@ -846,6 +848,13 @@ class CollectionResourcesView(View):
 
             if metadata_file is None:
                 raise Http404(f"Collection metadata resource {decoded_resource_id} not found")
+
+            ensure_supported_resource_action(
+                request,
+                action=action,
+                container=collection,
+                resource=metadata_file,
+            )
 
             is_htmx = request.headers.get('HX-Request') == 'true'
             resource_service = ResourceMappingService(skip_bucket_check=True)
@@ -925,9 +934,6 @@ class CollectionResourcesView(View):
                     storage_resolution["bucket"],
                     storage_resolution["key"],
                 )
-
-            if action == 'download':
-                raise Http404("Direct downloads are not available")
 
             peaks_url = None
             spectrogram_data_url = None
@@ -1020,12 +1026,29 @@ class CollectionResourcesView(View):
 
             raise Http404("Unsupported action")
 
+        except Http404:
+            raise
         except ValueError as e:
-            logger.error("Resource mapping service error", extra={"error": str(e)})
+            context = resource_request_log_context(
+                request,
+                action=action,
+                container=collection,
+                resource=metadata_file,
+            )
+            context["error"] = str(e)
+            logger.warning("Resource mapping service error", extra=context)
             raise Http404(f"Resource {resource_id} not found or cannot be accessed")
-        except Exception as e:
-            logger.error("Error accessing resource", extra={"error": str(e)})
-            raise Http404(f"Error accessing resource: {str(e)}")
+        except Exception:
+            logger.exception(
+                "Error accessing resource",
+                extra=resource_request_log_context(
+                    request,
+                    action=action,
+                    container=collection,
+                    resource=metadata_file,
+                ),
+            )
+            raise
 
     def _render_resource_page(
         self,

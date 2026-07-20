@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 from uuid import uuid4
 from django.contrib.auth import get_user_model
@@ -343,6 +345,124 @@ def test_resource_access_denied_without_permission(client):
 
 @pytest.mark.django_db
 @override_settings(ACL_ENFORCEMENT_ENABLED=True)
+def test_invalid_resource_action_is_rejected_after_public_acl_before_storage(
+    client,
+    monkeypatch,
+    caplog,
+):
+    collection = _create_collection("invalid-action-public-collection")
+    bundle = _create_bundle(collection, "invalid-action-public-bundle")
+    resource = _add_bundle_media_resource(bundle, "invalid-action-public.wav")
+    _store_acl(bundle, [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}])
+
+    def fail_if_storage_is_initialized(*args, **kwargs):
+        raise AssertionError("invalid actions must be rejected before storage access")
+
+    monkeypatch.setattr(
+        "lacos.explorer.views.bundles.ResourceMappingService",
+        fail_if_storage_is_initialized,
+    )
+
+    with caplog.at_level(logging.WARNING, logger="lacos.explorer.resource_actions"):
+        response = client.get(
+            reverse("resource_by_handle", kwargs={"handle_id": resource.file_pid[4:]}),
+            {"action": "767950014"},
+            REMOTE_ADDR="203.0.113.25",
+        )
+
+    assert response.status_code == 404
+    record = next(
+        record for record in caplog.records
+        if record.name == "lacos.explorer.resource_actions"
+    )
+    assert record.resource_action == "767950014"
+    assert record.client_ip == "203.0.113.25"
+    assert record.resource_pid == resource.file_pid
+    assert record.container_identifier == bundle.identifier
+    assert record.authenticated is False
+
+
+@pytest.mark.django_db
+@override_settings(ACL_ENFORCEMENT_ENABLED=True)
+def test_invalid_resource_action_does_not_bypass_restricted_acl(
+    client,
+    monkeypatch,
+    caplog,
+):
+    collection = _create_collection("invalid-action-restricted-collection")
+    bundle = _create_bundle(collection, "invalid-action-restricted-bundle")
+    resource = _add_bundle_media_resource(bundle, "invalid-action-restricted.wav")
+    _store_acl(
+        bundle,
+        [{
+            "agentClass": "foaf:Person",
+            "agent": "urn:lacos:eppn:allowed@example.test",
+            "mode": ["acl:Read"],
+        }],
+    )
+
+    def fail_if_storage_is_initialized(*args, **kwargs):
+        raise AssertionError("denied requests must not reach storage access")
+
+    monkeypatch.setattr(
+        "lacos.explorer.views.bundles.ResourceMappingService",
+        fail_if_storage_is_initialized,
+    )
+
+    with caplog.at_level(logging.WARNING, logger="lacos.explorer.resource_actions"):
+        response = client.get(
+            reverse("resource_by_handle", kwargs={"handle_id": resource.file_pid[4:]}),
+            {"action": "767950014"},
+        )
+
+    assert response.status_code == 403
+    assert not any(
+        record.name == "lacos.explorer.resource_actions"
+        for record in caplog.records
+    )
+
+
+@pytest.mark.django_db
+@override_settings(ACL_ENFORCEMENT_ENABLED=True)
+def test_unexpected_resource_error_logs_context_and_traceback(
+    client,
+    monkeypatch,
+    caplog,
+):
+    collection = _create_collection("resource-error-collection")
+    bundle = _create_bundle(collection, "resource-error-bundle")
+    resource = _add_bundle_media_resource(bundle, "resource-error.wav")
+    _store_acl(bundle, [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}])
+
+    def raise_storage_error(*args, **kwargs):
+        raise RuntimeError("internal storage diagnostic")
+
+    monkeypatch.setattr(
+        "lacos.explorer.views.bundles.ResourceMappingService",
+        raise_storage_error,
+    )
+    client.raise_request_exception = False
+
+    with caplog.at_level(logging.ERROR, logger="lacos.explorer.views.bundles"):
+        response = client.get(
+            reverse("resource_by_handle", kwargs={"handle_id": resource.file_pid[4:]}),
+            {"action": "view"},
+        )
+
+    assert response.status_code == 500
+    record = next(
+        record for record in caplog.records
+        if record.name == "lacos.explorer.views.bundles"
+        and record.getMessage() == "Error accessing resource"
+    )
+    assert record.exc_info[0] is RuntimeError
+    assert record.resource_action == "view"
+    assert record.resource_pid == resource.file_pid
+    assert record.container_identifier == bundle.identifier
+
+
+@pytest.mark.django_db
+@override_settings(ACL_ENFORCEMENT_ENABLED=True)
 def test_resource_access_allows_assigned_collection_manager(client):
     collection = _create_collection("manager-resource-collection")
     bundle = _create_bundle(collection, "manager-resource-bundle")
@@ -491,6 +611,45 @@ def test_collection_metadata_route_obeys_binary_exposure_policy(client, monkeypa
     )
 
     assert response.status_code == 403
+
+
+@pytest.mark.django_db
+@override_settings(ACL_ENFORCEMENT_ENABLED=True)
+def test_invalid_collection_metadata_action_is_rejected_before_storage(
+    client,
+    monkeypatch,
+    caplog,
+):
+    collection = _create_collection("invalid-collection-metadata-action")
+    metadata_file = CollectionAdditionalMetadataFile.objects.create(
+        file_pid="hdl:test/invalid-collection-metadata-action",
+        file_name="metadata.xml",
+        file_description="Public collection metadata",
+        mime_type="application/xml",
+    )
+    collection.structural_info.first().additional_metadata_files.add(metadata_file)
+
+    def fail_if_storage_is_initialized(*args, **kwargs):
+        raise AssertionError("invalid actions must be rejected before storage access")
+
+    monkeypatch.setattr(
+        "lacos.explorer.views.collections.ResourceMappingService",
+        fail_if_storage_is_initialized,
+    )
+
+    with caplog.at_level(logging.WARNING, logger="lacos.explorer.resource_actions"):
+        response = client.get(
+            reverse("resource_by_handle", kwargs={"handle_id": metadata_file.file_pid[4:]}),
+            {"action": "767950014"},
+        )
+
+    assert response.status_code == 404
+    record = next(
+        record for record in caplog.records
+        if record.name == "lacos.explorer.resource_actions"
+    )
+    assert record.resource_pid == metadata_file.file_pid
+    assert record.container_identifier == collection.identifier
 
 
 @pytest.mark.django_db

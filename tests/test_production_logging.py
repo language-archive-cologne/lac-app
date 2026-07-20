@@ -59,3 +59,12 @@ def test_admin_email_handler_only_pages_on_errors_and_keeps_rate_limit():
 
     assert mail_admins["level"] == "ERROR"
     assert "admin_email_rate_limit" in mail_admins["filters"]
+
+
+def test_loggers_with_admin_email_handlers_log_once_and_keep_console_output():
+    logging_config = _production_logging()
+
+    for logger_name, logger_config in logging_config["loggers"].items():
+        if "mail_admins" in logger_config.get("handlers", []):
+            assert logger_config["propagate"] is False, logger_name
+            assert "console" in logger_config["handlers"], logger_name

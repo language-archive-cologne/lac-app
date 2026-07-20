@@ -40,6 +40,8 @@ from lacos.explorer.permissions import (
     build_forbidden_response,
     enforce_binary_exposure,
 )
+from lacos.explorer.resource_actions import ensure_supported_resource_action
+from lacos.explorer.resource_actions import resource_request_log_context
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
 from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 from lacos.storage.services.file_discovery_service import FileDiscoveryService
@@ -505,6 +507,12 @@ class ResourceAccessView(View):
         if hasattr(bundle, 'structural_info') and bundle.structural_info.first():
             collection_for_path = bundle.structural_info.first().is_member_of_collection
         action = request.GET.get('action', 'view')
+        ensure_supported_resource_action(
+            request,
+            action=action,
+            container=bundle,
+            resource=resource,
+        )
 
         try:
 
@@ -579,9 +587,6 @@ class ResourceAccessView(View):
             markdown_html = None
             if is_htmx and action in {'play', 'view'} and detected_media_type == 'markdown':
                 markdown_html = load_markdown_preview(resource_service, bucket_name, object_key)
-
-            if action == 'download':
-                raise Http404("Direct downloads are not available")
 
             # Resolve precomputed visualization sidecars for audio files
             # Also resolve for ELAN files that have a linked audio resource
@@ -681,12 +686,29 @@ class ResourceAccessView(View):
 
             raise Http404("Unsupported action")
 
+        except Http404:
+            raise
         except ValueError as e:
-            logger.error("Resource mapping service error", extra={"error": str(e)})
+            context = resource_request_log_context(
+                request,
+                action=action,
+                container=bundle,
+                resource=resource,
+            )
+            context["error"] = str(e)
+            logger.warning("Resource mapping service error", extra=context)
             raise Http404(f"Resource {resource_id} not found or cannot be accessed")
-        except Exception as e:
-            logger.error("Error accessing resource", extra={"error": str(e)})
-            return HttpResponse(f"Error accessing resource: {str(e)}", status=500)
+        except Exception:
+            logger.exception(
+                "Error accessing resource",
+                extra=resource_request_log_context(
+                    request,
+                    action=action,
+                    container=bundle,
+                    resource=resource,
+                ),
+            )
+            raise
 
     def _build_elan_context(
         self, resource_service, bundle, resource, collection_for_path,
