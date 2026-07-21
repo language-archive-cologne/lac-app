@@ -11,6 +11,8 @@ Disallow: /storage/
 Disallow: /api/
 Disallow: /admin/
 Disallow: /accounts/
+# Faceted search is a crawler trap (endless facet permutations)
+Disallow: /search/
 
 # ============================================
 # AI/ML Training Crawlers - BLOCKED
@@ -65,6 +67,7 @@ Disallow: /
 User-agent: bingbot
 Disallow: /api/
 Disallow: /storage/
+Disallow: /search/
 
 # Amazon
 User-agent: Amazonbot
