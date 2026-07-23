@@ -80,7 +80,7 @@ class FacetDefinition:
     filter_lookup: str
     label_map: dict[str, str] | None = None
     allowed_values: frozenset[str] | None = None
-    sort_alphabetically: bool = False
+    sort_newest_first: bool = False
     show_all: bool = False
     integer_values: bool = False
 
@@ -88,11 +88,10 @@ class FacetDefinition:
 FACET_DEFINITIONS: list[FacetDefinition] = [
     FacetDefinition(
         name="keyword",
-        label="Keyword",
+        label="Collection Keyword",
         value_field="general_info__keywords__value",
         label_field="general_info__keywords__value",
         filter_lookup="general_info__keywords__value__in",
-        sort_alphabetically=True,
         show_all=True,
     ),
     FacetDefinition(
@@ -118,6 +117,7 @@ FACET_DEFINITIONS: list[FacetDefinition] = [
         label_field="publication_info__publication_year",
         filter_lookup="publication_info__publication_year__in",
         integer_values=True,
+        sort_newest_first=True,
     ),
     FacetDefinition(
         name="country",
@@ -159,11 +159,10 @@ BUNDLE_FACET_DEFINITIONS: list[FacetDefinition] = [
     # Ordered from highest to lowest cardinality
     FacetDefinition(
         name="keyword",
-        label="Keyword",
+        label="Bundle Keyword",
         value_field="general_info__keywords__value",
         label_field="general_info__keywords__value",
         filter_lookup="general_info__keywords__value__in",
-        sort_alphabetically=True,
         show_all=True,
     ),
     FacetDefinition(
@@ -196,6 +195,7 @@ BUNDLE_FACET_DEFINITIONS: list[FacetDefinition] = [
         label_field="publication_info__publication_year",
         filter_lookup="publication_info__publication_year__in",
         integer_values=True,
+        sort_newest_first=True,
     ),
     FacetDefinition(
         name="country",
@@ -372,7 +372,7 @@ class FacetService:
                 grouped.get(defn.name, []),
                 selections.get(defn.name, []),
                 label_map=defn.label_map,
-                sort_alphabetically=defn.sort_alphabetically,
+                sort_newest_first=defn.sort_newest_first,
             )
             truncated = not defn.show_all and len(facet_values) > FACET_MAX_VALUES
             if truncated:
@@ -479,7 +479,7 @@ class FacetService:
         selected_list: list[str],
         *,
         label_map: dict[str, str] | None = None,
-        sort_alphabetically: bool = False,
+        sort_newest_first: bool = False,
     ) -> list[FacetValue]:
         """Convert raw DB rows into sorted FacetValue list."""
         counts: dict[str, dict[str, Any]] = {}
@@ -511,8 +511,13 @@ class FacetService:
                     FacetValue(value=sel_val, label=sel_val, count=0, selected=True)
                 )
 
-        if sort_alphabetically:
-            facet_values.sort(key=lambda fv: (not fv.selected, fv.label.lower()))
+        if sort_newest_first:
+            facet_values.sort(
+                key=lambda fv: (
+                    not fv.selected,
+                    -int(fv.value) if fv.value.isdigit() else 0,
+                )
+            )
         else:
             facet_values.sort(key=lambda fv: (not fv.selected, -fv.count, fv.label))
         return facet_values

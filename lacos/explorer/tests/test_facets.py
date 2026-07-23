@@ -798,3 +798,68 @@ def test_acl_permission_change_invalidates_facet_cache(explorer_cache_invalidati
 
     permission.delete()
     assert explorer_cache_invalidations["n"] == 2
+
+
+@pytest.mark.django_db
+def test_keyword_facet_label_names_collections():
+    _create_collection("C1", "Alpha")
+
+    service = FacetService()
+    result = service.search(_make_params(), _collection_qs())
+
+    keyword_facet = next(f for f in result.facets if f.name == "keyword")
+    assert keyword_facet.label == "Collection Keyword"
+
+
+@pytest.mark.django_db
+def test_keyword_facet_sorted_by_frequency():
+    c1 = _create_collection("C1", "Alpha")
+    c2 = _create_collection("C2", "Beta")
+    c3 = _create_collection("C3", "Gamma")
+
+    rare = CollectionKeyword.objects.create(value="aardvark")
+    common = CollectionKeyword.objects.create(value="zoology")
+    for collection in (c1, c2, c3):
+        collection.general_info.first().keywords.add(common)
+    c1.general_info.first().keywords.add(rare)
+
+    service = FacetService()
+    result = service.search(_make_params(), _collection_qs())
+
+    keyword_facet = next(f for f in result.facets if f.name == "keyword")
+    labels = [fv.label for fv in keyword_facet.values]
+    assert labels == ["zoology", "aardvark"]
+
+
+@pytest.mark.django_db
+def test_year_facet_sorted_newest_first():
+    for identifier, year in (("C1", 2003), ("C2", 2024), ("C3", 2011)):
+        collection = _create_collection(identifier, f"Title {identifier}")
+        CollectionPublicationInfo.objects.create(
+            collection=collection,
+            publication_year=year,
+            data_provider="LAC",
+        )
+
+    service = FacetService()
+    result = service.search(_make_params(), _collection_qs())
+
+    year_facet = next(f for f in result.facets if f.name == "year")
+    assert [fv.value for fv in year_facet.values] == ["2024", "2011", "2003"]
+
+
+@pytest.mark.django_db
+def test_year_facet_keeps_selected_values_pinned_first():
+    for identifier, year in (("C1", 2003), ("C2", 2024), ("C3", 2011)):
+        collection = _create_collection(identifier, f"Title {identifier}")
+        CollectionPublicationInfo.objects.create(
+            collection=collection,
+            publication_year=year,
+            data_provider="LAC",
+        )
+
+    service = FacetService()
+    result = service.search(_make_params(year=["2003"]), _collection_qs())
+
+    year_facet = next(f for f in result.facets if f.name == "year")
+    assert [fv.value for fv in year_facet.values] == ["2003", "2024", "2011"]

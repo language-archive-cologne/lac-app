@@ -33,6 +33,26 @@ describe('facet-filter', () => {
     expect(document.querySelector('[data-facet-label="Narrative texts"]').hidden).toBe(true);
   });
 
+  test('matches at the start of the label only, not mid-word substrings', () => {
+    const input = document.querySelector('[data-facet-filter-input]');
+    input.value = 'olog';
+
+    filterFacetValues(input);
+
+    expect(document.querySelector('[data-facet-label="Phonology"]').hidden).toBe(true);
+    expect(document.querySelector('[data-facet-label="Lexicon"]').hidden).toBe(true);
+  });
+
+  test('matches at the start of any word in multi-word labels', () => {
+    const input = document.querySelector('[data-facet-filter-input]');
+    input.value = 'tex';
+
+    filterFacetValues(input);
+
+    expect(document.querySelector('[data-facet-label="Narrative texts"]').hidden).toBe(false);
+    expect(document.querySelector('[data-facet-label="Phonology"]').hidden).toBe(true);
+  });
+
   test('empty filter restores all facet values', () => {
     const input = document.querySelector('[data-facet-filter-input]');
     input.value = 'lex';

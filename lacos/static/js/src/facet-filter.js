@@ -18,7 +18,8 @@ export function filterFacetValues(input) {
   const query = normalizeLabel(input.value).trim();
   scope.querySelectorAll('[data-facet-label]').forEach((item) => {
     const label = normalizeLabel(item.dataset.facetLabel);
-    item.hidden = query !== '' && !label.includes(query);
+    const matches = label.split(/\s+/).some((word) => word.startsWith(query));
+    item.hidden = query !== '' && !matches;
   });
 }
 

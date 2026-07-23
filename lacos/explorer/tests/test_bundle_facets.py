@@ -699,3 +699,14 @@ def test_invalid_sort_param_uses_default(client):
 
     response = client.get("/search/bundles/", {"sort": "INVALID"})
     assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_bundle_keyword_facet_label_names_bundles():
+    coll = _create_collection("C1", "Test Collection")
+    _create_bundle("B1", "Bundle One", coll)
+
+    result = _service().search(_make_params(), Bundle.objects.all())
+
+    keyword_facet = next(f for f in result.facets if f.name == "keyword")
+    assert keyword_facet.label == "Bundle Keyword"
