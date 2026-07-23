@@ -118,11 +118,6 @@ LOGGING = {
             "level": "WARNING",
             "propagate": False,
         },
-        "uvicorn.access": {
-            "handlers": ["console"],
-            "level": "WARNING",
-            "propagate": False,
-        },
         "huey": {
             "handlers": ["console"],
             "level": "INFO",
