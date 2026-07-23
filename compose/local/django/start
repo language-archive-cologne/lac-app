@@ -7,6 +7,13 @@ set -o nounset
 # Run migrations
 python manage.py migrate
 
-# Start the Django development server.
-# Access logs are disabled to avoid very noisy HTMX polling output in local dev.
-exec uvicorn config.asgi:application --host 0.0.0.0 --reload --reload-include '*.html' --no-access-log
+# Start the development server on the same WSGI application production uses
+# (ASGI leaked DB connections when clients aborted requests). Gunicorn logs
+# no access log by default, which keeps HTMX polling output quiet.
+exec /usr/local/bin/gunicorn config.wsgi \
+    --bind 0.0.0.0:8000 \
+    --chdir=/app \
+    --workers 2 \
+    --threads 4 \
+    --timeout 120 \
+    --reload
