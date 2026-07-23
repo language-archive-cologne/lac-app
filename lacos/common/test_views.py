@@ -85,3 +85,50 @@ def test_user_guides_index_links_use_title_aligned_slugs(client):
     assert reverse("user-guide", args=["licenses"]) in content
     assert reverse("user-guide", args=["depositing-policy"]) not in content
     assert reverse("user-guide", args=["depositor-agreement"]) not in content
+
+
+def _asset_dir(settings, tmp_path: Path) -> Path:
+    html_dir = tmp_path / "guidelines"
+    assets = html_dir / "assets"
+    assets.mkdir(parents=True)
+    settings.GUIDELINES_HTML_DIR = html_dir
+    return assets
+
+
+@pytest.mark.django_db
+def test_guideline_asset_view_serves_image(settings, tmp_path: Path, client):
+    assets = _asset_dir(settings, tmp_path)
+    (assets / "pic.png").write_bytes(b"\x89PNG fake")
+
+    response = client.get("/user-guides/assets/pic.png")
+
+    assert response.status_code == 200
+    assert response["Content-Type"] == "image/png"
+    assert b"".join(response.streaming_content) == b"\x89PNG fake"
+
+
+@pytest.mark.django_db
+def test_guideline_asset_view_missing_file_returns_404(settings, tmp_path: Path, client):
+    _asset_dir(settings, tmp_path)
+
+    assert client.get("/user-guides/assets/nope.png").status_code == 404
+
+
+@pytest.mark.django_db
+def test_guideline_asset_view_rejects_traversal(settings, tmp_path: Path, client):
+    assets = _asset_dir(settings, tmp_path)
+    (assets.parent / "user.html").write_text("secret", encoding="utf-8")
+
+    response = client.get("/user-guides/assets/..%2Fuser.html")
+
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_guideline_asset_view_rejects_non_image_extension(
+    settings, tmp_path: Path, client
+):
+    assets = _asset_dir(settings, tmp_path)
+    (assets / "notes.html").write_text("<script>x</script>", encoding="utf-8")
+
+    assert client.get("/user-guides/assets/notes.html").status_code == 404

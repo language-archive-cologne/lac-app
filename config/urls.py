@@ -14,7 +14,7 @@ from drf_spectacular.views import SpectacularSwaggerView
 from rest_framework.permissions import AllowAny
 from lacos.oaipmh.views import OAIPMHOverviewView
 from lacos.sitemaps import sitemaps
-from lacos.common.views import guideline_view
+from lacos.common.views import guideline_asset_view, guideline_view
 from lacos.explorer.views import (
     BundleFacetedSearchView,
     CollectionListView,
@@ -97,6 +97,12 @@ urlpatterns = [
         "user-guides/",
         TemplateView.as_view(template_name="pages/user_guides/index.html"),
         name="user-guides",
+    ),
+    # Images referenced by rendered guideline pages (synced from texts/assets/)
+    path(
+        "user-guides/assets/<str:filename>",
+        guideline_asset_view,
+        name="user-guide-asset",
     ),
     # Dynamic guideline pages - checks for rendered HTML first, falls back to templates
     path("user-guides/<slug:slug>/", guideline_view, name="user-guide"),

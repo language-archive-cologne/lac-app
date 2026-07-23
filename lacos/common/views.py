@@ -1,11 +1,16 @@
+import mimetypes
 import re
 from pathlib import Path
 
 from django.conf import settings
-from django.http import Http404
+from django.http import FileResponse, Http404
 from django.shortcuts import redirect, render
+from django.utils.cache import patch_cache_control
 
 from lacos.common.services.safe_html import sanitize_html
+
+# Only raster image formats are served from the guideline assets directory.
+GUIDELINE_ASSET_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 
 
 # Mapping from URL slug to MD filename (without extension)
@@ -52,6 +57,33 @@ def _get_guidelines_version(html_dir: Path) -> str | None:
         except Exception:
             return None
     return None
+
+
+def guideline_asset_view(request, filename: str):
+    """Serve an image referenced by a rendered guideline page.
+
+    Assets are copied from the lac-guidelines repo's texts/assets/ directory
+    into GUIDELINES_HTML_DIR/assets by the sync task.
+    """
+    html_dir = getattr(settings, "GUIDELINES_HTML_DIR", None)
+    if not html_dir:
+        raise Http404("Guidelines not configured")
+
+    assets_dir = (Path(html_dir) / "assets").resolve()
+    asset_path = (assets_dir / filename).resolve()
+
+    if (
+        asset_path.parent != assets_dir
+        or asset_path.suffix.lower() not in GUIDELINE_ASSET_EXTENSIONS
+        or not asset_path.is_file()
+    ):
+        raise Http404("Asset not found")
+
+    content_type = mimetypes.guess_type(asset_path.name)[0] or "application/octet-stream"
+    response = FileResponse(asset_path.open("rb"), content_type=content_type)
+    # Assets only change on guideline re-sync; let browsers cache for a day.
+    patch_cache_control(response, public=True, max_age=86400)
+    return response
 
 
 def guideline_view(request, slug: str):

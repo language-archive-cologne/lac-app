@@ -108,9 +108,27 @@ def _fix_internal_links(html: str) -> str:
     return re.sub(r'href="([^"]+\.md)"', replace_link, html)
 
 
+def _fix_asset_urls(html: str) -> str:
+    """Rewrite relative texts/assets/ image sources to the served asset URL."""
+    return re.sub(r'src="assets/([^"]+)"', r'src="/user-guides/assets/\1"', html)
+
+
+def _copy_assets(texts_dir: Path, output_dir: Path) -> None:
+    """Copy texts/assets/ next to the rendered HTML so images resolve."""
+    assets_dir = texts_dir / "assets"
+    if not assets_dir.is_dir():
+        return
+    target = output_dir / "assets"
+    target.mkdir(parents=True, exist_ok=True)
+    for asset in assets_dir.iterdir():
+        if asset.is_file():
+            (target / asset.name).write_bytes(asset.read_bytes())
+
+
 def _render_markdown_files(texts_dir: Path, output_dir: Path, tag: str) -> dict:
     """Render all MD files to HTML."""
     output_dir.mkdir(parents=True, exist_ok=True)
+    _copy_assets(texts_dir, output_dir)
 
     rendered = []
     errors = []
@@ -118,7 +136,9 @@ def _render_markdown_files(texts_dir: Path, output_dir: Path, tag: str) -> dict:
     for md_file in texts_dir.glob("*.md"):
         try:
             content = md_file.read_text(encoding="utf-8")
-            html = sanitize_html(_fix_internal_links(content_to_html(content)))
+            html = sanitize_html(
+                _fix_asset_urls(_fix_internal_links(content_to_html(content)))
+            )
             slug = md_file.stem
             output_path = output_dir / f"{slug}.html"
             output_path.write_text(html, encoding="utf-8")
