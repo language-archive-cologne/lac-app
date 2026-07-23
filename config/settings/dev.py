@@ -86,6 +86,9 @@ else:
     }
     MEDIA_URL = "/media/"
     STATIC_URL = "/static/"
+    # collectfasta's boto3 strategy (inherited from production) cannot run
+    # against local StaticFilesStorage
+    COLLECTFASTA_ENABLED = False
 
 # SAML defaults for dev
 # ------------------------------------------------------------------------------
