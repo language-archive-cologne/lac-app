@@ -85,6 +85,14 @@ RUN chown -R dev-user:dev-user ${APP_HOME}
 FROM python-runtime-base AS web-run-stage
 ENTRYPOINT ["/entrypoint"]
 
+# Local/test image target: deployment-script tests exercise git worktrees
+FROM web-run-stage AS test-run-stage
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install --no-install-recommends -y \
+    git
+ENTRYPOINT ["/entrypoint"]
+
 # Worker image target (Huey with media tooling)
 FROM python-runtime-base AS worker-run-stage
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \

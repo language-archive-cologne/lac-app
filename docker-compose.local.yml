@@ -13,7 +13,7 @@ services:
     build:
       context: .
       dockerfile: ./compose/local/django/Dockerfile
-      target: web-run-stage
+      target: test-run-stage
     image: lacos_local_django
     restart: "on-failure:3"
     logging:
