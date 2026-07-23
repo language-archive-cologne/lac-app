@@ -7,4 +7,15 @@ set -o nounset
 python /app/manage.py migrate
 python /app/manage.py collectstatic --noinput
 
-exec /usr/local/bin/gunicorn config.asgi --bind 0.0.0.0:8000 --chdir=/app -k uvicorn_worker.UvicornWorker
+# WSGI with bounded workers: client disconnects cannot cancel request cleanup
+# (ASGI leaked DB connections on aborted requests until PgBouncer's
+# max_client_conn filled), and workers*threads caps concurrent DB clients
+# to the PgBouncer server pool size.
+exec /usr/local/bin/gunicorn config.wsgi \
+    --bind 0.0.0.0:8000 \
+    --chdir=/app \
+    --workers "${GUNICORN_WORKERS:-4}" \
+    --threads "${GUNICORN_THREADS:-8}" \
+    --timeout "${GUNICORN_TIMEOUT:-120}" \
+    --max-requests 1000 \
+    --max-requests-jitter 100
