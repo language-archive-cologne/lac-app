@@ -18,6 +18,7 @@ USER_GUIDE_SLUGS = [
     "submission-guidelines",
     "licenses",
     "format-whitelist",
+    "keywords-cheatsheet",
 ]
 
 

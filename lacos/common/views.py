@@ -21,6 +21,7 @@ GUIDELINE_SLUG_MAP = {
     "licenses": "licenses",
     "user": "user",
     "archiving": "archiving_LAC",
+    "keywords-cheatsheet": "keywords_cheatsheet",
 }
 
 # Legacy URL slugs kept for backward compatibility. Each redirects to the slug

@@ -87,6 +87,16 @@ def test_user_guides_index_links_use_title_aligned_slugs(client):
     assert reverse("user-guide", args=["depositor-agreement"]) not in content
 
 
+@pytest.mark.django_db
+def test_user_guides_index_has_keywords_cheatsheet_card(client):
+    response = client.get(reverse("user-guides"))
+    content = response.content.decode()
+
+    assert response.status_code == 200
+    assert reverse("user-guide", args=["keywords-cheatsheet"]) in content
+    assert "Keywords Cheat Sheet" in content
+
+
 def _asset_dir(settings, tmp_path: Path) -> Path:
     html_dir = tmp_path / "guidelines"
     assets = html_dir / "assets"
