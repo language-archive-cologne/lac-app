@@ -1,5 +1,7 @@
 from typing import Dict, Any, List, Optional
 from django.db.models import QuerySet
+from lacos.blam.mappers.relations import first_of
+from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import (
     BundleStructuralInfo,
     BundleAdditionalMetadataFile,
@@ -19,33 +21,39 @@ OtherResourceType = Cmd.Components.BlamBundleRepositoryV11.BundleStructuralInfo.
 BundleAdditionalMetadataFileType = Cmd.Components.BlamBundleRepositoryV11.BundleStructuralInfo.BundleAdditionalMetadataFile
 
 
-def export_structural_info(structural_info: BundleStructuralInfo, cmd_data: Cmd) -> None:
+def export_structural_info(
+    structural_info: BundleStructuralInfo,
+    cmd_data: Cmd,
+    bundle: Optional[Bundle] = None,
+) -> None:
     """
     Export bundle structural information from Django models to BLAM schema.
-    
+
     Args:
         structural_info: The BundleStructuralInfo instance to export
         cmd_data: The BLAM bundle repository schema data to populate
+        bundle: The owning Bundle when the caller already holds it (its
+            prefetched relations are then reused instead of re-querying)
     """
     # Create the bundle structural info structure
     bundle_info = BundleStructuralInfoType()
-    
+
     collection = structural_info.is_member_of_collection
     if collection:
         collection_info = collection.get_general_info
         if collection_info:
             bundle_info.bundle_is_member_of_collection = create_collection_membership(collection_info)
-    
+
     # Export additional metadata files if present
-    if structural_info.additional_metadata_files.exists():
+    metadata_files = list(structural_info.additional_metadata_files.all())
+    if metadata_files:
         bundle_info.bundle_additional_metadata_file = [
-            export_additional_metadata_file(file) 
-            for file in structural_info.additional_metadata_files.all()
+            export_additional_metadata_file(file) for file in metadata_files
         ]
-    
+
     # Export resources
-    bundle_info.bundle_resources = export_bundle_resources(structural_info)
-    
+    bundle_info.bundle_resources = export_bundle_resources(structural_info, bundle=bundle)
+
     # Assign to cmd_data
     cmd_data.components.blam_bundle_repository_v1_1.bundle_structural_info = bundle_info
 
@@ -105,35 +113,45 @@ def export_additional_metadata_file(file: BundleAdditionalMetadataFile) -> Bundl
     return metadata_file
 
 
-def export_bundle_resources(structural_info: BundleStructuralInfo) -> BundleResourcesType:
+def export_bundle_resources(
+    structural_info: BundleStructuralInfo,
+    bundle: Optional[Bundle] = None,
+) -> BundleResourcesType:
     """
     Export bundle resources to schema format.
-    
+
     Args:
         structural_info: The BundleStructuralInfo instance
-        
+        bundle: The owning Bundle when the caller already holds it
+
     Returns:
         A bundle resources container for the schema
     """
     resources_data = BundleResourcesType()
 
-    bundle_resources = BundleResources.objects.filter(bundle=structural_info.bundle).first()
+    if bundle is not None:
+        bundle_resources = first_of(bundle.resources)
+    else:
+        bundle_resources = BundleResources.objects.filter(bundle=structural_info.bundle).first()
     if not bundle_resources:
         return resources_data
 
-    if bundle_resources.bundle_media_resources.exists():
+    media_resources = list(bundle_resources.bundle_media_resources.all())
+    if media_resources:
         resources_data.media_resource = [
-            export_media_resource(resource) for resource in bundle_resources.bundle_media_resources.all()
+            export_media_resource(resource) for resource in media_resources
         ]
 
-    if bundle_resources.bundle_written_resources.exists():
+    written_resources = list(bundle_resources.bundle_written_resources.all())
+    if written_resources:
         resources_data.written_resource = [
-            export_written_resource(resource) for resource in bundle_resources.bundle_written_resources.all()
+            export_written_resource(resource) for resource in written_resources
         ]
 
-    if bundle_resources.bundle_other_resources.exists():
+    other_resources = list(bundle_resources.bundle_other_resources.all())
+    if other_resources:
         resources_data.other_resource = [
-            export_other_resource(resource) for resource in bundle_resources.bundle_other_resources.all()
+            export_other_resource(resource) for resource in other_resources
         ]
 
     return resources_data
@@ -186,10 +204,12 @@ def export_written_resource(resource: Any) -> WrittenResourceType:
         resource_data.file_description = resource.file_description
     
     # Set annotation references if present
-    if hasattr(resource, 'annotations') and resource.annotations.exists():
-        resource_data.is_annotation_of = [
-            annotation.is_annotation_of for annotation in resource.annotations.all()
-        ]
+    if hasattr(resource, 'annotations'):
+        annotations = list(resource.annotations.all())
+        if annotations:
+            resource_data.is_annotation_of = [
+                annotation.is_annotation_of for annotation in annotations
+            ]
     
     return resource_data
 

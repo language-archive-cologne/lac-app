@@ -10,6 +10,7 @@ from blam_schemas.collection.blam_collection_repository_v1_2 import (
     CollectionHasCollectionMemberIdentifierType,
     ResourcetypeSimple,
 )
+from lacos.blam.mappers.relations import first_of
 from lacos.blam.models.collection.collection_repository import Collection
 
 from .export_header import export_header
@@ -60,22 +61,22 @@ class CollectionExporter:
         repo = cmd.components.blam_collection_repository_v1_2
 
         # Export header
-        header = collection.header.first()
+        header = first_of(collection.header)
         if header:
             export_header(header, cmd)
 
         # Export general info
-        general_info = collection.general_info.first()
+        general_info = first_of(collection.general_info)
         if general_info:
             export_general_info(general_info, repo)
 
         # Export publication info
-        pub_info = collection.publication_info.first()
+        pub_info = first_of(collection.publication_info)
         if pub_info:
             export_publication_info(pub_info, repo)
 
         # Export administrative info
-        admin_info = collection.administrative_info.first()
+        admin_info = first_of(collection.administrative_info)
         if admin_info:
             export_administrative_info(admin_info, repo)
 
@@ -141,8 +142,8 @@ class CollectionExporter:
                 md_license.uri = header.md_license_uri
             return md_license
 
-        if admin_info and admin_info.licenses.exists():
-            first_license = admin_info.licenses.first()
+        first_license = first_of(admin_info.licenses) if admin_info else None
+        if first_license:
             md_license.value = first_license.license_name
             md_license.uri = first_license.license_identifier
         else:

@@ -6,8 +6,8 @@ from xsdata.formats.dataclass.serializers import XmlSerializer
 from xsdata.formats.dataclass.serializers.config import SerializerConfig
 
 from blam_schemas.bundle.blam_bundle_repository_v1_1 import Cmd, ResourcetypeSimple
+from lacos.blam.mappers.relations import first_of
 from lacos.blam.models.bundle.bundle_repository import Bundle
-from lacos.blam.models.bundle.bundle_structural_info import BundleResources
 
 from .export_header import export_header
 from .export_general_info import export_general_info
@@ -56,29 +56,29 @@ class BundleExporter:
         )
 
         # Export header
-        header = bundle.header.first()
+        header = first_of(bundle.header)
         if header:
             export_header(header, cmd)
 
         # Export general info
-        general_info = bundle.general_info.first()
+        general_info = first_of(bundle.general_info)
         if general_info:
             export_general_info(general_info, cmd)
 
         # Export publication info
-        pub_info = bundle.publication_info.first()
+        pub_info = first_of(bundle.publication_info)
         if pub_info:
             export_publication_info(pub_info, cmd)
 
         # Export administrative info
-        admin_info = bundle.administrative_info.first()
+        admin_info = first_of(bundle.administrative_info)
         if admin_info:
             export_administrative_info(admin_info, cmd)
 
         # Export structural info
-        structural_info = bundle.structural_info.first()
+        structural_info = first_of(bundle.structural_info)
         if structural_info:
-            export_structural_info(structural_info, cmd)
+            export_structural_info(structural_info, cmd, bundle=bundle)
 
         # Set MD license (from admin info if available)
         repo = cmd.components.blam_bundle_repository_v1_1
@@ -104,7 +104,7 @@ class BundleExporter:
         ResourceRef = ResourceProxy.ResourceRef
 
         idx = 0
-        bundle_resources = BundleResources.objects.filter(bundle=bundle).first()
+        bundle_resources = first_of(bundle.resources)
         if bundle_resources:
             files = [
                 *bundle_resources.bundle_media_resources.all(),
@@ -136,8 +136,8 @@ class BundleExporter:
     def _create_md_license(self, admin_info) -> Cmd.Components.BlamBundleRepositoryV11.Mdlicense:
         """Create MD license from administrative info."""
         md_license = Cmd.Components.BlamBundleRepositoryV11.Mdlicense()
-        if admin_info and admin_info.licenses.exists():
-            first_license = admin_info.licenses.first()
+        first_license = first_of(admin_info.licenses) if admin_info else None
+        if first_license:
             md_license.value = first_license.license_name
             md_license.uri = first_license.license_identifier
         else:

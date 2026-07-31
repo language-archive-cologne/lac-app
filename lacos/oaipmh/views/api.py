@@ -14,6 +14,7 @@ from django.utils.dateparse import parse_date, parse_datetime
 from ..constants import SUPPORTED_METADATA_FORMATS, SUPPORTED_SETS, DEFAULT_PAGE_SIZE
 from ..errors import OAIPMHError
 from ..formats import serialize as serialize_metadata
+from ..formats import serialize_page
 from ..identifiers import parse_oai_identifier
 from ..request_parser import OAIRequestParser
 from ..resumption import ResumptionTokenService
@@ -232,17 +233,16 @@ def _handle_list_verbs(request: HttpRequest, verb: str, oai_request) -> HttpResp
         ]
         return render_list_identifiers(request, headers_payload, next_token)
 
-    record_payload = []
-    for record in records:
-        metadata_element = serialize_metadata(metadata_prefix, record.metadata)
-        record_payload.append(
-            {
-                "identifier": record.identifier,
-                "datestamp": record.datestamp,
-                "sets": record.sets,
-                "metadata": metadata_element,
-            }
-        )
+    metadata_elements = serialize_page(metadata_prefix, [record.metadata for record in records])
+    record_payload = [
+        {
+            "identifier": record.identifier,
+            "datestamp": record.datestamp,
+            "sets": record.sets,
+            "metadata": metadata_element,
+        }
+        for record, metadata_element in zip(records, metadata_elements)
+    ]
 
     return render_list_records(request, record_payload, next_token)
 
