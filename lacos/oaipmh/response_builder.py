@@ -132,7 +132,7 @@ def render_list_identifiers(
         ET.SubElement(header_el, "datestamp").text = header["datestamp"]
         for set_spec in header.get("sets", []):
             ET.SubElement(header_el, "setSpec").text = set_spec
-    if resumption_token:
+    if resumption_token is not None:
         token_el = ET.SubElement(container, "resumptionToken")
         token_el.text = resumption_token
     return _as_http_response(envelope)
@@ -162,7 +162,7 @@ def render_list_records(
             ET.SubElement(header_el, "setSpec").text = set_spec
         metadata_el = ET.SubElement(record_el, "metadata")
         metadata_el.append(record["metadata"])
-    if resumption_token:
+    if resumption_token is not None:
         token_el = ET.SubElement(container, "resumptionToken")
         token_el.text = resumption_token
     return _as_http_response(envelope)
@@ -243,7 +243,7 @@ def _render_list_records_with_string_metadata(
         )
 
     token_xml = ""
-    if resumption_token:
+    if resumption_token is not None:
         token_xml = f"<resumptionToken>{_escape_xml(resumption_token)}</resumptionToken>"
 
     xml = (

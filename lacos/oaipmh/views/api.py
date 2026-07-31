@@ -216,6 +216,10 @@ def _handle_list_verbs(request: HttpRequest, verb: str, oai_request) -> HttpResp
             until_date=until_param,
             set_spec=active_set,
         )
+    elif oai_request.resumption_token:
+        # OAI-PMH 2.0 flow control: the response completing a token-based
+        # list must carry an empty resumptionToken element.
+        next_token = ""
 
     if verb == "ListIdentifiers":
         headers_payload = [

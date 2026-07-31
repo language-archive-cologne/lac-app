@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from django.urls import reverse
 
@@ -162,6 +164,93 @@ def test_list_records_with_collection_set_excludes_bundles(client):
     body = response.content.decode("utf-8")
     assert f"<identifier>{build_oai_identifier(collection.identifier)}</identifier>" in body
     assert f"<identifier>{build_oai_identifier(bundle.identifier)}</identifier>" not in body
+
+
+def _extract_resumption_token(body: str) -> str | None:
+    match = re.search(r"<resumptionToken[^>]*>(.*?)</resumptionToken>", body)
+    return match.group(1) if match else None
+
+
+def _has_empty_resumption_token(body: str) -> bool:
+    return bool(re.search(r"<resumptionToken\s*/>|<resumptionToken\s*></resumptionToken>", body))
+
+
+def _small_pages(monkeypatch, page_size: int = 2) -> None:
+    from lacos.oaipmh.views import api as oai_api
+
+    monkeypatch.setattr(oai_api._resumption, "page_size", page_size)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("metadata_prefix", ["oai_dc", "blam"])
+def test_list_records_final_page_has_empty_resumption_token(client, monkeypatch, metadata_prefix):
+    """The response completing a resumptionToken flow must carry an empty
+    <resumptionToken/> element (OAI-PMH 2.0 flow control)."""
+    _small_pages(monkeypatch)
+    for i in range(3):
+        _create_collection(f"hdl:test/oai-page-collection-{i}")
+
+    first = client.get(
+        reverse("oaipmh:endpoint"),
+        {"verb": "ListRecords", "metadataPrefix": metadata_prefix, "set": "collections"},
+    )
+    assert first.status_code == 200
+    first_body = first.content.decode("utf-8")
+    token = _extract_resumption_token(first_body)
+    assert token, "first page should carry a non-empty resumptionToken"
+
+    final = client.get(
+        reverse("oaipmh:endpoint"),
+        {"verb": "ListRecords", "resumptionToken": token},
+    )
+    assert final.status_code == 200
+    final_body = final.content.decode("utf-8")
+    assert final_body.count("<record>") == 1
+    assert _has_empty_resumption_token(final_body)
+
+
+@pytest.mark.django_db
+def test_list_identifiers_final_page_has_empty_resumption_token(client, monkeypatch):
+    _small_pages(monkeypatch)
+    for i in range(3):
+        _create_collection(f"hdl:test/oai-page-identifier-{i}")
+
+    first = client.get(
+        reverse("oaipmh:endpoint"),
+        {"verb": "ListIdentifiers", "metadataPrefix": "oai_dc", "set": "collections"},
+    )
+    assert first.status_code == 200
+    token = _extract_resumption_token(first.content.decode("utf-8"))
+    assert token, "first page should carry a non-empty resumptionToken"
+
+    final = client.get(
+        reverse("oaipmh:endpoint"),
+        {"verb": "ListIdentifiers", "resumptionToken": token},
+    )
+    assert final.status_code == 200
+    final_body = final.content.decode("utf-8")
+    assert final_body.count("<header>") == 1
+    assert _has_empty_resumption_token(final_body)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("metadata_prefix", ["oai_dc", "blam"])
+def test_list_records_complete_first_page_has_no_resumption_token(
+    client, monkeypatch, metadata_prefix
+):
+    """A complete list served in one response (no token in the request) must
+    not contain any resumptionToken element."""
+    _small_pages(monkeypatch)
+    _create_collection("hdl:test/oai-single-collection")
+
+    response = client.get(
+        reverse("oaipmh:endpoint"),
+        {"verb": "ListRecords", "metadataPrefix": metadata_prefix, "set": "collections"},
+    )
+    assert response.status_code == 200
+    body = response.content.decode("utf-8")
+    assert "<record>" in body
+    assert "<resumptionToken" not in body
 
 
 @pytest.mark.django_db
