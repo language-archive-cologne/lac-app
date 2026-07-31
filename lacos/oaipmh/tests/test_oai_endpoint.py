@@ -234,6 +234,39 @@ def test_list_identifiers_final_page_has_empty_resumption_token(client, monkeypa
 
 
 @pytest.mark.django_db
+def test_full_repository_harvest_yields_every_record_exactly_once(client, monkeypatch):
+    """End-to-end harvest walk over collections and bundles: every record
+    appears exactly once and the token flow terminates."""
+    _small_pages(monkeypatch)
+    collections = [_create_collection(f"hdl:test/oai-walk-col-{i}") for i in range(5)]
+    bundles = [
+        _create_bundle(collections[0], f"hdl:test/oai-walk-bun-{i}") for i in range(3)
+    ]
+
+    harvested: list[str] = []
+    params = {"verb": "ListRecords", "metadataPrefix": "oai_dc"}
+    for _ in range(20):
+        response = client.get(reverse("oaipmh:endpoint"), params)
+        assert response.status_code == 200
+        body = response.content.decode("utf-8")
+        assert "badResumptionToken" not in body
+        harvested.extend(re.findall(r"<identifier>(.*?)</identifier>", body))
+        token = _extract_resumption_token(body)
+        if not token:
+            break
+        params = {"verb": "ListRecords", "resumptionToken": token}
+    else:
+        raise AssertionError("harvest did not terminate")
+
+    expected = {
+        build_oai_identifier(record.identifier)
+        for record in [*collections, *bundles]
+    }
+    assert len(harvested) == len(expected)
+    assert set(harvested) == expected
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize("metadata_prefix", ["oai_dc", "blam"])
 def test_list_records_complete_first_page_has_no_resumption_token(
     client, monkeypatch, metadata_prefix

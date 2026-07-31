@@ -77,18 +77,19 @@ def fetch_collection_records(
     if until_date is not None:
         qs = qs.filter(administrative_info__availability_date__lte=until_date)
 
-    qs = qs.distinct().order_by("identifier")
-
-    page = list(qs[offset : offset + limit + 1])
     policy = ExposurePolicyService()
     harvest_user = user or policy.anonymous_user()
+    # The channel filter defines the sequence that offsets index into; the
+    # per-object check below may only hide records, never shift pagination.
+    qs = policy.filter_collection_queryset(harvest_user, qs, channel="oai")
+    qs = qs.distinct().order_by("identifier")
+
+    window = list(qs[offset : offset + limit + 1])
+    has_more = len(window) > limit
     page = [
-        collection for collection in page
+        collection for collection in window[:limit]
         if policy.can_harvest_via_oai(harvest_user, collection)
     ]
-    has_more = len(page) > limit
-    if has_more:
-        page = page[:limit]
 
     results: List[OAIPMHCollectionResult] = [
         OAIPMHCollectionResult(
