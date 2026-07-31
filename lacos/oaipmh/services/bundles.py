@@ -67,18 +67,9 @@ def fetch_bundle_records(
     limit: int = DEFAULT_PAGE_SIZE,
     user=None,
 ) -> tuple[List[OAIPMHBundlesResult], bool]:
-    qs = _base_queryset()
-    if from_date is not None:
-        qs = qs.filter(administrative_info__availability_date__gte=from_date)
-    if until_date is not None:
-        qs = qs.filter(administrative_info__availability_date__lte=until_date)
-
     policy = ExposurePolicyService()
     harvest_user = user or policy.anonymous_user()
-    # The channel filter defines the sequence that offsets index into; the
-    # per-object check below may only hide records, never shift pagination.
-    qs = policy.filter_bundle_queryset(harvest_user, qs, channel="oai")
-    qs = qs.distinct().order_by("identifier")
+    qs = _filtered_queryset(policy, harvest_user, from_date, until_date)
 
     window = list(qs[offset : offset + limit + 1])
     has_more = len(window) > limit
@@ -96,6 +87,40 @@ def fetch_bundle_records(
         for bundle in page
     ]
     return results, has_more
+
+
+def has_bundle_records(
+    *,
+    from_date: Optional[date] = None,
+    until_date: Optional[date] = None,
+    user=None,
+) -> bool:
+    """Return whether any bundle is visible in the OAI channel for these filters."""
+
+    policy = ExposurePolicyService()
+    harvest_user = user or policy.anonymous_user()
+    return _filtered_queryset(policy, harvest_user, from_date, until_date).exists()
+
+
+def _filtered_queryset(
+    policy: ExposurePolicyService,
+    harvest_user,
+    from_date: Optional[date],
+    until_date: Optional[date],
+) -> QuerySet[Bundle]:
+    """Ordered OAI-channel queryset; fetch and existence checks must share it
+    so offsets always index the same sequence."""
+
+    qs = _base_queryset()
+    if from_date is not None:
+        qs = qs.filter(administrative_info__availability_date__gte=from_date)
+    if until_date is not None:
+        qs = qs.filter(administrative_info__availability_date__lte=until_date)
+    # The channel filter defines the sequence that offsets index into; the
+    # per-object check in fetch_bundle_records may only hide records, never
+    # shift pagination.
+    qs = policy.filter_bundle_queryset(harvest_user, qs, channel="oai")
+    return qs.distinct().order_by("identifier")
 
 
 def fetch_bundle_record_by_identifier(
