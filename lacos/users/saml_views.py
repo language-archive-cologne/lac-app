@@ -16,6 +16,7 @@ from djangosaml2.views import _set_subject_id
 from saml2.mdstore import MetaDataMDX
 
 from lacos.users.saml_logging import build_acs_failure_log_context
+from lacos.users.saml_logging import format_acs_failure_log_message
 from lacos.users.saml_metadata import add_request_initiator
 
 if TYPE_CHECKING:
@@ -99,15 +100,13 @@ class LacosAssertionConsumerServiceView(AssertionConsumerServiceView):
         status: int = 403,
         **kwargs: Any,
     ) -> HttpResponse:
-        logger.error(
-            "SAML ACS failure",
-            extra=build_acs_failure_log_context(
-                request,
-                exception=exception,
-                status=status,
-                session_info=kwargs.get("session_info"),
-            ),
+        context = build_acs_failure_log_context(
+            request,
+            exception=exception,
+            status=status,
+            session_info=kwargs.get("session_info"),
         )
+        logger.error(format_acs_failure_log_message(context), extra=context)
         return super().handle_acs_failure(
             request,
             exception=exception,

@@ -45,6 +45,38 @@ def build_acs_failure_log_context(
     }
 
 
+def format_acs_failure_log_message(context: dict[str, Any]) -> str:
+    """Render the failure context into the log message itself.
+
+    AdminEmailHandler only emails ``record.getMessage()`` — ``extra``
+    fields never reach the admin email, so the details must be inline.
+    """
+    exception_type = context["saml_failure_exception_type"]
+    if exception_type:
+        exception_summary = f"{exception_type}: {context['saml_failure_exception']}"
+    else:
+        exception_summary = "no exception"
+
+    fields = (
+        ("status", context["saml_failure_status"]),
+        ("issuer", context["saml_failure_issuer"]),
+        ("eppn", _yes_no(context["saml_failure_has_eppn"])),
+        ("eppn_scope", context["saml_failure_eppn_scope"]),
+        ("attrs", ",".join(context["saml_failure_attribute_names"])),
+        ("name_id", _yes_no(context["saml_failure_name_id_present"])),
+        ("saml_response", _yes_no(context["saml_failure_has_saml_response"])),
+        ("relay_state", context["saml_failure_relay_state"]),
+        ("ip", context["saml_failure_remote_addr"]),
+        ("ua", context["saml_failure_user_agent"]),
+    )
+    details = " ".join(f"{key}={value or '-'}" for key, value in fields)
+    return f"SAML ACS failure: {exception_summary} | {details}"
+
+
+def _yes_no(value: bool) -> str:  # noqa: FBT001
+    return "yes" if value else "no"
+
+
 def _attributes_from_session(
     session_info: dict[str, Any] | None,
 ) -> dict[str, Any]:

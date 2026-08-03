@@ -453,7 +453,9 @@ def test_saml_acs_failure_logs_sanitized_session_info(caplog):
 
     assert response.status_code == HTTPStatus.FORBIDDEN
     record = next(
-        record for record in caplog.records if record.message == "SAML ACS failure"
+        record
+        for record in caplog.records
+        if record.message.startswith("SAML ACS failure")
     )
     assert record.saml_failure_exception_type == "PermissionDenied"
     assert record.saml_failure_status == HTTPStatus.FORBIDDEN
@@ -468,6 +470,70 @@ def test_saml_acs_failure_logs_sanitized_session_info(caplog):
     assert record.saml_failure_user_agent == "Mozilla/5.0 Example"
     assert "raw-secret-assertion" not in caplog.text
     assert "alice@ed.ac.uk" not in caplog.text
+
+
+def test_saml_acs_failure_message_includes_diagnostic_details(caplog):
+    request = RequestFactory().post(
+        "/saml2/acs/",
+        {
+            "SAMLResponse": "raw-secret-assertion",
+            "RelayState": "/collections/?token=secret",
+        },
+        HTTP_USER_AGENT="Mozilla/5.0 Example",
+        HTTP_X_FORWARDED_FOR="198.51.100.10, 10.0.0.1",
+    )
+    view = LacosAssertionConsumerServiceView()
+    session_info = {
+        "issuer": "https://idp.ed.ac.uk/shibboleth",
+        "name_id": None,
+        "ava": {
+            "eduPersonPrincipalName": ["alice@ed.ac.uk"],
+            "mail": ["alice@example.org"],
+        },
+    }
+
+    with caplog.at_level(logging.WARNING, logger="lacos.users.saml_views"):
+        view.handle_acs_failure(
+            request,
+            exception=PermissionDenied("No user could be authenticated."),
+            status=HTTPStatus.FORBIDDEN,
+            session_info=session_info,
+        )
+
+    message = next(
+        record.message
+        for record in caplog.records
+        if record.message.startswith("SAML ACS failure")
+    )
+    assert "PermissionDenied: No user could be authenticated." in message
+    assert "status=403" in message
+    assert "issuer=https://idp.ed.ac.uk/shibboleth" in message
+    assert "eppn=yes" in message
+    assert "eppn_scope=ed.ac.uk" in message
+    assert "attrs=eduPersonPrincipalName,mail" in message
+    assert "relay_state=/collections/" in message
+    assert "ip=198.51.100.10" in message
+    assert "ua=Mozilla/5.0 Example" in message
+    assert "alice@ed.ac.uk" not in message
+    assert "raw-secret-assertion" not in message
+
+
+def test_saml_acs_failure_message_handles_missing_context(caplog):
+    request = RequestFactory().post("/saml2/acs/", {})
+    view = LacosAssertionConsumerServiceView()
+
+    with caplog.at_level(logging.WARNING, logger="lacos.users.saml_views"):
+        view.handle_acs_failure(request, exception=None, status=HTTPStatus.FORBIDDEN)
+
+    message = next(
+        record.message
+        for record in caplog.records
+        if record.message.startswith("SAML ACS failure")
+    )
+    assert message.startswith("SAML ACS failure: no exception")
+    assert "issuer=-" in message
+    assert "eppn=no" in message
+    assert "attrs=-" in message
 
 
 @pytest.mark.django_db
@@ -489,7 +555,9 @@ def test_saml_acs_failure_renders_friendly_error_page_and_logs_failure(
         )
 
     record = next(
-        record for record in caplog.records if record.message == "SAML ACS failure"
+        record
+        for record in caplog.records
+        if record.message.startswith("SAML ACS failure")
     )
     assert record.saml_failure_has_saml_response is True
     assert record.saml_failure_relay_state == "/private/"
@@ -519,7 +587,9 @@ def test_saml_acs_failure_logs_at_error_level_for_admin_email(caplog):
         )
 
     record = next(
-        record for record in caplog.records if record.message == "SAML ACS failure"
+        record
+        for record in caplog.records
+        if record.message.startswith("SAML ACS failure")
     )
     assert record.levelno == logging.ERROR
 
