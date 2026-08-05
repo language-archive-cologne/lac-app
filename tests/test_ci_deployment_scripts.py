@@ -17,6 +17,7 @@ REMOTE_SAML_PREFLIGHT = REPO_ROOT / "scripts" / "ci" / "remote-saml-preflight.sh
 DEPLOY = REPO_ROOT / "scripts" / "deploy" / "deploy.sh"
 SSH_FILE_MODE = 0o600
 PRODUCTION_RESOURCE_GROUP_JOBS = 3
+NO_DEPS_COMMAND_COUNT = 4
 
 
 def _run(
@@ -231,6 +232,22 @@ def test_deploy_refreshes_explorer_facets_after_django_is_ready():
 
     assert warm_command in deploy
     assert deploy.index(warm_command) > deploy.index("--wait-timeout 120")
+
+
+def test_deploy_warms_search_pages_after_facets():
+    deploy = DEPLOY.read_text()
+    facet_command = "python manage.py warm_explorer_facets --refresh"
+    page_command = "python /app/scripts/deploy/warm_pages.py"
+
+    assert page_command in deploy
+    assert deploy.index(page_command) > deploy.index(facet_command)
+
+
+def test_full_deploy_does_not_build_or_recreate_dependencies():
+    deploy = DEPLOY.read_text()
+
+    assert 'docker compose -f "${compose_file}" build django huey' in deploy
+    assert deploy.count("--no-deps") >= NO_DEPS_COMMAND_COUNT
 
 
 @pytest.mark.parametrize(
