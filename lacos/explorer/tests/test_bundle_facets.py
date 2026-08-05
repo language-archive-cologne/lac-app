@@ -339,6 +339,7 @@ def test_bundle_faceted_search_paginates_twenty_five_results(client):
     response = client.get("/search/bundles/")
 
     assert response.status_code == 200
+    assert response.headers["Server-Timing"].startswith("facets;dur=")
     assert len(response.context["bundles"]) == 25
     assert response.context["paginator"].per_page == 25
     assert response.context["is_paginated"] is True

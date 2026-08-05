@@ -31,7 +31,9 @@ from lacos.blam.models.collection.collection_publication_info import (
     CollectionPublicationInfo,
 )
 
+from lacos.explorer.facets import BUNDLE_FACET_CACHE_KEY
 from lacos.explorer.facets import FACET_CACHE_KEY
+from lacos.explorer.facets import FACET_CACHE_TIMEOUT
 from lacos.explorer.facets import FACET_MAX_SELECTED_VALUES
 from lacos.explorer.facets import FACET_MAX_TOTAL_SELECTED_VALUES
 from lacos.explorer.facets import FacetService
@@ -514,6 +516,7 @@ def test_faceted_search_paginates_twenty_five_results(client):
     response = client.get("/search/")
 
     assert response.status_code == 200
+    assert response.headers["Server-Timing"].startswith("facets;dur=")
     assert len(response.context["collections"]) == 25
     assert response.context["paginator"].per_page == 25
     assert response.context["is_paginated"] is True
@@ -628,10 +631,11 @@ def explorer_cache_invalidations(monkeypatch):
     """Count signal-driven explorer cache invalidations."""
     from lacos.blam import signals as blam_signals
 
-    calls = {"n": 0}
+    calls = {"n": 0, "args": []}
 
-    def counting_invalidation():
+    def counting_invalidation(*args, **kwargs):
         calls["n"] += 1
+        calls["args"].append(args)
 
     monkeypatch.setattr(
         blam_signals,
@@ -639,6 +643,26 @@ def explorer_cache_invalidations(monkeypatch):
         counting_invalidation,
     )
     return calls
+
+
+def test_collection_location_change_scopes_facet_invalidation(
+    explorer_cache_invalidations,
+):
+    from lacos.blam import signals as blam_signals
+
+    blam_signals.invalidate_cache_on_location_change(None, None)
+
+    assert explorer_cache_invalidations["args"] == [(FACET_CACHE_KEY,)]
+
+
+def test_bundle_metadata_change_scopes_facet_invalidation(
+    explorer_cache_invalidations,
+):
+    from lacos.blam import signals as blam_signals
+
+    blam_signals.invalidate_cache_on_bundle_general_info_save(None, None)
+
+    assert explorer_cache_invalidations["args"] == [(BUNDLE_FACET_CACHE_KEY,)]
 
 
 @pytest.mark.django_db
@@ -692,6 +716,61 @@ def test_invalidate_cache_busts_filtered_facet_cache(compute_counter):
         _make_params(keyword=["phonology"]), _collection_qs(), cache_key=FACET_CACHE_KEY
     )
     assert compute_counter["n"] == 2
+
+
+def test_collection_cache_invalidation_does_not_bust_bundle_cache():
+    cache.clear()
+    collection_key_before = FacetService._build_cache_key(FACET_CACHE_KEY, {})
+    bundle_key_before = FacetService._build_cache_key(BUNDLE_FACET_CACHE_KEY, {})
+
+    FacetService.invalidate_cache(FACET_CACHE_KEY)
+
+    assert FacetService._build_cache_key(FACET_CACHE_KEY, {}) != collection_key_before
+    assert FacetService._build_cache_key(BUNDLE_FACET_CACHE_KEY, {}) == bundle_key_before
+
+
+@pytest.mark.django_db
+def test_facet_cache_uses_extended_timeout(monkeypatch):
+    cache.clear()
+    cache_sets = []
+    original_set = cache.set
+
+    def recording_set(key, value, timeout=None, version=None):
+        cache_sets.append((key, timeout))
+        return original_set(key, value, timeout=timeout, version=version)
+
+    monkeypatch.setattr(cache, "set", recording_set)
+
+    result = FacetService().search(
+        _make_params(),
+        _collection_qs().none(),
+        cache_key=FACET_CACHE_KEY,
+    )
+
+    assert result.cache_status == "miss"
+    assert any(timeout == FACET_CACHE_TIMEOUT for _, timeout in cache_sets)
+
+
+@pytest.mark.django_db
+def test_facet_result_reports_cache_hit_after_warmup():
+    cache.clear()
+    service = FacetService()
+
+    miss = service.search(
+        _make_params(),
+        _collection_qs().none(),
+        cache_key=FACET_CACHE_KEY,
+    )
+    hit = service.search(
+        _make_params(),
+        _collection_qs().none(),
+        cache_key=FACET_CACHE_KEY,
+    )
+
+    assert miss.cache_status == "miss"
+    assert miss.facet_duration_ms >= 0
+    assert hit.cache_status == "hit"
+    assert hit.facet_duration_ms >= 0
 
 
 @pytest.mark.django_db

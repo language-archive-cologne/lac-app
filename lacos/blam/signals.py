@@ -19,15 +19,27 @@ logger = logging.getLogger(__name__)
 security_logger = logging.getLogger("lacos.security")
 
 
-def _invalidate_explorer_caches():
+def _invalidate_explorer_caches(*facet_cache_keys):
     """Invalidate explorer caches when collection data changes."""
     from lacos.explorer.map_utils import invalidate_map_markers_cache
     from lacos.explorer.facets import FacetService
     from django.core.cache import cache
     invalidate_map_markers_cache()
     cache.delete("explorer:language_count")
-    FacetService.invalidate_cache()
+    FacetService.invalidate_cache(*facet_cache_keys)
     logger.debug("Explorer caches invalidated")
+
+
+def _collection_facet_cache_key():
+    from lacos.explorer.facets import FACET_CACHE_KEY
+
+    return FACET_CACHE_KEY
+
+
+def _bundle_facet_cache_key():
+    from lacos.explorer.facets import BUNDLE_FACET_CACHE_KEY
+
+    return BUNDLE_FACET_CACHE_KEY
 
 
 def _is_post_m2m_action(action: str | None) -> bool:
@@ -215,40 +227,49 @@ def log_collection_deletion(sender, instance, **kwargs):
         "COLLECTION_DELETED",
         extra={"collection_name": collection_name, "pid": collection_pid, "pk": instance.pk},
     )
-    _invalidate_explorer_caches()
+    _invalidate_explorer_caches(
+        _collection_facet_cache_key(),
+        _bundle_facet_cache_key(),
+    )
 
 
 @receiver(post_save, sender=Collection)
 def invalidate_cache_on_collection_save(sender, instance, **kwargs):
     """Invalidate explorer caches when a collection is created or updated."""
-    _invalidate_explorer_caches()
+    _invalidate_explorer_caches(
+        _collection_facet_cache_key(),
+        _bundle_facet_cache_key(),
+    )
 
 
 @receiver(post_save, sender=CollectionGeneralInfo)
 def invalidate_cache_on_general_info_save(sender, instance, **kwargs):
     """Invalidate explorer caches when collection general info changes."""
-    _invalidate_explorer_caches()
+    _invalidate_explorer_caches(
+        _collection_facet_cache_key(),
+        _bundle_facet_cache_key(),
+    )
 
 
 @receiver(post_save, sender=CollectionLocation)
 @receiver(post_delete, sender=CollectionLocation)
 def invalidate_cache_on_location_change(sender, instance, **kwargs):
     """Invalidate explorer caches when collection location changes."""
-    _invalidate_explorer_caches()
+    _invalidate_explorer_caches(_collection_facet_cache_key())
 
 
 @receiver(post_save, sender=CollectionPublicationInfo)
 @receiver(post_delete, sender=CollectionPublicationInfo)
 def invalidate_cache_on_collection_publication_info_change(sender, instance, **kwargs):
     """Invalidate explorer caches when collection publication info changes."""
-    _invalidate_explorer_caches()
+    _invalidate_explorer_caches(_collection_facet_cache_key())
 
 
 @receiver(post_save, sender=CollectionAdministrativeInfo)
 @receiver(post_delete, sender=CollectionAdministrativeInfo)
 def invalidate_cache_on_collection_admin_info_change(sender, instance, **kwargs):
     """Invalidate explorer caches when collection administrative info changes."""
-    _invalidate_explorer_caches()
+    _invalidate_explorer_caches(_collection_facet_cache_key())
 
 
 @receiver(m2m_changed, sender=CollectionGeneralInfo.keywords.through)
@@ -261,21 +282,28 @@ def invalidate_cache_on_collection_general_info_m2m_change(
 ):
     """Invalidate explorer caches when collection keywords or languages change."""
     if _is_post_m2m_action(action):
-        _invalidate_explorer_caches()
+        _invalidate_explorer_caches(_collection_facet_cache_key())
 
 
 @receiver(m2m_changed, sender=CollectionAdministrativeInfo.licenses.through)
 def invalidate_cache_on_collection_licenses_change(sender, instance, action, **kwargs):
     """Invalidate explorer caches when collection licenses change."""
     if _is_post_m2m_action(action):
-        _invalidate_explorer_caches()
+        _invalidate_explorer_caches(_collection_facet_cache_key())
 
 
 @receiver(post_save, sender=ACLPermissions)
 @receiver(post_delete, sender=ACLPermissions)
 def invalidate_cache_on_acl_permission_change(sender, instance, **kwargs):
     """Invalidate explorer caches when indexed access levels change."""
-    _invalidate_explorer_caches()
+    model = instance.content_type.model_class()
+    if model is Collection:
+        cache_keys = (_collection_facet_cache_key(),)
+    elif model is Bundle:
+        cache_keys = (_bundle_facet_cache_key(),)
+    else:
+        cache_keys = ()
+    _invalidate_explorer_caches(*cache_keys)
 
 
 @receiver(post_delete, sender=Bundle)
@@ -287,57 +315,65 @@ def log_bundle_deletion(sender, instance, **kwargs):
         "BUNDLE_DELETED",
         extra={"bundle_name": bundle_name, "pid": bundle_pid, "pk": instance.pk},
     )
-    _invalidate_explorer_caches()
+    _invalidate_explorer_caches(
+        _collection_facet_cache_key(),
+        _bundle_facet_cache_key(),
+    )
 
 
 @receiver(post_save, sender=Bundle)
 def invalidate_cache_on_bundle_save(sender, instance, **kwargs):
     """Invalidate explorer caches when a bundle is created or updated."""
-    _invalidate_explorer_caches()
+    _invalidate_explorer_caches(_bundle_facet_cache_key())
 
 
 @receiver(post_save, sender=BundleGeneralInfo)
 def invalidate_cache_on_bundle_general_info_save(sender, instance, **kwargs):
     """Invalidate explorer caches when bundle general info changes."""
-    _invalidate_explorer_caches()
+    _invalidate_explorer_caches(_bundle_facet_cache_key())
 
 
 @receiver(post_save, sender=BundleLocation)
 @receiver(post_delete, sender=BundleLocation)
 def invalidate_cache_on_bundle_location_change(sender, instance, **kwargs):
     """Invalidate explorer caches when bundle location changes."""
-    _invalidate_explorer_caches()
+    _invalidate_explorer_caches(_bundle_facet_cache_key())
 
 
 @receiver(post_save, sender=BundleStructuralInfo)
 def invalidate_cache_on_bundle_structural_info_save(sender, instance, **kwargs):
     """Invalidate explorer caches when bundle structural info changes."""
-    _invalidate_explorer_caches()
+    _invalidate_explorer_caches(
+        _collection_facet_cache_key(),
+        _bundle_facet_cache_key(),
+    )
 
 
 @receiver(post_save, sender=BundlePublicationInfo)
 @receiver(post_delete, sender=BundlePublicationInfo)
 def invalidate_cache_on_bundle_publication_info_change(sender, instance, **kwargs):
     """Invalidate explorer caches when bundle publication info changes."""
-    _invalidate_explorer_caches()
+    _invalidate_explorer_caches(_bundle_facet_cache_key())
 
 
 @receiver(post_save, sender=BundleAdministrativeInfo)
 @receiver(post_delete, sender=BundleAdministrativeInfo)
 def invalidate_cache_on_bundle_admin_info_change(sender, instance, **kwargs):
     """Invalidate explorer caches when bundle administrative info changes."""
-    _invalidate_explorer_caches()
+    _invalidate_explorer_caches(_bundle_facet_cache_key())
 
 
 @receiver(m2m_changed, sender=BundleGeneralInfo.keywords.through)
 @receiver(m2m_changed, sender=BundleGeneralInfo.object_languages.through)
 def invalidate_cache_on_bundle_general_info_m2m_change(sender, instance, **kwargs):
     """Invalidate explorer caches when bundle keywords or languages change."""
-    _invalidate_explorer_caches()
+    if _is_post_m2m_action(kwargs.get("action")):
+        _invalidate_explorer_caches(_bundle_facet_cache_key())
 
 
 
 @receiver(m2m_changed, sender=BundleAdministrativeInfo.licenses.through)
 def invalidate_cache_on_bundle_licenses_change(sender, instance, **kwargs):
     """Invalidate explorer caches when bundle licenses change."""
-    _invalidate_explorer_caches()
+    if _is_post_m2m_action(kwargs.get("action")):
+        _invalidate_explorer_caches(_bundle_facet_cache_key())

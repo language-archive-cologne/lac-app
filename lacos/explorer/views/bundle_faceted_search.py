@@ -1,8 +1,6 @@
 """Faceted search view for bundle discovery."""
 
-from django.contrib.contenttypes.models import ContentType
-from django.db.models import CharField, Min, OuterRef, Subquery
-from django.db.models.functions import Cast
+from django.db.models import Min
 from django.shortcuts import render
 from django.views.generic import ListView
 
@@ -11,6 +9,7 @@ from lacos.explorer.advanced_search import (
     BUNDLE_FIELD_DEFINITIONS,
     apply_field_scoped_search,
 )
+from lacos.explorer.facet_querysets import bundle_facet_queryset
 from lacos.explorer.facets import (
     BUNDLE_FACET_CACHE_KEY,
     BUNDLE_FACET_DEFINITIONS,
@@ -19,7 +18,6 @@ from lacos.explorer.facets import (
 )
 from lacos.explorer.match_reasons import attach_bundle_match_reasons
 from lacos.explorer.text_search import apply_text_search
-from lacos.storage.models.acl_permissions import ACLPermissions
 
 BUNDLE_SORT_ALLOWLIST = {
     "name": "general_info__display_title",
@@ -37,15 +35,7 @@ class BundleFacetedSearchView(ListView):
     _search_in: list[str] = []
 
     def get_queryset(self):
-        bundle_ct = ContentType.objects.get_for_model(Bundle)
-        base_qs = Bundle.objects.annotate(
-            acl_access_level=Subquery(
-                ACLPermissions.objects.filter(
-                    content_type=bundle_ct,
-                    object_id=Cast(OuterRef("pk"), output_field=CharField()),
-                ).values("access_level")[:1]
-            )
-        )
+        base_qs = bundle_facet_queryset()
 
         search_query = self.request.GET.get("q", "").strip()
         valid_keys = {d.key for d in BUNDLE_FIELD_DEFINITIONS}
@@ -125,9 +115,13 @@ class BundleFacetedSearchView(ListView):
 
     def render_to_response(self, context, **kwargs):
         if self.request.headers.get("HX-Request"):
-            return render(
+            response = render(
                 self.request,
                 "explorer/partials/bundle_faceted_results.html",
                 context,
             )
-        return super().render_to_response(context, **kwargs)
+        else:
+            response = super().render_to_response(context, **kwargs)
+        if self._faceted_result:
+            response.headers["Server-Timing"] = self._faceted_result.server_timing
+        return response

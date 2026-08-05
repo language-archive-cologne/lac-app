@@ -14,6 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIGURE_SSH = REPO_ROOT / "scripts" / "ci" / "configure-ssh.sh"
 REMOTE_DEPLOY = REPO_ROOT / "scripts" / "ci" / "remote-deploy.sh"
 REMOTE_SAML_PREFLIGHT = REPO_ROOT / "scripts" / "ci" / "remote-saml-preflight.sh"
+DEPLOY = REPO_ROOT / "scripts" / "deploy" / "deploy.sh"
 SSH_FILE_MODE = 0o600
 PRODUCTION_RESOURCE_GROUP_JOBS = 3
 
@@ -222,3 +223,25 @@ def test_gitlab_pipeline_uses_hardened_serialized_commit_deployments():
         >= PRODUCTION_RESOURCE_GROUP_JOBS
     )
     assert "git reset --hard origin/" not in pipeline
+
+
+def test_deploy_refreshes_explorer_facets_after_django_is_ready():
+    deploy = DEPLOY.read_text()
+    warm_command = "python manage.py warm_explorer_facets --refresh"
+
+    assert warm_command in deploy
+    assert deploy.index(warm_command) > deploy.index("--wait-timeout 120")
+
+
+@pytest.mark.parametrize(
+    ("compose_file", "healthcheck_host"),
+    [
+        ("docker-compose.dev.yml", "dev.lacos.uni-koeln.de"),
+        ("docker-compose.production.yml", "lacos.uni-koeln.de"),
+    ],
+)
+def test_django_container_uses_http_readiness_check(compose_file, healthcheck_host):
+    compose = (REPO_ROOT / compose_file).read_text()
+
+    assert "http://127.0.0.1:8000/health/ready/" in compose
+    assert f'DJANGO_HEALTHCHECK_HOST: "{healthcheck_host}"' in compose

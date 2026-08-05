@@ -14,6 +14,7 @@ from drf_spectacular.views import SpectacularSwaggerView
 from rest_framework.permissions import AllowAny
 from lacos.oaipmh.views import OAIPMHOverviewView
 from lacos.sitemaps import sitemaps
+from lacos.common.health import readiness_view
 from lacos.common.views import guideline_asset_view, guideline_view
 from lacos.explorer.views import (
     BundleFacetedSearchView,
@@ -26,6 +27,7 @@ from lacos.explorer.views import (
 from lacos.users.views import disabled_account_management_view, login_view
 
 urlpatterns = [
+    path("health/ready/", readiness_view, name="readiness"),
     path(
         "",
         CollectionListView.as_view(),

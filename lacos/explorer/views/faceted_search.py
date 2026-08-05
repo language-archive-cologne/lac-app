@@ -1,8 +1,6 @@
 """Faceted search view for collection discovery."""
 
-from django.contrib.contenttypes.models import ContentType
-from django.db.models import CharField, Count, Min, OuterRef, Subquery
-from django.db.models.functions import Cast
+from django.db.models import Count, Min
 from django.shortcuts import render
 from django.views.generic import ListView
 
@@ -11,9 +9,9 @@ from lacos.explorer.advanced_search import (
     COLLECTION_FIELD_DEFINITIONS,
     apply_field_scoped_search,
 )
-from lacos.explorer.facets import FACET_CACHE_KEY, FacetService, FacetedSearchResult
+from lacos.explorer.facet_querysets import collection_facet_queryset
+from lacos.explorer.facets import FACET_CACHE_KEY, FacetedSearchResult, FacetService
 from lacos.explorer.text_search import apply_text_search
-from lacos.storage.models.acl_permissions import ACLPermissions
 
 SORT_ALLOWLIST = {
     "name": "general_info__display_title",
@@ -33,15 +31,7 @@ class FacetedSearchView(ListView):
     def get_queryset(self):
         # Clean base queryset for facet counting — no extra JOINs that inflate counts.
         # Annotations like bundles_count/first_language are added AFTER filtering.
-        collection_ct = ContentType.objects.get_for_model(Collection)
-        base_qs = Collection.objects.annotate(
-            acl_access_level=Subquery(
-                ACLPermissions.objects.filter(
-                    content_type=collection_ct,
-                    object_id=Cast(OuterRef("pk"), output_field=CharField()),
-                ).values("access_level")[:1]
-            )
-        )
+        base_qs = collection_facet_queryset()
 
         search_query = self.request.GET.get("q", "").strip()
         valid_keys = {d.key for d in COLLECTION_FIELD_DEFINITIONS}
@@ -112,7 +102,11 @@ class FacetedSearchView(ListView):
 
     def render_to_response(self, context, **kwargs):
         if self.request.headers.get("HX-Request"):
-            return render(
+            response = render(
                 self.request, "explorer/partials/faceted_results.html", context
             )
-        return super().render_to_response(context, **kwargs)
+        else:
+            response = super().render_to_response(context, **kwargs)
+        if self._faceted_result:
+            response.headers["Server-Timing"] = self._faceted_result.server_timing
+        return response

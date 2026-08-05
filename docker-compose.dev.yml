@@ -45,11 +45,12 @@ services:
       SAML_USE_NAME_ID_AS_USERNAME: "false"
       GUIDELINES_REPO_URL: /app/lac-guidelines
       LAC_MEDIA_TMP_DIR: "/app/.tmp/media-processing"
+      DJANGO_HEALTHCHECK_HOST: "dev.lacos.uni-koeln.de"
     ports:
       - '127.0.0.1:8102:8000'
     command: /start-production
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8000), timeout=3).close()"]
+      test: ["CMD", "python", "-c", "import os, urllib.request; request = urllib.request.Request('http://127.0.0.1:8000/health/ready/', headers={'Host': os.environ['DJANGO_HEALTHCHECK_HOST'], 'X-Forwarded-Proto': 'https'}); urllib.request.urlopen(request, timeout=3).read()"]
       interval: 5s
       timeout: 5s
       retries: 12

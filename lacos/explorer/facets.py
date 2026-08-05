@@ -7,6 +7,7 @@ import json
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
+from time import perf_counter
 from typing import Any
 
 from django.contrib.contenttypes.models import ContentType
@@ -23,11 +24,17 @@ logger = logging.getLogger(__name__)
 
 FACET_CACHE_KEY = "explorer:facets:base"
 BUNDLE_FACET_CACHE_KEY = "explorer:facets:bundles:base"
-FACET_VERSION_KEY = "explorer:facets:version"
-FACET_CACHE_TIMEOUT = 60 * 10  # 10 minutes
+COLLECTION_FACET_VERSION_KEY = "explorer:facets:collections:version"
+BUNDLE_FACET_VERSION_KEY = "explorer:facets:bundles:version"
+FACET_CACHE_TIMEOUT = 60 * 60 * 6  # 6 hours; writes explicitly invalidate it.
 FACET_MAX_VALUES = 30  # Max values shown per facet (selected values always included)
 FACET_MAX_SELECTED_VALUES = 10
 FACET_MAX_TOTAL_SELECTED_VALUES = 30
+
+FACET_VERSION_KEYS = {
+    FACET_CACHE_KEY: COLLECTION_FACET_VERSION_KEY,
+    BUNDLE_FACET_CACHE_KEY: BUNDLE_FACET_VERSION_KEY,
+}
 
 
 @dataclass(frozen=True)
@@ -67,6 +74,14 @@ class FacetedSearchResult:
     facets: list[Facet]
     active_filters: list[dict[str, str]]
     total_count: int
+    cache_status: str = "disabled"
+    facet_duration_ms: float = 0.0
+
+    @property
+    def server_timing(self) -> str:
+        return (
+            f'facets;dur={self.facet_duration_ms:.1f};desc="{self.cache_status}"'
+        )
 
 
 @dataclass(frozen=True)
@@ -255,6 +270,7 @@ class FacetService:
         NOTE: total_count is left as -1 here; the view should use the
         paginator's count to avoid a duplicate COUNT query.
         """
+        started_at = perf_counter()
         base_qs = self._ensure_required_annotations(base_qs)
         selections = self._parse_selections(params)
         filtered_qs = self._apply_filters(base_qs, selections)
@@ -267,16 +283,28 @@ class FacetService:
         full_key = self._build_cache_key(cache_key, selections) if cache_key else None
 
         facets: list[Facet] | None = None
+        cache_status = "disabled"
         if full_key:
             facets = django_cache.get(full_key)
             if facets is not None:
+                cache_status = "hit"
                 logger.debug("Facet cache hit: %s", full_key)
 
         if facets is None:
             facets = self._compute_facets(base_qs, selections)
             if full_key:
+                cache_status = "miss"
                 django_cache.set(full_key, facets, FACET_CACHE_TIMEOUT)
                 logger.debug("Facet cache set: %s", full_key)
+
+        facet_duration_ms = (perf_counter() - started_at) * 1000
+        log = logger.info if cache_status == "miss" else logger.debug
+        log(
+            "Facet resolution cache_status=%s cache_key=%s duration_ms=%.1f",
+            cache_status,
+            cache_key or "none",
+            facet_duration_ms,
+        )
 
         active_filters = self._build_active_filters(selections, facets)
 
@@ -285,6 +313,8 @@ class FacetService:
             facets=facets,
             active_filters=active_filters,
             total_count=-1,
+            cache_status=cache_status,
+            facet_duration_ms=facet_duration_ms,
         )
 
     def _ensure_required_annotations(self, qs: QuerySet) -> QuerySet:
@@ -531,7 +561,8 @@ class FacetService:
         folded in so :meth:`invalidate_cache` busts every cached combination at
         once without enumerating keys.
         """
-        version = django_cache.get_or_set(FACET_VERSION_KEY, 1, None)
+        version_key = FACET_VERSION_KEYS.get(base_key, f"{base_key}:version")
+        version = django_cache.get_or_set(version_key, 1, None)
         if not selections:
             digest = "base"
         else:
@@ -543,18 +574,21 @@ class FacetService:
         return f"{base_key}:v{version}:{digest}"
 
     @staticmethod
-    def invalidate_cache() -> None:
-        """Invalidate all cached facet counts (base and filtered combinations).
+    def invalidate_cache(*cache_keys: str) -> None:
+        """Invalidate scoped cached facet counts.
 
         Bumps a single version counter folded into every facet cache key, so
         every cached combination is invalidated atomically without enumerating
         keys. Stale-version entries fall off via their TTL.
         """
-        try:
-            django_cache.incr(FACET_VERSION_KEY)
-        except ValueError:
-            # Version key absent (never set or expired): start a fresh epoch.
-            django_cache.set(FACET_VERSION_KEY, 2, None)
+        targets = cache_keys or tuple(FACET_VERSION_KEYS)
+        for cache_key in targets:
+            version_key = FACET_VERSION_KEYS.get(cache_key, f"{cache_key}:version")
+            try:
+                django_cache.incr(version_key)
+            except ValueError:
+                # Version key absent (never set or expired): start a fresh epoch.
+                django_cache.set(version_key, 2, None)
 
     def _build_active_filters(
         self,

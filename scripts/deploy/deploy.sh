@@ -106,4 +106,8 @@ else
     django </dev/null
 fi
 
+log "Refreshing Explorer facet caches"
+docker compose -f "${compose_file}" exec -T django \
+  python manage.py warm_explorer_facets --refresh </dev/null
+
 log "Deployed ${commit}"
