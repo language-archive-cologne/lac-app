@@ -15,7 +15,7 @@ BLAM_NS = "http://www.clarin.eu/cmd/"
 BLAM_SCHEMA = "https://infra.clarin.eu/CMDI/1.x/xsd/cmd-component.xsd"
 EMPTY_CMD = f'<CMD xmlns="{BLAM_NS}" CMDVersion="1.1"/>'
 
-COLLECTION_PREFETCHES = (
+COMMON_PREFETCHES = (
     "header",
     "general_info",
     "general_info__location",
@@ -32,7 +32,15 @@ COLLECTION_PREFETCHES = (
     "administrative_info__rights_holders__rights_holder_identifiers",
 )
 
-BUNDLE_PREFETCHES = COLLECTION_PREFETCHES + (
+COLLECTION_PREFETCHES = (
+    *COMMON_PREFETCHES,
+    "bundle_collection",
+    "bundle_collection__bundle",
+    "bundle_collection__bundle__general_info",
+)
+
+BUNDLE_PREFETCHES = (
+    *COMMON_PREFETCHES,
     "structural_info",
     "structural_info__additional_metadata_files",
     "structural_info__is_member_of_collection__general_info",

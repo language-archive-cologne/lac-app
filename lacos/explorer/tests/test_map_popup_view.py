@@ -3,14 +3,18 @@
 from pathlib import Path
 
 import pytest
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 
 @pytest.mark.django_db
 def test_map_popup_view_returns_200_with_valid_coords(client):
     url = reverse("explorer:map_popup")
-    response = client.get(url, {"geo": "50.9254927,6.9328194", "title": "Cologne"})
+    with CaptureQueriesContext(connection) as captured:
+        response = client.get(url, {"geo": "50.9254927,6.9328194", "title": "Cologne"})
     assert response.status_code == 200
+    assert len(captured) <= 2
 
 
 @pytest.mark.django_db

@@ -5,6 +5,9 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from lacos.blam.models.bundle.bundle_repository import Bundle
+from lacos.blam.models.bundle.bundle_administrative_info import (
+    BundleAdministrativeInfo,
+)
 from lacos.blam.models.bundle.bundle_structural_info import (
     BundleResources,
     BundleStructuralInfo,
@@ -12,7 +15,13 @@ from lacos.blam.models.bundle.bundle_structural_info import (
     OtherResource,
     WrittenResource,
 )
+from lacos.blam.models.collection.collection_administrative_info import (
+    CollectionAdministrativeInfo,
+)
 from lacos.blam.models.collection.collection_repository import Collection
+from lacos.blam.models.collection.collection_structural_info import (
+    CollectionStructuralInfo,
+)
 from lacos.blam.models.collection.collection_general_info import (
     CollectionGeneralInfo,
     CollectionLocation,
@@ -25,6 +34,21 @@ from lacos.blam.models.collection.collection_publication_info import (
 from lacos.storage.constants import ACL_LEVEL_PUBLIC
 from lacos.storage.models.acl_permissions import ACLPermissions
 from lacos.storage.models.s3_resource_location import S3ResourceLocation
+
+
+def _direct_selects(captured, model) -> list[str]:
+    """Return queries that select directly from a model's table."""
+    quoted_table = connection.ops.quote_name(model._meta.db_table)
+    return [
+        query["sql"]
+        for query in captured.captured_queries
+        if f"FROM {quoted_table}" in query["sql"]
+    ]
+
+
+def _assert_single_direct_select(captured, model) -> None:
+    direct_selects = _direct_selects(captured, model)
+    assert len(direct_selects) == 1, direct_selects
 
 
 def _create_s3_location(resource, *, bucket: str, key_prefix: str):
@@ -170,7 +194,9 @@ def test_collection_detail_query_budget_with_resource_rich_bundles(client):
         assert response.status_code == 200
         _ = response.content
 
-    assert len(captured) <= 40
+    assert len(captured) <= 31
+    _assert_single_direct_select(captured, CollectionStructuralInfo)
+    _assert_single_direct_select(captured, CollectionAdministrativeInfo)
 
 
 @pytest.mark.django_db
@@ -217,4 +243,7 @@ def test_bundle_detail_bulk_loads_s3_locations_for_many_resources(client):
         page = response.content.decode("utf-8")
 
     assert page.count("media-rich-") >= 60
-    assert len(captured) <= 55
+    assert len(captured) <= 24
+    _assert_single_direct_select(captured, BundleStructuralInfo)
+    _assert_single_direct_select(captured, BundleResources)
+    _assert_single_direct_select(captured, BundleAdministrativeInfo)

@@ -1,7 +1,9 @@
 from types import SimpleNamespace
 
 import pytest
+from django.db import connection
 from django.template.loader import render_to_string
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import translation
 
@@ -526,10 +528,12 @@ def test_imdi_xml_view_allows_signed_root_access(client, monkeypatch):
         bucket="bucket-a",
         root_key="collection-a/metadata/file.imdi",
     )
-    response = client.get(reverse("explorer:imdi_xml"), {"token": token})
+    with CaptureQueriesContext(connection) as captured:
+        response = client.get(reverse("explorer:imdi_xml"), {"token": token})
 
     assert response.status_code == 200
     assert response.content == b"<METATRANSCRIPT/>"
+    assert len(captured) <= 2
 
 
 @pytest.mark.django_db

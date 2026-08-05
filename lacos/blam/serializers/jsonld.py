@@ -11,6 +11,7 @@ from lacos.blam.creator_ordering import (
     ordered_bundle_creators,
     ordered_collection_creators,
 )
+from lacos.blam.mappers.relations import first_of
 from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.blam.models.collection.collection_repository import Collection
 
@@ -45,27 +46,27 @@ class CollectionJsonLdSerializer:
         }
 
         # Header
-        header = self.collection.header.first()
+        header = first_of(self.collection.header)
         if header:
             data["Header"] = self._serialize_header(header)
 
         # General Info
-        general_info = self.collection.general_info.first()
+        general_info = first_of(self.collection.general_info)
         if general_info:
             data["CollectionGeneralInfo"] = self._serialize_general_info(general_info)
 
         # Publication Info
-        pub_info = self.collection.publication_info.first()
+        pub_info = first_of(self.collection.publication_info)
         if pub_info:
             data["CollectionPublicationInfo"] = self._serialize_publication_info(pub_info)
 
         # Administrative Info
-        admin_info = self.collection.administrative_info.first()
+        admin_info = first_of(self.collection.administrative_info)
         if admin_info:
             data["CollectionAdministrativeInfo"] = self._serialize_administrative_info(admin_info)
 
         # Structural Info (including collection members/bundles)
-        structural_info = self.collection.structural_info.first()
+        structural_info = first_of(self.collection.structural_info)
         structural_data = self._serialize_structural_info(structural_info) if structural_info else {}
 
         # Add collection members (bundles)
@@ -77,9 +78,10 @@ class CollectionJsonLdSerializer:
             data["CollectionStructuralInfo"] = structural_data
 
         # Project Info
-        if self.collection.project_infos.exists():
+        project_infos = list(self.collection.project_infos.all())
+        if project_infos:
             data["ProjectInfo"] = [
-                self._serialize_project_info(p) for p in self.collection.project_infos.all()
+                self._serialize_project_info(project) for project in project_infos
             ]
 
         return data
@@ -90,7 +92,7 @@ class CollectionJsonLdSerializer:
 
     def _get_collection_id(self) -> str:
         """Get the primary identifier for the collection."""
-        general_info = self.collection.general_info.first()
+        general_info = first_of(self.collection.general_info)
         if general_info and general_info.id_value:
             return general_info.id_value
         return str(self.collection.id)
@@ -140,7 +142,7 @@ class CollectionJsonLdSerializer:
             data["RecordingDate"] = info.recording_date.isoformat()
 
         # Keywords
-        keywords = list(info.keywords.values_list("value", flat=True))
+        keywords = [keyword.value for keyword in info.keywords.all()]
         if keywords:
             data["CollectionKeywords"] = {"CollectionKeyword": keywords}
 
@@ -176,7 +178,7 @@ class CollectionJsonLdSerializer:
             data["ObjectLanguageGlottologCode"] = lang.glottolog_code
 
         # Alternative names
-        alt_names = list(lang.alternative_names.values_list("value", flat=True))
+        alt_names = [alternative.value for alternative in lang.alternative_names.all()]
         if alt_names:
             data["ObjectLanguageAlternativeNames"] = {
                 "ObjectLanguageAlternativeName": alt_names
@@ -185,7 +187,7 @@ class CollectionJsonLdSerializer:
         # Taxonomy / Language families
         try:
             taxonomy = lang.taxonomy
-            families = list(taxonomy.language_family.values_list("value", flat=True))
+            families = [family.value for family in taxonomy.language_family.all()]
             if families:
                 data["ObjectLanguageTaxonomy"] = {
                     "ObjectLanguageLanguageFamily": families
@@ -379,11 +381,7 @@ class CollectionJsonLdSerializer:
     def _serialize_collection_members(self) -> Optional[dict[str, Any]]:
         """Serialize collection members (bundles belonging to this collection)."""
         # Get bundles through the bundle_collection reverse relation
-        bundle_structural_infos = self.collection.bundle_collection.select_related(
-            "bundle",
-        ).prefetch_related(
-            "bundle__general_info",
-        ).all()
+        bundle_structural_infos = list(self.collection.bundle_collection.all())
 
         if not bundle_structural_infos:
             return None
@@ -391,7 +389,7 @@ class CollectionJsonLdSerializer:
         members = []
         for bundle_info in bundle_structural_infos:
             bundle = bundle_info.bundle
-            general_info = bundle.general_info.first() if hasattr(bundle, 'general_info') else None
+            general_info = first_of(bundle.general_info)
 
             member_data = {
                 "@type": "BLAMBundleRepository",
@@ -496,27 +494,27 @@ class BundleJsonLdSerializer:
         }
 
         # Header
-        header = self.bundle.header.first()
+        header = first_of(self.bundle.header)
         if header:
             data["Header"] = self._serialize_header(header)
 
         # General Info
-        general_info = self.bundle.general_info.first()
+        general_info = first_of(self.bundle.general_info)
         if general_info:
             data["BundleGeneralInfo"] = self._serialize_general_info(general_info)
 
         # Publication Info
-        pub_info = self.bundle.publication_info.first()
+        pub_info = first_of(self.bundle.publication_info)
         if pub_info:
             data["BundlePublicationInfo"] = self._serialize_publication_info(pub_info)
 
         # Administrative Info
-        admin_info = self.bundle.administrative_info.first()
+        admin_info = first_of(self.bundle.administrative_info)
         if admin_info:
             data["BundleAdministrativeInfo"] = self._serialize_administrative_info(admin_info)
 
         # Structural Info
-        structural_info = self.bundle.structural_info.first()
+        structural_info = first_of(self.bundle.structural_info)
         if structural_info:
             data["BundleStructuralInfo"] = self._serialize_structural_info(structural_info)
 
@@ -530,7 +528,7 @@ class BundleJsonLdSerializer:
         """Get the primary identifier for the bundle."""
         if self.bundle.identifier:
             return self.bundle.identifier
-        general_info = self.bundle.general_info.first()
+        general_info = first_of(self.bundle.general_info)
         if general_info and general_info.id_value:
             return general_info.id_value
         return str(self.bundle.id)
@@ -581,7 +579,7 @@ class BundleJsonLdSerializer:
             data["RecordingDate"] = info.recording_date.isoformat()
 
         # Keywords
-        keywords = list(info.keywords.values_list("value", flat=True))
+        keywords = [keyword.value for keyword in info.keywords.all()]
         if keywords:
             data["BundleKeywords"] = {"BundleKeyword": keywords}
 
@@ -617,7 +615,7 @@ class BundleJsonLdSerializer:
             data["ObjectLanguageGlottologCode"] = lang.glottolog_code
 
         # Alternative names
-        alt_names = list(lang.alternative_names.values_list("value", flat=True))
+        alt_names = [alternative.value for alternative in lang.alternative_names.all()]
         if alt_names:
             data["ObjectLanguageAlternativeNames"] = {
                 "ObjectLanguageAlternativeName": alt_names
@@ -626,7 +624,7 @@ class BundleJsonLdSerializer:
         # Taxonomy / Language families
         try:
             taxonomy = lang.taxonomy
-            families = list(taxonomy.language_family.values_list("value", flat=True))
+            families = [family.value for family in taxonomy.language_family.all()]
             if families:
                 data["ObjectLanguageTaxonomy"] = {
                     "ObjectLanguageLanguageFamily": families
@@ -836,7 +834,7 @@ class BundleJsonLdSerializer:
             member_data = {"@type": "BLAMCollectionRepository"}
             if collection.identifier:
                 member_data["@id"] = collection.identifier
-            general_info = collection.general_info.first()
+            general_info = first_of(collection.general_info)
             if general_info and general_info.display_title:
                 member_data["CollectionDisplayTitle"] = general_info.display_title
             data["IsMemberOfCollection"] = member_data

@@ -49,10 +49,11 @@ class CollectionExporter:
     def _build_cmd(self, collection: Collection) -> Cmd:
         """Build the CMD dataclass from collection model."""
         cmd = Cmd()
+        bundle_structural_infos = self._bundle_structural_infos(collection)
 
         # Initialize required structures
         cmd.header = Cmd.Header()
-        cmd.resources = self._create_resources(collection)
+        cmd.resources = self._create_resources(collection, bundle_structural_infos)
         cmd.components = Cmd.Components()
         cmd.components.blam_collection_repository_v1_2 = (
             Cmd.Components.BlamCollectionRepositoryV12()
@@ -84,11 +85,30 @@ class CollectionExporter:
         repo.mdlicense = self._create_md_license(header, admin_info)
 
         # Structural info with collection members (bundles)
-        repo.collection_structural_info = self._create_structural_info(collection)
+        repo.collection_structural_info = self._create_structural_info(
+            collection,
+            bundle_structural_infos,
+        )
 
         return cmd
 
-    def _create_resources(self, collection: Collection) -> Cmd.Resources:
+    @staticmethod
+    def _bundle_structural_infos(collection: Collection) -> list:
+        """Load member bundles once, reusing an explorer/OAI prefetch when present."""
+        prefetched = getattr(collection, "_prefetched_objects_cache", {})
+        if "bundle_collection" in prefetched:
+            return list(prefetched["bundle_collection"])
+        return list(
+            collection.bundle_collection.select_related("bundle").prefetch_related(
+                "bundle__general_info",
+            ),
+        )
+
+    def _create_resources(
+        self,
+        collection: Collection,
+        bundle_structural_infos: list,
+    ) -> Cmd.Resources:
         """Create resources section with ResourceProxy entries for each bundle.
 
         A ``LandingPage`` proxy to the collection's own handle is always added so
@@ -104,18 +124,16 @@ class CollectionExporter:
         ResourceType = ResourceProxy.ResourceType
         ResourceRef = ResourceProxy.ResourceRef
 
-        bundle_structural_infos = collection.bundle_collection.select_related(
-            "bundle",
-        ).prefetch_related(
-            "bundle__general_info",
-        ).all()
-
         for idx, bundle_info in enumerate(bundle_structural_infos, start=1):
             bundle = bundle_info.bundle
             ref_value = bundle.identifier or ""
             if not ref_value:
-                general_info = bundle.general_info.first() if hasattr(bundle, "general_info") else None
-                ref_value = (general_info.id_value if general_info and general_info.id_value else str(bundle.id))
+                general_info = first_of(bundle.general_info)
+                ref_value = (
+                    general_info.id_value
+                    if general_info and general_info.id_value
+                    else str(bundle.id)
+                )
 
             proxy = ResourceProxy(
                 resource_type=ResourceType(value=ResourcetypeSimple.METADATA),
@@ -150,7 +168,11 @@ class CollectionExporter:
             md_license.value = "Unknown"
         return md_license
 
-    def _create_structural_info(self, collection: Collection):
+    def _create_structural_info(
+        self,
+        collection: Collection,
+        bundle_structural_infos: list,
+    ):
         """Create structural info section with collection members (bundles)."""
         struct_info = Cmd.Components.BlamCollectionRepositoryV12.CollectionStructuralInfo()
         struct_info.collection_members = (
@@ -163,13 +185,6 @@ class CollectionExporter:
             .CollectionMembers.CollectionHasCollectionMember
         )
 
-        # Get bundles through the bundle_collection reverse relation
-        bundle_structural_infos = collection.bundle_collection.select_related(
-            "bundle",
-        ).prefetch_related(
-            "bundle__general_info",
-        ).all()
-
         for bundle_info in bundle_structural_infos:
             bundle = bundle_info.bundle
 
@@ -180,7 +195,7 @@ class CollectionExporter:
                     identifier_type=CollectionHasCollectionMemberIdentifierType.HANDLE,
                 )
             else:
-                general_info = bundle.general_info.first() if hasattr(bundle, 'general_info') else None
+                general_info = first_of(bundle.general_info)
                 if general_info and general_info.id_value:
                     member = CollectionMember(
                         value=general_info.id_value,

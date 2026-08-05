@@ -120,7 +120,12 @@ class BundleLookupPermissionMixin(ACLPermissionMixin):
         )
 
 
-class BundleDetailView(MetadataExposureMixin, HandleLookupMixin, ACLPermissionMixin, DetailView):
+class BundleDetailView(
+    MetadataExposureMixin,
+    ACLPermissionMixin,
+    HandleLookupMixin,
+    DetailView,
+):
     """Detail view for a bundle, accessible by UUID or handle."""
 
     model = Bundle
@@ -187,9 +192,7 @@ class BundleDetailView(MetadataExposureMixin, HandleLookupMixin, ACLPermissionMi
             ordered_bundle_creators(publication_info) if publication_info else []
         )
 
-        structural_info = None
-        if hasattr(self.object, 'structural_info'):
-            structural_info = self.object.structural_info.first()
+        structural_info = self.object.get_structural_info
         if structural_info:
             context['collection'] = structural_info.is_member_of_collection
 
@@ -211,7 +214,7 @@ class BundleDetailView(MetadataExposureMixin, HandleLookupMixin, ACLPermissionMi
         context['metadata_files'] = []
         context['restricted_resources'] = False
 
-        resources = self.object.resources.first()
+        resources = next(iter(self.object.resources.all()), None)
         content_type_cache = {}
         s3_locations_by_resource = build_s3_location_lookup(
             _iter_bundle_detail_resources(resources, structural_info),
@@ -242,8 +245,9 @@ class BundleDetailView(MetadataExposureMixin, HandleLookupMixin, ACLPermissionMi
 
         # Licenses
         context['licenses'] = []
-        if hasattr(self.object, 'administrative_info') and self.object.administrative_info.first():
-            context['licenses'] = self.object.administrative_info.first().licenses.all()
+        administrative_info = self.object.get_administrative_info
+        if administrative_info:
+            context['licenses'] = administrative_info.licenses.all()
         context["head_metadata"] = build_bundle_head_metadata(
             self.object,
             public_base_url=settings.PUBLIC_BASE_URL,
@@ -1020,7 +1024,7 @@ class BundleJsonLdView(MetadataExposureMixin, BundleLookupPermissionMixin, View)
         response = JsonResponse(data, json_dumps_params={"indent": 2, "ensure_ascii": False})
         response["Content-Type"] = "application/ld+json"
 
-        general_info = bundle.general_info.first()
+        general_info = bundle.get_general_info
         if general_info and general_info.display_title:
             filename = general_info.display_title.replace(" ", "_")[:50]
         else:
@@ -1054,7 +1058,14 @@ class BundleXmlView(MetadataExposureMixin, BundleLookupPermissionMixin, View):
             "administrative_info__rights_holders__rights_holder_identifiers",
             "administrative_info__is_identical_to",
             "structural_info",
+            "structural_info__is_member_of_collection",
+            "structural_info__is_member_of_collection__general_info",
             "structural_info__additional_metadata_files",
+            "resources",
+            "resources__bundle_media_resources",
+            "resources__bundle_written_resources",
+            "resources__bundle_written_resources__annotations",
+            "resources__bundle_other_resources",
         )
 
     def get(self, request, pk=None, handle=None):
@@ -1079,7 +1090,7 @@ class BundleXmlView(MetadataExposureMixin, BundleLookupPermissionMixin, View):
                 "language_class": "language-xml",
             })
 
-        general_info = bundle.general_info.first()
+        general_info = bundle.get_general_info
         if general_info and general_info.display_title:
             filename = general_info.display_title.replace(" ", "_")[:50]
         else:

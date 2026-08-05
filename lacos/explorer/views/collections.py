@@ -518,7 +518,12 @@ class CollectionListView(ListView):
         return super().render_to_response(context, **response_kwargs)
 
 
-class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionACLPermissionMixin, DetailView):
+class CollectionDetailView(
+    MetadataExposureMixin,
+    CollectionACLPermissionMixin,
+    HandleLookupMixin,
+    DetailView,
+):
     """Detail view for a collection, accessible by UUID or handle."""
 
     model = Collection
@@ -685,10 +690,11 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
 
         # Additional metadata files
         context['additional_metadata_files'] = []
-        if hasattr(self.object, 'structural_info') and self.object.structural_info.first():
+        structural_info = self.object.get_structural_info
+        if structural_info:
             metadata_files = [
                 annotate_resource(res)
-                for res in self.object.structural_info.first().additional_metadata_files.all()
+                for res in structural_info.additional_metadata_files.all()
             ]
             context['additional_metadata_files'] = [res for res in metadata_files if res]
 
@@ -704,8 +710,9 @@ class CollectionDetailView(MetadataExposureMixin, HandleLookupMixin, CollectionA
         # Display only administrative content licenses in the collection header.
         context["content_licenses"] = []
 
-        if hasattr(self.object, "administrative_info") and self.object.administrative_info.first():
-            context["content_licenses"] = self.object.administrative_info.first().licenses.all()
+        administrative_info = self.object.get_administrative_info
+        if administrative_info:
+            context["content_licenses"] = administrative_info.licenses.all()
 
         # Citation
         context['citation'] = self._format_citation(publication_info, collection_creators)
@@ -1244,7 +1251,7 @@ class CollectionJsonLdView(MetadataExposureMixin, CollectionLookupPermissionMixi
         response = JsonResponse(data, json_dumps_params={"indent": 2, "ensure_ascii": False})
         response["Content-Type"] = "application/ld+json"
 
-        general_info = collection.general_info.first()
+        general_info = collection.get_general_info
         if general_info and general_info.display_title:
             filename = general_info.display_title.replace(" ", "_")[:50]
         else:
@@ -1282,6 +1289,9 @@ class CollectionXmlView(MetadataExposureMixin, CollectionLookupPermissionMixin, 
             "project_infos",
             "project_infos__funder_infos",
             "project_infos__funder_infos__funder_identifiers",
+            "bundle_collection",
+            "bundle_collection__bundle",
+            "bundle_collection__bundle__general_info",
         )
 
     def get(self, request, pk=None, handle=None):
@@ -1306,7 +1316,7 @@ class CollectionXmlView(MetadataExposureMixin, CollectionLookupPermissionMixin, 
                 "language_class": "language-xml",
             })
 
-        general_info = collection.general_info.first()
+        general_info = collection.get_general_info
         if general_info and general_info.display_title:
             filename = general_info.display_title.replace(" ", "_")[:50]
         else:

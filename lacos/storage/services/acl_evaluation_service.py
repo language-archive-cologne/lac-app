@@ -169,11 +169,9 @@ class ACLEvaluationService:
         if hasattr(obj, "_acl_parent"):
             return getattr(obj, "_acl_parent")
         if isinstance(obj, Bundle):
-            structural = getattr(obj, "structural_info", None)
-            if structural and structural.exists():
-                structural_info = structural.first()
-                if structural_info:
-                    return structural_info.is_member_of_collection
+            structural_info = obj.get_structural_info
+            if structural_info:
+                return structural_info.is_member_of_collection
         return None
 
     def _get_permissions(self, obj: Any) -> Optional[ACLPermissions]:
