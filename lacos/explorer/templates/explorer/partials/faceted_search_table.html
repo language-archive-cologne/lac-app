@@ -22,8 +22,8 @@
   {% facet_sort_url "language" as sort_lang_url %}
   <div class="overflow-x-auto">
     <div class="min-w-full text-sm">
-      <div class="hidden lg:grid lg:min-w-[72rem] lg:grid-cols-[minmax(18rem,2fr)_minmax(12rem,1fr)_minmax(16rem,1.4fr)_minmax(12rem,1fr)_8rem] bg-base-200 sticky top-0 z-10">
-        <div class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">
+      <div class="hidden lg:grid lg:grid-cols-[minmax(12rem,2fr)_minmax(8rem,1fr)_minmax(9rem,1.4fr)_minmax(7rem,1fr)_minmax(5rem,8rem)] bg-base-200 sticky top-0 z-10">
+        <div class="px-4 xl:px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">
           <a href="{{ sort_name_url }}"
              hx-get="{{ sort_name_url }}"
              hx-target="#faceted-results"
@@ -36,7 +36,7 @@
             {% endif %}
           </a>
         </div>
-        <div class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">
+        <div class="px-4 xl:px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">
           <a href="{{ sort_lang_url }}"
              hx-get="{{ sort_lang_url }}"
              hx-target="#faceted-results"
@@ -49,16 +49,16 @@
             {% endif %}
           </a>
         </div>
-        <div class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">{% translate "Description" %}</div>
-        <div class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">{% translate "Location" %}</div>
-        <div class="px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">{% translate "Bundles" %}</div>
+        <div class="px-4 xl:px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">{% translate "Description" %}</div>
+        <div class="px-4 xl:px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">{% translate "Location" %}</div>
+        <div class="px-4 xl:px-6 py-4 text-xs font-semibold text-base-content/60 uppercase tracking-widest">{% translate "Bundles" %}</div>
       </div>
 
-      <div class="divide-y divide-base-200 lg:min-w-[72rem]">
+      <div class="divide-y divide-base-200">
         {% for collection in collections %}
           {% with gi=collection.get_general_info %}
-            <div class="grid gap-3 px-4 py-4 transition-colors hover:bg-base-200 lg:grid-cols-[minmax(18rem,2fr)_minmax(12rem,1fr)_minmax(16rem,1.4fr)_minmax(12rem,1fr)_8rem] lg:gap-0 lg:px-0 lg:py-0">
-              <div class="min-w-0 space-y-1 lg:px-6 lg:py-5">
+            <div class="grid gap-3 px-4 py-4 transition-colors hover:bg-base-200 lg:grid-cols-[minmax(12rem,2fr)_minmax(8rem,1fr)_minmax(9rem,1.4fr)_minmax(7rem,1fr)_minmax(5rem,8rem)] lg:gap-0 lg:px-0 lg:py-0">
+              <div class="min-w-0 space-y-1 lg:px-4 xl:px-6 lg:py-5">
                 <a href="{% url 'explorer:collection_detail_by_handle' handle=collection.handle_path %}{% back_query %}"
                    class="inline-flex max-w-full items-center gap-2 text-base-content hover:text-primary font-semibold">
                   <span class="truncate">
@@ -115,7 +115,7 @@
                 {% endif %}
               </div>
 
-              <div class="order-3 space-y-1.5 lg:order-none lg:px-6 lg:py-5">
+              <div class="order-3 space-y-1.5 lg:order-none lg:px-4 xl:px-6 lg:py-5">
                 <span class="text-[11px] font-semibold uppercase tracking-wide text-base-content/50 lg:hidden">{% translate "Languages" %}</span>
                 {% if gi and gi.object_languages.all %}
                   <div class="flex flex-wrap gap-1.5">
@@ -126,14 +126,14 @@
                 {% endif %}
               </div>
 
-              <div class="order-4 space-y-1 text-sm text-base-content/70 lg:order-none lg:px-6 lg:py-5">
+              <div class="order-4 space-y-1 text-sm text-base-content/70 lg:order-none lg:px-4 xl:px-6 lg:py-5">
                 <span class="text-[11px] font-semibold uppercase tracking-wide text-base-content/50 lg:hidden">{% translate "Description" %}</span>
                 {% if gi and gi.description %}
                   <span class="line-clamp-2 cursor-help lg:line-clamp-none" title="{{ gi.description }}">{{ gi.description|truncatewords:12|highlight_query:search_query }}</span>
                 {% endif %}
               </div>
 
-              <div class="order-5 space-y-1 text-sm text-base-content/70 lg:order-none lg:px-6 lg:py-5">
+              <div class="order-5 space-y-1 text-sm text-base-content/70 lg:order-none lg:px-4 xl:px-6 lg:py-5">
                 <span class="text-[11px] font-semibold uppercase tracking-wide text-base-content/50 lg:hidden">{% translate "Location" %}</span>
                 {% if gi and gi.location %}
                   {% if gi.location.geo_location %}
@@ -154,7 +154,7 @@
                 {% endif %}
               </div>
 
-              <div class="order-2 flex items-center gap-2 lg:order-none lg:block lg:px-6 lg:py-5">
+              <div class="order-2 flex items-center gap-2 lg:order-none lg:block lg:px-4 xl:px-6 lg:py-5">
                 <span class="text-[11px] font-semibold uppercase tracking-wide text-base-content/50 lg:hidden">{% translate "Bundles" %}</span>
                 <span class="inline-flex items-center rounded-full border border-base-300 bg-base-200 px-2 py-0.5 text-xs font-semibold text-base-content/70">
                   {{ collection.bundles_count }}
