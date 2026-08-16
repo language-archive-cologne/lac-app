@@ -153,6 +153,10 @@ def test_full_deploy_resets_to_the_exact_pipeline_commit(deployment_repo):
     ).exists()
     commands = Path(deployment_repo["docker_log"]).read_text().splitlines()
     assert commands == [
+        (
+            "compose -f docker-compose.dev.yml up -d --no-build --wait "
+            "--wait-timeout 120 cache"
+        ),
         "compose -f docker-compose.dev.yml build django huey",
         "compose -f docker-compose.dev.yml stop -t 30 huey",
         (
@@ -184,6 +188,10 @@ def test_fast_deploy_preserves_the_controlled_restart_order(deployment_repo):
     assert result.returncode == 0, result.stderr
     commands = Path(deployment_repo["docker_log"]).read_text().splitlines()
     assert commands == [
+        (
+            "compose -f docker-compose.dev.yml up -d --no-build --wait "
+            "--wait-timeout 120 cache"
+        ),
         "compose -f docker-compose.dev.yml stop -t 30 huey",
         (
             "compose -f docker-compose.dev.yml up -d --no-build --no-deps "
@@ -217,6 +225,10 @@ def test_streamed_deploy_prevents_docker_from_consuming_the_script(
     assert result.returncode == 0, result.stderr
     commands = Path(deployment_repo["docker_log"]).read_text().splitlines()
     assert commands == [
+        (
+            "compose -f docker-compose.dev.yml up -d --no-build --wait "
+            "--wait-timeout 120 cache"
+        ),
         "compose -f docker-compose.dev.yml stop -t 30 huey",
         (
             "compose -f docker-compose.dev.yml up -d --no-build --no-deps "

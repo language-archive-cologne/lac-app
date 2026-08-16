@@ -2,8 +2,17 @@
 limit_req_zone $binary_remote_addr zone=lacos_search_per_ip:10m rate=60r/m;
 
 # Bound aggregate work even when a crawler distributes requests across IPs.
-limit_req_zone $server_name zone=lacos_search_global:1m rate=180r/m;
+# The application rejects excessive facet complexity and runs accepted queries
+# within a database deadline, so this boundary can absorb normal traffic bursts.
+limit_req_zone $server_name zone=lacos_search_global:1m rate=600r/m;
 limit_conn_zone $server_name zone=lacos_search_concurrency:1m;
+
+# Reject the dominant abusive shape before it consumes a Gunicorn connection.
+# The application applies the same maximum of four selected values per facet.
+map $args $lacos_search_too_many_keywords {
+    default 0;
+    ~*keyword=.*keyword=.*keyword=.*keyword=.*keyword= 1;
+}
 
 # Declared crawlers are blocked from faceted search entirely. This complements
 # the request limits; clients that impersonate browsers still hit the limits.
@@ -40,7 +49,11 @@ server {
             return 403;
         }
 
-        limit_req zone=lacos_search_global burst=40 nodelay;
+        if ($lacos_search_too_many_keywords) {
+            return 422 "Select no more than four values per search facet.\n";
+        }
+
+        limit_req zone=lacos_search_global burst=100 nodelay;
         limit_req zone=lacos_search_per_ip burst=20 nodelay;
         limit_req_status 429;
 

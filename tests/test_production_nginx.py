@@ -27,11 +27,20 @@ def test_search_location_enforces_layered_request_limits():
     config = _config()
 
     assert "$binary_remote_addr zone=lacos_search_per_ip:10m rate=60r/m" in config
-    assert "$server_name zone=lacos_search_global:1m rate=180r/m" in config
+    assert "$server_name zone=lacos_search_global:1m rate=600r/m" in config
     assert "$server_name zone=lacos_search_concurrency" in config
     assert "limit_req zone=lacos_search_per_ip burst=20 nodelay" in config
-    assert "limit_req zone=lacos_search_global burst=40 nodelay" in config
+    assert "limit_req zone=lacos_search_global burst=100 nodelay" in config
     assert "limit_conn lacos_search_concurrency" in config
+
+
+def test_search_rejects_keyword_selections_over_the_application_budget():
+    config = _config()
+
+    assert "map $args $lacos_search_too_many_keywords" in config
+    assert "keyword=.*keyword=.*keyword=.*keyword=.*keyword=" in config
+    assert "if ($lacos_search_too_many_keywords)" in config
+    assert 'return 422 "Select no more than four values per search facet.\\n"' in config
 
 
 def test_search_limits_return_retryable_429_responses():

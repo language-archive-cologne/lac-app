@@ -250,6 +250,14 @@ def test_full_deploy_does_not_build_or_recreate_dependencies():
     assert deploy.count("--no-deps") >= NO_DEPS_COMMAND_COUNT
 
 
+def test_deploy_ensures_the_cache_service_exists_before_django():
+    deploy = DEPLOY.read_text()
+    cache_command = 'log "Ensuring the bounded Django cache is available"'
+
+    assert cache_command in deploy
+    assert deploy.index(cache_command) < deploy.index('if [[ "${mode}" == "full" ]]')
+
+
 @pytest.mark.parametrize(
     ("compose_file", "healthcheck_host"),
     [

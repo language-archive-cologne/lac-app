@@ -91,6 +91,14 @@ mv -f "${theme_temporary}" "${theme_destination}"
 theme_temporary=
 [[ -s "${theme_destination}" ]] || die "Theme artifact installation failed"
 
+log "Ensuring the bounded Django cache is available"
+docker compose -f "${compose_file}" up \
+  -d \
+  --no-build \
+  --wait \
+  --wait-timeout 120 \
+  cache </dev/null
+
 if [[ "${mode}" == "full" ]]; then
   log "Rebuilding Django and Huey"
   docker compose -f "${compose_file}" build django huey </dev/null
