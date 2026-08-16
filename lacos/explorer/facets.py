@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import logging
+import secrets
 from collections import defaultdict
-from dataclasses import dataclass, field
-from time import perf_counter
+from dataclasses import dataclass, field, replace
+from time import monotonic, perf_counter, sleep
 from typing import Any
 
 from django.contrib.contenttypes.models import ContentType
@@ -28,13 +27,23 @@ COLLECTION_FACET_VERSION_KEY = "explorer:facets:collections:version"
 BUNDLE_FACET_VERSION_KEY = "explorer:facets:bundles:version"
 FACET_CACHE_TIMEOUT = 60 * 60 * 6  # 6 hours; writes explicitly invalidate it.
 FACET_MAX_VALUES = 30  # Max values shown per facet (selected values always included)
-FACET_MAX_SELECTED_VALUES = 10
-FACET_MAX_TOTAL_SELECTED_VALUES = 30
+FACET_MAX_SELECTED_VALUES = 4
+FACET_MAX_TOTAL_SELECTED_VALUES = 8
+FACET_CACHE_LOCK_TIMEOUT = 30
+FACET_CACHE_LOCK_WAIT_SECONDS = 2.0
 
 FACET_VERSION_KEYS = {
     FACET_CACHE_KEY: COLLECTION_FACET_VERSION_KEY,
     BUNDLE_FACET_CACHE_KEY: BUNDLE_FACET_VERSION_KEY,
 }
+
+
+class FacetSelectionLimitError(ValueError):
+    """Raised when a request exceeds the supported facet-selection budget."""
+
+
+class FacetCacheBusyError(RuntimeError):
+    """Raised when another request is already rebuilding the same facet cache."""
 
 
 @dataclass(frozen=True)
@@ -73,7 +82,6 @@ class FacetedSearchResult:
     queryset: QuerySet
     facets: list[Facet]
     active_filters: list[dict[str, str]]
-    total_count: int
     cache_status: str = "disabled"
     facet_duration_ms: float = 0.0
 
@@ -260,27 +268,23 @@ class FacetService:
         base_qs: QuerySet,
         *,
         cache_key: str | None = None,
+        cross_filter_counts: bool = True,
     ) -> FacetedSearchResult:
         """Run faceted search: filter the queryset and compute facet counts.
 
-        When *cache_key* is provided, facet counts are served from / written
-        to the Django cache, keyed by the active selections so each
-        cross-facet combination is cached independently.
+        When *cache_key* is provided, only the unfiltered base facet set is
+        admitted to the Django cache. Active selections are applied to a copy
+        of those facets so arbitrary request combinations cannot create keys.
 
-        NOTE: total_count is left as -1 here; the view should use the
-        paginator's count to avoid a duplicate COUNT query.
+        Result pagination is handled separately without an exact total count.
         """
         started_at = perf_counter()
         base_qs = self._ensure_required_annotations(base_qs)
         selections = self._parse_selections(params)
         filtered_qs = self._apply_filters(base_qs, selections)
 
-        # Cache facet counts whenever a cache_key context is provided (the
-        # view passes None for free-text searches). The key folds in the
-        # active selections so each cross-facet combination is cached on its
-        # own, and a version number so invalidation busts every combination
-        # at once.
-        full_key = self._build_cache_key(cache_key, selections) if cache_key else None
+        facet_selections = selections if cross_filter_counts else {}
+        full_key = self._build_cache_key(cache_key) if cache_key else None
 
         facets: list[Facet] | None = None
         cache_status = "disabled"
@@ -291,11 +295,15 @@ class FacetService:
                 logger.debug("Facet cache hit: %s", full_key)
 
         if facets is None:
-            facets = self._compute_facets(base_qs, selections)
             if full_key:
-                cache_status = "miss"
-                django_cache.set(full_key, facets, FACET_CACHE_TIMEOUT)
-                logger.debug("Facet cache set: %s", full_key)
+                facets, cache_status = self._get_or_compute_cached_facets(
+                    full_key,
+                    base_qs,
+                )
+            else:
+                facets = self._compute_facets(base_qs, facet_selections)
+
+        facets = self._apply_selection_state(facets, selections)
 
         facet_duration_ms = (perf_counter() - started_at) * 1000
         log = logger.info if cache_status == "miss" else logger.debug
@@ -312,7 +320,6 @@ class FacetService:
             queryset=filtered_qs,
             facets=facets,
             active_filters=active_filters,
-            total_count=-1,
             cache_status=cache_status,
             facet_duration_ms=facet_duration_ms,
         )
@@ -342,12 +349,10 @@ class FacetService:
         )
 
     def _parse_selections(self, params: QueryDict) -> dict[str, list[str]]:
-        """Extract selected facet values from query params, deduplicated and capped."""
+        """Extract selections and reject requests exceeding the fixed budget."""
         selections: dict[str, list[str]] = {}
-        remaining_values = FACET_MAX_TOTAL_SELECTED_VALUES
+        total_values = 0
         for defn in self.definitions:
-            if remaining_values <= 0:
-                break
             raw_values = params.getlist(defn.name)
             cleaned = list(dict.fromkeys(v.strip() for v in raw_values if v.strip()))
             if defn.allowed_values is not None:
@@ -355,10 +360,94 @@ class FacetService:
             if defn.integer_values:
                 cleaned = [v for v in cleaned if v.isdigit()]
             if cleaned:
-                limit = min(FACET_MAX_SELECTED_VALUES, remaining_values)
-                selections[defn.name] = cleaned[:limit]
-                remaining_values -= len(selections[defn.name])
+                if len(cleaned) > FACET_MAX_SELECTED_VALUES:
+                    message = (
+                        f"Facet '{defn.name}' exceeds the maximum of "
+                        f"{FACET_MAX_SELECTED_VALUES} selections."
+                    )
+                    raise FacetSelectionLimitError(message)
+                total_values += len(cleaned)
+                if total_values > FACET_MAX_TOTAL_SELECTED_VALUES:
+                    message = (
+                        "The total number of facet selections exceeds the maximum "
+                        f"of {FACET_MAX_TOTAL_SELECTED_VALUES}."
+                    )
+                    raise FacetSelectionLimitError(message)
+                selections[defn.name] = cleaned
         return selections
+
+    def _get_or_compute_cached_facets(
+        self,
+        full_key: str,
+        base_qs: QuerySet,
+    ) -> tuple[list[Facet], str]:
+        """Populate one fixed cache entry while preventing miss stampedes."""
+        lock_key = f"{full_key}:lock"
+        token = secrets.token_hex(16)
+        acquired = django_cache.add(
+            lock_key,
+            token,
+            timeout=FACET_CACHE_LOCK_TIMEOUT,
+        )
+        if not acquired:
+            deadline = monotonic() + FACET_CACHE_LOCK_WAIT_SECONDS
+            while monotonic() < deadline:
+                facets = django_cache.get(full_key)
+                if facets is not None:
+                    return facets, "hit-after-wait"
+                sleep(0.05)
+            message = "Facet counts are currently being refreshed."
+            raise FacetCacheBusyError(message)
+
+        try:
+            facets = django_cache.get(full_key)
+            if facets is not None:
+                return facets, "hit-after-lock"
+            facets = self._compute_facets(base_qs, {})
+            django_cache.set(full_key, facets, FACET_CACHE_TIMEOUT)
+            logger.debug("Facet cache set: %s", full_key)
+            return facets, "miss"
+        finally:
+            if django_cache.get(lock_key) == token:
+                django_cache.delete(lock_key)
+
+    def _apply_selection_state(
+        self,
+        facets: list[Facet],
+        selections: dict[str, list[str]],
+    ) -> list[Facet]:
+        """Return request-scoped facet copies without mutating cached values."""
+        selected_by_name = {name: set(values) for name, values in selections.items()}
+        definitions = {definition.name: definition for definition in self.definitions}
+        result: list[Facet] = []
+        for facet in facets:
+            selected = selected_by_name.get(facet.name, set())
+            values = [
+                replace(value, selected=value.value in selected)
+                for value in facet.values
+            ]
+            present = {value.value for value in values}
+            values.extend(
+                FacetValue(value=value, label=value, count=0, selected=True)
+                for value in selected - present
+            )
+            if definitions[facet.name].sort_newest_first:
+                values.sort(
+                    key=lambda value: (
+                        not value.selected,
+                        -int(value.value) if value.value.isdigit() else 0,
+                    )
+                )
+            else:
+                values.sort(
+                    key=lambda value: (
+                        not value.selected,
+                        -value.count,
+                        value.label,
+                    )
+                )
+            result.append(replace(facet, values=values))
+        return result
 
     def _apply_filters(
         self, qs: QuerySet, selections: dict[str, list[str]]
@@ -553,25 +642,11 @@ class FacetService:
         return facet_values
 
     @staticmethod
-    def _build_cache_key(base_key: str, selections: dict[str, list[str]]) -> str:
-        """Build a versioned cache key scoped to the active selections.
-
-        Selections are normalised (facet names and their values sorted) so the
-        key is independent of request parameter order. The cache version is
-        folded in so :meth:`invalidate_cache` busts every cached combination at
-        once without enumerating keys.
-        """
+    def _build_cache_key(base_key: str) -> str:
+        """Build the one versioned cache key admitted for a facet scope."""
         version_key = FACET_VERSION_KEYS.get(base_key, f"{base_key}:version")
         version = django_cache.get_or_set(version_key, 1, None)
-        if not selections:
-            digest = "base"
-        else:
-            normalised = json.dumps(
-                {name: sorted(selections[name]) for name in sorted(selections)},
-                separators=(",", ":"),
-            )
-            digest = hashlib.sha256(normalised.encode()).hexdigest()
-        return f"{base_key}:v{version}:{digest}"
+        return f"{base_key}:v{version}:base"
 
     @staticmethod
     def invalidate_cache(*cache_keys: str) -> None:

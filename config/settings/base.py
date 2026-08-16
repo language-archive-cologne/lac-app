@@ -326,6 +326,7 @@ REDIS_URL = env("REDIS_URL", default="redis://redis:6379/0")
 REDIS_SSL = REDIS_URL.startswith("rediss://")
 HUEY_IMMEDIATE = env.bool("HUEY_IMMEDIATE", default=DEBUG)
 HUEY_WORKERS = env.int("HUEY_WORKERS", default=2)
+SEARCH_STATEMENT_TIMEOUT_MS = env.int("SEARCH_STATEMENT_TIMEOUT_MS", default=15_000)
 
 # Huey (Task Queue) Configuration
 # ------------------------------------------------------------------------------

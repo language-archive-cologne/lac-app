@@ -43,6 +43,14 @@ def test_search_limits_return_retryable_429_responses():
     assert "add_header Retry-After 10 always" in config
 
 
+def test_search_proxy_has_a_bounded_request_window():
+    config = _config()
+    search_location = config.split("location ^~ /search/ {", 1)[1].split("\n    }", 1)[0]
+
+    assert "proxy_read_timeout 35s" in search_location
+    assert "proxy_send_timeout 35s" in search_location
+
+
 def test_search_limits_use_the_restored_real_client_address():
     config = _config()
 

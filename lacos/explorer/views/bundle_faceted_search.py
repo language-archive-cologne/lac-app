@@ -17,6 +17,10 @@ from lacos.explorer.facets import (
     FacetService,
 )
 from lacos.explorer.match_reasons import attach_bundle_match_reasons
+from lacos.explorer.search_safeguards import (
+    CountlessPaginationMixin,
+    SearchRequestBudgetMixin,
+)
 from lacos.explorer.text_search import apply_text_search
 
 BUNDLE_SORT_ALLOWLIST = {
@@ -26,7 +30,11 @@ BUNDLE_SORT_ALLOWLIST = {
 }
 
 
-class BundleFacetedSearchView(ListView):
+class BundleFacetedSearchView(
+    SearchRequestBudgetMixin,
+    CountlessPaginationMixin,
+    ListView,
+):
     model = Bundle
     template_name = "bundle_faceted_search.html"
     context_object_name = "bundles"
@@ -53,7 +61,12 @@ class BundleFacetedSearchView(ListView):
         facet_cache_key = BUNDLE_FACET_CACHE_KEY if not search_query else None
         self._faceted_result = FacetService(
             definitions=BUNDLE_FACET_DEFINITIONS
-        ).search(self.request.GET, base_qs, cache_key=facet_cache_key)
+        ).search(
+            self.request.GET,
+            base_qs,
+            cache_key=facet_cache_key,
+            cross_filter_counts=False,
+        )
         qs = self._faceted_result.queryset
 
         sort_key = self.request.GET.get("sort", "name")
@@ -75,7 +88,11 @@ class BundleFacetedSearchView(ListView):
             sort_key, "general_info__display_title"
         )
         prefix = "-" if order == "desc" else ""
-        qs = qs.order_by(f"{prefix}{sort_field}", "general_info__display_title")
+        qs = qs.order_by(
+            f"{prefix}{sort_field}",
+            "general_info__display_title",
+            "pk",
+        )
 
         qs = qs.prefetch_related(
             "general_info",
@@ -98,8 +115,9 @@ class BundleFacetedSearchView(ListView):
             context["facets"] = self._faceted_result.facets
             context["active_filters"] = self._faceted_result.active_filters
             context["has_active_filters"] = bool(self._faceted_result.active_filters)
-        paginator = context.get("paginator")
-        context["total_count"] = paginator.count if paginator else 0
+        page = context.get("page_obj")
+        context["total_count"] = page.known_count if page else 0
+        context["total_count_is_lower_bound"] = bool(page and page.has_next())
         context["search_query"] = self.request.GET.get("q", "")
         context["current_sort"] = self.request.GET.get("sort", "name")
         context["current_order"] = self.request.GET.get("order", "asc")

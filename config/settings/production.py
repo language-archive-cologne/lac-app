@@ -27,10 +27,11 @@ configure_database_connections(DATABASES["default"], env)
 
 # CACHES
 # ------------------------------------------------------------------------------
+CACHE_REDIS_URL = env("CACHE_REDIS_URL", default=REDIS_URL)
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": REDIS_URL,
+        "LOCATION": CACHE_REDIS_URL,
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
             # Mimicking memcache behavior.

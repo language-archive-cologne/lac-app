@@ -27,6 +27,7 @@ services:
     depends_on:
       - pgbouncer
       - redis
+      - cache
     volumes:
       - .:/app:z
       - /etc/shibboleth:/etc/shibboleth:ro
@@ -60,6 +61,7 @@ services:
       EDUGAIN_METADATA_URL: "https://www.aai.dfn.de/fileadmin/metadata/dfn-aai-edugain+idp-metadata.xml"
       GUIDELINES_REPO_URL: /app/lac-guidelines
       LAC_MEDIA_TMP_DIR: "/app/.tmp/media-processing"
+      CACHE_REDIS_URL: "redis://cache:6379/0"
       DJANGO_HEALTHCHECK_HOST: "lacos.uni-koeln.de"
       # Allow Matomo analytics (matomo.js + tracking beacons) through the CSP.
       CSP_EXTRA_SCRIPT_ORIGINS: "https://matomo.rrz.uni-koeln.de"
@@ -150,6 +152,24 @@ services:
     networks:
       - lacos_production_network
 
+  cache:
+    image: "redis:8.2-alpine@sha256:a308ca111032fa8f306a2dc7be7ba5deb8b777ed5d258c733cddba48a1fd7904"
+    container_name: lacos_production_cache
+    restart: unless-stopped
+    command: redis-server --loglevel warning --save "" --appendonly no --maxmemory 256mb --maxmemory-policy allkeys-lru
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - lacos_production_network
+
   huey:
     build:
       context: .
@@ -170,6 +190,7 @@ services:
       - django
       - pgbouncer
       - redis
+      - cache
     volumes:
       - .:/app:z
       - /etc/shibboleth:/etc/shibboleth:ro
@@ -213,6 +234,7 @@ services:
       HUEY_IMMEDIATE: "false"
       HUEY_WORKERS: "4"
       LAC_MEDIA_TMP_DIR: "/app/.tmp/media-processing"
+      CACHE_REDIS_URL: "redis://cache:6379/0"
     command: /bin/sh -c "python manage.py run_huey"
     networks:
       - lacos_production_network

@@ -36,6 +36,8 @@ from lacos.explorer.facets import FACET_CACHE_KEY
 from lacos.explorer.facets import FACET_CACHE_TIMEOUT
 from lacos.explorer.facets import FACET_MAX_SELECTED_VALUES
 from lacos.explorer.facets import FACET_MAX_TOTAL_SELECTED_VALUES
+from lacos.explorer.facets import FacetCacheBusyError
+from lacos.explorer.facets import FacetSelectionLimitError
 from lacos.explorer.facets import FacetService
 from lacos.explorer.models import BundleFileTypeFacet
 from lacos.explorer.search_indexing import update_collection_search_vector
@@ -107,23 +109,20 @@ def _make_params(**kwargs) -> QueryDict:
 
 
 @pytest.mark.django_db
-def test_facet_selection_values_are_capped_per_facet():
+def test_facet_selection_values_over_per_facet_budget_are_rejected():
     values = [f"lang-{i}" for i in range(FACET_MAX_SELECTED_VALUES + 3)]
 
-    result = FacetService().search(
-        _make_params(language=values),
-        _collection_qs().none(),
-    )
-
-    assert [
-        active_filter["value"] for active_filter in result.active_filters
-    ] == values[:FACET_MAX_SELECTED_VALUES]
+    with pytest.raises(FacetSelectionLimitError, match="language"):
+        FacetService().search(
+            _make_params(language=values),
+            _collection_qs().none(),
+        )
 
 
 @pytest.mark.django_db
-def test_facet_selection_values_are_capped_across_request():
-    values = [f"value-{i}" for i in range(FACET_MAX_SELECTED_VALUES + 3)]
-    years = [str(2000 + i) for i in range(FACET_MAX_SELECTED_VALUES + 3)]
+def test_facet_selection_values_over_request_budget_are_rejected():
+    values = [f"value-{i}" for i in range(FACET_MAX_SELECTED_VALUES)]
+    years = [str(2000 + i) for i in range(FACET_MAX_SELECTED_VALUES)]
     params = _make_params(
         keyword=values,
         language=values,
@@ -133,19 +132,8 @@ def test_facet_selection_values_are_capped_across_request():
         license=values,
     )
 
-    result = FacetService().search(params, _collection_qs().none())
-
-    active_filters_by_name: dict[str, list[str]] = {}
-    for active_filter in result.active_filters:
-        active_filters_by_name.setdefault(active_filter["facet_name"], []).append(
-            active_filter["value"],
-        )
-
-    assert len(result.active_filters) == FACET_MAX_TOTAL_SELECTED_VALUES
-    assert all(
-        len(active_values) <= FACET_MAX_SELECTED_VALUES
-        for active_values in active_filters_by_name.values()
-    )
+    with pytest.raises(FacetSelectionLimitError, match="total"):
+        FacetService().search(params, _collection_qs().none())
 
 
 @pytest.mark.django_db
@@ -720,13 +708,13 @@ def test_invalidate_cache_busts_filtered_facet_cache(compute_counter):
 
 def test_collection_cache_invalidation_does_not_bust_bundle_cache():
     cache.clear()
-    collection_key_before = FacetService._build_cache_key(FACET_CACHE_KEY, {})
-    bundle_key_before = FacetService._build_cache_key(BUNDLE_FACET_CACHE_KEY, {})
+    collection_key_before = FacetService._build_cache_key(FACET_CACHE_KEY)
+    bundle_key_before = FacetService._build_cache_key(BUNDLE_FACET_CACHE_KEY)
 
     FacetService.invalidate_cache(FACET_CACHE_KEY)
 
-    assert FacetService._build_cache_key(FACET_CACHE_KEY, {}) != collection_key_before
-    assert FacetService._build_cache_key(BUNDLE_FACET_CACHE_KEY, {}) == bundle_key_before
+    assert FacetService._build_cache_key(FACET_CACHE_KEY) != collection_key_before
+    assert FacetService._build_cache_key(BUNDLE_FACET_CACHE_KEY) == bundle_key_before
 
 
 @pytest.mark.django_db
@@ -774,7 +762,7 @@ def test_facet_result_reports_cache_hit_after_warmup():
 
 
 @pytest.mark.django_db
-def test_distinct_filtered_selections_are_cached_separately(compute_counter):
+def test_distinct_filtered_selections_share_one_bounded_base_cache(compute_counter):
     cache.clear()
     _collection_with_keywords("C1", "phonology", "lexicon")
     service = FacetService()
@@ -786,7 +774,67 @@ def test_distinct_filtered_selections_are_cached_separately(compute_counter):
         _make_params(keyword=["lexicon"]), _collection_qs(), cache_key=FACET_CACHE_KEY
     )
 
-    assert compute_counter["n"] == 2
+    assert compute_counter["n"] == 1
+
+
+@pytest.mark.django_db
+def test_unique_random_selections_cannot_grow_facet_cache(compute_counter):
+    cache.clear()
+    service = FacetService()
+
+    for index in range(50):
+        service.search(
+            _make_params(keyword=[f"unique-{index}"]),
+            _collection_qs().none(),
+            cache_key=FACET_CACHE_KEY,
+        )
+
+    assert compute_counter["n"] == 1
+
+
+@pytest.mark.django_db
+def test_concurrent_cache_miss_is_rejected_instead_of_recomputed(
+    compute_counter,
+    monkeypatch,
+):
+    cache.clear()
+    service = FacetService()
+    full_key = service._build_cache_key(FACET_CACHE_KEY)
+    cache.set(f"{full_key}:lock", "another-request", timeout=30)
+    monkeypatch.setattr("lacos.explorer.facets.FACET_CACHE_LOCK_WAIT_SECONDS", 0)
+
+    with pytest.raises(FacetCacheBusyError, match="currently being refreshed"):
+        service.search(
+            _make_params(keyword=["unique"]),
+            _collection_qs().none(),
+            cache_key=FACET_CACHE_KEY,
+        )
+
+    assert compute_counter["n"] == 0
+
+
+@pytest.mark.django_db
+def test_cached_facets_are_not_mutated_by_request_selections():
+    cache.clear()
+    service = FacetService()
+
+    first = service.search(
+        _make_params(language=["aka"]),
+        _collection_qs().none(),
+        cache_key=FACET_CACHE_KEY,
+    )
+    second = service.search(
+        _make_params(language=["sef"]),
+        _collection_qs().none(),
+        cache_key=FACET_CACHE_KEY,
+    )
+
+    first_language = next(facet for facet in first.facets if facet.name == "language")
+    second_language = next(
+        facet for facet in second.facets if facet.name == "language"
+    )
+    assert [value.value for value in first_language.selected_values] == ["aka"]
+    assert [value.value for value in second_language.selected_values] == ["sef"]
 
 
 @pytest.mark.django_db
