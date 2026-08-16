@@ -1,8 +1,8 @@
 # Restore real client addresses before applying the per-client boundary.
-limit_req_zone $binary_remote_addr zone=lacos_search_per_ip:10m rate=10r/m;
+limit_req_zone $binary_remote_addr zone=lacos_search_per_ip:10m rate=60r/m;
 
 # Bound aggregate work even when a crawler distributes requests across IPs.
-limit_req_zone $server_name zone=lacos_search_global:1m rate=30r/m;
+limit_req_zone $server_name zone=lacos_search_global:1m rate=180r/m;
 limit_conn_zone $server_name zone=lacos_search_concurrency:1m;
 
 # Declared crawlers are blocked from faceted search entirely. This complements
@@ -40,8 +40,8 @@ server {
             return 403;
         }
 
-        limit_req zone=lacos_search_global burst=10 nodelay;
-        limit_req zone=lacos_search_per_ip burst=10 nodelay;
+        limit_req zone=lacos_search_global burst=40 nodelay;
+        limit_req zone=lacos_search_per_ip burst=20 nodelay;
         limit_req_status 429;
 
         limit_conn lacos_search_concurrency 20;

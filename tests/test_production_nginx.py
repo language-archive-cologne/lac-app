@@ -26,11 +26,11 @@ def test_search_location_covers_collection_and_bundle_routes():
 def test_search_location_enforces_layered_request_limits():
     config = _config()
 
-    assert "$binary_remote_addr zone=lacos_search_per_ip" in config
-    assert "$server_name zone=lacos_search_global" in config
+    assert "$binary_remote_addr zone=lacos_search_per_ip:10m rate=60r/m" in config
+    assert "$server_name zone=lacos_search_global:1m rate=180r/m" in config
     assert "$server_name zone=lacos_search_concurrency" in config
-    assert "limit_req zone=lacos_search_per_ip" in config
-    assert "limit_req zone=lacos_search_global" in config
+    assert "limit_req zone=lacos_search_per_ip burst=20 nodelay" in config
+    assert "limit_req zone=lacos_search_global burst=40 nodelay" in config
     assert "limit_conn lacos_search_concurrency" in config
 
 
