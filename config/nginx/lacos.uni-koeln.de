@@ -1,0 +1,108 @@
+# Restore real client addresses before applying the per-client boundary.
+limit_req_zone $binary_remote_addr zone=lacos_search_per_ip:10m rate=10r/m;
+
+# Bound aggregate work even when a crawler distributes requests across IPs.
+limit_req_zone $server_name zone=lacos_search_global:1m rate=30r/m;
+limit_conn_zone $server_name zone=lacos_search_concurrency:1m;
+
+# Declared crawlers are blocked from faceted search entirely. This complements
+# the request limits; clients that impersonate browsers still hit the limits.
+map $http_user_agent $lacos_search_crawler {
+    default 0;
+    ~*(applebot|googlebot|bingbot|baiduspider|yandexbot|duckduckbot|slurp|semrushbot|ahrefsbot|mj12bot|petalbot) 1;
+}
+
+##
+# Reached via the RRZK reverse proxy, which terminates HTTPS. Nginx listens on
+# plain HTTP and forwards application traffic to Docker-bound Gunicorn.
+##
+server {
+    listen 80;
+    server_name lac.uni-koeln.de;
+
+    client_max_body_size 0;
+    proxy_request_buffering off;
+
+    client_header_timeout 300s;
+    client_body_timeout 300s;
+    send_timeout 300s;
+
+    access_log /var/log/nginx/lac.uni-koeln.de.access.log;
+    error_log  /var/log/nginx/lac.uni-koeln.de.error.log;
+
+    set_real_ip_from 134.95.126.48/29;
+    real_ip_header   X-Forwarded-For;
+
+    # Covers both /search/ and /search/bundles/ with one policy. Requests to
+    # /search without a slash are redirected before they can run a search.
+    location ^~ /search/ {
+        if ($lacos_search_crawler) {
+            return 403;
+        }
+
+        limit_req zone=lacos_search_global burst=10 nodelay;
+        limit_req zone=lacos_search_per_ip burst=10 nodelay;
+        limit_req_status 429;
+
+        limit_conn lacos_search_concurrency 20;
+        limit_conn_status 429;
+
+        error_page 429 @search_rate_limited;
+
+        proxy_request_buffering off;
+        proxy_buffering off;
+        proxy_http_version 1.1;
+        proxy_max_temp_file_size 0;
+
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+
+        proxy_pass http://127.0.0.1:8103;
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header Connection        "";
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    location @search_rate_limited {
+        default_type text/plain;
+        add_header Retry-After 10 always;
+        return 429 "Too many search requests - please wait a few seconds and try again.\n";
+    }
+
+    location / {
+        proxy_request_buffering off;
+        proxy_buffering off;
+        proxy_http_version 1.1;
+        proxy_max_temp_file_size 0;
+
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+
+        proxy_pass http://127.0.0.1:8103;
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header Connection        "";
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    location /map-assets/ {
+        alias /opt/lacos/map-assets/;
+        autoindex off;
+
+        expires 7d;
+        add_header Cache-Control "public, max-age=604800";
+        add_header Access-Control-Allow-Origin "*" always;
+
+        location ~* \.pmtiles$ {
+            types { application/octet-stream pmtiles; }
+            add_header Accept-Ranges bytes always;
+        }
+    }
+}

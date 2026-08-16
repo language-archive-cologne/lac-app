@@ -76,6 +76,13 @@ docker_socket="${DOCKER_SOCKET:-/var/run/docker.sock}"
 export DOCKER_GID
 DOCKER_GID="$(stat -c '%g' "${docker_socket}")"
 
+if [[ "${branch}" == "main" ]]; then
+  log "Verifying reviewed production Nginx configuration"
+  bash scripts/deploy/verify-nginx-config.sh \
+    config/nginx/lacos.uni-koeln.de \
+    /etc/nginx/sites-enabled/lacos.uni-koeln.de
+fi
+
 log "Installing validated theme artifact"
 mkdir -p "$(dirname "${theme_destination}")"
 theme_temporary="${theme_destination}.${BASHPID}"
