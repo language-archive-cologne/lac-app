@@ -262,6 +262,20 @@ class FacetService:
     def __init__(self, definitions: list[FacetDefinition] | None = None):
         self.definitions = definitions or FACET_DEFINITIONS
 
+    @staticmethod
+    def get_cached_facets(cache_key: str) -> list[Facet]:
+        """Read prewarmed facets without rebuilding them from the database."""
+        try:
+            full_key = FacetService._build_cache_key(cache_key)
+            facets = django_cache.get(full_key)
+        except Exception:  # noqa: BLE001 -- cache failure must keep the shell DB-free.
+            logger.exception(
+                "Unable to read prewarmed facet shell",
+                extra={"cache_key": cache_key},
+            )
+            return []
+        return facets if isinstance(facets, list) else []
+
     def search(
         self,
         params: QueryDict,

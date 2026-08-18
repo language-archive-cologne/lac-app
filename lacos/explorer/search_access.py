@@ -17,6 +17,7 @@ from lacos.common.request_utils import get_client_ip
 SEARCH_ACCESS_COOKIE_NAME = "lacos_search_access"
 SEARCH_ACCESS_SIGNING_SALT = "lacos.explorer.search-access.v1"
 SEARCH_ACCESS_CACHE_PREFIX = "explorer:search-access"
+SEARCH_ACCESS_ACTIVE_VALUE = "active"
 
 logger = logging.getLogger(__name__)
 
@@ -37,12 +38,16 @@ class SearchAccessAuthorization:
 
 
 class SearchAccessService:
-    """Issue, validate, and spend finite grants after ALTCHA verification."""
+    """Issue and rate-limit temporary grants after ALTCHA verification."""
 
     def issue(self, request) -> SearchAccessGrant:
         grant_id = secrets.token_urlsafe(24)
         max_age = self._max_age()
-        cache.set(self._cache_key(grant_id), 0, timeout=max_age)
+        cache.set(
+            self._cache_key(grant_id),
+            SEARCH_ACCESS_ACTIVE_VALUE,
+            timeout=max_age,
+        )
         value = signing.dumps(
             {"grant": grant_id, "fingerprint": self._fingerprint(request)},
             salt=SEARCH_ACCESS_SIGNING_SALT,
@@ -65,15 +70,18 @@ class SearchAccessService:
         if not grant_id or not hmac.compare_digest(supplied, expected):
             return None
 
-        used = self._read_grant(grant_id)
-        if not isinstance(used, int) or used < 0 or used >= self._request_budget():
+        if self._read_grant(grant_id) != SEARCH_ACCESS_ACTIVE_VALUE:
             return None
         return SearchAccessAuthorization(grant_id=grant_id)
 
-    def spend(self, authorization: SearchAccessAuthorization) -> bool:
-        """Atomically spend a validated grant after search capacity is reserved."""
-        used = self._increment_grant(authorization.grant_id)
-        return isinstance(used, int) and used <= self._request_budget()
+    def admit(self, authorization: SearchAccessAuthorization) -> bool:
+        """Apply an atomic request-rate boundary to a validated grant."""
+        try:
+            count = self._increment_rate_counter(authorization.grant_id)
+        except Exception:
+            logger.exception("Search grant rate cache unavailable")
+            return False
+        return isinstance(count, int) and count <= self._rate_limit()
 
     def _load_payload(self, value: str) -> dict | None:
         try:
@@ -89,16 +97,16 @@ class SearchAccessService:
             return None
         return payload
 
-    def _increment_grant(self, grant_id: str) -> int | None:
+    def _increment_rate_counter(self, grant_id: str) -> int | None:
+        cache_key = self._rate_cache_key(grant_id)
         try:
-            return cache.incr(self._cache_key(grant_id))
-        except (TypeError, ValueError):
-            return None
-        except Exception:
-            logger.exception("Search grant cache unavailable")
-            return None
+            return cache.incr(cache_key)
+        except ValueError:
+            if cache.add(cache_key, 1, timeout=self._rate_window_seconds()):
+                return 1
+            return cache.incr(cache_key)
 
-    def _read_grant(self, grant_id: str) -> int | None:
+    def _read_grant(self, grant_id: str) -> str | None:
         try:
             return cache.get(self._cache_key(grant_id))
         except Exception:
@@ -116,12 +124,20 @@ class SearchAccessService:
         return f"{SEARCH_ACCESS_CACHE_PREFIX}:grant:{grant_id}"
 
     @staticmethod
+    def _rate_cache_key(grant_id: str) -> str:
+        return f"{SEARCH_ACCESS_CACHE_PREFIX}:rate:{grant_id}"
+
+    @staticmethod
     def _max_age() -> int:
         return settings.SEARCH_ALTCHA_ACCESS_TTL_SECONDS
 
     @staticmethod
-    def _request_budget() -> int:
-        return settings.SEARCH_ALTCHA_REQUEST_BUDGET
+    def _rate_limit() -> int:
+        return settings.SEARCH_GRANT_RATE_LIMIT
+
+    @staticmethod
+    def _rate_window_seconds() -> int:
+        return settings.SEARCH_GRANT_RATE_WINDOW_SECONDS
 
 
 def get_search_access_service() -> SearchAccessService:

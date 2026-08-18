@@ -13,6 +13,7 @@ Disallow: /admin/
 Disallow: /accounts/
 # Faceted search is a crawler trap (endless facet permutations)
 Disallow: /search/
+Disallow: /search-access/
 
 # ============================================
 # AI/ML Training Crawlers - BLOCKED

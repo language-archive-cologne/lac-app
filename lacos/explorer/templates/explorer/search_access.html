@@ -10,10 +10,10 @@
     <div class="card border border-base-300 bg-base-100 shadow-sm">
       <div class="card-body gap-5">
         <div>
-          <h1 class="card-title text-2xl">{% translate "Verify search access" %}</h1>
+          <h1 class="card-title text-2xl">{% translate "Preparing your search" %}</h1>
           <p class="mt-2 text-base-content/70">
-            {% blocktranslate trimmed with request_budget=search_request_budget access_minutes=search_access_minutes %}
-              Automated traffic is putting the archive search under heavy load. Complete this private proof-of-work check to unlock {{ request_budget }} searches for up to {{ access_minutes }} minutes.
+            {% blocktranslate trimmed with access_minutes=search_access_minutes %}
+              The archive is checking this browser before continuing. Search access remains available for up to {{ access_minutes }} minutes.
             {% endblocktranslate %}
           </p>
         </div>
@@ -26,18 +26,62 @@
 
         {% if rate_limited %}
           <div role="alert" class="alert alert-warning">
-            <span>{% translate "Too many verification attempts. Please wait a minute and try again." %}</span>
+            <span>{% translate "Too many verification attempts. Please wait and try again." %}</span>
           </div>
         {% endif %}
 
-        <form method="post" action="{% url 'search_access' %}" class="space-y-5">
-          {% csrf_token %}
-          <input type="hidden" name="next" value="{{ next }}">
-          <altcha-widget name="altcha" challengeurl="{% url 'storage:altcha_challenge' %}"></altcha-widget>
-          <button type="submit" class="btn btn-primary w-full" {% if rate_limited %}disabled{% endif %}>
-            {% translate "Continue to search" %}
-          </button>
-        </form>
+        {% if not rate_limited %}
+          <form id="search-access-form" method="post" action="{% url 'search_access' %}" class="space-y-5">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ next }}">
+            <p id="search-access-status" role="status" aria-live="polite" class="flex items-center gap-3 text-sm text-base-content/70">
+              <span class="loading loading-spinner loading-sm text-primary" aria-hidden="true"></span>
+              <span>{% translate "Verifying automatically..." %}</span>
+            </p>
+            <altcha-widget
+              id="search-access-challenge"
+              class="hidden"
+              name="altcha"
+              auto="onload"
+              challengeurl="{% url 'storage:altcha_challenge' %}"
+            ></altcha-widget>
+          </form>
+          <script>
+            (function () {
+              var form = document.getElementById("search-access-form");
+              var widget = document.getElementById("search-access-challenge");
+              var status = document.getElementById("search-access-status");
+              var submitted = false;
+
+              function showFallback(message) {
+                if (submitted) {
+                  return;
+                }
+                status.querySelector("span:last-child").textContent = message;
+                widget.classList.remove("hidden");
+              }
+
+              widget.addEventListener("verified", function () {
+                if (submitted) {
+                  return;
+                }
+                submitted = true;
+                status.querySelector("span:last-child").textContent = "{% translate 'Opening search...' %}";
+                form.requestSubmit();
+              });
+
+              widget.addEventListener("statechange", function (event) {
+                if (event.detail && event.detail.state === "error") {
+                  showFallback("{% translate 'Automatic verification failed. Please use the verification control below.' %}");
+                }
+              });
+
+              window.setTimeout(function () {
+                showFallback("{% translate 'Verification is taking longer than expected. You can complete it below.' %}");
+              }, 15000);
+            })();
+          </script>
+        {% endif %}
 
         <p class="text-xs text-base-content/50">
           {% translate "The challenge runs locally in your browser and does not use behavioral tracking." %}

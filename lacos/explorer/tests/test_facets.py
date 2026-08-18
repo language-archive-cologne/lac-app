@@ -2,43 +2,52 @@
 
 from __future__ import annotations
 
-from datetime import date
 import re
+from datetime import date
 
 import pytest
 from django.contrib.contenttypes.models import ContentType
 from django.core.cache import cache
-from django.db.models import CharField, OuterRef, Subquery
+from django.db.models import CharField
+from django.db.models import OuterRef
+from django.db.models import Subquery
 from django.db.models.functions import Cast
 from django.http import QueryDict
+from django.template import Context
+from django.template import Template
 from django.test import RequestFactory
 from django.urls import reverse
 
-from lacos.blam.models import Bundle, Collection
-from lacos.blam.models.base_indentifiers import AccessTypeChoices, IdentifierTypeChoices
+from lacos.blam.models import Bundle
+from lacos.blam.models import Collection
+from lacos.blam.models.base_indentifiers import AccessTypeChoices
+from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
 from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
 from lacos.blam.models.collection.collection_administrative_info import (
     CollectionAdministrativeInfo,
+)
+from lacos.blam.models.collection.collection_administrative_info import (
     CollectionLicense,
 )
+from lacos.blam.models.collection.collection_general_info import CollectionGeneralInfo
+from lacos.blam.models.collection.collection_general_info import CollectionKeyword
+from lacos.blam.models.collection.collection_general_info import CollectionLocation
 from lacos.blam.models.collection.collection_general_info import (
-    CollectionGeneralInfo,
-    CollectionKeyword,
-    CollectionLocation,
     CollectionObjectLanguage,
 )
 from lacos.blam.models.collection.collection_publication_info import (
     CollectionPublicationInfo,
 )
-
 from lacos.explorer.facets import BUNDLE_FACET_CACHE_KEY
 from lacos.explorer.facets import FACET_CACHE_KEY
 from lacos.explorer.facets import FACET_CACHE_TIMEOUT
 from lacos.explorer.facets import FACET_MAX_SELECTED_VALUES
 from lacos.explorer.facets import FACET_MAX_TOTAL_SELECTED_VALUES
+from lacos.explorer.facets import Facet
 from lacos.explorer.facets import FacetCacheBusyError
 from lacos.explorer.facets import FacetSelectionLimitError
 from lacos.explorer.facets import FacetService
+from lacos.explorer.facets import FacetValue
 from lacos.explorer.models import BundleFileTypeFacet
 from lacos.explorer.search_indexing import update_collection_search_vector
 from lacos.storage.models.acl_permissions import ACLPermissions
@@ -476,8 +485,6 @@ def test_page_reset_on_filter_change():
     factory = RequestFactory()
     request = factory.get("/search/", {"language": "aka", "page": "3"})
 
-    from django.template import Context, Template
-
     template = Template(
         "{% load explorer_extras %}{% facet_toggle_url 'country' 'Ghana' as url %}{{ url }}"
     )
@@ -715,6 +722,38 @@ def test_collection_cache_invalidation_does_not_bust_bundle_cache():
 
     assert FacetService._build_cache_key(FACET_CACHE_KEY) != collection_key_before
     assert FacetService._build_cache_key(BUNDLE_FACET_CACHE_KEY) == bundle_key_before
+
+
+def test_cached_facets_can_be_read_without_recomputation():
+    cache.clear()
+    expected = [
+        Facet(
+            name="language",
+            label="Language",
+            values=[FacetValue(value="aka", label="Akan", count=1)],
+        ),
+    ]
+    cache.set(FacetService._build_cache_key(FACET_CACHE_KEY), expected)  # noqa: SLF001
+
+    assert FacetService.get_cached_facets(FACET_CACHE_KEY) == expected
+
+
+def test_missing_cached_facets_return_an_empty_shell():
+    cache.clear()
+
+    assert FacetService.get_cached_facets(FACET_CACHE_KEY) == []
+
+
+def test_unavailable_facet_cache_returns_an_empty_shell(monkeypatch):
+    def unavailable(*_args, **_kwargs):
+        raise RuntimeError("cache unavailable")
+
+    monkeypatch.setattr(
+        "lacos.explorer.facets.django_cache.get_or_set",
+        unavailable,
+    )
+
+    assert FacetService.get_cached_facets(FACET_CACHE_KEY) == []
 
 
 @pytest.mark.django_db

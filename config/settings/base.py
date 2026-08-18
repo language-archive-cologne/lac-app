@@ -441,15 +441,15 @@ ALTCHA_MAX_NUMBER = env.int("ALTCHA_MAX_NUMBER", default=50000)
 ALTCHA_EXPIRES_SECONDS = env.int("ALTCHA_EXPIRES_SECONDS", default=300)
 
 # Faceted-search admission. Each ALTCHA solution creates a signed,
-# client-bound grant with a finite request budget so one solved challenge
-# cannot be reused for an unlimited bot crawl.
+# client-bound grant with an atomic request-rate boundary.
 SEARCH_ALTCHA_ENABLED = env.bool("SEARCH_ALTCHA_ENABLED", default=False)
 # Production overrides these placeholders with required private environment
 # values. Keeping neutral values here lets non-production settings opt out.
 SEARCH_ALTCHA_ACCESS_TTL_SECONDS = env.int("SEARCH_ALTCHA_ACCESS_TTL_SECONDS", default=0)
-SEARCH_ALTCHA_REQUEST_BUDGET = env.int("SEARCH_ALTCHA_REQUEST_BUDGET", default=0)
 SEARCH_ALTCHA_VERIFY_RATE_LIMIT = env.int("SEARCH_ALTCHA_VERIFY_RATE_LIMIT", default=0)
 SEARCH_ALTCHA_VERIFY_RATE_WINDOW_SECONDS = env.int("SEARCH_ALTCHA_VERIFY_RATE_WINDOW_SECONDS", default=0)
+SEARCH_GRANT_RATE_LIMIT = env.int("SEARCH_GRANT_RATE_LIMIT", default=0)
+SEARCH_GRANT_RATE_WINDOW_SECONDS = env.int("SEARCH_GRANT_RATE_WINDOW_SECONDS", default=0)
 SEARCH_MAX_CONCURRENT_REQUESTS = env.int("SEARCH_MAX_CONCURRENT_REQUESTS", default=0)
 SEARCH_CAPACITY_SLOT_TIMEOUT_SECONDS = env.int("SEARCH_CAPACITY_SLOT_TIMEOUT_SECONDS", default=0)
 SEARCH_CAPACITY_RETRY_SECONDS = env.int("SEARCH_CAPACITY_RETRY_SECONDS", default=0)

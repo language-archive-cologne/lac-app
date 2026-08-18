@@ -16,6 +16,7 @@ from lacos.explorer.match_reasons import attach_bundle_match_reasons
 from lacos.explorer.search_access_views import SearchAccessRequiredMixin
 from lacos.explorer.search_safeguards import CountlessPaginationMixin
 from lacos.explorer.search_safeguards import SearchRequestBudgetMixin
+from lacos.explorer.search_shell import SearchShellMixin
 from lacos.explorer.text_search import apply_text_search
 
 BUNDLE_SORT_ALLOWLIST = {
@@ -27,6 +28,7 @@ BUNDLE_SORT_ALLOWLIST = {
 
 class BundleFacetedSearchView(
     SearchAccessRequiredMixin,
+    SearchShellMixin,
     SearchRequestBudgetMixin,
     CountlessPaginationMixin,
     ListView,
@@ -37,6 +39,8 @@ class BundleFacetedSearchView(
     paginate_by = 25
     _faceted_result: FacetedSearchResult | None = None
     _search_in: list[str] = []
+    search_shell_facet_cache_key = BUNDLE_FACET_CACHE_KEY
+    search_shell_field_definitions = BUNDLE_FIELD_DEFINITIONS
 
     def get_queryset(self):
         base_qs = bundle_facet_queryset()

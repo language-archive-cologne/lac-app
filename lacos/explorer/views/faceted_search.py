@@ -15,6 +15,7 @@ from lacos.explorer.facets import FacetService
 from lacos.explorer.search_access_views import SearchAccessRequiredMixin
 from lacos.explorer.search_safeguards import CountlessPaginationMixin
 from lacos.explorer.search_safeguards import SearchRequestBudgetMixin
+from lacos.explorer.search_shell import SearchShellMixin
 from lacos.explorer.text_search import apply_text_search
 
 SORT_ALLOWLIST = {
@@ -26,6 +27,7 @@ SORT_ALLOWLIST = {
 
 class FacetedSearchView(
     SearchAccessRequiredMixin,
+    SearchShellMixin,
     SearchRequestBudgetMixin,
     CountlessPaginationMixin,
     ListView,
@@ -36,6 +38,8 @@ class FacetedSearchView(
     paginate_by = 25
     _faceted_result: FacetedSearchResult | None = None
     _search_in: list[str] = []
+    search_shell_facet_cache_key = FACET_CACHE_KEY
+    search_shell_field_definitions = COLLECTION_FIELD_DEFINITIONS
 
     def get_queryset(self):
         # Clean base queryset for facet counting — no extra JOINs that inflate counts.

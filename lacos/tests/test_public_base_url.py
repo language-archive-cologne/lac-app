@@ -161,6 +161,8 @@ def test_robots_and_llms_use_public_base_url(client):
         "Sitemap: https://lac.uni-koeln.de/sitemap.xml"
         in robots_response.content.decode("utf-8")
     )
+    assert "Disallow: /search/" in robots_response.content.decode("utf-8")
+    assert "Disallow: /search-access/" in robots_response.content.decode("utf-8")
     llms_body = llms_response.content.decode("utf-8")
     assert "- [Collections](/collections/):" in llms_body
     assert "- Website: https://lac.uni-koeln.de" in llms_body

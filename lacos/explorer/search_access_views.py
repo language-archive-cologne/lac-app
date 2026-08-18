@@ -48,21 +48,29 @@ class SearchAccessRequiredMixin:
         enabled = settings.SEARCH_ALTCHA_ENABLED
         protected = request.method in {"GET", "HEAD"}
         if enabled and protected:
+            if not request.GET:
+                return self._mark_noindex(self.render_search_shell(request))
+
             access_service = get_search_access_service()
             authorization = access_service.validate(request)
             if authorization is None:
-                return self._verification_required(request)
+                return self._mark_noindex(self._verification_required(request))
 
             with get_search_capacity_service().reserve() as admitted:
                 if not admitted:
-                    return self._capacity_exceeded()
-                if not access_service.spend(authorization):
-                    return self._verification_required(request)
+                    return self._mark_noindex(self._capacity_exceeded())
+                if not access_service.admit(authorization):
+                    return self._mark_noindex(self._rate_exceeded())
                 response = super().dispatch(request, *args, **kwargs)
                 if hasattr(response, "render") and not response.is_rendered:
                     response.render()
-                return response
-        return super().dispatch(request, *args, **kwargs)
+                return self._mark_noindex(response)
+        return self._mark_noindex(super().dispatch(request, *args, **kwargs))
+
+    @staticmethod
+    def _mark_noindex(response):
+        response.headers["X-Robots-Tag"] = "noindex, nofollow"
+        return response
 
     @staticmethod
     def _verification_required(request):
@@ -82,6 +90,19 @@ class SearchAccessRequiredMixin:
             content_type="text/plain",
         )
         response.headers["Retry-After"] = str(settings.SEARCH_CAPACITY_RETRY_SECONDS)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @staticmethod
+    def _rate_exceeded():
+        response = HttpResponse(
+            "Search requests are arriving too quickly. Please retry shortly.\n",
+            status=429,
+            content_type="text/plain",
+        )
+        response.headers["Retry-After"] = str(
+            settings.SEARCH_GRANT_RATE_WINDOW_SECONDS,
+        )
         response.headers["Cache-Control"] = "no-store"
         return response
 
@@ -126,6 +147,7 @@ class SearchAccessView(View):
             path="/search/",
         )
         response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Robots-Tag"] = "noindex, nofollow"
         return response
 
     def _render(
@@ -137,14 +159,13 @@ class SearchAccessView(View):
         rate_limited=False,
         status=200,
     ):
-        return render(
+        response = render(
             request,
             self.template_name,
             {
                 "next": target,
                 "verification_failed": verification_failed,
                 "rate_limited": rate_limited,
-                "search_request_budget": settings.SEARCH_ALTCHA_REQUEST_BUDGET,
                 "search_access_minutes": max(
                     1,
                     settings.SEARCH_ALTCHA_ACCESS_TTL_SECONDS // 60,
@@ -152,3 +173,6 @@ class SearchAccessView(View):
             },
             status=status,
         )
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Robots-Tag"] = "noindex, nofollow"
+        return response

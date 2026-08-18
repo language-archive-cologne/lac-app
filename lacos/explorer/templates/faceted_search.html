@@ -175,7 +175,11 @@
         <span class="loading loading-spinner loading-md text-primary"></span>
       </div>
       <div class="facet-dimmable">
-        {% include "explorer/partials/faceted_search_table.html" %}
+        {% if search_shell %}
+          {% include "explorer/partials/search_shell_prompt.html" %}
+        {% else %}
+          {% include "explorer/partials/faceted_search_table.html" %}
+        {% endif %}
       </div>
     </div>
   </div>

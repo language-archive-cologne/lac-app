@@ -1,0 +1,10 @@
+{% load i18n %}
+<div id="facet-sidebar-inner" hx-swap-oob="true">
+  {% include "explorer/partials/facet_sidebar.html" %}
+</div>
+<div id="active-filters-wrapper" hx-swap-oob="true">
+  {% include "explorer/partials/active_filters.html" %}
+</div>
+<div id="faceted-results" class="flex-1 min-w-0 relative">
+  {% include "explorer/partials/search_shell_prompt.html" %}
+</div>

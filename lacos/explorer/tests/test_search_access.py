@@ -23,9 +23,10 @@ from lacos.storage.services.altcha_service import get_altcha_service
 SEARCH_ACCESS_SETTINGS = {
     "SEARCH_ALTCHA_ENABLED": True,
     "SEARCH_ALTCHA_ACCESS_TTL_SECONDS": 600,
-    "SEARCH_ALTCHA_REQUEST_BUDGET": 2,
     "SEARCH_ALTCHA_VERIFY_RATE_LIMIT": 10,
     "SEARCH_ALTCHA_VERIFY_RATE_WINDOW_SECONDS": 60,
+    "SEARCH_GRANT_RATE_LIMIT": 2,
+    "SEARCH_GRANT_RATE_WINDOW_SECONDS": 60,
     "SEARCH_MAX_CONCURRENT_REQUESTS": 2,
     "SEARCH_CAPACITY_SLOT_TIMEOUT_SECONDS": 40,
     "SEARCH_CAPACITY_RETRY_SECONDS": 5,
@@ -97,16 +98,30 @@ def test_forged_cookie_redirects_before_database_work(client):
 @override_settings(**SEARCH_ACCESS_SETTINGS)
 @pytest.mark.django_db
 @pytest.mark.parametrize("route_name", ["faceted_search", "bundle_faceted_search"])
-def test_bare_search_redirects_before_database_work(client, route_name):
+def test_bare_search_renders_public_shell_without_database_work(client, route_name):
     with CaptureQueriesContext(connection) as queries:
         response = client.get(reverse(route_name))
 
-    assert response.status_code == HTTPStatus.FOUND
-    assert response.url.startswith(reverse("search_access"))
+    assert response.status_code == HTTPStatus.OK
+    assert response.context["search_shell"] is True
+    assert "Start your search" in response.content.decode()
+    assert response.headers["X-Robots-Tag"] == "noindex, nofollow"
     statements = "\n".join(query["sql"] for query in queries.captured_queries)
     assert "statement_timeout" not in statements
     assert "blam_collection" not in statements
     assert "blam_bundle" not in statements
+
+
+@override_settings(**SEARCH_ACCESS_SETTINGS)
+@pytest.mark.django_db
+def test_bare_htmx_search_returns_public_shell_fragment(client):
+    response = client.get(reverse("faceted_search"), HTTP_HX_REQUEST="true")
+
+    content = response.content.decode()
+    assert response.status_code == HTTPStatus.OK
+    assert 'id="faceted-results"' in content
+    assert "<html" not in content
+    assert "Start your search" in content
 
 
 @override_settings(**SEARCH_ACCESS_SETTINGS)
@@ -124,7 +139,7 @@ def test_htmx_search_redirects_to_full_verification_page(client):
 
 @override_settings(**SEARCH_ACCESS_SETTINGS)
 @pytest.mark.django_db
-def test_access_page_renders_private_proof_of_work_widget(client):
+def test_access_page_runs_proof_of_work_automatically(client):
     target = f"{reverse('faceted_search')}?keyword=DoBeS"
     response = client.get(reverse("search_access"), {"next": target})
 
@@ -133,11 +148,16 @@ def test_access_page_renders_private_proof_of_work_widget(client):
     assert "<altcha-widget" in content
     assert reverse("storage:altcha_challenge") in content
     assert 'name="next" value="/search/?keyword=DoBeS"' in content
+    assert 'auto="onload"' in content
+    assert 'addEventListener("verified"' in content
+    assert "Continue to search" not in content
+    assert "searches for up to" not in content
+    assert response.headers["X-Robots-Tag"] == "noindex, nofollow"
 
 
 @override_settings(**SEARCH_ACCESS_SETTINGS)
 @pytest.mark.django_db
-def test_valid_solution_issues_bound_limited_search_grant(client):
+def test_valid_solution_issues_bound_rate_limited_search_grant(client):
     target = f"{reverse('faceted_search')}?keyword=DoBeS"
     response = client.post(
         reverse("search_access"),
@@ -166,7 +186,7 @@ def test_valid_solution_issues_bound_limited_search_grant(client):
         REMOTE_ADDR="192.0.2.10",
         HTTP_USER_AGENT="test-browser",
     )
-    exhausted = client.get(
+    rate_limited = client.get(
         target,
         REMOTE_ADDR="192.0.2.10",
         HTTP_USER_AGENT="test-browser",
@@ -174,8 +194,29 @@ def test_valid_solution_issues_bound_limited_search_grant(client):
 
     assert first.status_code == HTTPStatus.OK
     assert second.status_code == HTTPStatus.OK
-    assert exhausted.status_code == HTTPStatus.FOUND
-    assert exhausted.url.startswith(reverse("search_access"))
+    assert rate_limited.status_code == HTTPStatus.TOO_MANY_REQUESTS
+    assert rate_limited.headers["Retry-After"] == "60"
+    assert rate_limited.headers["X-Robots-Tag"] == "noindex, nofollow"
+
+
+@override_settings(
+    **{
+        **SEARCH_ACCESS_SETTINGS,
+        "SEARCH_GRANT_RATE_LIMIT": 20,
+    },
+)
+@pytest.mark.django_db
+def test_normal_search_session_does_not_repeat_the_challenge(client):
+    target = f"{reverse('faceted_search')}?keyword=DoBeS"
+    issued = client.post(
+        reverse("search_access"),
+        {"altcha": _solved_altcha_payload(), "next": target},
+    )
+    assert issued.status_code == HTTPStatus.FOUND
+
+    responses = [client.get(target) for _ in range(10)]
+
+    assert all(response.status_code == HTTPStatus.OK for response in responses)
 
 
 @override_settings(**SEARCH_ACCESS_SETTINGS)
@@ -216,7 +257,7 @@ def test_malformed_signed_grant_fails_closed(client):
 
 @override_settings(**SEARCH_ACCESS_SETTINGS)
 @pytest.mark.django_db
-def test_grant_fails_closed_when_cache_counter_is_unavailable(client):
+def test_grant_fails_closed_when_cache_state_is_unavailable(client):
     target = f"{reverse('faceted_search')}?keyword=DoBeS"
     issued = client.post(
         reverse("search_access"),
@@ -225,8 +266,7 @@ def test_grant_fails_closed_when_cache_counter_is_unavailable(client):
     assert issued.status_code == HTTPStatus.FOUND
 
     with patch("lacos.explorer.search_access.cache") as grant_cache:
-        grant_cache.get.return_value = 0
-        grant_cache.incr.return_value = None
+        grant_cache.get.return_value = None
         response = client.get(target)
 
     assert response.status_code == HTTPStatus.FOUND
@@ -235,7 +275,7 @@ def test_grant_fails_closed_when_cache_counter_is_unavailable(client):
 
 @override_settings(**SEARCH_ACCESS_SETTINGS)
 @pytest.mark.django_db
-def test_grant_fails_closed_when_cache_counter_raises(client):
+def test_grant_rate_limit_fails_closed_when_cache_counter_raises(client):
     target = f"{reverse('faceted_search')}?keyword=DoBeS"
     issued = client.post(
         reverse("search_access"),
@@ -244,12 +284,11 @@ def test_grant_fails_closed_when_cache_counter_raises(client):
     assert issued.status_code == HTTPStatus.FOUND
 
     with patch("lacos.explorer.search_access.cache") as grant_cache:
-        grant_cache.get.return_value = 0
+        grant_cache.get.return_value = "active"
         grant_cache.incr.side_effect = RuntimeError("cache unavailable")
         response = client.get(target)
 
-    assert response.status_code == HTTPStatus.FOUND
-    assert response.url.startswith(reverse("search_access"))
+    assert response.status_code == HTTPStatus.TOO_MANY_REQUESTS
 
 
 @override_settings(**SEARCH_ACCESS_SETTINGS)
@@ -275,7 +314,7 @@ def test_verified_search_uses_aggregate_capacity_after_grant_validation(client):
 
 @override_settings(**SEARCH_ACCESS_SETTINGS)
 @pytest.mark.django_db
-def test_capacity_rejection_does_not_spend_the_search_grant(client):
+def test_capacity_rejection_does_not_spend_the_grant_rate_allowance(client):
     target = f"{reverse('faceted_search')}?keyword=DoBeS"
     issued = client.post(
         reverse("search_access"),
@@ -290,9 +329,8 @@ def test_capacity_rejection_does_not_spend_the_search_grant(client):
     cache.delete(SEARCH_CAPACITY_CACHE_KEY)
     assert client.get(target).status_code == HTTPStatus.OK
     assert client.get(target).status_code == HTTPStatus.OK
-    exhausted = client.get(target)
-    assert exhausted.status_code == HTTPStatus.FOUND
-    assert exhausted.url.startswith(reverse("search_access"))
+    rate_limited = client.get(target)
+    assert rate_limited.status_code == HTTPStatus.TOO_MANY_REQUESTS
 
 
 @override_settings(**SEARCH_ACCESS_SETTINGS)
