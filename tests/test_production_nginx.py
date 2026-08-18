@@ -6,13 +6,14 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 NGINX_CONFIG = REPO_ROOT / "config" / "nginx" / "lacos.uni-koeln.de"
 PRIVATE_TEMPLATES = REPO_ROOT / "config" / "nginx" / "private-templates"
 PRODUCTION_COMPOSE = REPO_ROOT / "docker-compose.production.yml"
 VERIFY_SCRIPT = REPO_ROOT / "scripts" / "deploy" / "verify-nginx-config.sh"
-EXPECTED_PROXY_HEADER_COUNT = 2
+EXPECTED_PROXY_HEADER_COUNT = 4
 
 
 def _config() -> str:
@@ -138,6 +139,48 @@ def test_search_proxy_has_a_bounded_request_window():
     assert "proxy_send_timeout 35s" in search_location
 
 
+def test_search_uses_a_dedicated_upstream_pool():
+    config = _config()
+    search_location = config.split("location ^~ /search/ {", 1)[1].split(
+        "\n    }",
+        1,
+    )[0]
+    application_location = config.split("location / {", 1)[1].split(
+        "\n    }",
+        1,
+    )[0]
+
+    assert "proxy_pass http://127.0.0.1:8104;" in search_location
+    assert "proxy_pass http://127.0.0.1:8103;" not in search_location
+    assert "proxy_pass http://127.0.0.1:8103;" in application_location
+    assert "proxy_pass http://127.0.0.1:8104;" not in application_location
+
+
+def test_search_access_and_search_result_navigation_use_search_pool():
+    config = _config()
+    access_location = config.split("location = /search-access/ {", 1)[1].split(
+        "\n    }",
+        1,
+    )[0]
+    navigation_location = config.split("location @search_navigation {", 1)[1].split(
+        "\n    }",
+        1,
+    )[0]
+    application_location = config.split("location / {", 1)[1].split(
+        "\n    }",
+        1,
+    )[0]
+
+    assert "map $arg_back $lacos_search_navigation" in config
+    assert "if ($lacos_search_navigation)" in application_location
+    for location in (access_location, navigation_location):
+        assert (
+            "include /etc/nginx/lacos-private/search-location-limits.conf;"
+            in location
+        )
+        assert "proxy_pass http://127.0.0.1:8104;" in location
+
+
 def test_search_limits_use_the_restored_real_client_address():
     config = _config()
 
@@ -150,10 +193,25 @@ def test_search_limits_use_the_restored_real_client_address():
 
 
 def test_django_trusts_only_the_internal_docker_proxy_network():
-    compose = PRODUCTION_COMPOSE.read_text()
+    compose_text = PRODUCTION_COMPOSE.read_text()
 
-    assert 'TRUSTED_PROXY_CIDRS: "172.16.0.0/12"' in compose
-    assert "127.0.0.1:8103:8000" in compose
+    assert 'TRUSTED_PROXY_CIDRS: "172.16.0.0/12"' in compose_text
+    assert "127.0.0.1:8103:8000" in compose_text
+
+
+def test_production_compose_reserves_independent_worker_pools():
+    services = yaml.safe_load(PRODUCTION_COMPOSE.read_text())["services"]
+    application = services["django"]
+    search = services["search"]
+
+    assert search["image"] == application["image"]
+    assert search["command"] == "/start-production-search"
+    assert search["ports"] == ["127.0.0.1:8104:8000"]
+    assert application["environment"]["GUNICORN_WORKERS"] == "3"
+    assert application["environment"]["GUNICORN_THREADS"] == "8"
+    assert search["environment"]["GUNICORN_WORKERS"] == "2"
+    assert search["environment"]["GUNICORN_THREADS"] == "8"
+    assert application["healthcheck"] == search["healthcheck"]
 
 
 def test_pipeline_validates_the_nginx_configuration():
@@ -280,12 +338,12 @@ def test_nginx_verifier_accepts_private_limit_files(tmp_path: Path):
     (private_root / "search-location-limits.conf").write_text(
         "limit_req zone=lacos_search_per_ip burst=VALUE nodelay;\n"
         "limit_req zone=lacos_search_emergency_requests burst=VALUE nodelay;\n"
-        "limit_conn lacos_search_emergency_connections VALUE;\n",
+        "limit_conn lacos_search_emergency_connections 12;\n",
     )
     (private_root / "application-location-limits.conf").write_text(
         "limit_req zone=lacos_application_emergency_requests "
         "burst=VALUE nodelay;\n"
-        "limit_conn lacos_application_emergency_connections VALUE;\n",
+        "limit_conn lacos_application_emergency_connections 20;\n",
     )
 
     result = _verify(expected, installed, private_root)
@@ -310,3 +368,55 @@ def test_nginx_verifier_rejects_shared_application_capacity_zone(tmp_path: Path)
 
     assert result.returncode != 0
     assert "application emergency request boundary" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("filename", "zone", "unsafe_limit", "expected_error"),
+    [
+        (
+            "search-location-limits.conf",
+            "lacos_search_emergency_connections",
+            13,
+            "search connection ceiling exceeds safe maximum 12",
+        ),
+        (
+            "application-location-limits.conf",
+            "lacos_application_emergency_connections",
+            21,
+            "application connection ceiling exceeds safe maximum 20",
+        ),
+    ],
+)
+def test_nginx_verifier_rejects_worker_exhausting_connection_ceiling(
+    tmp_path: Path,
+    filename: str,
+    zone: str,
+    unsafe_limit: int,
+    expected_error: str,
+):
+    expected = tmp_path / "expected"
+    installed = tmp_path / "installed"
+    private_root = tmp_path / "private"
+    private_root.mkdir()
+    config = f"include /etc/nginx/lacos-private/{filename};\n"
+    expected.write_text(config)
+    installed.write_text(config)
+    if filename == "search-location-limits.conf":
+        private_config = (
+            "limit_req zone=lacos_search_per_ip burst=VALUE nodelay;\n"
+            "limit_req zone=lacos_search_emergency_requests "
+            "burst=VALUE nodelay;\n"
+            f"limit_conn {zone} {unsafe_limit};\n"
+        )
+    else:
+        private_config = (
+            "limit_req zone=lacos_application_emergency_requests "
+            "burst=VALUE nodelay;\n"
+            f"limit_conn {zone} {unsafe_limit};\n"
+        )
+    (private_root / filename).write_text(private_config)
+
+    result = _verify(expected, installed, private_root)
+
+    assert result.returncode != 0
+    assert expected_error in result.stderr

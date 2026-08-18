@@ -256,6 +256,15 @@ def test_deploy_ensures_the_cache_service_exists_before_django():
     assert deploy.index(cache_command) < deploy.index('if [[ "${mode}" == "full" ]]')
 
 
+def test_production_deploy_controls_the_dedicated_search_service():
+    deploy = DEPLOY.read_text()
+
+    assert "web_services=(django)" in deploy
+    assert 'if [[ "${branch}" == "main" ]]' in deploy
+    assert "web_services+=(search)" in deploy
+    assert '"${web_services[@]}"' in deploy
+
+
 @pytest.mark.parametrize(
     ("compose_file", "healthcheck_host"),
     [

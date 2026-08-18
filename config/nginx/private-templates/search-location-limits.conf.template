@@ -1,4 +1,6 @@
 # Render this file outside version control with private production values.
+# LACOS_EMERGENCY_CONNECTIONS must be between 1 and 12 so the 16-thread
+# search pool always retains worker headroom.
 limit_req zone=lacos_search_emergency_requests burst=${LACOS_EMERGENCY_REQUEST_BURST} nodelay;
 limit_req zone=lacos_search_per_ip burst=${LACOS_SEARCH_PER_IP_BURST} nodelay;
 limit_conn lacos_search_emergency_connections ${LACOS_EMERGENCY_CONNECTIONS};

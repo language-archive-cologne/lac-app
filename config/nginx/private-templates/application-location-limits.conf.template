@@ -1,4 +1,6 @@
 # Render this file outside version control with private production values.
+# LACOS_APPLICATION_CONNECTIONS must be between 1 and 20 so the 24-thread
+# application pool always retains worker headroom.
 limit_req zone=lacos_application_emergency_requests burst=${LACOS_APPLICATION_REQUEST_BURST} nodelay;
 limit_conn lacos_application_emergency_connections ${LACOS_APPLICATION_CONNECTIONS};
 limit_req_status 503;

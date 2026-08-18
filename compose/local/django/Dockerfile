@@ -77,6 +77,12 @@ RUN sed -i 's/\r$//g' /start && chmod +x /start
 COPY ./compose/production/django/start /start-production
 RUN sed -i 's/\r$//g' /start-production && chmod +x /start-production
 
+COPY ./compose/production/django/start-search /start-production-search
+RUN sed -i 's/\r$//g' /start-production-search && chmod +x /start-production-search
+
+COPY ./compose/production/django/run-gunicorn /run-gunicorn
+RUN sed -i 's/\r$//g' /run-gunicorn && chmod +x /run-gunicorn
+
 # copy application code to WORKDIR
 COPY . ${APP_HOME}
 RUN chown -R dev-user:dev-user ${APP_HOME}

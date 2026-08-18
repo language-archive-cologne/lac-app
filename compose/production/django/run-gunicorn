@@ -1,0 +1,15 @@
+#!/bin/bash
+
+set -o errexit
+set -o pipefail
+set -o nounset
+
+# Each production service overrides the worker count to reserve an independent
+# request pool. Workers remain long-lived because request-count recycling in a
+# threaded worker can terminate unrelated in-flight requests.
+exec /usr/local/bin/gunicorn config.wsgi \
+    --bind 0.0.0.0:8000 \
+    --chdir=/app \
+    --workers "${GUNICORN_WORKERS:-4}" \
+    --threads "${GUNICORN_THREADS:-8}" \
+    --timeout "${GUNICORN_TIMEOUT:-120}"

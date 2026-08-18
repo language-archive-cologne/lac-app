@@ -63,6 +63,8 @@ services:
       LAC_MEDIA_TMP_DIR: "/app/.tmp/media-processing"
       CACHE_REDIS_URL: "redis://cache:6379/0"
       DJANGO_HEALTHCHECK_HOST: "lacos.uni-koeln.de"
+      GUNICORN_WORKERS: "3"
+      GUNICORN_THREADS: "8"
       # Django is bound to host loopback; only the internal Docker gateway can
       # reach it through the host Nginx reverse proxy.
       TRUSTED_PROXY_CIDRS: "172.16.0.0/12"
@@ -71,6 +73,76 @@ services:
     ports:
       - '127.0.0.1:8103:8000'
     command: /start-production
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, urllib.request; request = urllib.request.Request('http://127.0.0.1:8000/health/ready/', headers={'Host': os.environ['DJANGO_HEALTHCHECK_HOST'], 'X-Forwarded-Proto': 'https'}); urllib.request.urlopen(request, timeout=3).read()"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    networks:
+      - lacos_production_network
+    dns:
+      - ${DNS_PRIMARY}
+      - ${DNS_SECONDARY}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "${S3_HOSTNAME}:${S3_IP}"
+
+  search:
+    image: lacos_production_django
+    container_name: lacos_production_search
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      - pgbouncer
+      - redis
+      - cache
+    volumes:
+      - .:/app:z
+      - /etc/shibboleth:/etc/shibboleth:ro
+      - /opt/lacos/lac-guidelines:/app/lac-guidelines:ro
+    env_file:
+      - ./.envs/.production/.django
+      - ./.envs/.production/.postgres
+      - ./.envs/.production/.storage
+    environment:
+      POSTGRES_HOST: pgbouncer
+      POSTGRES_PORT: "6432"
+      CONN_MAX_AGE: "0"
+      DISABLE_SERVER_SIDE_CURSORS: "true"
+      SAML_LOGIN_ENABLED: "true"
+      SAML_DJANGO_USER_MAIN_ATTRIBUTE: "username"
+      SAML_USE_NAME_ID_AS_USERNAME: "false"
+      PUBLIC_BASE_URL: "https://lac.uni-koeln.de"
+      SAML_SP_BASE_URL: "https://lac.uni-koeln.de"
+      SAML_ENTITY_ID: "https://lac.uni-koeln.de/saml2/metadata/"
+      SAML_ASSERTION_CONSUMER_SERVICE_URL: "https://lac.uni-koeln.de/saml2/acs/"
+      SAML_SINGLE_LOGOUT_SERVICE_URL: "https://lac.uni-koeln.de/saml2/ls/"
+      SAML_REQUEST_INITIATOR_URL: "https://lac.uni-koeln.de/saml2/login/"
+      SAML_DISCOVERY_RESPONSE_URL: "https://lac.uni-koeln.de/saml2/login/"
+      SAML_IDP_METADATA_LOCAL: ""
+      SAML_IDP_METADATA_REMOTE: "https://infra.clarin.eu/aai/prod_md_about_clarin_erics_proxy-idp.xml"
+      SAML_METADATA_MDQ_URL: ""
+      SAML_METADATA_REFRESH_ENABLED: "false"
+      SAML2_DISCO_URL: ""
+      SAML_AUTHN_REQUESTS_SIGNED: "false"
+      SAML_DIRECT_IDP_SELECTION_ENABLED: "false"
+      EDUGAIN_METADATA_URL: "https://www.aai.dfn.de/fileadmin/metadata/dfn-aai-edugain+idp-metadata.xml"
+      GUIDELINES_REPO_URL: /app/lac-guidelines
+      LAC_MEDIA_TMP_DIR: "/app/.tmp/media-processing"
+      CACHE_REDIS_URL: "redis://cache:6379/0"
+      DJANGO_HEALTHCHECK_HOST: "lacos.uni-koeln.de"
+      GUNICORN_WORKERS: "2"
+      GUNICORN_THREADS: "8"
+      TRUSTED_PROXY_CIDRS: "172.16.0.0/12"
+      CSP_EXTRA_SCRIPT_ORIGINS: "https://matomo.rrz.uni-koeln.de"
+    ports:
+      - '127.0.0.1:8104:8000'
+    command: /start-production-search
     healthcheck:
       test: ["CMD", "python", "-c", "import os, urllib.request; request = urllib.request.Request('http://127.0.0.1:8000/health/ready/', headers={'Host': os.environ['DJANGO_HEALTHCHECK_HOST'], 'X-Forwarded-Proto': 'https'}); urllib.request.urlopen(request, timeout=3).read()"]
       interval: 5s

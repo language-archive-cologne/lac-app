@@ -76,6 +76,11 @@ docker_socket="${DOCKER_SOCKET:-/var/run/docker.sock}"
 export DOCKER_GID
 DOCKER_GID="$(stat -c '%g' "${docker_socket}")"
 
+web_services=(django)
+if [[ "${branch}" == "main" ]]; then
+  web_services+=(search)
+fi
+
 if [[ "${branch}" == "main" ]]; then
   log "Verifying reviewed production Nginx configuration"
   bash scripts/deploy/verify-nginx-config.sh \
@@ -109,7 +114,7 @@ if [[ "${mode}" == "full" ]]; then
     --force-recreate \
     --wait \
     --wait-timeout 120 \
-    django </dev/null
+    "${web_services[@]}" </dev/null
   docker compose -f "${compose_file}" up \
     -d \
     --no-deps \
@@ -127,7 +132,7 @@ else
     --force-recreate \
     --wait \
     --wait-timeout 120 \
-    django </dev/null
+    "${web_services[@]}" </dev/null
   docker compose -f "${compose_file}" up \
     -d \
     --no-build \

@@ -23,6 +23,26 @@ require_directive() {
   }
 }
 
+require_connection_ceiling() {
+  local config_file=$1
+  local zone=$2
+  local maximum=$3
+  local description=$4
+  local directive
+  local value
+
+  directive="$(
+    grep -Em1 -- \
+      "^[[:space:]]*limit_conn[[:space:]]+${zone}[[:space:]]+[0-9]+;" \
+      "${config_file}"
+  )" || die "Private Nginx config has no numeric ${description}: ${config_file}"
+  value="$(awk '{gsub(/;/, "", $3); print $3}' <<<"${directive}")"
+  (( value > 0 )) || die "Private Nginx ${description} must be positive"
+  (( value <= maximum )) || {
+    die "Private Nginx ${description} exceeds safe maximum ${maximum}"
+  }
+}
+
 [[ -f "${expected}" ]] || die "Expected config does not exist: ${expected}"
 [[ -f "${installed}" ]] || die "Installed config does not exist: ${installed}"
 
@@ -53,10 +73,20 @@ while IFS= read -r included_file; do
       require_directive "${private_file}" 'limit_req zone=lacos_search_per_ip ' 'the per-client search boundary'
       require_directive "${private_file}" 'limit_req zone=lacos_search_emergency_requests ' 'the search emergency request boundary'
       require_directive "${private_file}" 'limit_conn lacos_search_emergency_connections ' 'the search emergency connection boundary'
+      require_connection_ceiling \
+        "${private_file}" \
+        lacos_search_emergency_connections \
+        12 \
+        'search connection ceiling'
       ;;
     application-location-limits.conf)
       require_directive "${private_file}" 'limit_req zone=lacos_application_emergency_requests ' 'the application emergency request boundary'
       require_directive "${private_file}" 'limit_conn lacos_application_emergency_connections ' 'the application emergency connection boundary'
+      require_connection_ceiling \
+        "${private_file}" \
+        lacos_application_emergency_connections \
+        20 \
+        'application connection ceiling'
       ;;
   esac
 done < <(

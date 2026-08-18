@@ -5,15 +5,20 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 START_PRODUCTION = REPO_ROOT / "compose" / "production" / "django" / "start"
+START_PRODUCTION_SEARCH = (
+    REPO_ROOT / "compose" / "production" / "django" / "start-search"
+)
+RUN_GUNICORN = REPO_ROOT / "compose" / "production" / "django" / "run-gunicorn"
 START_LOCAL = REPO_ROOT / "compose" / "local" / "django" / "start"
+MAX_PGBOUNCER_CONCURRENCY = 40
 
 
 def _gunicorn_line() -> str:
-    script = START_PRODUCTION.read_text().replace("\\\n", " ")
+    script = RUN_GUNICORN.read_text().replace("\\\n", " ")
     for line in script.splitlines():
         if "gunicorn" in line and not line.lstrip().startswith("#"):
             return line
-    msg = "no gunicorn invocation found in production start script"
+    msg = "no gunicorn invocation found in production runner"
     raise AssertionError(msg)
 
 
@@ -27,7 +32,8 @@ def test_production_serves_wsgi_not_asgi():
 
     assert "config.wsgi" in line
     assert "asgi" not in line
-    assert "Uvicorn" not in line and "uvicorn" not in line
+    assert "Uvicorn" not in line
+    assert "uvicorn" not in line
 
 
 def test_production_gunicorn_bounds_concurrency():
@@ -41,14 +47,36 @@ def test_production_gunicorn_bounds_concurrency():
     assert workers, "gunicorn must set an explicit --workers count"
     assert threads, "gunicorn must set an explicit --threads count"
     concurrency = int(workers.group(1)) * int(threads.group(1))
-    assert concurrency <= 40, "concurrency must not exceed PgBouncer server pool"
+    assert concurrency <= MAX_PGBOUNCER_CONCURRENCY, (
+        "concurrency must not exceed PgBouncer server pool"
+    )
+
+
+def test_production_gunicorn_does_not_recycle_workers_during_active_traffic():
+    line = _gunicorn_line()
+
+    assert "--max-requests" not in line
+    assert "--max-requests-jitter" not in line
+
+
+def test_only_application_pool_runs_startup_tasks():
+    application_start = START_PRODUCTION.read_text()
+    search_start = START_PRODUCTION_SEARCH.read_text()
+
+    assert "manage.py migrate" in application_start
+    assert "manage.py collectstatic" in application_start
+    assert "exec /run-gunicorn" in application_start
+    assert "manage.py" not in search_start
+    assert "exec /run-gunicorn" in search_start
 
 
 def test_dev_stack_uses_the_production_start_script():
     """The deployed dev stack must not run the reload dev server; it serves
     the same WSGI configuration as production."""
     compose = (REPO_ROOT / "docker-compose.dev.yml").read_text()
-    django_block = compose[compose.index("  django:\n") : compose.index("\n  pgbouncer:\n")]
+    django_block = compose[
+        compose.index("  django:\n") : compose.index("\n  pgbouncer:\n")
+    ]
 
     assert "command: /start-production" in django_block
 
@@ -67,7 +95,9 @@ def test_local_compose_runs_the_start_script():
     """The local compose file must not inline its own server command,
     which would silently bypass the start script's WSGI configuration."""
     compose = (REPO_ROOT / "docker-compose.local.yml").read_text()
-    django_block = compose[compose.index("  django:\n") : compose.index("\n  pgbouncer:\n")]
+    django_block = compose[
+        compose.index("  django:\n") : compose.index("\n  pgbouncer:\n")
+    ]
 
     assert "command: /start\n" in django_block
     assert "uvicorn" not in django_block
