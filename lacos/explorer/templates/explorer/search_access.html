@@ -7,86 +7,78 @@
 
 {% block explorer_content %}
   <div class="mx-auto max-w-xl py-8">
-    <div class="card border border-base-300 bg-base-100 shadow-sm">
-      <div class="card-body gap-5">
-        <div>
-          <h1 class="card-title text-2xl">{% translate "Preparing your search" %}</h1>
-          <p class="mt-2 text-base-content/70">
-            {% blocktranslate trimmed with access_minutes=search_access_minutes %}
-              The archive is checking this browser before continuing. Search access remains available for up to {{ access_minutes }} minutes.
-            {% endblocktranslate %}
-          </p>
+    <div id="search-access-fallback" class="{% if not verification_failed and not rate_limited %}hidden{% endif %}">
+      {% if verification_failed %}
+        <div role="alert" class="alert alert-error">
+          <span>{% translate "Verification failed. Please complete a new challenge and try again." %}</span>
         </div>
+      {% endif %}
 
-        {% if verification_failed %}
-          <div role="alert" class="alert alert-error">
-            <span>{% translate "Verification failed. Please complete a new challenge and try again." %}</span>
-          </div>
-        {% endif %}
+      {% if rate_limited %}
+        <div role="alert" class="alert alert-warning">
+          <span>{% translate "Too many verification attempts. Please wait and try again." %}</span>
+        </div>
+      {% endif %}
 
-        {% if rate_limited %}
-          <div role="alert" class="alert alert-warning">
-            <span>{% translate "Too many verification attempts. Please wait and try again." %}</span>
-          </div>
-        {% endif %}
-
-        {% if not rate_limited %}
-          <form id="search-access-form" method="post" action="{% url 'search_access' %}" class="space-y-5">
-            {% csrf_token %}
-            <input type="hidden" name="next" value="{{ next }}">
-            <p id="search-access-status" role="status" aria-live="polite" class="flex items-center gap-3 text-sm text-base-content/70">
-              <span class="loading loading-spinner loading-sm text-primary" aria-hidden="true"></span>
-              <span>{% translate "Verifying automatically..." %}</span>
-            </p>
-            <altcha-widget
-              id="search-access-challenge"
-              class="hidden"
-              name="altcha"
-              auto="onload"
-              challengeurl="{% url 'storage:altcha_challenge' %}"
-            ></altcha-widget>
-          </form>
-          <script>
-            (function () {
-              var form = document.getElementById("search-access-form");
-              var widget = document.getElementById("search-access-challenge");
-              var status = document.getElementById("search-access-status");
-              var submitted = false;
-
-              function showFallback(message) {
-                if (submitted) {
-                  return;
-                }
-                status.querySelector("span:last-child").textContent = message;
-                widget.classList.remove("hidden");
-              }
-
-              widget.addEventListener("verified", function () {
-                if (submitted) {
-                  return;
-                }
-                submitted = true;
-                status.querySelector("span:last-child").textContent = "{% translate 'Opening search...' %}";
-                form.requestSubmit();
-              });
-
-              widget.addEventListener("statechange", function (event) {
-                if (event.detail && event.detail.state === "error") {
-                  showFallback("{% translate 'Automatic verification failed. Please use the verification control below.' %}");
-                }
-              });
-
-              window.setTimeout(function () {
-                showFallback("{% translate 'Verification is taking longer than expected. You can complete it below.' %}");
-              }, 15000);
-            })();
-          </script>
-        {% endif %}
-
-        <p class="text-xs text-base-content/50">
-          {% translate "The challenge runs locally in your browser and does not use behavioral tracking." %}
-        </p>
-      </div>
+      <p class="mt-4 text-xs text-base-content/50">
+        {% translate "The challenge runs locally in your browser and does not use behavioral tracking." %}
+      </p>
     </div>
+
+    {% if not rate_limited %}
+      <form id="search-access-form" method="post" action="{% url 'search_access' %}">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next }}">
+        <p id="search-access-status" role="status" aria-live="polite" class="sr-only">
+          <span class="loading loading-spinner loading-sm text-primary" aria-hidden="true"></span>
+          <span>{% translate "Verifying automatically..." %}</span>
+        </p>
+        <altcha-widget
+          id="search-access-challenge"
+          class="{% if not verification_failed %}hidden{% endif %}"
+          name="altcha"
+          auto="onload"
+          challengeurl="{% url 'storage:altcha_challenge' %}"
+        ></altcha-widget>
+      </form>
+      <script>
+        (function () {
+          var form = document.getElementById("search-access-form");
+          var widget = document.getElementById("search-access-challenge");
+          var status = document.getElementById("search-access-status");
+          var fallback = document.getElementById("search-access-fallback");
+          var submitted = false;
+
+          function showFallback(message) {
+            if (submitted) {
+              return;
+            }
+            status.querySelector("span:last-child").textContent = message;
+            status.className = "flex items-center gap-3 text-sm text-base-content/70";
+            fallback.classList.remove("hidden");
+            widget.classList.remove("hidden");
+          }
+
+          widget.addEventListener("verified", function () {
+            if (submitted) {
+              return;
+            }
+            submitted = true;
+            status.querySelector("span:last-child").textContent = "{% translate 'Opening search...' %}";
+            form.requestSubmit();
+          });
+
+          widget.addEventListener("statechange", function (event) {
+            if (event.detail && event.detail.state === "error") {
+              showFallback("{% translate 'Automatic verification failed. Please use the verification control below.' %}");
+            }
+          });
+
+          window.setTimeout(function () {
+            showFallback("{% translate 'Verification is taking longer than expected. You can complete it below.' %}");
+          }, 15000);
+        })();
+      </script>
+    {% endif %}
   </div>
 {% endblock explorer_content %}

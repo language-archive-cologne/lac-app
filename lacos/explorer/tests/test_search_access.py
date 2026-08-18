@@ -152,6 +152,10 @@ def test_access_page_runs_proof_of_work_automatically(client):
     assert 'addEventListener("verified"' in content
     assert "Continue to search" not in content
     assert "searches for up to" not in content
+    assert 'class="card border border-base-300' not in content
+    assert 'id="search-access-status"' in content
+    assert 'class="sr-only"' in content
+    assert 'id="search-access-fallback" class="hidden"' in content
     assert response.headers["X-Robots-Tag"] == "noindex, nofollow"
 
 
