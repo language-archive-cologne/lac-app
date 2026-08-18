@@ -41,20 +41,22 @@ while IFS= read -r included_file; do
   case "$(basename "${included_file}")" in
     search-zones.conf)
       require_directive "${private_file}" 'limit_req_zone .*zone=lacos_search_per_ip:' 'the per-client request zone'
-      require_directive "${private_file}" 'limit_req_zone .*zone=lacos_emergency_requests:' 'the emergency request zone'
-      require_directive "${private_file}" 'limit_conn_zone .*zone=lacos_emergency_connections:' 'the emergency connection zone'
+      require_directive "${private_file}" 'limit_req_zone .*zone=lacos_search_emergency_requests:' 'the search emergency request zone'
+      require_directive "${private_file}" 'limit_conn_zone .*zone=lacos_search_emergency_connections:' 'the search emergency connection zone'
+      require_directive "${private_file}" 'limit_req_zone .*zone=lacos_application_emergency_requests:' 'the application emergency request zone'
+      require_directive "${private_file}" 'limit_conn_zone .*zone=lacos_application_emergency_connections:' 'the application emergency connection zone'
       require_directive "${private_file}" 'map .*\$lacos_search_too_many_keywords' 'the excessive-query map'
       require_directive "${private_file}" 'map .*\$lacos_search_retry_after' 'the search retry value'
       require_directive "${private_file}" 'map .*\$lacos_capacity_retry_after' 'the capacity retry value'
       ;;
     search-location-limits.conf)
       require_directive "${private_file}" 'limit_req zone=lacos_search_per_ip ' 'the per-client search boundary'
-      require_directive "${private_file}" 'limit_req zone=lacos_emergency_requests ' 'the emergency request boundary'
-      require_directive "${private_file}" 'limit_conn lacos_emergency_connections ' 'the emergency connection boundary'
+      require_directive "${private_file}" 'limit_req zone=lacos_search_emergency_requests ' 'the search emergency request boundary'
+      require_directive "${private_file}" 'limit_conn lacos_search_emergency_connections ' 'the search emergency connection boundary'
       ;;
     application-location-limits.conf)
-      require_directive "${private_file}" 'limit_req zone=lacos_emergency_requests ' 'the emergency request boundary'
-      require_directive "${private_file}" 'limit_conn lacos_emergency_connections ' 'the emergency connection boundary'
+      require_directive "${private_file}" 'limit_req zone=lacos_application_emergency_requests ' 'the application emergency request boundary'
+      require_directive "${private_file}" 'limit_conn lacos_application_emergency_connections ' 'the application emergency connection boundary'
       ;;
   esac
 done < <(

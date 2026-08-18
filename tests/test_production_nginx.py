@@ -48,8 +48,8 @@ def test_application_routes_use_the_private_emergency_capacity_boundary():
     private_limits = (
         PRIVATE_TEMPLATES / "application-location-limits.conf.template"
     ).read_text()
-    assert "limit_req zone=lacos_emergency_requests" in private_limits
-    assert "limit_conn lacos_emergency_connections" in private_limits
+    assert "limit_req zone=lacos_application_emergency_requests" in private_limits
+    assert "limit_conn lacos_application_emergency_connections" in private_limits
     assert "error_page 503 @application_capacity_limited" in private_limits
 
 
@@ -60,14 +60,40 @@ def test_private_search_template_layers_client_and_emergency_boundaries():
     ).read_text()
 
     assert "zone=lacos_search_per_ip:${LACOS_SEARCH_ZONE_SIZE}" in zones
-    assert "zone=lacos_emergency_requests:${LACOS_EMERGENCY_REQUEST_ZONE_SIZE}" in zones
     assert (
-        "zone=lacos_emergency_connections:${LACOS_EMERGENCY_CONNECTION_ZONE_SIZE}"
+        "zone=lacos_search_emergency_requests:${LACOS_EMERGENCY_REQUEST_ZONE_SIZE}"
+        in zones
+    )
+    assert (
+        "zone=lacos_search_emergency_connections:"
+        "${LACOS_EMERGENCY_CONNECTION_ZONE_SIZE}"
+        in zones
+    )
+    assert (
+        "zone=lacos_application_emergency_requests:"
+        "${LACOS_APPLICATION_REQUEST_ZONE_SIZE}"
+        in zones
+    )
+    assert (
+        "zone=lacos_application_emergency_connections:"
+        "${LACOS_APPLICATION_CONNECTION_ZONE_SIZE}"
         in zones
     )
     assert "limit_req zone=lacos_search_per_ip" in search_limits
-    assert "limit_req zone=lacos_emergency_requests" in search_limits
-    assert "limit_conn lacos_emergency_connections" in search_limits
+    assert "limit_req zone=lacos_search_emergency_requests" in search_limits
+    assert "limit_conn lacos_search_emergency_connections" in search_limits
+
+
+def test_search_and_application_do_not_share_emergency_capacity_zones():
+    search_limits = (
+        PRIVATE_TEMPLATES / "search-location-limits.conf.template"
+    ).read_text()
+    application_limits = (
+        PRIVATE_TEMPLATES / "application-location-limits.conf.template"
+    ).read_text()
+
+    assert "lacos_application_emergency" not in search_limits
+    assert "lacos_search_emergency" not in application_limits
 
 
 def test_search_limits_do_not_trust_client_supplied_cookie_values():
@@ -230,20 +256,57 @@ def test_nginx_verifier_accepts_private_limit_files(tmp_path: Path):
     installed = tmp_path / "installed"
     private_root = tmp_path / "private"
     private_root.mkdir()
-    config = "include /etc/nginx/lacos-private/search-zones.conf;\n"
+    config = (
+        "include /etc/nginx/lacos-private/search-zones.conf;\n"
+        "include /etc/nginx/lacos-private/search-location-limits.conf;\n"
+        "include /etc/nginx/lacos-private/application-location-limits.conf;\n"
+    )
     expected.write_text(config)
     installed.write_text(config)
     (private_root / "search-zones.conf").write_text(
         "limit_req_zone $binary_remote_addr zone=lacos_search_per_ip:VALUE "
         "rate=VALUE;\n"
-        "limit_req_zone $server_name zone=lacos_emergency_requests:VALUE "
+        "limit_req_zone $server_name zone=lacos_search_emergency_requests:VALUE "
         "rate=VALUE;\n"
-        "limit_conn_zone $server_name zone=lacos_emergency_connections:VALUE;\n"
+        "limit_conn_zone $server_name zone=lacos_search_emergency_connections:VALUE;\n"
+        "limit_req_zone $server_name zone=lacos_application_emergency_requests:VALUE "
+        "rate=VALUE;\n"
+        "limit_conn_zone $server_name "
+        "zone=lacos_application_emergency_connections:VALUE;\n"
         "map $args $lacos_search_too_many_keywords { default 0; }\n"
         'map "" $lacos_search_retry_after { default VALUE; }\n'
         'map "" $lacos_capacity_retry_after { default VALUE; }\n',
+    )
+    (private_root / "search-location-limits.conf").write_text(
+        "limit_req zone=lacos_search_per_ip burst=VALUE nodelay;\n"
+        "limit_req zone=lacos_search_emergency_requests burst=VALUE nodelay;\n"
+        "limit_conn lacos_search_emergency_connections VALUE;\n",
+    )
+    (private_root / "application-location-limits.conf").write_text(
+        "limit_req zone=lacos_application_emergency_requests "
+        "burst=VALUE nodelay;\n"
+        "limit_conn lacos_application_emergency_connections VALUE;\n",
     )
 
     result = _verify(expected, installed, private_root)
 
     assert result.returncode == 0, result.stderr
+
+
+def test_nginx_verifier_rejects_shared_application_capacity_zone(tmp_path: Path):
+    expected = tmp_path / "expected"
+    installed = tmp_path / "installed"
+    private_root = tmp_path / "private"
+    private_root.mkdir()
+    config = "include /etc/nginx/lacos-private/application-location-limits.conf;\n"
+    expected.write_text(config)
+    installed.write_text(config)
+    (private_root / "application-location-limits.conf").write_text(
+        "limit_req zone=lacos_search_emergency_requests burst=VALUE nodelay;\n"
+        "limit_conn lacos_search_emergency_connections VALUE;\n",
+    )
+
+    result = _verify(expected, installed, private_root)
+
+    assert result.returncode != 0
+    assert "application emergency request boundary" in result.stderr

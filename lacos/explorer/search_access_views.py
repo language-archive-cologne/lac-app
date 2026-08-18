@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from urllib.parse import urlencode
-from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.http import HttpResponse
@@ -17,11 +16,13 @@ from lacos.common.cache_rate_limit import check_rate_limit
 from lacos.explorer.search_access import SEARCH_ACCESS_COOKIE_NAME
 from lacos.explorer.search_access import get_search_access_service
 from lacos.explorer.search_capacity import get_search_capacity_service
+from lacos.explorer.search_navigation import is_search_access_target
+from lacos.explorer.search_navigation import validated_search_back_url
 from lacos.storage.services.altcha_service import get_altcha_service
 
 
 def safe_search_target(request, candidate: str | None) -> str:
-    """Return a local faceted-search URL or the collection-search fallback."""
+    """Return a local search-flow URL or the collection-search fallback."""
     fallback = reverse("faceted_search")
     if not candidate or not url_has_allowed_host_and_scheme(
         candidate,
@@ -30,8 +31,7 @@ def safe_search_target(request, candidate: str | None) -> str:
     ):
         return fallback
 
-    allowed_paths = {fallback, reverse("bundle_faceted_search")}
-    if urlsplit(candidate).path not in allowed_paths:
+    if not is_search_access_target(request, candidate):
         return fallback
     return candidate
 
@@ -39,6 +39,45 @@ def safe_search_target(request, candidate: str | None) -> str:
 def search_access_url(request) -> str:
     target = safe_search_target(request, request.get_full_path())
     return f"{reverse('search_access')}?{urlencode({'next': target})}"
+
+
+def mark_search_response_noindex(response):
+    response.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return response
+
+
+def search_verification_required(request):
+    location = search_access_url(request)
+    if request.headers.get("HX-Request"):
+        response = HttpResponse(status=403)
+        response.headers["HX-Redirect"] = location
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    return redirect(location)
+
+
+def search_capacity_exceeded_response():
+    response = HttpResponse(
+        "Search is temporarily at capacity. Please retry shortly.\n",
+        status=503,
+        content_type="text/plain",
+    )
+    response.headers["Retry-After"] = str(settings.SEARCH_CAPACITY_RETRY_SECONDS)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+def search_rate_exceeded_response():
+    response = HttpResponse(
+        "Search requests are arriving too quickly. Please retry shortly.\n",
+        status=429,
+        content_type="text/plain",
+    )
+    response.headers["Retry-After"] = str(
+        settings.SEARCH_GRANT_RATE_WINDOW_SECONDS,
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 class SearchAccessRequiredMixin:
@@ -49,62 +88,59 @@ class SearchAccessRequiredMixin:
         protected = request.method in {"GET", "HEAD"}
         if enabled and protected:
             if not request.GET:
-                return self._mark_noindex(self.render_search_shell(request))
+                return mark_search_response_noindex(self.render_search_shell(request))
 
             access_service = get_search_access_service()
             authorization = access_service.validate(request)
             if authorization is None:
-                return self._mark_noindex(self._verification_required(request))
+                return mark_search_response_noindex(
+                    search_verification_required(request),
+                )
 
             with get_search_capacity_service().reserve() as admitted:
                 if not admitted:
-                    return self._mark_noindex(self._capacity_exceeded())
+                    return mark_search_response_noindex(
+                        search_capacity_exceeded_response(),
+                    )
                 if not access_service.admit(authorization):
-                    return self._mark_noindex(self._rate_exceeded())
+                    return mark_search_response_noindex(
+                        search_rate_exceeded_response(),
+                    )
                 response = super().dispatch(request, *args, **kwargs)
                 if hasattr(response, "render") and not response.is_rendered:
                     response.render()
-                return self._mark_noindex(response)
-        return self._mark_noindex(super().dispatch(request, *args, **kwargs))
-
-    @staticmethod
-    def _mark_noindex(response):
-        response.headers["X-Robots-Tag"] = "noindex, nofollow"
-        return response
-
-    @staticmethod
-    def _verification_required(request):
-        location = search_access_url(request)
-        if request.headers.get("HX-Request"):
-            response = HttpResponse(status=403)
-            response.headers["HX-Redirect"] = location
-            response.headers["Cache-Control"] = "no-store"
-            return response
-        return redirect(location)
-
-    @staticmethod
-    def _capacity_exceeded():
-        response = HttpResponse(
-            "Search is temporarily at capacity. Please retry shortly.\n",
-            status=503,
-            content_type="text/plain",
+                return mark_search_response_noindex(response)
+        return mark_search_response_noindex(
+            super().dispatch(request, *args, **kwargs),
         )
-        response.headers["Retry-After"] = str(settings.SEARCH_CAPACITY_RETRY_SECONDS)
-        response.headers["Cache-Control"] = "no-store"
-        return response
 
-    @staticmethod
-    def _rate_exceeded():
-        response = HttpResponse(
-            "Search requests are arriving too quickly. Please retry shortly.\n",
-            status=429,
-            content_type="text/plain",
-        )
-        response.headers["Retry-After"] = str(
-            settings.SEARCH_GRANT_RATE_WINDOW_SECONDS,
-        )
-        response.headers["Cache-Control"] = "no-store"
-        return response
+class SearchResultAccessRequiredMixin:
+    """Require a valid search grant before rendering linked result details."""
+
+    def dispatch(self, request, *args, **kwargs):
+        protected = request.method in {"GET", "HEAD"}
+        search_back = validated_search_back_url(request, request.GET.get("back"))
+        if settings.SEARCH_ALTCHA_ENABLED and protected and search_back:
+            access_service = get_search_access_service()
+            authorization = access_service.validate(request)
+            if authorization is None:
+                response = search_verification_required(request)
+                return mark_search_response_noindex(response)
+
+            with get_search_capacity_service().reserve() as admitted:
+                if not admitted:
+                    return mark_search_response_noindex(
+                        search_capacity_exceeded_response(),
+                    )
+                if not access_service.admit(authorization):
+                    return mark_search_response_noindex(
+                        search_rate_exceeded_response(),
+                    )
+                response = super().dispatch(request, *args, **kwargs)
+                if hasattr(response, "render") and not response.is_rendered:
+                    response.render()
+                return mark_search_response_noindex(response)
+        return super().dispatch(request, *args, **kwargs)
 
 
 class SearchAccessView(View):
@@ -144,7 +180,7 @@ class SearchAccessView(View):
             secure=settings.SESSION_COOKIE_SECURE,
             httponly=True,
             samesite="Lax",
-            path="/search/",
+            path="/",
         )
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Robots-Tag"] = "noindex, nofollow"

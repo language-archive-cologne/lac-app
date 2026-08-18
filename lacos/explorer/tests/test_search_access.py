@@ -175,6 +175,7 @@ def test_valid_solution_issues_bound_rate_limited_search_grant(client):
     grant = response.cookies["lacos_search_access"]
     assert grant["httponly"] is True
     assert grant["samesite"] == "Lax"
+    assert grant["path"] == "/"
     assert (
         int(grant["max-age"])
         == SEARCH_ACCESS_SETTINGS["SEARCH_ALTCHA_ACCESS_TTL_SECONDS"]
@@ -403,3 +404,19 @@ def test_access_redirect_rejects_external_next_url(client):
 
     assert response.status_code == HTTPStatus.FOUND
     assert response.url == reverse("faceted_search")
+
+
+@override_settings(**SEARCH_ACCESS_SETTINGS)
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "target",
+    [
+        "/bundles/11341/example/?back=%2Fsearch%2Fbundles%2F%3Fq%3Dtest",
+        "/collections/11341/example/?back=%2Fsearch%2F%3Fq%3Dtest",
+    ],
+)
+def test_access_page_preserves_local_search_result_detail_target(client, target):
+    response = client.get(reverse("search_access"), {"next": target})
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.context["next"] == target

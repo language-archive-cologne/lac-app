@@ -42,6 +42,7 @@ from lacos.explorer.permissions import (
 )
 from lacos.explorer.resource_actions import ensure_supported_resource_action
 from lacos.explorer.resource_actions import resource_request_log_context
+from lacos.explorer.search_access_views import SearchResultAccessRequiredMixin
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
 from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 from lacos.storage.services.file_discovery_service import FileDiscoveryService
@@ -121,6 +122,7 @@ class BundleLookupPermissionMixin(ACLPermissionMixin):
 
 
 class BundleDetailView(
+    SearchResultAccessRequiredMixin,
     MetadataExposureMixin,
     ACLPermissionMixin,
     HandleLookupMixin,

@@ -47,6 +47,7 @@ from lacos.explorer.resource_actions import resource_request_log_context
 from lacos.explorer.collection_structured_data import serialize_collection_json_ld
 from lacos.explorer.file_types import FILE_TYPE_LABELS
 from lacos.explorer.search import search_archives
+from lacos.explorer.search_access_views import SearchResultAccessRequiredMixin
 from lacos.explorer.structured_data import serialize_catalogue_json_ld
 from lacos.explorer.views.utils import build_content_disposition
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
@@ -519,6 +520,7 @@ class CollectionListView(ListView):
 
 
 class CollectionDetailView(
+    SearchResultAccessRequiredMixin,
     MetadataExposureMixin,
     CollectionACLPermissionMixin,
     HandleLookupMixin,

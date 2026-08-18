@@ -70,8 +70,9 @@ server {
     }
 
     location / {
-        # This emergency boundary also covers admission, ALTCHA challenges,
-        # bundle details, and other application routes.
+        # Keep ordinary application capacity independent from the search pool.
+        # Search-result detail requests without a valid grant are redirected
+        # before their database-backed detail rendering begins.
         include /etc/nginx/lacos-private/application-location-limits.conf;
 
         proxy_request_buffering off;
