@@ -41,6 +41,12 @@ production_nginx_config:
   rules:
     - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "main"'
   script:
+    # Private production values are not available to validation jobs. Empty
+    # includes validate the reviewed public configuration structure only.
+    - mkdir -p /etc/nginx/lacos-private
+    - printf 'map "" $lacos_search_too_many_keywords { default 0; }\nmap "" $lacos_search_retry_after { default 1; }\nmap "" $lacos_capacity_retry_after { default 1; }\n' > /etc/nginx/lacos-private/search-zones.conf
+    - printf '# CI syntax placeholder\n' > /etc/nginx/lacos-private/search-location-limits.conf
+    - printf '# CI syntax placeholder\n' > /etc/nginx/lacos-private/application-location-limits.conf
     - cp config/nginx/lacos.uni-koeln.de /etc/nginx/conf.d/default.conf
     - nginx -t
 

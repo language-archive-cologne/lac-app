@@ -5,22 +5,17 @@ from django.shortcuts import render
 from django.views.generic import ListView
 
 from lacos.blam.models import Bundle
-from lacos.explorer.advanced_search import (
-    BUNDLE_FIELD_DEFINITIONS,
-    apply_field_scoped_search,
-)
+from lacos.explorer.advanced_search import BUNDLE_FIELD_DEFINITIONS
+from lacos.explorer.advanced_search import apply_field_scoped_search
 from lacos.explorer.facet_querysets import bundle_facet_queryset
-from lacos.explorer.facets import (
-    BUNDLE_FACET_CACHE_KEY,
-    BUNDLE_FACET_DEFINITIONS,
-    FacetedSearchResult,
-    FacetService,
-)
+from lacos.explorer.facets import BUNDLE_FACET_CACHE_KEY
+from lacos.explorer.facets import BUNDLE_FACET_DEFINITIONS
+from lacos.explorer.facets import FacetedSearchResult
+from lacos.explorer.facets import FacetService
 from lacos.explorer.match_reasons import attach_bundle_match_reasons
-from lacos.explorer.search_safeguards import (
-    CountlessPaginationMixin,
-    SearchRequestBudgetMixin,
-)
+from lacos.explorer.search_access_views import SearchAccessRequiredMixin
+from lacos.explorer.search_safeguards import CountlessPaginationMixin
+from lacos.explorer.search_safeguards import SearchRequestBudgetMixin
 from lacos.explorer.text_search import apply_text_search
 
 BUNDLE_SORT_ALLOWLIST = {
@@ -31,6 +26,7 @@ BUNDLE_SORT_ALLOWLIST = {
 
 
 class BundleFacetedSearchView(
+    SearchAccessRequiredMixin,
     SearchRequestBudgetMixin,
     CountlessPaginationMixin,
     ListView,

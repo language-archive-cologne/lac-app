@@ -5,55 +5,15 @@ import re
 from typing import Optional
 
 from django.conf import settings
-from django.core.cache import cache
 
+from lacos.blam.models.bundle.bundle_repository import Bundle
+from lacos.common.cache_rate_limit import check_rate_limit as check_rate_limit
+from lacos.common.request_utils import get_client_ip
 from lacos.storage.models.s3_resource_location import S3ResourceLocation
 from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
 from lacos.storage.services.exposure_policy_service import ExposurePolicyService
-from lacos.blam.models.bundle.bundle_repository import Bundle
-from lacos.common.request_utils import get_client_ip
 
 logger = logging.getLogger(__name__)
-
-
-def check_rate_limit(request, key_prefix: str, max_requests: int, window_seconds: int) -> bool:
-    """Check if request is within rate limit.
-
-    Uses atomic cache operations to prevent race conditions under concurrent requests.
-
-    Args:
-        request: Django request object
-        key_prefix: Cache key prefix for this rate limit
-        max_requests: Maximum requests allowed in window
-        window_seconds: Time window in seconds
-
-    Returns:
-        True if request is allowed, False if rate limited
-    """
-    client_ip = get_client_ip(request)
-    cache_key = f"ratelimit:{key_prefix}:{client_ip}"
-
-    try:
-        # Try to increment existing key atomically
-        new_count = cache.incr(cache_key)
-    except ValueError:
-        # Key doesn't exist, create it atomically with add()
-        # add() only sets if key doesn't exist, preventing race conditions
-        added = cache.add(cache_key, 1, timeout=window_seconds)
-        if added:
-            new_count = 1
-        else:
-            # Another request created the key between our incr and add
-            # Try increment again
-            try:
-                new_count = cache.incr(cache_key)
-            except ValueError:
-                # Extremely rare: key expired between add failure and this incr
-                # Allow request but log for monitoring
-                logger.warning("Rate limit cache race", extra={"cache_key": cache_key})
-                return True
-
-    return new_count <= max_requests
 
 
 def validate_bucket_key(bucket: str, key: str) -> Optional[str]:

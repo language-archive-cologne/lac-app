@@ -1,20 +1,20 @@
 """Faceted search view for collection discovery."""
 
-from django.db.models import Count, Min
+from django.db.models import Count
+from django.db.models import Min
 from django.shortcuts import render
 from django.views.generic import ListView
 
 from lacos.blam.models import Collection
-from lacos.explorer.advanced_search import (
-    COLLECTION_FIELD_DEFINITIONS,
-    apply_field_scoped_search,
-)
+from lacos.explorer.advanced_search import COLLECTION_FIELD_DEFINITIONS
+from lacos.explorer.advanced_search import apply_field_scoped_search
 from lacos.explorer.facet_querysets import collection_facet_queryset
-from lacos.explorer.facets import FACET_CACHE_KEY, FacetedSearchResult, FacetService
-from lacos.explorer.search_safeguards import (
-    CountlessPaginationMixin,
-    SearchRequestBudgetMixin,
-)
+from lacos.explorer.facets import FACET_CACHE_KEY
+from lacos.explorer.facets import FacetedSearchResult
+from lacos.explorer.facets import FacetService
+from lacos.explorer.search_access_views import SearchAccessRequiredMixin
+from lacos.explorer.search_safeguards import CountlessPaginationMixin
+from lacos.explorer.search_safeguards import SearchRequestBudgetMixin
 from lacos.explorer.text_search import apply_text_search
 
 SORT_ALLOWLIST = {
@@ -24,7 +24,12 @@ SORT_ALLOWLIST = {
 }
 
 
-class FacetedSearchView(SearchRequestBudgetMixin, CountlessPaginationMixin, ListView):
+class FacetedSearchView(
+    SearchAccessRequiredMixin,
+    SearchRequestBudgetMixin,
+    CountlessPaginationMixin,
+    ListView,
+):
     model = Collection
     template_name = "faceted_search.html"
     context_object_name = "collections"

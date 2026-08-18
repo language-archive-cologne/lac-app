@@ -234,13 +234,11 @@ def test_deploy_refreshes_explorer_facets_after_django_is_ready():
     assert deploy.index(warm_command) > deploy.index("--wait-timeout 120")
 
 
-def test_deploy_warms_search_pages_after_facets():
+def test_deploy_does_not_warm_admission_gated_search_pages():
     deploy = DEPLOY.read_text()
-    facet_command = "python manage.py warm_explorer_facets --refresh"
     page_command = "python /app/scripts/deploy/warm_pages.py"
 
-    assert page_command in deploy
-    assert deploy.index(page_command) > deploy.index(facet_command)
+    assert page_command not in deploy
 
 
 def test_full_deploy_does_not_build_or_recreate_dependencies():

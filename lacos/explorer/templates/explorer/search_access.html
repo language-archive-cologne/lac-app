@@ -1,0 +1,48 @@
+{% extends "explorer_base.html" %}
+{% load i18n %}
+
+{% block title %}{% translate "Verify search access" %} - {{ block.super }}{% endblock title %}
+
+{% block page_title %}{% endblock page_title %}
+
+{% block explorer_content %}
+  <div class="mx-auto max-w-xl py-8">
+    <div class="card border border-base-300 bg-base-100 shadow-sm">
+      <div class="card-body gap-5">
+        <div>
+          <h1 class="card-title text-2xl">{% translate "Verify search access" %}</h1>
+          <p class="mt-2 text-base-content/70">
+            {% blocktranslate trimmed with request_budget=search_request_budget access_minutes=search_access_minutes %}
+              Automated traffic is putting the archive search under heavy load. Complete this private proof-of-work check to unlock {{ request_budget }} searches for up to {{ access_minutes }} minutes.
+            {% endblocktranslate %}
+          </p>
+        </div>
+
+        {% if verification_failed %}
+          <div role="alert" class="alert alert-error">
+            <span>{% translate "Verification failed. Please complete a new challenge and try again." %}</span>
+          </div>
+        {% endif %}
+
+        {% if rate_limited %}
+          <div role="alert" class="alert alert-warning">
+            <span>{% translate "Too many verification attempts. Please wait a minute and try again." %}</span>
+          </div>
+        {% endif %}
+
+        <form method="post" action="{% url 'search_access' %}" class="space-y-5">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ next }}">
+          <altcha-widget name="altcha" challengeurl="{% url 'storage:altcha_challenge' %}"></altcha-widget>
+          <button type="submit" class="btn btn-primary w-full" {% if rate_limited %}disabled{% endif %}>
+            {% translate "Continue to search" %}
+          </button>
+        </form>
+
+        <p class="text-xs text-base-content/50">
+          {% translate "The challenge runs locally in your browser and does not use behavioral tracking." %}
+        </p>
+      </div>
+    </div>
+  </div>
+{% endblock explorer_content %}

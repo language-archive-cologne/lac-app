@@ -24,6 +24,7 @@ from lacos.explorer.views import (
     legacy_bundle_by_handle,
     legacy_collection_by_handle,
 )
+from lacos.explorer.search_access_views import SearchAccessView
 from lacos.users.views import disabled_account_management_view, login_view
 
 urlpatterns = [
@@ -37,6 +38,11 @@ urlpatterns = [
         "search/",
         FacetedSearchView.as_view(),
         name="faceted_search",
+    ),
+    path(
+        "search-access/",
+        SearchAccessView.as_view(),
+        name="search_access",
     ),
     path(
         "search/bundles/",

@@ -141,8 +141,4 @@ log "Refreshing Explorer facet caches"
 docker compose -f "${compose_file}" exec -T django \
   python manage.py warm_explorer_facets --refresh </dev/null
 
-log "Warming Explorer search pages"
-docker compose -f "${compose_file}" exec -T django \
-  python /app/scripts/deploy/warm_pages.py </dev/null
-
 log "Deployed ${commit}"

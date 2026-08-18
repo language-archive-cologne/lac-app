@@ -36,5 +36,9 @@ TEMPLATES[0]["OPTIONS"]["debug"] = True  # type: ignore[index]
 # ------------------------------------------------------------------------------
 # https://docs.djangoproject.com/en/dev/ref/settings/#media-url
 MEDIA_URL = "http://media.testserver/"
+
+# Existing search tests focus on query behavior. Dedicated integration tests
+# enable the admission gate explicitly.
+SEARCH_ALTCHA_ENABLED = False
 # Your stuff...
 # ------------------------------------------------------------------------------

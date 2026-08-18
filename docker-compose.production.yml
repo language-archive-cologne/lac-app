@@ -63,6 +63,9 @@ services:
       LAC_MEDIA_TMP_DIR: "/app/.tmp/media-processing"
       CACHE_REDIS_URL: "redis://cache:6379/0"
       DJANGO_HEALTHCHECK_HOST: "lacos.uni-koeln.de"
+      # Django is bound to host loopback; only the internal Docker gateway can
+      # reach it through the host Nginx reverse proxy.
+      TRUSTED_PROXY_CIDRS: "172.16.0.0/12"
       # Allow Matomo analytics (matomo.js + tracking beacons) through the CSP.
       CSP_EXTRA_SCRIPT_ORIGINS: "https://matomo.rrz.uni-koeln.de"
     ports:

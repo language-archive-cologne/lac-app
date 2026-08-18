@@ -1,0 +1,17 @@
+# Render this file outside version control with private production values.
+limit_req_zone $binary_remote_addr zone=lacos_search_per_ip:${LACOS_SEARCH_ZONE_SIZE} rate=${LACOS_SEARCH_PER_IP_RATE};
+limit_req_zone $server_name zone=lacos_emergency_requests:${LACOS_EMERGENCY_REQUEST_ZONE_SIZE} rate=${LACOS_EMERGENCY_REQUEST_RATE};
+limit_conn_zone $server_name zone=lacos_emergency_connections:${LACOS_EMERGENCY_CONNECTION_ZONE_SIZE};
+
+map $args $lacos_search_too_many_keywords {
+    default 0;
+    ${LACOS_EXCESSIVE_KEYWORD_PATTERN} 1;
+}
+
+map "" $lacos_search_retry_after {
+    default ${LACOS_SEARCH_RETRY_AFTER};
+}
+
+map "" $lacos_capacity_retry_after {
+    default ${LACOS_CAPACITY_RETRY_AFTER};
+}

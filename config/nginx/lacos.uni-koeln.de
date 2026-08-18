@@ -1,18 +1,6 @@
-# Restore real client addresses before applying the per-client boundary.
-limit_req_zone $binary_remote_addr zone=lacos_search_per_ip:10m rate=60r/m;
-
-# Bound aggregate work even when a crawler distributes requests across IPs.
-# The application rejects excessive facet complexity and runs accepted queries
-# within a database deadline, so this boundary can absorb normal traffic bursts.
-limit_req_zone $server_name zone=lacos_search_global:1m rate=600r/m;
-limit_conn_zone $server_name zone=lacos_search_concurrency:1m;
-
-# Reject the dominant abusive shape before it consumes a Gunicorn connection.
-# The application applies the same maximum of four selected values per facet.
-map $args $lacos_search_too_many_keywords {
-    default 0;
-    ~*keyword=.*keyword=.*keyword=.*keyword=.*keyword= 1;
-}
+# Rate, burst, concurrency, retry, and excessive-query values are managed on the
+# host and intentionally excluded from version control.
+include /etc/nginx/lacos-private/search-zones.conf;
 
 # Declared crawlers are blocked from faceted search entirely. This complements
 # the request limits; clients that impersonate browsers still hit the limits.
@@ -50,15 +38,10 @@ server {
         }
 
         if ($lacos_search_too_many_keywords) {
-            return 422 "Select no more than four values per search facet.\n";
+            return 422 "Select fewer values per search facet.\n";
         }
 
-        limit_req zone=lacos_search_global burst=100 nodelay;
-        limit_req zone=lacos_search_per_ip burst=20 nodelay;
-        limit_req_status 429;
-
-        limit_conn lacos_search_concurrency 20;
-        limit_conn_status 429;
+        include /etc/nginx/lacos-private/search-location-limits.conf;
 
         error_page 429 @search_rate_limited;
 
@@ -75,18 +58,22 @@ server {
 
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-For   $remote_addr;
         proxy_set_header Connection        "";
         proxy_set_header X-Forwarded-Proto https;
     }
 
     location @search_rate_limited {
         default_type text/plain;
-        add_header Retry-After 10 always;
+        add_header Retry-After $lacos_search_retry_after always;
         return 429 "Too many search requests - please wait a few seconds and try again.\n";
     }
 
     location / {
+        # This emergency boundary also covers admission, ALTCHA challenges,
+        # bundle details, and other application routes.
+        include /etc/nginx/lacos-private/application-location-limits.conf;
+
         proxy_request_buffering off;
         proxy_buffering off;
         proxy_http_version 1.1;
@@ -100,9 +87,15 @@ server {
 
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-For   $remote_addr;
         proxy_set_header Connection        "";
         proxy_set_header X-Forwarded-Proto https;
+    }
+
+    location @application_capacity_limited {
+        default_type text/plain;
+        add_header Retry-After $lacos_capacity_retry_after always;
+        return 503 "The application is temporarily at capacity. Please retry shortly.\n";
     }
 
     location /map-assets/ {

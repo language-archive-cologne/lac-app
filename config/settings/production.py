@@ -1,10 +1,37 @@
 # ruff: noqa: E501
+from django.core.exceptions import ImproperlyConfigured
+
 from .base import *  # noqa: F403
 from .base import DATABASES
 from .base import INSTALLED_APPS
 from .base import REDIS_URL
 from .base import env
 from .database import configure_database_connections
+
+# Faceted-search safeguards are intentionally required from the private
+# production environment. Operational thresholds must not live in Git.
+SEARCH_ALTCHA_ENABLED = env.bool("SEARCH_ALTCHA_ENABLED")
+SEARCH_ALTCHA_ACCESS_TTL_SECONDS = env.int("SEARCH_ALTCHA_ACCESS_TTL_SECONDS")
+SEARCH_ALTCHA_REQUEST_BUDGET = env.int("SEARCH_ALTCHA_REQUEST_BUDGET")
+SEARCH_ALTCHA_VERIFY_RATE_LIMIT = env.int("SEARCH_ALTCHA_VERIFY_RATE_LIMIT")
+SEARCH_ALTCHA_VERIFY_RATE_WINDOW_SECONDS = env.int("SEARCH_ALTCHA_VERIFY_RATE_WINDOW_SECONDS")
+SEARCH_MAX_CONCURRENT_REQUESTS = env.int("SEARCH_MAX_CONCURRENT_REQUESTS")
+SEARCH_CAPACITY_SLOT_TIMEOUT_SECONDS = env.int("SEARCH_CAPACITY_SLOT_TIMEOUT_SECONDS")
+SEARCH_CAPACITY_RETRY_SECONDS = env.int("SEARCH_CAPACITY_RETRY_SECONDS")
+
+_PRIVATE_SEARCH_LIMITS = {
+    "SEARCH_ALTCHA_ACCESS_TTL_SECONDS": SEARCH_ALTCHA_ACCESS_TTL_SECONDS,
+    "SEARCH_ALTCHA_REQUEST_BUDGET": SEARCH_ALTCHA_REQUEST_BUDGET,
+    "SEARCH_ALTCHA_VERIFY_RATE_LIMIT": SEARCH_ALTCHA_VERIFY_RATE_LIMIT,
+    "SEARCH_ALTCHA_VERIFY_RATE_WINDOW_SECONDS": SEARCH_ALTCHA_VERIFY_RATE_WINDOW_SECONDS,
+    "SEARCH_MAX_CONCURRENT_REQUESTS": SEARCH_MAX_CONCURRENT_REQUESTS,
+    "SEARCH_CAPACITY_SLOT_TIMEOUT_SECONDS": SEARCH_CAPACITY_SLOT_TIMEOUT_SECONDS,
+    "SEARCH_CAPACITY_RETRY_SECONDS": SEARCH_CAPACITY_RETRY_SECONDS,
+}
+for _setting_name, _setting_value in _PRIVATE_SEARCH_LIMITS.items():
+    if _setting_value < 1:
+        message = f"{_setting_name} must be a positive integer"
+        raise ImproperlyConfigured(message)
 
 # GENERAL
 # ------------------------------------------------------------------------------
