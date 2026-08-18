@@ -162,10 +162,10 @@ def test_search_access_and_search_result_navigation_use_search_pool():
         "\n    }",
         1,
     )[0]
-    navigation_location = config.split("location @search_navigation {", 1)[1].split(
-        "\n    }",
+    navigation_location = config.split(
+        "location = /__lacos_search_navigation {",
         1,
-    )[0]
+    )[1].split("\n    }", 1)[0]
     application_location = config.split("location / {", 1)[1].split(
         "\n    }",
         1,
@@ -173,12 +173,16 @@ def test_search_access_and_search_result_navigation_use_search_pool():
 
     assert "map $arg_back $lacos_search_navigation" in config
     assert "if ($lacos_search_navigation)" in application_location
+    assert "rewrite ^ /__lacos_search_navigation last;" in application_location
+    assert "return 418" not in config
+    assert "internal;" in navigation_location
     for location in (access_location, navigation_location):
         assert (
             "include /etc/nginx/lacos-private/search-location-limits.conf;"
             in location
         )
-        assert "proxy_pass http://127.0.0.1:8104;" in location
+        assert "proxy_pass http://127.0.0.1:8104" in location
+    assert "proxy_pass http://127.0.0.1:8104$request_uri;" in navigation_location
 
 
 def test_search_limits_use_the_restored_real_client_address():

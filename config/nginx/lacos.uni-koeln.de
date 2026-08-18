@@ -38,8 +38,6 @@ server {
     set_real_ip_from 134.95.126.48/29;
     real_ip_header   X-Forwarded-For;
 
-    error_page 418 = @search_navigation;
-
     # Covers both /search/ and /search/bundles/ with one policy. Requests to
     # /search without a slash are redirected before they can run a search.
     location ^~ /search/ {
@@ -102,7 +100,9 @@ server {
         proxy_set_header X-Forwarded-Proto https;
     }
 
-    location @search_navigation {
+    location = /__lacos_search_navigation {
+        internal;
+
         include /etc/nginx/lacos-private/search-location-limits.conf;
 
         error_page 429 @search_rate_limited;
@@ -116,7 +116,7 @@ server {
         proxy_send_timeout 35s;
         proxy_read_timeout 35s;
 
-        proxy_pass http://127.0.0.1:8104;
+        proxy_pass http://127.0.0.1:8104$request_uri;
 
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;
@@ -130,7 +130,7 @@ server {
         # Search-result detail requests without a valid grant are redirected
         # before their database-backed detail rendering begins.
         if ($lacos_search_navigation) {
-            return 418;
+            rewrite ^ /__lacos_search_navigation last;
         }
 
         include /etc/nginx/lacos-private/application-location-limits.conf;
