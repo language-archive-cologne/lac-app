@@ -142,6 +142,10 @@ else
     huey </dev/null
 fi
 
+log "Ensuring the public search artifact directory is worker-writable"
+docker compose -f "${compose_file}" exec -T --user root django \
+  install -d -o 1000 -g 1000 -m 0750 /app/.tmp/public-search </dev/null
+
 log "Refreshing derived discovery projections when enabled"
 docker compose -f "${compose_file}" exec -T django \
   python manage.py refresh_discovery_search --if-enabled --force </dev/null

@@ -49,7 +49,7 @@ services:
       DJANGO_HEALTHCHECK_HOST: "dev.lacos.uni-koeln.de"
       CACHE_REDIS_URL: "redis://cache:6379/0"
       PUBLIC_SEARCH_INDEX_ENABLED: "true"
-      PUBLIC_SEARCH_INDEX_PATH: "/app/.tmp/public-search-index.json"
+      PUBLIC_SEARCH_INDEX_PATH: "/app/.tmp/public-search/public-search-index.json"
       DISCOVERY_REFRESH_ENABLED: "true"
       DISCOVERY_REFRESH_DEBOUNCE_SECONDS: "30"
     ports:
@@ -207,7 +207,7 @@ services:
       LAC_MEDIA_TMP_DIR: "/app/.tmp/media-processing"
       CACHE_REDIS_URL: "redis://cache:6379/0"
       PUBLIC_SEARCH_INDEX_ENABLED: "true"
-      PUBLIC_SEARCH_INDEX_PATH: "/app/.tmp/public-search-index.json"
+      PUBLIC_SEARCH_INDEX_PATH: "/app/.tmp/public-search/public-search-index.json"
       DISCOVERY_REFRESH_ENABLED: "true"
       DISCOVERY_REFRESH_DEBOUNCE_SECONDS: "30"
     command: /bin/sh -c "python manage.py run_huey"

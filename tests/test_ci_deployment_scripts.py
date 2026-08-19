@@ -18,6 +18,7 @@ DEPLOY = REPO_ROOT / "scripts" / "deploy" / "deploy.sh"
 SSH_FILE_MODE = 0o600
 PRODUCTION_RESOURCE_GROUP_JOBS = 3
 NO_DEPS_COMMAND_COUNT = 4
+DEV_PUBLIC_INDEX_CONSUMERS = 2
 
 
 def _run(
@@ -228,15 +229,30 @@ def test_gitlab_pipeline_uses_hardened_serialized_commit_deployments():
 
 def test_deploy_refreshes_explorer_facets_after_django_is_ready():
     deploy = DEPLOY.read_text()
+    index_directory_command = (
+        "install -d -o 1000 -g 1000 -m 0750 /app/.tmp/public-search"
+    )
     index_command = (
         "python manage.py refresh_discovery_search --if-enabled --force"
     )
     warm_command = "python manage.py warm_explorer_facets --refresh"
 
+    assert index_directory_command in deploy
     assert index_command in deploy
     assert warm_command in deploy
+    assert deploy.index(index_directory_command) < deploy.index(index_command)
     assert deploy.index(index_command) < deploy.index(warm_command)
     assert deploy.index(warm_command) > deploy.index("--wait-timeout 120")
+
+
+def test_dev_web_and_worker_share_the_writable_public_index_path():
+    compose = (REPO_ROOT / "docker-compose.dev.yml").read_text()
+    index_path = "/app/.tmp/public-search/public-search-index.json"
+
+    assert (
+        compose.count(f'PUBLIC_SEARCH_INDEX_PATH: "{index_path}"')
+        == DEV_PUBLIC_INDEX_CONSUMERS
+    )
 
 
 def test_deploy_does_not_warm_admission_gated_search_pages():
