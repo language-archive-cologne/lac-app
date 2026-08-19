@@ -6,6 +6,7 @@ import pytest
 from django.http import QueryDict
 
 from lacos.explorer.facets import BUNDLE_FACET_DEFINITIONS
+from lacos.explorer.facets import FACET_MAX_VALUES
 from lacos.explorer.facets import FacetSelectionLimitError
 from lacos.explorer.public_search.query import PublicSearchQueryEngine
 
@@ -146,3 +147,27 @@ def test_public_search_query_rejects_excessive_selection_count():
 
     with pytest.raises(FacetSelectionLimitError, match="language"):
         _engine().search(_params(values))
+
+
+def test_public_search_caps_rendered_facet_values_and_keeps_selection():
+    records = [
+        _record(
+            f"bundle-{index}",
+            f"Bundle {index}",
+            language=("aka", "Akan"),
+            country="Ghana",
+            keywords=[f"keyword-{index}"],
+        )
+        for index in range(FACET_MAX_VALUES + 5)
+    ]
+    selected = f"keyword-{FACET_MAX_VALUES + 4}"
+    result = PublicSearchQueryEngine(
+        records=records,
+        definitions=BUNDLE_FACET_DEFINITIONS,
+    ).search(_params(f"keyword={selected}"))
+
+    keyword_facet = next(facet for facet in result.facets if facet.name == "keyword")
+    assert keyword_facet.truncated is True
+    assert len(keyword_facet.values) == FACET_MAX_VALUES
+    assert keyword_facet.values[0].value == selected
+    assert keyword_facet.values[0].selected is True

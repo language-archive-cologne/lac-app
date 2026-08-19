@@ -264,7 +264,7 @@ class PublicSearchQueryEngine:
                         item.label.casefold(),
                     ),
                 )
-            truncated = not definition.show_all and len(values) > FACET_MAX_VALUES
+            truncated = len(values) > FACET_MAX_VALUES
             if truncated:
                 chosen = [value for value in values if value.selected]
                 remaining = [value for value in values if not value.selected]
