@@ -228,9 +228,14 @@ def test_gitlab_pipeline_uses_hardened_serialized_commit_deployments():
 
 def test_deploy_refreshes_explorer_facets_after_django_is_ready():
     deploy = DEPLOY.read_text()
+    index_command = (
+        "python manage.py refresh_discovery_search --if-enabled --force"
+    )
     warm_command = "python manage.py warm_explorer_facets --refresh"
 
+    assert index_command in deploy
     assert warm_command in deploy
+    assert deploy.index(index_command) < deploy.index(warm_command)
     assert deploy.index(warm_command) > deploy.index("--wait-timeout 120")
 
 

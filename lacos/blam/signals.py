@@ -13,6 +13,7 @@ from .models.collection.collection_general_info import CollectionGeneralInfo, Co
 from .models.collection.collection_publication_info import CollectionPublicationInfo
 from lacos.storage.models import S3ResourceLocation
 from lacos.storage.models.acl_permissions import ACLPermissions
+from lacos.explorer.models import BundleFileTypeFacet
 from django.contrib.contenttypes.models import ContentType
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,9 @@ def _invalidate_explorer_caches(*facet_cache_keys):
     invalidate_map_markers_cache()
     cache.delete("explorer:language_count")
     FacetService.invalidate_cache(*facet_cache_keys)
+    from lacos.explorer.discovery_refresh import request_discovery_refresh
+
+    request_discovery_refresh()
     logger.debug("Explorer caches invalidated")
 
 
@@ -377,3 +381,13 @@ def invalidate_cache_on_bundle_licenses_change(sender, instance, **kwargs):
     """Invalidate explorer caches when bundle licenses change."""
     if _is_post_m2m_action(kwargs.get("action")):
         _invalidate_explorer_caches(_bundle_facet_cache_key())
+
+
+@receiver(post_save, sender=BundleFileTypeFacet)
+@receiver(post_delete, sender=BundleFileTypeFacet)
+def invalidate_cache_on_bundle_file_type_change(sender, instance, **kwargs):
+    """Refresh collection and bundle discovery after file-type projection changes."""
+    _invalidate_explorer_caches(
+        _collection_facet_cache_key(),
+        _bundle_facet_cache_key(),
+    )

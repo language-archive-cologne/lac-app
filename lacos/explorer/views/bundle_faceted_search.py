@@ -13,6 +13,8 @@ from lacos.explorer.facets import BUNDLE_FACET_DEFINITIONS
 from lacos.explorer.facets import FacetedSearchResult
 from lacos.explorer.facets import FacetService
 from lacos.explorer.match_reasons import attach_bundle_match_reasons
+from lacos.explorer.public_search.service import is_anonymous_public_search
+from lacos.explorer.public_search.service import search_public_index
 from lacos.explorer.search_access_views import SearchAccessRequiredMixin
 from lacos.explorer.search_safeguards import CountlessPaginationMixin
 from lacos.explorer.search_safeguards import SearchRequestBudgetMixin
@@ -41,8 +43,15 @@ class BundleFacetedSearchView(
     _search_in: list[str] = []
     search_shell_facet_cache_key = BUNDLE_FACET_CACHE_KEY
     search_shell_field_definitions = BUNDLE_FIELD_DEFINITIONS
+    public_search_scope = "bundles"
 
     def get_queryset(self):
+        if is_anonymous_public_search(self.request):
+            result = search_public_index("bundles", self.request.GET)
+            self._faceted_result = result
+            self._search_in = result.active_search_in
+            return result.records
+
         base_qs = bundle_facet_queryset()
 
         search_query = self.request.GET.get("q", "").strip()
@@ -53,14 +62,17 @@ class BundleFacetedSearchView(
         if search_query:
             if self._search_in:
                 base_qs = apply_field_scoped_search(
-                    base_qs, search_query, self._search_in, BUNDLE_FIELD_DEFINITIONS
+                    base_qs,
+                    search_query,
+                    self._search_in,
+                    BUNDLE_FIELD_DEFINITIONS,
                 )
             else:
                 base_qs = apply_text_search(base_qs, search_query)
 
         facet_cache_key = BUNDLE_FACET_CACHE_KEY if not search_query else None
         self._faceted_result = FacetService(
-            definitions=BUNDLE_FACET_DEFINITIONS
+            definitions=BUNDLE_FACET_DEFINITIONS,
         ).search(
             self.request.GET,
             base_qs,
@@ -80,12 +92,13 @@ class BundleFacetedSearchView(
         elif sort_key == "collection":
             qs = qs.annotate(
                 collection_identifier=Min(
-                    "structural_info__is_member_of_collection__identifier"
+                    "structural_info__is_member_of_collection__identifier",
                 ),
             )
 
         sort_field = BUNDLE_SORT_ALLOWLIST.get(
-            sort_key, "general_info__display_title"
+            sort_key,
+            "general_info__display_title",
         )
         prefix = "-" if order == "desc" else ""
         qs = qs.order_by(
@@ -94,7 +107,7 @@ class BundleFacetedSearchView(
             "pk",
         )
 
-        qs = qs.prefetch_related(
+        return qs.prefetch_related(
             "general_info",
             "general_info__keywords",
             "general_info__object_languages",
@@ -107,8 +120,6 @@ class BundleFacetedSearchView(
             "publication_info__contributors__contributor_name",
         )
 
-        return qs
-
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         if self._faceted_result:
@@ -116,8 +127,14 @@ class BundleFacetedSearchView(
             context["active_filters"] = self._faceted_result.active_filters
             context["has_active_filters"] = bool(self._faceted_result.active_filters)
         page = context.get("page_obj")
-        context["total_count"] = page.known_count if page else 0
-        context["total_count_is_lower_bound"] = bool(page and page.has_next())
+        public_index = is_anonymous_public_search(self.request)
+        context["public_search_index"] = public_index
+        if public_index and self._faceted_result:
+            context["total_count"] = self._faceted_result.total_count
+            context["total_count_is_lower_bound"] = False
+        else:
+            context["total_count"] = page.known_count if page else 0
+            context["total_count_is_lower_bound"] = bool(page and page.has_next())
         context["search_query"] = self.request.GET.get("q", "")
         context["current_sort"] = self.request.GET.get("sort", "name")
         context["current_order"] = self.request.GET.get("order", "asc")
@@ -142,4 +159,7 @@ class BundleFacetedSearchView(
             response = super().render_to_response(context, **kwargs)
         if self._faceted_result:
             response.headers["Server-Timing"] = self._faceted_result.server_timing
+        if is_anonymous_public_search(self.request):
+            response.headers["X-Search-Backend"] = "public-index"
+            response.headers["X-Robots-Tag"] = "noindex, nofollow"
         return response

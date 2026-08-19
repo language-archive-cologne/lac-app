@@ -169,6 +169,10 @@ def test_full_deploy_resets_to_the_exact_pipeline_commit(deployment_repo):
         ),
         (
             "compose -f docker-compose.dev.yml exec -T django python manage.py "
+            "refresh_discovery_search --if-enabled --force"
+        ),
+        (
+            "compose -f docker-compose.dev.yml exec -T django python manage.py "
             "warm_explorer_facets --refresh"
         ),
     ]
@@ -196,6 +200,10 @@ def test_fast_deploy_preserves_the_controlled_restart_order(deployment_repo):
         (
             "compose -f docker-compose.dev.yml up -d --no-build --no-deps "
             "--wait --wait-timeout 120 huey"
+        ),
+        (
+            "compose -f docker-compose.dev.yml exec -T django python manage.py "
+            "refresh_discovery_search --if-enabled --force"
         ),
         (
             "compose -f docker-compose.dev.yml exec -T django python manage.py "
@@ -229,6 +237,10 @@ def test_streamed_deploy_prevents_docker_from_consuming_the_script(
         (
             "compose -f docker-compose.dev.yml up -d --no-build --no-deps "
             "--wait --wait-timeout 120 huey"
+        ),
+        (
+            "compose -f docker-compose.dev.yml exec -T django python manage.py "
+            "refresh_discovery_search --if-enabled --force"
         ),
         (
             "compose -f docker-compose.dev.yml exec -T django python manage.py "

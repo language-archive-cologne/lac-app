@@ -454,6 +454,24 @@ SEARCH_MAX_CONCURRENT_REQUESTS = env.int("SEARCH_MAX_CONCURRENT_REQUESTS", defau
 SEARCH_CAPACITY_SLOT_TIMEOUT_SECONDS = env.int("SEARCH_CAPACITY_SLOT_TIMEOUT_SECONDS", default=0)
 SEARCH_CAPACITY_RETRY_SECONDS = env.int("SEARCH_CAPACITY_RETRY_SECONDS", default=0)
 
+# Static anonymous faceted-search index. Development enables this explicitly;
+# production remains on the guarded database path until the dev rollout is
+# validated and promoted.
+PUBLIC_SEARCH_INDEX_ENABLED = env.bool("PUBLIC_SEARCH_INDEX_ENABLED", default=False)
+PUBLIC_SEARCH_INDEX_PATH = env(
+    "PUBLIC_SEARCH_INDEX_PATH",
+    default=str(BASE_DIR / ".tmp" / "public-search-index.json"),
+)
+PUBLIC_SEARCH_INDEX_CACHE_SECONDS = env.int(
+    "PUBLIC_SEARCH_INDEX_CACHE_SECONDS",
+    default=300,
+)
+DISCOVERY_REFRESH_ENABLED = env.bool("DISCOVERY_REFRESH_ENABLED", default=False)
+DISCOVERY_REFRESH_DEBOUNCE_SECONDS = env.int(
+    "DISCOVERY_REFRESH_DEBOUNCE_SECONDS",
+    default=30,
+)
+
 # ACL Configuration
 # ------------------------------------------------------------------------------
 ACL_ENFORCEMENT_ENABLED = env.bool("ACL_ENFORCEMENT_ENABLED", default=True)

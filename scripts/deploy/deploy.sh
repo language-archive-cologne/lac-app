@@ -142,6 +142,10 @@ else
     huey </dev/null
 fi
 
+log "Refreshing derived discovery projections when enabled"
+docker compose -f "${compose_file}" exec -T django \
+  python manage.py refresh_discovery_search --if-enabled --force </dev/null
+
 log "Refreshing Explorer facet caches"
 docker compose -f "${compose_file}" exec -T django \
   python manage.py warm_explorer_facets --refresh </dev/null

@@ -253,23 +253,19 @@ def test_collection_list_htmx_pagination_returns_table_partial(client, settings)
 
 
 @pytest.mark.django_db
-def test_collection_list_full_page_uses_globe_style_variant(client):
+def test_collection_list_full_page_loads_globe_map_module(client):
     _build_collection_graph(1)
 
     response = client.get(reverse("explorer:collection_list"))
 
     assert response.status_code == 200
     page = response.content.decode("utf-8")
-    assert "const GLOBE_STYLE_URL = STYLE_URL + (STYLE_URL.includes('?') ? '&' : '?') + 'projection=globe';" in page
-    assert "const GLOBE_DARK_STYLE_URL = DARK_STYLE_URL + (DARK_STYLE_URL.includes('?') ? '&' : '?') + 'projection=globe';" in page
-    assert "style: isDark ? GLOBE_DARK_STYLE_URL : GLOBE_STYLE_URL," in page
-    assert "setProjection({ type: 'globe' })" not in page
+    assert 'data-style-url="/maps/style/natural-earth-c.json"' in page
+    assert 'type="module" src="/static/js/src/collections-map.js"' in page
     assert 'rel="preload" href="/static/vendor/js/maplibre-gl/maplibre-gl.css" as="style"' in page
     assert 'rel="preload" href="/static/vendor/js/maplibre-gl/maplibre-gl.js" as="script"' in page
     assert 'rel="preload" href="/static/vendor/js/pmtiles/pmtiles.js" as="script"' in page
     assert 'rel="preload" href="/maps/style/natural-earth-c.json" as="fetch"' in page
-    assert "initCollectionsMap();" in page
-    assert "DOMContentLoaded', initCollectionsMap" not in page
 
 
 @pytest.mark.django_db

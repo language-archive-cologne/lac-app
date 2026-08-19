@@ -16,6 +16,9 @@ from django.http import HttpResponse
 
 from lacos.explorer.facets import FacetCacheBusyError
 from lacos.explorer.facets import FacetSelectionLimitError
+from lacos.explorer.public_search.service import is_anonymous_public_search
+from lacos.explorer.public_search.service import public_search_unavailable_response
+from lacos.explorer.public_search.store import PublicSearchIndexError
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -128,6 +131,24 @@ class SearchRequestBudgetMixin:
                 f"Search text is limited to {SEARCH_MAX_QUERY_LENGTH} characters.",
             )
 
+        if is_anonymous_public_search(request):
+            return self._dispatch_public_index(request, *args, **kwargs)
+
+        return self._dispatch_database_search(request, *args, **kwargs)
+
+    def _dispatch_public_index(self, request, *args, **kwargs):
+        try:
+            response = super().dispatch(request, *args, **kwargs)
+            if hasattr(response, "render"):
+                response.render()
+        except (FacetSelectionLimitError, SearchPageLimitError) as error:
+            return self._complexity_response(str(error))
+        except PublicSearchIndexError:
+            logger.exception("Public search index is unavailable")
+            return self._public_index_unavailable_response()
+        return response
+
+    def _dispatch_database_search(self, request, *args, **kwargs):
         try:
             with transaction.atomic(savepoint=False):
                 with connection.cursor() as cursor:
@@ -185,3 +206,7 @@ class SearchRequestBudgetMixin:
         )
         response.headers["Retry-After"] = str(SEARCH_RETRY_AFTER_SECONDS)
         return response
+
+    @staticmethod
+    def _public_index_unavailable_response() -> HttpResponse:
+        return public_search_unavailable_response()

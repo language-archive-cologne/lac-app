@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from typing import TYPE_CHECKING
 
 from django.contrib.postgres.search import SearchQuery
-from django.db.models import QuerySet
+
+if TYPE_CHECKING:
+    from django.db.models import QuerySet
 
 MIN_SEARCH_TOKEN_LENGTH = 2
+MIN_SIMPLE_INFLECTION_LENGTH = 4
+MIN_IES_INFLECTION_LENGTH = 5
 
 
 def sanitize_search_term(term: str) -> str:
@@ -31,13 +36,18 @@ def searchable_words(search_term: str) -> list[str]:
     ]
 
 
-def _expand_prefix_variants(word: str) -> list[str]:
+def expand_prefix_variants(word: str) -> list[str]:
+    """Return singular and plural variants used by every search backend."""
     variants = {word}
-    if len(word) > 3 and word.endswith("y"):
+    if len(word) >= MIN_SIMPLE_INFLECTION_LENGTH and word.endswith("y"):
         variants.add(f"{word[:-1]}ies")
-    if len(word) > 4 and word.endswith("ies"):
+    if len(word) >= MIN_IES_INFLECTION_LENGTH and word.endswith("ies"):
         variants.add(f"{word[:-3]}y")
-    if len(word) > 3 and word.endswith("s") and not word.endswith("ss"):
+    if (
+        len(word) >= MIN_SIMPLE_INFLECTION_LENGTH
+        and word.endswith("s")
+        and not word.endswith("ss")
+    ):
         variants.add(word[:-1])
     return sorted(variants)
 
@@ -51,7 +61,9 @@ def build_fts_query(search_term: str) -> SearchQuery | None:
     if not words:
         return None
     prefix_terms = " & ".join(
-        "(" + " | ".join(f"{variant}:*" for variant in _expand_prefix_variants(word)) + ")"
+        "("
+        + " | ".join(f"{variant}:*" for variant in expand_prefix_variants(word))
+        + ")"
         for word in words
     )
     return SearchQuery(prefix_terms, config="simple", search_type="raw")

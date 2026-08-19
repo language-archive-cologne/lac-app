@@ -18,7 +18,11 @@ def test_deployed_django_services_have_a_startup_aware_healthcheck():
         django = _django_service_block(REPO_ROOT / filename)
 
         assert "healthcheck:" in django
-        assert "socket.create_connection" in django
+        assert "urllib.request.Request" in django
+        assert "/health/ready/" in django
+        assert "DJANGO_HEALTHCHECK_HOST" in django
+        assert "X-Forwarded-Proto" in django
+        assert "urllib.request.urlopen" in django
         assert "127.0.0.1" in django
         assert "8000" in django
         assert "start_period: 60s" in django

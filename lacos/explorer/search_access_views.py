@@ -13,6 +13,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 
 from lacos.common.cache_rate_limit import check_rate_limit
+from lacos.explorer.public_search.service import is_anonymous_public_search
 from lacos.explorer.search_access import SEARCH_ACCESS_COOKIE_NAME
 from lacos.explorer.search_access import get_search_access_service
 from lacos.explorer.search_capacity import get_search_capacity_service
@@ -86,33 +87,40 @@ class SearchAccessRequiredMixin:
     def dispatch(self, request, *args, **kwargs):
         enabled = settings.SEARCH_ALTCHA_ENABLED
         protected = request.method in {"GET", "HEAD"}
-        if enabled and protected:
-            if not request.GET:
-                return mark_search_response_noindex(self.render_search_shell(request))
+        if not enabled or not protected:
+            return mark_search_response_noindex(
+                super().dispatch(request, *args, **kwargs),
+            )
+        return self._dispatch_protected_search(request, *args, **kwargs)
 
-            access_service = get_search_access_service()
-            authorization = access_service.validate(request)
-            if authorization is None:
+    def _dispatch_protected_search(self, request, *args, **kwargs):
+        if not request.GET:
+            return mark_search_response_noindex(self.render_search_shell(request))
+
+        if is_anonymous_public_search(request):
+            return super().dispatch(request, *args, **kwargs)
+
+        access_service = get_search_access_service()
+        authorization = access_service.validate(request)
+        if authorization is None:
+            return mark_search_response_noindex(
+                search_verification_required(request),
+            )
+
+        with get_search_capacity_service().reserve() as admitted:
+            if not admitted:
                 return mark_search_response_noindex(
-                    search_verification_required(request),
+                    search_capacity_exceeded_response(),
                 )
+            if not access_service.admit(authorization):
+                return mark_search_response_noindex(
+                    search_rate_exceeded_response(),
+                )
+            response = super().dispatch(request, *args, **kwargs)
+            if hasattr(response, "render") and not response.is_rendered:
+                response.render()
+            return mark_search_response_noindex(response)
 
-            with get_search_capacity_service().reserve() as admitted:
-                if not admitted:
-                    return mark_search_response_noindex(
-                        search_capacity_exceeded_response(),
-                    )
-                if not access_service.admit(authorization):
-                    return mark_search_response_noindex(
-                        search_rate_exceeded_response(),
-                    )
-                response = super().dispatch(request, *args, **kwargs)
-                if hasattr(response, "render") and not response.is_rendered:
-                    response.render()
-                return mark_search_response_noindex(response)
-        return mark_search_response_noindex(
-            super().dispatch(request, *args, **kwargs),
-        )
 
 class SearchResultAccessRequiredMixin:
     """Require a valid search grant before rendering linked result details."""

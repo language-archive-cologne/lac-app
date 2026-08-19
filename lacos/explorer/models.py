@@ -41,3 +41,38 @@ class BundleFileTypeFacet(models.Model):
 
     def __str__(self) -> str:
         return f"{self.bundle_id} {self.collection_id} {self.file_type}"
+
+
+class DiscoveryIndexState(models.Model):
+    """Durable revision status for derived search projections."""
+
+    class Status(models.TextChoices):
+        READY = "ready", "Ready"
+        PENDING = "pending", "Pending"
+        REFRESHING = "refreshing", "Refreshing"
+        DEGRADED = "degraded", "Degraded"
+
+    singleton = models.CharField(
+        primary_key=True,
+        default="discovery",
+        max_length=32,
+        editable=False,
+    )
+    source_revision = models.PositiveBigIntegerField(default=0)
+    search_vector_revision = models.PositiveBigIntegerField(default=0)
+    public_index_revision = models.PositiveBigIntegerField(default=0)
+    facet_cache_revision = models.PositiveBigIntegerField(default=0)
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.READY,
+    )
+    dirty_at = models.DateTimeField(null=True, blank=True)
+    refresh_started_at = models.DateTimeField(null=True, blank=True)
+    refresh_completed_at = models.DateTimeField(null=True, blank=True)
+    public_index_version = models.CharField(max_length=64, blank=True, default="")
+    last_error = models.TextField(blank=True, default="")
+
+    class Meta:
+        verbose_name = "Discovery index state"
+        verbose_name_plural = "Discovery index state"

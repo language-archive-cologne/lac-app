@@ -3,6 +3,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.contrib.sitemaps.views import sitemap
+from django.db import transaction
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from django.urls import include
 from django.urls import path
@@ -25,6 +26,7 @@ from lacos.explorer.views import (
     legacy_collection_by_handle,
 )
 from lacos.explorer.search_access_views import SearchAccessView
+from lacos.explorer.public_search.views import public_search_index_view
 from lacos.users.views import disabled_account_management_view, login_view
 
 urlpatterns = [
@@ -36,8 +38,13 @@ urlpatterns = [
     ),
     path(
         "search/",
-        FacetedSearchView.as_view(),
+        transaction.non_atomic_requests(FacetedSearchView.as_view()),
         name="faceted_search",
+    ),
+    path(
+        "search/public-index.json",
+        transaction.non_atomic_requests(public_search_index_view),
+        name="public_search_index",
     ),
     path(
         "search-access/",
@@ -46,7 +53,7 @@ urlpatterns = [
     ),
     path(
         "search/bundles/",
-        BundleFacetedSearchView.as_view(),
+        transaction.non_atomic_requests(BundleFacetedSearchView.as_view()),
         name="bundle_faceted_search",
     ),
     path(

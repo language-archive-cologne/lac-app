@@ -12,6 +12,8 @@ from lacos.explorer.facet_querysets import collection_facet_queryset
 from lacos.explorer.facets import FACET_CACHE_KEY
 from lacos.explorer.facets import FacetedSearchResult
 from lacos.explorer.facets import FacetService
+from lacos.explorer.public_search.service import is_anonymous_public_search
+from lacos.explorer.public_search.service import search_public_index
 from lacos.explorer.search_access_views import SearchAccessRequiredMixin
 from lacos.explorer.search_safeguards import CountlessPaginationMixin
 from lacos.explorer.search_safeguards import SearchRequestBudgetMixin
@@ -40,8 +42,15 @@ class FacetedSearchView(
     _search_in: list[str] = []
     search_shell_facet_cache_key = FACET_CACHE_KEY
     search_shell_field_definitions = COLLECTION_FIELD_DEFINITIONS
+    public_search_scope = "collections"
 
     def get_queryset(self):
+        if is_anonymous_public_search(self.request):
+            result = search_public_index("collections", self.request.GET)
+            self._faceted_result = result
+            self._search_in = result.active_search_in
+            return result.records
+
         # Clean base queryset for facet counting — no extra JOINs that inflate counts.
         # Annotations like bundles_count/first_language are added AFTER filtering.
         base_qs = collection_facet_queryset()
@@ -54,7 +63,10 @@ class FacetedSearchView(
         if search_query:
             if self._search_in:
                 base_qs = apply_field_scoped_search(
-                    base_qs, search_query, self._search_in, COLLECTION_FIELD_DEFINITIONS
+                    base_qs,
+                    search_query,
+                    self._search_in,
+                    COLLECTION_FIELD_DEFINITIONS,
                 )
             else:
                 base_qs = apply_text_search(base_qs, search_query)
@@ -91,7 +103,7 @@ class FacetedSearchView(
             "pk",
         )
 
-        qs = qs.prefetch_related(
+        return qs.prefetch_related(
             "general_info",
             "general_info__keywords",
             "general_info__object_languages",
@@ -101,8 +113,6 @@ class FacetedSearchView(
             "publication_info__contributors",
         )
 
-        return qs
-
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         if self._faceted_result:
@@ -110,8 +120,14 @@ class FacetedSearchView(
             context["active_filters"] = self._faceted_result.active_filters
             context["has_active_filters"] = bool(self._faceted_result.active_filters)
         page = context.get("page_obj")
-        context["total_count"] = page.known_count if page else 0
-        context["total_count_is_lower_bound"] = bool(page and page.has_next())
+        public_index = is_anonymous_public_search(self.request)
+        context["public_search_index"] = public_index
+        if public_index and self._faceted_result:
+            context["total_count"] = self._faceted_result.total_count
+            context["total_count_is_lower_bound"] = False
+        else:
+            context["total_count"] = page.known_count if page else 0
+            context["total_count_is_lower_bound"] = bool(page and page.has_next())
         context["search_query"] = self.request.GET.get("q", "")
         context["current_sort"] = self.request.GET.get("sort", "name")
         context["current_order"] = self.request.GET.get("order", "asc")
@@ -123,10 +139,15 @@ class FacetedSearchView(
     def render_to_response(self, context, **kwargs):
         if self.request.headers.get("HX-Request"):
             response = render(
-                self.request, "explorer/partials/faceted_results.html", context
+                self.request,
+                "explorer/partials/faceted_results.html",
+                context,
             )
         else:
             response = super().render_to_response(context, **kwargs)
         if self._faceted_result:
             response.headers["Server-Timing"] = self._faceted_result.server_timing
+        if is_anonymous_public_search(self.request):
+            response.headers["X-Search-Backend"] = "public-index"
+            response.headers["X-Robots-Tag"] = "noindex, nofollow"
         return response
