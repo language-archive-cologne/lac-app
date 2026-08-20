@@ -12,6 +12,7 @@ import pytest
 from django.core import signing
 from django.core.cache import cache
 from django.db import connection
+from django.templatetags.static import static
 from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
@@ -31,6 +32,7 @@ SEARCH_ACCESS_SETTINGS = {
     "SEARCH_CAPACITY_SLOT_TIMEOUT_SECONDS": 40,
     "SEARCH_CAPACITY_RETRY_SECONDS": 5,
 }
+MAX_SEARCH_ACCESS_RESPONSE_BYTES = 10_000
 
 
 def _solved_altcha_payload() -> str:
@@ -156,6 +158,17 @@ def test_access_page_runs_proof_of_work_automatically(client):
     assert 'id="search-access-status"' in content
     assert 'class="sr-only"' in content
     assert 'id="search-access-fallback" class="hidden"' in content
+    assert static("css/output.css") in content
+    assert static("vendor/css/altcha.css") in content
+    assert static("vendor/js/altcha.min.js") in content
+    assert "wavesurfer" not in content
+    assert "prism" not in content
+    assert "map-modal" not in content
+    assert "facet-filter" not in content
+    assert "matomo" not in content.lower()
+    assert "<nav" not in content
+    assert "<footer" not in content
+    assert len(response.content) < MAX_SEARCH_ACCESS_RESPONSE_BYTES
     assert response.headers["X-Robots-Tag"] == "noindex, nofollow"
 
 

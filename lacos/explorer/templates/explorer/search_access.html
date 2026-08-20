@@ -1,84 +1,98 @@
-{% extends "explorer_base.html" %}
-{% load i18n %}
+{% load i18n static %}
+<!DOCTYPE html>
+{% get_current_language as LANGUAGE_CODE %}
+<html lang="{{ LANGUAGE_CODE }}" data-theme="corporate">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#1e3a5f">
+    <title>{% translate "Verify search access" %} - Language Archive Cologne</title>
+    <link href="{% static 'css/output.css' %}" rel="stylesheet">
+    <link href="{% static 'vendor/css/altcha.css' %}" rel="stylesheet">
+    <script type="module" src="{% static 'vendor/js/altcha.min.js' %}"></script>
+  </head>
+  <body class="bg-base-200 text-base-content font-normal min-h-screen">
+    <main class="mx-auto flex min-h-screen w-full max-w-xl items-center px-6 py-8">
+      <section class="w-full" aria-labelledby="search-access-title">
+        <h1 id="search-access-title" class="sr-only">
+          {% translate "Verify search access" %}
+        </h1>
 
-{% block title %}{% translate "Verify search access" %} - {{ block.super }}{% endblock title %}
+        <div id="search-access-fallback" class="{% if not verification_failed and not rate_limited %}hidden{% endif %}">
+          {% if verification_failed %}
+            <div role="alert" class="alert alert-error">
+              <span>{% translate "Verification failed. Please complete a new challenge and try again." %}</span>
+            </div>
+          {% endif %}
 
-{% block page_title %}{% endblock page_title %}
+          {% if rate_limited %}
+            <div role="alert" class="alert alert-warning">
+              <span>{% translate "Too many verification attempts. Please wait and try again." %}</span>
+            </div>
+          {% endif %}
 
-{% block explorer_content %}
-  <div class="mx-auto max-w-xl py-8">
-    <div id="search-access-fallback" class="{% if not verification_failed and not rate_limited %}hidden{% endif %}">
-      {% if verification_failed %}
-        <div role="alert" class="alert alert-error">
-          <span>{% translate "Verification failed. Please complete a new challenge and try again." %}</span>
+          <p class="mt-4 text-xs text-base-content/50">
+            {% translate "The challenge runs locally in your browser and does not use behavioral tracking." %}
+          </p>
         </div>
-      {% endif %}
 
-      {% if rate_limited %}
-        <div role="alert" class="alert alert-warning">
-          <span>{% translate "Too many verification attempts. Please wait and try again." %}</span>
-        </div>
-      {% endif %}
+        {% if not rate_limited %}
+          <form id="search-access-form" method="post" action="{% url 'search_access' %}">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ next }}">
+            <p id="search-access-status" role="status" aria-live="polite" class="sr-only">
+              <span class="loading loading-spinner loading-sm text-primary" aria-hidden="true"></span>
+              <span>{% translate "Verifying automatically..." %}</span>
+            </p>
+            <altcha-widget
+              id="search-access-challenge"
+              class="{% if not verification_failed %}hidden{% endif %}"
+              name="altcha"
+              auto="onload"
+              challengeurl="{% url 'storage:altcha_challenge' %}"
+            ></altcha-widget>
+          </form>
+          <script>
+            (function () {
+              var form = document.getElementById("search-access-form");
+              var widget = document.getElementById("search-access-challenge");
+              var status = document.getElementById("search-access-status");
+              var fallback = document.getElementById("search-access-fallback");
+              var submitted = false;
 
-      <p class="mt-4 text-xs text-base-content/50">
-        {% translate "The challenge runs locally in your browser and does not use behavioral tracking." %}
-      </p>
-    </div>
+              function showFallback(message) {
+                if (submitted) {
+                  return;
+                }
+                status.querySelector("span:last-child").textContent = message;
+                status.className = "flex items-center gap-3 text-sm text-base-content/70";
+                fallback.classList.remove("hidden");
+                widget.classList.remove("hidden");
+              }
 
-    {% if not rate_limited %}
-      <form id="search-access-form" method="post" action="{% url 'search_access' %}">
-        {% csrf_token %}
-        <input type="hidden" name="next" value="{{ next }}">
-        <p id="search-access-status" role="status" aria-live="polite" class="sr-only">
-          <span class="loading loading-spinner loading-sm text-primary" aria-hidden="true"></span>
-          <span>{% translate "Verifying automatically..." %}</span>
-        </p>
-        <altcha-widget
-          id="search-access-challenge"
-          class="{% if not verification_failed %}hidden{% endif %}"
-          name="altcha"
-          auto="onload"
-          challengeurl="{% url 'storage:altcha_challenge' %}"
-        ></altcha-widget>
-      </form>
-      <script>
-        (function () {
-          var form = document.getElementById("search-access-form");
-          var widget = document.getElementById("search-access-challenge");
-          var status = document.getElementById("search-access-status");
-          var fallback = document.getElementById("search-access-fallback");
-          var submitted = false;
+              widget.addEventListener("verified", function () {
+                if (submitted) {
+                  return;
+                }
+                submitted = true;
+                status.querySelector("span:last-child").textContent = "{% translate 'Opening search...' %}";
+                form.requestSubmit();
+              });
 
-          function showFallback(message) {
-            if (submitted) {
-              return;
-            }
-            status.querySelector("span:last-child").textContent = message;
-            status.className = "flex items-center gap-3 text-sm text-base-content/70";
-            fallback.classList.remove("hidden");
-            widget.classList.remove("hidden");
-          }
+              widget.addEventListener("statechange", function (event) {
+                if (event.detail && event.detail.state === "error") {
+                  showFallback("{% translate 'Automatic verification failed. Please use the verification control below.' %}");
+                }
+              });
 
-          widget.addEventListener("verified", function () {
-            if (submitted) {
-              return;
-            }
-            submitted = true;
-            status.querySelector("span:last-child").textContent = "{% translate 'Opening search...' %}";
-            form.requestSubmit();
-          });
-
-          widget.addEventListener("statechange", function (event) {
-            if (event.detail && event.detail.state === "error") {
-              showFallback("{% translate 'Automatic verification failed. Please use the verification control below.' %}");
-            }
-          });
-
-          window.setTimeout(function () {
-            showFallback("{% translate 'Verification is taking longer than expected. You can complete it below.' %}");
-          }, 15000);
-        })();
-      </script>
-    {% endif %}
-  </div>
-{% endblock explorer_content %}
+              window.setTimeout(function () {
+                showFallback("{% translate 'Verification is taking longer than expected. You can complete it below.' %}");
+              }, 15000);
+            })();
+          </script>
+        {% endif %}
+      </section>
+    </main>
+  </body>
+</html>
