@@ -7,6 +7,7 @@ from http import HTTPStatus
 import pytest
 from django.core.cache import cache
 from django.db import connection
+from django.test import RequestFactory
 from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
@@ -14,14 +15,18 @@ from django.urls import reverse
 from lacos.explorer.public_search.builder import build_public_search_index
 from lacos.explorer.public_search.store import clear_public_search_index_cache
 from lacos.explorer.public_search.store import write_public_search_index
+from lacos.explorer.search_access import SEARCH_ACCESS_COOKIE_NAME
+from lacos.explorer.search_access import get_search_access_service
 from lacos.explorer.tests.test_bundle_facets import _create_bundle
 from lacos.explorer.tests.test_bundle_facets import _create_collection
 
 
 @pytest.fixture(autouse=True)
 def _clear_index_cache():
+    cache.clear()
     clear_public_search_index_cache()
     yield
+    cache.clear()
     clear_public_search_index_cache()
 
 
@@ -54,15 +59,23 @@ PUBLIC_INDEX_SETTINGS = {
 }
 
 
+def _grant_search_access(client) -> None:
+    request = RequestFactory().get(reverse("bundle_faceted_search"))
+    grant = get_search_access_service().issue(request)
+    client.cookies[SEARCH_ACCESS_COOKIE_NAME] = grant.value
+
+
 @pytest.mark.django_db
-def test_anonymous_filtered_search_uses_index_without_database_queries(
+def test_anonymous_filtered_search_requires_grant_before_public_index_work(
     client,
-    public_index_path,
+    tmp_path,
 ):
+    missing = tmp_path / "missing.json"
+
     with (
         override_settings(
             **PUBLIC_INDEX_SETTINGS,
-            PUBLIC_SEARCH_INDEX_PATH=public_index_path,
+            PUBLIC_SEARCH_INDEX_PATH=missing,
         ),
         CaptureQueriesContext(connection) as captured,
     ):
@@ -70,7 +83,29 @@ def test_anonymous_filtered_search_uses_index_without_database_queries(
             reverse("bundle_faceted_search"),
             {"language": "aka"},
         )
-        content = response.content.decode()
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.url.startswith(reverse("search_access"))
+    assert "next=%2Fsearch%2Fbundles%2F%3Flanguage%3Daka" in response.url
+    assert captured.captured_queries == []
+
+
+@pytest.mark.django_db
+def test_verified_anonymous_search_uses_index_without_database_queries(
+    client,
+    public_index_path,
+):
+    with override_settings(
+        **PUBLIC_INDEX_SETTINGS,
+        PUBLIC_SEARCH_INDEX_PATH=public_index_path,
+    ):
+        _grant_search_access(client)
+        with CaptureQueriesContext(connection) as captured:
+            response = client.get(
+                reverse("bundle_faceted_search"),
+                {"language": "aka"},
+            )
+            content = response.content.decode()
 
     assert response.status_code == HTTPStatus.OK
     assert "Akan Stories" in content
@@ -81,7 +116,28 @@ def test_anonymous_filtered_search_uses_index_without_database_queries(
 
 
 @pytest.mark.django_db
-def test_anonymous_htmx_search_uses_public_index_fragment(
+def test_anonymous_htmx_search_requires_grant_before_public_index_work(
+    client,
+    tmp_path,
+):
+    missing = tmp_path / "missing.json"
+
+    with override_settings(
+        **PUBLIC_INDEX_SETTINGS,
+        PUBLIC_SEARCH_INDEX_PATH=missing,
+    ):
+        response = client.get(
+            reverse("bundle_faceted_search"),
+            {"country": "Ghana"},
+            HTTP_HX_REQUEST="true",
+        )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert response.headers["HX-Redirect"].startswith(reverse("search_access"))
+
+
+@pytest.mark.django_db
+def test_verified_anonymous_htmx_search_uses_public_index_fragment(
     client,
     public_index_path,
 ):
@@ -89,6 +145,7 @@ def test_anonymous_htmx_search_uses_public_index_fragment(
         **PUBLIC_INDEX_SETTINGS,
         PUBLIC_SEARCH_INDEX_PATH=public_index_path,
     ):
+        _grant_search_access(client)
         response = client.get(
             reverse("bundle_faceted_search"),
             {"country": "Ghana"},
@@ -99,6 +156,33 @@ def test_anonymous_htmx_search_uses_public_index_fragment(
     assert "Akan Stories" in response.content.decode()
     assert "<html" not in response.content.decode()
     assert response.headers["X-Search-Backend"] == "public-index"
+
+
+@pytest.mark.django_db
+def test_anonymous_public_index_search_respects_grant_rate_limit(
+    client,
+    public_index_path,
+):
+    with override_settings(
+        **{
+            **PUBLIC_INDEX_SETTINGS,
+            "PUBLIC_SEARCH_INDEX_PATH": public_index_path,
+            "SEARCH_GRANT_RATE_LIMIT": 1,
+        },
+    ):
+        _grant_search_access(client)
+        admitted = client.get(
+            reverse("bundle_faceted_search"),
+            {"country": "Ghana"},
+        )
+        rate_limited = client.get(
+            reverse("bundle_faceted_search"),
+            {"language": "aka"},
+        )
+
+    assert admitted.status_code == HTTPStatus.OK
+    assert rate_limited.status_code == HTTPStatus.TOO_MANY_REQUESTS
+    assert rate_limited.headers["Retry-After"] == "60"
 
 
 @pytest.mark.django_db
@@ -133,17 +217,16 @@ def test_anonymous_landing_facets_come_from_index_without_cache_or_database(
 def test_missing_public_index_fails_closed_without_database_fallback(client, tmp_path):
     missing = tmp_path / "missing.json"
 
-    with (
-        override_settings(
-            **PUBLIC_INDEX_SETTINGS,
-            PUBLIC_SEARCH_INDEX_PATH=missing,
-        ),
-        CaptureQueriesContext(connection) as captured,
+    with override_settings(
+        **PUBLIC_INDEX_SETTINGS,
+        PUBLIC_SEARCH_INDEX_PATH=missing,
     ):
-        response = client.get(
-            reverse("bundle_faceted_search"),
-            {"country": "Ghana"},
-        )
+        _grant_search_access(client)
+        with CaptureQueriesContext(connection) as captured:
+            response = client.get(
+                reverse("bundle_faceted_search"),
+                {"country": "Ghana"},
+            )
 
     assert response.status_code == HTTPStatus.SERVICE_UNAVAILABLE
     assert response.headers["Retry-After"] == "30"
