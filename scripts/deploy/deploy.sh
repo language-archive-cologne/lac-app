@@ -104,17 +104,23 @@ docker compose -f "${compose_file}" up \
   --wait-timeout 120 \
   cache </dev/null
 
+# The django service runs collectstatic before gunicorn; every other web
+# service boots gunicorn directly and reads the shared static manifest at
+# startup. Recreate django first (healthy implies the manifest is current) so
+# the remaining web services never cache a stale manifest.
 if [[ "${mode}" == "full" ]]; then
   log "Rebuilding Django and Huey"
   docker compose -f "${compose_file}" build django huey </dev/null
   docker compose -f "${compose_file}" stop -t 30 huey </dev/null
-  docker compose -f "${compose_file}" up \
-    -d \
-    --no-deps \
-    --force-recreate \
-    --wait \
-    --wait-timeout 120 \
-    "${web_services[@]}" </dev/null
+  for web_service in "${web_services[@]}"; do
+    docker compose -f "${compose_file}" up \
+      -d \
+      --no-deps \
+      --force-recreate \
+      --wait \
+      --wait-timeout 120 \
+      "${web_service}" </dev/null
+  done
   docker compose -f "${compose_file}" up \
     -d \
     --no-deps \
@@ -125,14 +131,16 @@ if [[ "${mode}" == "full" ]]; then
 else
   log "Restarting Django and Huey without rebuilding images"
   docker compose -f "${compose_file}" stop -t 30 huey </dev/null
-  docker compose -f "${compose_file}" up \
-    -d \
-    --no-build \
-    --no-deps \
-    --force-recreate \
-    --wait \
-    --wait-timeout 120 \
-    "${web_services[@]}" </dev/null
+  for web_service in "${web_services[@]}"; do
+    docker compose -f "${compose_file}" up \
+      -d \
+      --no-build \
+      --no-deps \
+      --force-recreate \
+      --wait \
+      --wait-timeout 120 \
+      "${web_service}" </dev/null
+  done
   docker compose -f "${compose_file}" up \
     -d \
     --no-build \
