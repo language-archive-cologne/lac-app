@@ -1,0 +1,12 @@
+{% load static %}
+{% if request.search_altcha_enabled %}
+  {# Config for js/src/search/search-access-grant.js: solves ALTCHA in the #}
+  {# background and retries HTMX searches instead of full-page verification. #}
+  <div id="search-access-config"
+       hidden
+       data-grant-needed="{% if request.search_access_grant_needed %}1{% else %}0{% endif %}"
+       data-challenge-url="{% url 'storage:altcha_challenge' %}"
+       data-grant-url="{% url 'search_access' %}"
+       data-csrf-token="{{ csrf_token }}"></div>
+  <script type="module" src="{% static 'js/src/search/search-access-grant.js' %}"></script>
+{% endif %}

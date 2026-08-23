@@ -50,7 +50,10 @@ def search_verification_required(request):
     location = search_access_url(request)
     if request.headers.get("HX-Request"):
         response = HttpResponse(status=403)
+        # HX-Redirect is the no-script fallback; pages running the inline
+        # grant script cancel it and re-verify without leaving the page.
         response.headers["HX-Redirect"] = location
+        response.headers["X-Search-Verification"] = "required"
         response.headers["Cache-Control"] = "no-store"
         return response
     return redirect(location)
@@ -85,6 +88,8 @@ class SearchAccessRequiredMixin:
 
     def dispatch(self, request, *args, **kwargs):
         enabled = settings.SEARCH_ALTCHA_ENABLED
+        request.search_altcha_enabled = enabled
+        request.search_access_grant_needed = False
         protected = request.method in {"GET", "HEAD"}
         if not enabled or not protected:
             return mark_search_response_noindex(
@@ -93,11 +98,13 @@ class SearchAccessRequiredMixin:
         return self._dispatch_protected_search(request, *args, **kwargs)
 
     def _dispatch_protected_search(self, request, *args, **kwargs):
+        access_service = get_search_access_service()
+        authorization = access_service.validate(request)
+        request.search_access_grant_needed = authorization is None
+
         if not request.GET:
             return mark_search_response_noindex(self.render_search_shell(request))
 
-        access_service = get_search_access_service()
-        authorization = access_service.validate(request)
         if authorization is None:
             return mark_search_response_noindex(
                 search_verification_required(request),
@@ -157,6 +164,9 @@ class SearchAccessView(View):
         return self._render(request, target)
 
     def post(self, request):
+        # Inline mode: fetch() from the search page expects bare status codes
+        # and a Set-Cookie instead of the interstitial redirect flow.
+        inline = request.POST.get("mode") == "inline"
         target = safe_search_target(request, request.POST.get("next"))
         if not check_rate_limit(
             request,
@@ -164,7 +174,10 @@ class SearchAccessView(View):
             settings.SEARCH_ALTCHA_VERIFY_RATE_LIMIT,
             settings.SEARCH_ALTCHA_VERIFY_RATE_WINDOW_SECONDS,
         ):
-            response = self._render(request, target, rate_limited=True, status=429)
+            if inline:
+                response = self._inline_response(status=429)
+            else:
+                response = self._render(request, target, rate_limited=True, status=429)
             response.headers["Retry-After"] = str(
                 settings.SEARCH_ALTCHA_VERIFY_RATE_WINDOW_SECONDS,
             )
@@ -173,10 +186,12 @@ class SearchAccessView(View):
         payload = request.POST.get("altcha", "")
         verified, _error = get_altcha_service().verify_solution_base64(payload)
         if not verified:
+            if inline:
+                return self._inline_response(status=403)
             return self._render(request, target, verification_failed=True, status=403)
 
         grant = get_search_access_service().issue(request)
-        response = redirect(target)
+        response = self._inline_response(status=204) if inline else redirect(target)
         response.set_cookie(
             SEARCH_ACCESS_COOKIE_NAME,
             grant.value,
@@ -186,6 +201,13 @@ class SearchAccessView(View):
             samesite="Lax",
             path="/",
         )
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Robots-Tag"] = "noindex, nofollow"
+        return response
+
+    @staticmethod
+    def _inline_response(*, status):
+        response = HttpResponse(status=status)
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Robots-Tag"] = "noindex, nofollow"
         return response

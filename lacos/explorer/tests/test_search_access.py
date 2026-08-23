@@ -137,6 +137,7 @@ def test_htmx_search_redirects_to_full_verification_page(client):
 
     assert response.status_code == HTTPStatus.FORBIDDEN
     assert response.headers["HX-Redirect"].startswith(reverse("search_access"))
+    assert response.headers["X-Search-Verification"] == "required"
 
 
 @override_settings(**SEARCH_ACCESS_SETTINGS)
@@ -433,3 +434,114 @@ def test_access_page_preserves_local_search_result_detail_target(client, target)
 
     assert response.status_code == HTTPStatus.OK
     assert response.context["next"] == target
+
+
+@override_settings(**SEARCH_ACCESS_SETTINGS)
+@pytest.mark.django_db
+def test_inline_solution_sets_grant_cookie_without_redirect(client):
+    response = client.post(
+        reverse("search_access"),
+        {"altcha": _solved_altcha_payload(), "mode": "inline"},
+        REMOTE_ADDR="192.0.2.10",
+        HTTP_USER_AGENT="test-browser",
+    )
+
+    assert response.status_code == HTTPStatus.NO_CONTENT
+    assert not response.content
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.headers["X-Robots-Tag"] == "noindex, nofollow"
+    grant = response.cookies["lacos_search_access"]
+    assert grant["httponly"] is True
+    assert grant["samesite"] == "Lax"
+    assert grant["path"] == "/"
+    assert (
+        int(grant["max-age"])
+        == SEARCH_ACCESS_SETTINGS["SEARCH_ALTCHA_ACCESS_TTL_SECONDS"]
+    )
+
+    search = client.get(
+        reverse("faceted_search"),
+        {"keyword": "DoBeS"},
+        REMOTE_ADDR="192.0.2.10",
+        HTTP_USER_AGENT="test-browser",
+    )
+    assert search.status_code == HTTPStatus.OK
+
+
+@override_settings(**SEARCH_ACCESS_SETTINGS)
+@pytest.mark.django_db
+def test_inline_invalid_solution_fails_closed_without_cookie(client):
+    response = client.post(
+        reverse("search_access"),
+        {"altcha": "not-a-solution", "mode": "inline"},
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert not response.content
+    assert "lacos_search_access" not in response.cookies
+
+
+@override_settings(
+    **{
+        **SEARCH_ACCESS_SETTINGS,
+        "SEARCH_ALTCHA_VERIFY_RATE_LIMIT": 1,
+        "SEARCH_ALTCHA_VERIFY_RATE_WINDOW_SECONDS": 60,
+    },
+)
+@pytest.mark.django_db
+def test_inline_verification_attempts_are_rate_limited_per_client(client):
+    url = reverse("search_access")
+    form = {"altcha": "not-a-solution", "mode": "inline"}
+
+    first = client.post(url, form, REMOTE_ADDR="192.0.2.20")
+    limited = client.post(url, form, REMOTE_ADDR="192.0.2.20")
+
+    assert first.status_code == HTTPStatus.FORBIDDEN
+    assert limited.status_code == HTTPStatus.TOO_MANY_REQUESTS
+    assert not limited.content
+    assert limited.headers["Retry-After"] == "60"
+
+
+@override_settings(**SEARCH_ACCESS_SETTINGS)
+@pytest.mark.django_db
+@pytest.mark.parametrize("route_name", ["faceted_search", "bundle_faceted_search"])
+def test_search_shell_requests_background_verification(client, route_name):
+    response = client.get(reverse(route_name))
+
+    content = response.content.decode()
+    assert response.status_code == HTTPStatus.OK
+    assert 'id="search-access-config"' in content
+    assert 'data-grant-needed="1"' in content
+    assert reverse("storage:altcha_challenge") in content
+    assert reverse("search_access") in content
+    assert static("js/src/search/search-access-grant.js") in content
+
+
+@override_settings(**SEARCH_ACCESS_SETTINGS)
+@pytest.mark.django_db
+def test_search_shell_skips_background_verification_with_valid_grant(client):
+    issued = client.post(
+        reverse("search_access"),
+        {"altcha": _solved_altcha_payload(), "mode": "inline"},
+        REMOTE_ADDR="192.0.2.10",
+        HTTP_USER_AGENT="test-browser",
+    )
+    assert issued.status_code == HTTPStatus.NO_CONTENT
+
+    response = client.get(
+        reverse("faceted_search"),
+        REMOTE_ADDR="192.0.2.10",
+        HTTP_USER_AGENT="test-browser",
+    )
+
+    content = response.content.decode()
+    assert 'id="search-access-config"' in content
+    assert 'data-grant-needed="0"' in content
+
+
+@pytest.mark.django_db
+def test_search_page_omits_verification_config_when_disabled(client):
+    response = client.get(reverse("faceted_search"))
+
+    assert response.status_code == HTTPStatus.OK
+    assert 'id="search-access-config"' not in response.content.decode()
