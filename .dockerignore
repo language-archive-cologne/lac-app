@@ -24,3 +24,4 @@ theme/static_src/node_modules/
 aws/dist/
 .devcontainer/
 .ipython/
+.tmp/
