@@ -7,7 +7,7 @@ from typing import Optional
 from urllib.parse import unquote
 
 from django.conf import settings
-from django.db.models import Prefetch
+from django.db.models import OuterRef, Prefetch, Subquery
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext_lazy as _
@@ -18,6 +18,7 @@ from lacos.blam.creator_ordering import PREFETCHED_BUNDLE_CREATOR_LINKS_ATTR
 from lacos.blam.creator_ordering import order_creator_links
 from lacos.blam.creator_ordering import ordered_bundle_creators
 from lacos.blam.models import Bundle
+from lacos.blam.models.bundle.bundle_general_info import BundleGeneralInfo
 from lacos.blam.models.bundle.bundle_publication_info import BundlePublicationInfo
 from lacos.blam.models.bundle.bundle_publication_info import (
     BundlePublicationInfoCreator,
@@ -77,6 +78,15 @@ logger = logging.getLogger(__name__)
 def _get_first_bundle_publication_info(bundle):
     publication_infos = list(bundle.publication_info.all())
     return publication_infos[0] if publication_infos else None
+
+
+def _bundle_resource_page_queryset():
+    title = (
+        BundleGeneralInfo.objects.filter(bundle_id=OuterRef("pk"))
+        .order_by("pk")
+        .values("display_title")[:1]
+    )
+    return Bundle.objects.annotate(resource_page_title=Subquery(title))
 
 
 def _iter_bundle_detail_resources(resources_container, structural_info=None):
@@ -464,46 +474,105 @@ class ResourceAccessView(View):
 
     permission_denied_message = _("You do not have permission to access this resource.")
 
-    def get(self, request, bundle_id=None, resource_id=None, handle=None, resource_pid=None):
-        policy = ExposurePolicyService()
-        # Resolve bundle by UUID or handle
+    def _resolve_bundle(self, *, bundle_id=None, handle=None):
+        queryset = _bundle_resource_page_queryset()
         if bundle_id:
-            bundle = get_object_or_404(Bundle, pk=bundle_id)
-        elif handle:
-            bundle = Bundle.objects.filter(identifier=handle).first()
-            if not bundle and not handle.startswith('hdl:'):
-                bundle = Bundle.objects.filter(identifier=f"hdl:{handle}").first()
-            if not bundle:
-                raise Http404(f"Bundle with handle '{handle}' not found")
-        else:
-            raise Http404("No bundle identifier provided")
+            return get_object_or_404(queryset, pk=bundle_id)
+        if handle:
+            bundle = queryset.filter(identifier=handle).first()
+            if not bundle and not handle.startswith("hdl:"):
+                bundle = queryset.filter(identifier=f"hdl:{handle}").first()
+            if bundle:
+                return bundle
+            message = f"Bundle with handle '{handle}' not found"
+            raise Http404(message)
+        message = "No bundle identifier provided"
+        raise Http404(message)
 
-        # Resolve resource by UUID or file_pid
+    @staticmethod
+    def _resolve_resource(bundle, *, resource_id=None, resource_pid=None):
         if resource_id:
-            resource = find_resource_in_bundle(bundle, resource_id=resource_id)
-        elif resource_pid:
+            return find_resource_in_bundle(bundle, resource_id=resource_id)
+        if resource_pid:
             resource = find_resource_in_bundle(bundle, file_pid=resource_pid)
-            if not resource and not resource_pid.startswith('hdl:'):
-                resource = find_resource_in_bundle(bundle, file_pid=f"hdl:{resource_pid}")
-        else:
-            resource = None
+            if not resource and not resource_pid.startswith("hdl:"):
+                resource = find_resource_in_bundle(
+                    bundle,
+                    file_pid=f"hdl:{resource_pid}",
+                )
+            return resource
+        return None
 
-        # Additional metadata files are always public, skip ACL check for them
-        is_additional_metadata = isinstance(resource, BundleAdditionalMetadataFile)
-        if is_additional_metadata:
-            denied_response = enforce_binary_exposure(
+    def _access_denial(self, request, bundle, resource, policy):
+        if isinstance(resource, BundleAdditionalMetadataFile):
+            return enforce_binary_exposure(
                 request,
                 resource,
                 denial_message=self.permission_denied_message,
                 policy=policy,
             )
-            if denied_response is not None:
-                return denied_response
-        else:
-            acl_service = ACLEvaluationService()
-            acl_result = acl_service.evaluate(request.user, bundle, mode="acl:Read")
-            if acl_service.enforcement_enabled and not acl_result.allowed:
-                return build_forbidden_response(self.permission_denied_message, request=request)
+
+        acl_service = ACLEvaluationService()
+        acl_result = acl_service.evaluate(request.user, bundle, mode="acl:Read")
+        if acl_service.enforcement_enabled and not acl_result.allowed:
+            return build_forbidden_response(
+                self.permission_denied_message,
+                request=request,
+            )
+        return None
+
+    def head(
+        self,
+        request,
+        bundle_id=None,
+        resource_id=None,
+        handle=None,
+        resource_pid=None,
+    ):
+        bundle = self._resolve_bundle(bundle_id=bundle_id, handle=handle)
+        resource = self._resolve_resource(
+            bundle,
+            resource_id=resource_id,
+            resource_pid=resource_pid,
+        )
+        denied_response = self._access_denial(
+            request,
+            bundle,
+            resource,
+            ExposurePolicyService(),
+        )
+        if denied_response is not None:
+            return denied_response
+        if not resource:
+            res_ref = resource_id or resource_pid
+            message = f"Resource '{res_ref}' not found in bundle"
+            raise Http404(message)
+        ensure_supported_resource_action(
+            request,
+            action=request.GET.get("action", "view"),
+            container=bundle,
+            resource=resource,
+        )
+        return HttpResponse()
+
+    def get(
+        self,
+        request,
+        bundle_id=None,
+        resource_id=None,
+        handle=None,
+        resource_pid=None,
+    ):
+        policy = ExposurePolicyService()
+        bundle = self._resolve_bundle(bundle_id=bundle_id, handle=handle)
+        resource = self._resolve_resource(
+            bundle,
+            resource_id=resource_id,
+            resource_pid=resource_pid,
+        )
+        denied_response = self._access_denial(request, bundle, resource, policy)
+        if denied_response is not None:
+            return denied_response
 
         if not resource:
             res_ref = resource_id or resource_pid
@@ -879,6 +948,7 @@ class ResourceAccessView(View):
             'resource_pitch_url': kwargs.get('resource_pitch_url'),
             'subtitle_url': kwargs.get('subtitle_url'),
             'bundle': bundle,
+            'parent_title': bundle.resource_page_title or bundle.identifier,
             'resource': resource,
         }
 
@@ -929,57 +999,96 @@ class ResourceByHandleView(View):
     which maps to file_pid = "hdl:11341/00-0000-0000-0000-1B28-A"
     """
 
-    def get(self, request, handle_id):
+    @staticmethod
+    def _resolve_target(handle_id):
         pid_candidates = hdl_pid_candidates(handle_id)
         file_pid = pid_candidates[0] if pid_candidates else f"hdl:{handle_id}"
 
         # Collection-level additional metadata files live on the collection, not
         # a bundle. Resolve them first: a collection metadata handle must not be
         # shadowed by a bundle resource that happens to share the same pid.
-        collection = Collection.objects.filter(
-            structural_info__additional_metadata_files__file_pid__in=pid_candidates
-        ).distinct().first()
+        collection = (
+            Collection.objects.filter(
+                structural_info__additional_metadata_files__file_pid__in=pid_candidates,
+            )
+            .distinct()
+            .first()
+        )
         if collection:
             structural_info = collection.structural_info.first()
             collection_metadata = None
             if structural_info:
                 collection_metadata = structural_info.additional_metadata_files.filter(
-                    file_pid__in=pid_candidates
+                    file_pid__in=pid_candidates,
                 ).first()
             if collection_metadata:
-                # Imported here to avoid a circular import with the collections view module.
-                from lacos.explorer.views.collections import CollectionResourcesView
-
-                view = CollectionResourcesView()
-                return view.get(
-                    request,
-                    handle=collection.handle_path,
-                    resource_id=collection_metadata.file_pid,
-                )
+                return "collection", collection, collection_metadata
 
         # Search across all bundle resource types.
-        for model in (MediaResource, WrittenResource, OtherResource, BundleAdditionalMetadataFile):
+        resource_models = (
+            MediaResource,
+            WrittenResource,
+            OtherResource,
+            BundleAdditionalMetadataFile,
+        )
+        for model in resource_models:
             resource = model.objects.filter(file_pid__in=pid_candidates).first()
             if resource:
                 if isinstance(resource, BundleAdditionalMetadataFile):
                     bundle = Bundle.objects.filter(
-                        structural_info__additional_metadata_files=resource
+                        structural_info__additional_metadata_files=resource,
                     ).first()
                 else:
-                    # Reverse path goes through BundleResources (M2M container) → Bundle.resources
+                    # Reverse path uses the BundleResources M2M container.
                     bundle = Bundle.objects.filter(
-                        resources__in=resource.bundleresources_set.all()
+                        resources__in=resource.bundleresources_set.all(),
                     ).first()
                 if bundle:
-                    # Render directly via ResourceAccessView
-                    view = ResourceAccessView()
-                    return view.get(
-                        request,
-                        handle=bundle.identifier,
-                        resource_pid=resource.file_pid,
-                    )
+                    return "bundle", bundle, resource
 
-        raise Http404(f"Resource with handle '{file_pid}' not found")
+        message = f"Resource with handle '{file_pid}' not found"
+        raise Http404(message)
+
+    def get(self, request, handle_id):
+        target_type, parent, resource = self._resolve_target(handle_id)
+        if target_type == "collection":
+            # Imported here to avoid a circular import with the collections view module.
+            from lacos.explorer.views.collections import CollectionResourcesView
+
+            return CollectionResourcesView().get(
+                request,
+                handle=parent.handle_path,
+                resource_id=resource.file_pid,
+            )
+        return ResourceAccessView().get(
+            request,
+            bundle_id=parent.pk,
+            resource_pid=resource.file_pid,
+        )
+
+    def head(self, request, handle_id):
+        target_type, parent, resource = self._resolve_target(handle_id)
+        if target_type == "collection":
+            denied_response = enforce_binary_exposure(
+                request,
+                resource,
+                denial_message=ResourceAccessView.permission_denied_message,
+                policy=ExposurePolicyService(),
+            )
+            if denied_response is not None:
+                return denied_response
+            ensure_supported_resource_action(
+                request,
+                action=request.GET.get("action", "view"),
+                container=parent,
+                resource=resource,
+            )
+            return HttpResponse()
+        return ResourceAccessView().head(
+            request,
+            bundle_id=parent.pk,
+            resource_pid=resource.file_pid,
+        )
 
 
 class BundleJsonLdView(MetadataExposureMixin, BundleLookupPermissionMixin, View):

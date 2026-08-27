@@ -7,7 +7,7 @@ from urllib.parse import unquote
 from django.conf import settings
 from django.core.cache import cache
 from django.contrib.contenttypes.models import ContentType
-from django.db.models import Count, Min, Prefetch, Q
+from django.db.models import Count, Min, OuterRef, Prefetch, Q, Subquery
 from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render
 from django.utils.translation import gettext_lazy as _
@@ -61,7 +61,6 @@ from .utils import (
     annotate_resource,
     collection_bundle_file_type_options,
     get_formatted_location,
-    get_object_by_pk_or_handle,
     hdl_pid_candidates,
     is_imdi_resource,
     load_markdown_preview,
@@ -122,7 +121,8 @@ class CollectionLookupPermissionMixin(ACLPermissionMixin):
             handle=handle,
         )
         if collection is None:
-            raise Http404("Collection not found")
+            message = "Collection not found"
+            raise Http404(message)
         self._resolved_collection = collection
         return collection
 
@@ -825,7 +825,18 @@ class CollectionResourcesView(View):
     """
 
     def get(self, request, pk=None, handle=None, resource_id=None):
-        collection = get_object_by_pk_or_handle(Collection, pk=pk, handle=handle)
+        title = (
+            CollectionGeneralInfo.objects.filter(collection_id=OuterRef("pk"))
+            .order_by("pk")
+            .values("display_title")[:1]
+        )
+        collection = _get_collection_by_pk_or_handle(
+            Collection.objects.annotate(resource_page_title=Subquery(title)),
+            pk=pk,
+            handle=handle,
+        )
+        if collection is None:
+            raise Http404("Collection not found")
         policy = ExposurePolicyService()
 
         if not resource_id:
@@ -1110,6 +1121,7 @@ class CollectionResourcesView(View):
             'resource_analyze_url': resource_analyze_url,
             'resource_pitch_url': resource_pitch_url,
             'collection': collection,
+            'parent_title': collection.resource_page_title or collection.identifier,
             'resource': metadata_file,
         }
         return render(request, 'resource_detail.html', context)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from django.template.loader import render_to_string
 from django.test import RequestFactory
 
@@ -35,3 +37,31 @@ def test_full_page_player_wires_single_download_button_handler():
 
     assert "single-download-btn" in html
     assert "singleFileDownloadModal" in html
+
+
+def test_resource_breadcrumb_uses_resolved_title_without_related_lookup():
+    class UnexpectedRelatedLookup:
+        first_accessed = False
+
+        @property
+        def first(self):
+            self.first_accessed = True
+            return SimpleNamespace(display_title="Unexpected related title")
+
+    request = RequestFactory().get("/resource/11341/test-resource/")
+    related_lookup = UnexpectedRelatedLookup()
+    context = {
+        "resource_name": "sample.wav",
+        "media_type": "audio",
+        "parent_title": "Resolved bundle title",
+        "bundle": SimpleNamespace(
+            handle_path="11341/test-bundle",
+            identifier="hdl:11341/test-bundle",
+            general_info=related_lookup,
+        ),
+    }
+
+    html = render_to_string("resource_detail.html", context, request=request)
+
+    assert "Resolved bundle title" in html
+    assert related_lookup.first_accessed is False

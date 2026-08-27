@@ -7,9 +7,11 @@ new URL patterns:
   /bundles/11341/.../resources/11341/.../
 """
 
+from http import HTTPStatus
+from types import SimpleNamespace
+
 import pytest
 from django.urls import reverse
-from types import SimpleNamespace
 
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
 from lacos.blam.models.bundle.bundle_general_info import BundleGeneralInfo, BundleLocation
@@ -211,6 +213,91 @@ def test_resource_direct_url_renders_page(client):
     response = client.get(f"/resource/{pid_clean}/")
     # Renders directly (200/403/404 from S3) — NOT a 302 redirect
     assert response.status_code != 302
+
+
+@pytest.mark.django_db
+def test_resource_head_does_not_initialize_storage(client, monkeypatch):
+    """Link checks should resolve resource handles without rendering the player."""
+    collection = _create_collection()
+    bundle = _create_bundle(collection)
+    resource = _create_resource(bundle)
+
+    def fail_if_storage_is_initialized(*_args, **_kwargs):
+        pytest.fail("HEAD requests must not initialize resource storage")
+
+    monkeypatch.setattr(
+        "lacos.explorer.views.bundles.ResourceMappingService",
+        fail_if_storage_is_initialized,
+    )
+    monkeypatch.setattr(
+        "lacos.explorer.views.bundles.ACLEvaluationService.evaluate",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            allowed=True,
+            access_level="public",
+        ),
+    )
+
+    response = client.head(
+        reverse("resource_by_handle", kwargs={"handle_id": resource.file_pid[4:]}),
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.content == b""
+
+
+@pytest.mark.django_db
+def test_resource_head_preserves_access_control(client, monkeypatch):
+    collection = _create_collection()
+    bundle = _create_bundle(collection)
+    resource = _create_resource(bundle)
+
+    monkeypatch.setattr(
+        "lacos.explorer.views.bundles.ACLEvaluationService.evaluate",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            allowed=False,
+            access_level="restricted",
+        ),
+    )
+
+    response = client.head(
+        reverse("resource_by_handle", kwargs={"handle_id": resource.file_pid[4:]}),
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+
+
+@pytest.mark.django_db
+def test_resource_head_rejects_unsupported_action(client, monkeypatch):
+    collection = _create_collection()
+    bundle = _create_bundle(collection)
+    resource = _create_resource(bundle)
+
+    monkeypatch.setattr(
+        "lacos.explorer.views.bundles.ACLEvaluationService.evaluate",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            allowed=True,
+            access_level="public",
+        ),
+    )
+
+    response = client.head(
+        reverse("resource_by_handle", kwargs={"handle_id": resource.file_pid[4:]}),
+        {"action": "unsupported"},
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+@pytest.mark.django_db
+def test_missing_resource_head_returns_not_found(client):
+    response = client.head(
+        reverse(
+            "resource_by_handle",
+            kwargs={"handle_id": "11341/missing-resource"},
+        ),
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
 
 
 @pytest.mark.django_db

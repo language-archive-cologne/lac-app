@@ -12,9 +12,9 @@
   <nav class="text-sm breadcrumbs mb-4">
     <ul>
       {% if bundle %}
-        <li><a href="{% url 'explorer:bundle_detail_by_handle' bundle.handle_path %}" class="link link-hover">{{ bundle.general_info.first.display_title|default:bundle.identifier }}</a></li>
+        <li><a href="{% url 'explorer:bundle_detail_by_handle' bundle.handle_path %}" class="link link-hover">{{ parent_title|default:bundle.identifier }}</a></li>
       {% elif collection %}
-        <li><a href="{% url 'explorer:collection_detail_by_handle' collection.handle_path %}" class="link link-hover">{{ collection.general_info.first.display_title|default:collection.identifier }}</a></li>
+        <li><a href="{% url 'explorer:collection_detail_by_handle' collection.handle_path %}" class="link link-hover">{{ parent_title|default:collection.identifier }}</a></li>
       {% endif %}
       <li class="text-base-content/60">{{ resource_name }}</li>
     </ul>
