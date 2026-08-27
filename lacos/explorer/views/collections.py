@@ -82,6 +82,17 @@ COLLECTION_PERMISSION_DENIED_MESSAGE = _(
     "This collection is restricted. If you believe you should have access, "
     "please contact lac-helpdesk@uni-koeln.de."
 )
+
+
+def _collection_resource_page_queryset():
+    title = (
+        CollectionGeneralInfo.objects.filter(collection_id=OuterRef("pk"))
+        .order_by("pk")
+        .values("display_title")[:1]
+    )
+    return Collection.objects.annotate(resource_page_title=Subquery(title))
+
+
 def _get_collection_by_pk_or_handle(queryset, pk=None, handle=None):
     if pk is not None:
         return queryset.filter(pk=pk).first()
@@ -824,50 +835,79 @@ class CollectionResourcesView(View):
     Additional metadata files are always public and do not require ACL checks.
     """
 
-    def get(self, request, pk=None, handle=None, resource_id=None):
-        title = (
-            CollectionGeneralInfo.objects.filter(collection_id=OuterRef("pk"))
-            .order_by("pk")
-            .values("display_title")[:1]
-        )
+    @staticmethod
+    def _resolve_collection(*, pk=None, handle=None):
         collection = _get_collection_by_pk_or_handle(
-            Collection.objects.annotate(resource_page_title=Subquery(title)),
+            _collection_resource_page_queryset(),
             pk=pk,
             handle=handle,
         )
         if collection is None:
             raise Http404("Collection not found")
-        policy = ExposurePolicyService()
+        return collection
 
+    @staticmethod
+    def _resolve_metadata_file(collection, resource_id):
         if not resource_id:
             raise Http404("Resource ID required")
 
+        pid_candidates = hdl_pid_candidates(resource_id)
+        decoded_resource_id = (
+            pid_candidates[0] if pid_candidates else unquote(resource_id)
+        )
+        structural_info = collection.structural_info.first()
+        metadata_file = None
+        if structural_info:
+            metadata_file = structural_info.additional_metadata_files.filter(
+                file_pid__in=pid_candidates,
+            ).first()
+        if metadata_file is None:
+            message = f"Collection metadata resource {decoded_resource_id} not found"
+            raise Http404(message)
+        return metadata_file, structural_info, decoded_resource_id
+
+    @staticmethod
+    def _access_denial(request, metadata_file, policy):
+        return enforce_binary_exposure(
+            request,
+            metadata_file,
+            denial_message=COLLECTION_PERMISSION_DENIED_MESSAGE,
+            policy=policy,
+        )
+
+    def head(self, request, pk=None, handle=None, resource_id=None):
+        collection = self._resolve_collection(pk=pk, handle=handle)
+        metadata_file, _structural_info, _decoded_resource_id = (
+            self._resolve_metadata_file(collection, resource_id)
+        )
+        denied_response = self._access_denial(
+            request,
+            metadata_file,
+            ExposurePolicyService(),
+        )
+        if denied_response is not None:
+            return denied_response
+        ensure_supported_resource_action(
+            request,
+            action=request.GET.get("action", "view"),
+            container=collection,
+            resource=metadata_file,
+        )
+        return HttpResponse()
+
+    def get(self, request, pk=None, handle=None, resource_id=None):
+        collection = self._resolve_collection(pk=pk, handle=handle)
+        policy = ExposurePolicyService()
         action = request.GET.get('action', 'view')
         metadata_file = None
 
         try:
-            pid_candidates = hdl_pid_candidates(resource_id)
-            decoded_resource_id = pid_candidates[0] if pid_candidates else unquote(resource_id)
-
-            # Try to find the metadata file in the collection's additional metadata
-            structural_info = collection.structural_info.first()
-            if structural_info:
-                metadata_file = structural_info.additional_metadata_files.filter(
-                    file_pid__in=pid_candidates
-                ).first()
-
-            if metadata_file is not None:
-                denied_response = enforce_binary_exposure(
-                    request,
-                    metadata_file,
-                    denial_message=COLLECTION_PERMISSION_DENIED_MESSAGE,
-                    policy=policy,
-                )
-                if denied_response is not None:
-                    return denied_response
-
-            if metadata_file is None:
-                raise Http404(f"Collection metadata resource {decoded_resource_id} not found")
+            metadata_file, structural_info, decoded_resource_id = (
+                self._resolve_metadata_file(collection, resource_id)
+            )
+            denied_response = self._access_denial(request, metadata_file, policy)
+            if denied_response is not None:
+                return denied_response
 
             ensure_supported_resource_action(
                 request,

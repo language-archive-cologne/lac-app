@@ -1069,21 +1069,13 @@ class ResourceByHandleView(View):
     def head(self, request, handle_id):
         target_type, parent, resource = self._resolve_target(handle_id)
         if target_type == "collection":
-            denied_response = enforce_binary_exposure(
+            from lacos.explorer.views.collections import CollectionResourcesView
+
+            return CollectionResourcesView().head(
                 request,
-                resource,
-                denial_message=ResourceAccessView.permission_denied_message,
-                policy=ExposurePolicyService(),
+                handle=parent.handle_path,
+                resource_id=resource.file_pid,
             )
-            if denied_response is not None:
-                return denied_response
-            ensure_supported_resource_action(
-                request,
-                action=request.GET.get("action", "view"),
-                container=parent,
-                resource=resource,
-            )
-            return HttpResponse()
         return ResourceAccessView().head(
             request,
             bundle_id=parent.pk,

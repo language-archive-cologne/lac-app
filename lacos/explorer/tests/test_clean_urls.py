@@ -11,6 +11,7 @@ from http import HTTPStatus
 from types import SimpleNamespace
 
 import pytest
+from django.http import HttpResponseForbidden
 from django.urls import reverse
 
 from lacos.blam.models.base_indentifiers import IdentifierTypeChoices
@@ -96,6 +97,41 @@ def _create_collection_metadata_file(
     )
     structural_info.additional_metadata_files.add(metadata_file)
     return metadata_file
+
+
+def _bundle_resource_url(route_variant, bundle, resource):
+    if route_variant == "uuid":
+        return reverse(
+            "explorer:resource_access",
+            kwargs={"bundle_id": bundle.pk, "resource_id": resource.pk},
+        )
+    if route_variant == "bundle_handle":
+        return reverse(
+            "explorer:resource_access_by_handle",
+            kwargs={
+                "handle": bundle.handle_path,
+                "resource_pid": resource.file_pid[4:],
+            },
+        )
+    return reverse(
+        "resource_by_handle",
+        kwargs={"handle_id": resource.file_pid[4:]},
+    )
+
+
+def _collection_resource_url(route_variant, collection, metadata_file):
+    if route_variant == "collection_handle":
+        return reverse(
+            "explorer:collection_resource_by_handle",
+            kwargs={
+                "handle": collection.handle_path,
+                "resource_id": metadata_file.file_pid[4:],
+            },
+        )
+    return reverse(
+        "resource_by_handle",
+        kwargs={"handle_id": metadata_file.file_pid[4:]},
+    )
 
 
 # --- Collection clean URLs ---
@@ -216,8 +252,13 @@ def test_resource_direct_url_renders_page(client):
 
 
 @pytest.mark.django_db
-def test_resource_head_does_not_initialize_storage(client, monkeypatch):
-    """Link checks should resolve resource handles without rendering the player."""
+@pytest.mark.parametrize("route_variant", ["uuid", "bundle_handle", "flat_handle"])
+def test_bundle_resource_head_routes_do_not_initialize_storage(
+    client,
+    monkeypatch,
+    route_variant,
+):
+    """Every bundle resource route must answer HEAD without rendering the player."""
     collection = _create_collection()
     bundle = _create_bundle(collection)
     resource = _create_resource(bundle)
@@ -238,11 +279,60 @@ def test_resource_head_does_not_initialize_storage(client, monkeypatch):
     )
 
     response = client.head(
-        reverse("resource_by_handle", kwargs={"handle_id": resource.file_pid[4:]}),
+        _bundle_resource_url(route_variant, bundle, resource),
     )
 
     assert response.status_code == HTTPStatus.OK
     assert response.content == b""
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("route_variant", ["collection_handle", "flat_handle"])
+def test_collection_resource_head_routes_do_not_initialize_storage(
+    client,
+    monkeypatch,
+    route_variant,
+):
+    """Every collection resource route must answer HEAD without storage access."""
+    collection = _create_collection()
+    metadata_file = _create_collection_metadata_file(collection)
+
+    def fail_if_storage_is_initialized(*_args, **_kwargs):
+        pytest.fail("HEAD requests must not initialize resource storage")
+
+    monkeypatch.setattr(
+        "lacos.explorer.views.collections.ResourceMappingService",
+        fail_if_storage_is_initialized,
+    )
+
+    response = client.head(
+        _collection_resource_url(route_variant, collection, metadata_file),
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.content == b""
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("route_variant", ["collection_handle", "flat_handle"])
+def test_collection_resource_head_routes_preserve_exposure_policy(
+    client,
+    monkeypatch,
+    route_variant,
+):
+    collection = _create_collection()
+    metadata_file = _create_collection_metadata_file(collection)
+
+    monkeypatch.setattr(
+        "lacos.explorer.views.collections.enforce_binary_exposure",
+        lambda *_args, **_kwargs: HttpResponseForbidden(),
+    )
+
+    response = client.head(
+        _collection_resource_url(route_variant, collection, metadata_file),
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
 
 
 @pytest.mark.django_db
@@ -267,7 +357,12 @@ def test_resource_head_preserves_access_control(client, monkeypatch):
 
 
 @pytest.mark.django_db
-def test_resource_head_rejects_unsupported_action(client, monkeypatch):
+@pytest.mark.parametrize("route_variant", ["uuid", "bundle_handle", "flat_handle"])
+def test_bundle_resource_head_rejects_unsupported_action(
+    client,
+    monkeypatch,
+    route_variant,
+):
     collection = _create_collection()
     bundle = _create_bundle(collection)
     resource = _create_resource(bundle)
@@ -281,7 +376,24 @@ def test_resource_head_rejects_unsupported_action(client, monkeypatch):
     )
 
     response = client.head(
-        reverse("resource_by_handle", kwargs={"handle_id": resource.file_pid[4:]}),
+        _bundle_resource_url(route_variant, bundle, resource),
+        {"action": "unsupported"},
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("route_variant", ["collection_handle", "flat_handle"])
+def test_collection_resource_head_rejects_unsupported_action(
+    client,
+    route_variant,
+):
+    collection = _create_collection()
+    metadata_file = _create_collection_metadata_file(collection)
+
+    response = client.head(
+        _collection_resource_url(route_variant, collection, metadata_file),
         {"action": "unsupported"},
     )
 
@@ -294,6 +406,23 @@ def test_missing_resource_head_returns_not_found(client):
         reverse(
             "resource_by_handle",
             kwargs={"handle_id": "11341/missing-resource"},
+        ),
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+@pytest.mark.django_db
+def test_missing_direct_collection_resource_head_returns_not_found(client):
+    collection = _create_collection()
+
+    response = client.head(
+        reverse(
+            "explorer:collection_resource_by_handle",
+            kwargs={
+                "handle": collection.handle_path,
+                "resource_id": "11341/missing-resource",
+            },
         ),
     )
 
