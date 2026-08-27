@@ -10,13 +10,11 @@ from typing import Any
 from django.conf import settings
 from django.dispatch import receiver
 
-from .adapters import TRUSTED_SAML_SESSION_KEY
 from .models import User
 
 try:
-    from djangosaml2.signals import post_authenticated, pre_user_save
+    from djangosaml2.signals import pre_user_save
 except ImportError:  # pragma: no cover - optional dependency guard
-    post_authenticated = None  # type: ignore[assignment]
     pre_user_save = None  # type: ignore[assignment]
 
 USERNAME_ATTR_KEYS: tuple[str, ...] = (
@@ -131,27 +129,3 @@ if pre_user_save is not None:  # pragma: no branch - guarded by import
         # Keep only the federated identifier required for login and ACL matching.
         if instance.username:
             instance.acl_agent_uri = f"urn:lacos:eppn:{instance.username}"
-
-
-if post_authenticated is not None:  # pragma: no branch - guarded by import
-
-    @receiver(post_authenticated)
-    def clear_trusted_signup_flag(  # type: ignore[misc]
-        sender: Any,
-        user: User,
-        request: Any | None = None,
-        **kwargs: Any,
-    ) -> None:
-        """
-        Remove trusted signup markers once authentication completes.
-        """
-        if not getattr(settings, "SAML_LOGIN_ENABLED", False):
-            return
-
-        if request is None:
-            return
-
-        session = getattr(request, "session", None)
-        if session is not None:
-            session.pop(TRUSTED_SAML_SESSION_KEY, None)
-        setattr(request, "trusted_saml_signup", False)

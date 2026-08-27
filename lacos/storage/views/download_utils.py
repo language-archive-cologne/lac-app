@@ -6,11 +6,9 @@ from typing import Optional
 
 from django.conf import settings
 
-from lacos.blam.models.bundle.bundle_repository import Bundle
 from lacos.common.cache_rate_limit import check_rate_limit as check_rate_limit
 from lacos.common.request_utils import get_client_ip
 from lacos.storage.models.s3_resource_location import S3ResourceLocation
-from lacos.storage.services.acl_evaluation_service import ACLEvaluationService
 from lacos.storage.services.exposure_policy_service import ExposurePolicyService
 
 logger = logging.getLogger(__name__)
@@ -58,17 +56,13 @@ def check_resource_authorization(request, bucket: str, key: str) -> Optional[str
         By default (REQUIRE_S3_LOCATION_FOR_DOWNLOAD=True), this function DENIES
         access unless an S3ResourceLocation record exists for the bucket/key.
         This prevents attackers from requesting presigned URLs for arbitrary S3 paths.
-        If REQUIRE_S3_LOCATION_FOR_DOWNLOAD is False, access is still denied unless the
-        request explicitly opts in (X-Allow-Unmapped-S3-Download: true or
-        request.allow_unmapped_s3_download=True).
+        If REQUIRE_S3_LOCATION_FOR_DOWNLOAD is False, access is still denied unless
+        trusted server-side code sets request.allow_unmapped_s3_download=True.
     """
     require_location = getattr(settings, 'REQUIRE_S3_LOCATION_FOR_DOWNLOAD', True)
 
     def _has_explicit_unmapped_opt_in(req) -> bool:
-        if getattr(req, 'allow_unmapped_s3_download', False):
-            return True
-        header_value = req.META.get('HTTP_X_ALLOW_UNMAPPED_S3_DOWNLOAD', '')
-        return str(header_value).strip().lower() in {'1', 'true', 'yes'}
+        return getattr(req, 'allow_unmapped_s3_download', False) is True
 
     try:
         policy = ExposurePolicyService()
@@ -105,26 +99,6 @@ def check_resource_authorization(request, bucket: str, key: str) -> Optional[str
                 extra={"user": str(request.user), "bucket": bucket, "key": key},
             )
             return "Access denied"
-
-        # Preserve explicit ACL logging for protected bundle resources.
-        obj = location.content_object
-        if isinstance(obj, Bundle):
-            bundle = obj
-        elif hasattr(obj, 'bundleresources_set'):
-            bundle_resources = obj.bundleresources_set.first()
-            bundle = bundle_resources.bundle if bundle_resources else None
-        else:
-            bundle = None
-
-        if bundle:
-            acl_service = ACLEvaluationService()
-            acl_result = acl_service.evaluate(request.user, bundle, mode="acl:Read")
-            if not acl_result.allowed and acl_service.enforcement_enabled:
-                logger.warning(
-                    "ACL denied download",
-                    extra={"user": str(request.user), "bucket": bucket, "key": key, "reason": acl_result.reason},
-                )
-                return "Access denied"
 
         return None
 

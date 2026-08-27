@@ -131,13 +131,22 @@ class ResourceResolverService:
                 )
             return resolved, errors
 
-        # 3. Check ACL permissions
-        if not self.acl_service.is_allowed(user, bundle, mode="acl:Read"):
+        # 3. Check ACL permissions. Public additional metadata remains
+        # downloadable even when the containing bundle is restricted.
+        bundle_access_allowed = self.acl_service.is_allowed(user, bundle, mode="acl:Read")
+        if not bundle_access_allowed:
             logger.info(
                 "ACL denied for user on bundle",
                 extra={"user_pk": getattr(user, "pk", "anonymous"), "bundle_id": bundle_id},
             )
-            for resource_id in resource_ids:
+
+        # 4. Get all resources belonging to this bundle
+        bundle_resource_ids = self._get_bundle_resource_ids(bundle)
+        public_metadata_ids = self._get_bundle_public_metadata_ids(bundle)
+
+        # 5. Resolve each resource
+        for resource_id in resource_ids:
+            if not bundle_access_allowed and resource_id not in public_metadata_ids:
                 errors.append(
                     ResourceError(
                         resource_id=resource_id,
@@ -145,13 +154,7 @@ class ResourceResolverService:
                         message="Access denied to bundle resources",
                     )
                 )
-            return resolved, errors
-
-        # 4. Get all resources belonging to this bundle
-        bundle_resource_ids = self._get_bundle_resource_ids(bundle)
-
-        # 5. Resolve each resource
-        for resource_id in resource_ids:
+                continue
             try:
                 result = self._resolve_single_resource(
                     resource_id=resource_id,
@@ -223,26 +226,10 @@ class ResourceResolverService:
                 )
             return resolved, errors
 
-        # 3. Check ACL permissions on collection
-        if not self.acl_service.is_allowed(user, collection, mode="acl:Read"):
-            logger.info(
-                "ACL denied for user on collection",
-                extra={"user_pk": getattr(user, "pk", "anonymous"), "collection_id": collection_id},
-            )
-            for resource_id in resource_ids:
-                errors.append(
-                    ResourceError(
-                        resource_id=resource_id,
-                        error="access_denied",
-                        message="Access denied to collection resources",
-                    )
-                )
-            return resolved, errors
-
-        # 4. Get all metadata file IDs belonging to this collection
+        # 3. Collection additional metadata files are public by exposure policy.
         collection_resource_ids = self._get_collection_resource_ids(collection)
 
-        # 5. Resolve each resource
+        # 4. Resolve each resource
         for resource_id in resource_ids:
             try:
                 result = self._resolve_single_collection_resource(
@@ -375,6 +362,18 @@ class ResourceResolverService:
             logger.error("Error getting bundle resource IDs", extra={"error": str(e)})
 
         return resource_ids
+
+    @staticmethod
+    def _get_bundle_public_metadata_ids(bundle: Bundle) -> set[str]:
+        structural_info = bundle.structural_info.first()
+        if not structural_info:
+            return set()
+        return {
+            str(resource_id)
+            for resource_id in structural_info.additional_metadata_files.values_list(
+                "id", flat=True
+            )
+        }
 
     def _resolve_single_resource(
         self,

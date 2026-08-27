@@ -17,6 +17,10 @@ from lacos.blam.models.bundle.bundle_structural_info import (
     WrittenResource,
 )
 from lacos.blam.models.collection.collection_repository import Collection
+from lacos.blam.models.collection.collection_structural_info import (
+    CollectionAdditionalMetadataFile,
+    CollectionStructuralInfo,
+)
 from lacos.storage.models.s3_resource_location import S3ResourceLocation
 from lacos.storage.services.resource_resolver_service import (
     ResolvedResource,
@@ -396,7 +400,7 @@ class TestResourceResolverService:
         bundle,
         bundle_metadata_resource,
         user,
-        mock_acl_allowed,
+        mock_acl_denied,
         mock_presigned_url,
     ):
         """Bundle additional metadata files should resolve like other bundle resources."""
@@ -421,6 +425,41 @@ class TestResourceResolverService:
         assert len(resolved) == 1
         assert resolved[0].resource_id == str(bundle_metadata_resource.id)
         assert resolved[0].filename == "metadata.xml"
+
+    def test_resolve_collection_metadata_ignores_collection_binary_acl(
+        self,
+        collection,
+        user,
+        mock_acl_denied,
+        mock_presigned_url,
+    ):
+        structural_info = CollectionStructuralInfo.objects.create(collection=collection)
+        metadata_file = CollectionAdditionalMetadataFile.objects.create(
+            file_pid="https://hdl.handle.net/12345/collection-metadata",
+            file_name="collection-metadata.xml",
+            mime_type="application/xml",
+            is_metadata_for=collection.identifier,
+        )
+        structural_info.additional_metadata_files.add(metadata_file)
+        content_type = ContentType.objects.get_for_model(metadata_file)
+        S3ResourceLocation.objects.create(
+            content_type=content_type,
+            object_id=str(metadata_file.id),
+            s3_bucket="test-bucket",
+            s3_key="collections/test/metadata.xml",
+            size_bytes=2048,
+            resource_pid=metadata_file.file_pid,
+        )
+
+        service = ResourceResolverService()
+        resolved, errors = service.resolve_collection_resources(
+            collection_id=str(collection.id),
+            resource_ids=[str(metadata_file.id)],
+            user=user,
+        )
+
+        assert errors == []
+        assert [item.resource_id for item in resolved] == [str(metadata_file.id)]
 
 
 @pytest.mark.django_db

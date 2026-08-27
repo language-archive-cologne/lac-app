@@ -12,7 +12,6 @@ from django.urls import resolve
 from django.urls import reverse
 from saml2.mdstore import MetaDataMDX
 
-from lacos.users.adapters import TRUSTED_SAML_SESSION_KEY
 from lacos.users.backends import LacosSaml2Backend
 from lacos.users.models import SamlCountry
 from lacos.users.models import SamlIdp
@@ -595,14 +594,35 @@ def test_saml_acs_failure_logs_at_error_level_for_admin_email(caplog):
 
 
 @pytest.mark.django_db
-def test_saml_login_view_sets_session_marker(client, settings):
+def test_saml_login_view_redirects_to_saml(client, settings):
     settings.SAML_LOGIN_ENABLED = True
     response = client.get(reverse("users:saml_login"))
 
     assert response.status_code == HTTPStatus.FOUND
     assert response.headers["Location"].endswith("/saml2/login/")
-    session = client.session
-    assert session.get(TRUSTED_SAML_SESSION_KEY) is True
+    assert "users.saml_trusted_signup" not in client.session
+
+
+@pytest.mark.django_db
+def test_saml_login_does_not_open_local_signup(client, settings):
+    settings.ACCOUNT_ALLOW_REGISTRATION = False
+
+    response = client.get(reverse("users:saml_login"))
+
+    assert response.status_code == HTTPStatus.FOUND
+
+    response = client.post(
+        reverse("account_signup"),
+        {
+            "username": "unverified-saml-signup",
+            "email": "unverified-saml-signup@example.test",
+            "password1": "A-strong-test-password-123!",
+            "password2": "A-strong-test-password-123!",
+        },
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert not User.objects.filter(username="unverified-saml-signup").exists()
 
 
 @pytest.mark.django_db
@@ -618,8 +638,7 @@ def test_saml_login_view_preserves_selected_idp(client, settings):
     assert response.headers["Location"] == (
         "/saml2/login/?idp=https%3A%2F%2Fidp.example.org%2Fidp%2Fshibboleth"
     )
-    session = client.session
-    assert session.get(TRUSTED_SAML_SESSION_KEY) is True
+    assert "users.saml_trusted_signup" not in client.session
 
 
 @pytest.mark.django_db

@@ -72,10 +72,13 @@ class ExposurePolicyService:
             return self.acl_service.can_read_bundle(user, target)
 
         if isinstance(target, RESOURCE_MODELS):
-            bundle = self._get_resource_bundle(target)
-            if bundle is None:
+            bundles = self._get_resource_bundles(target)
+            if not bundles:
                 return False
-            return self.acl_service.can_read_bundle(user, bundle)
+            return any(
+                self.acl_service.can_read_bundle(user, bundle)
+                for bundle in bundles
+            )
 
         return False
 
@@ -113,20 +116,26 @@ class ExposurePolicyService:
         return AnonymousUser()
 
     @staticmethod
-    def _get_resource_bundle(resource) -> Bundle | None:
+    def _get_resource_bundles(resource) -> list[Bundle]:
         bundle_resources = getattr(resource, "bundleresources_set", None)
         if bundle_resources is not None:
-            relation = bundle_resources.first()
-            if relation:
-                return relation.bundle
+            relations = list(bundle_resources.select_related("bundle"))
+            if relations:
+                return [relation.bundle for relation in relations]
 
         if isinstance(resource, MediaResource):
-            relation = BundleResources.objects.filter(bundle_media_resources=resource).first()
+            relations = BundleResources.objects.filter(
+                bundle_media_resources=resource
+            ).select_related("bundle")
         elif isinstance(resource, WrittenResource):
-            relation = BundleResources.objects.filter(bundle_written_resources=resource).first()
+            relations = BundleResources.objects.filter(
+                bundle_written_resources=resource
+            ).select_related("bundle")
         elif isinstance(resource, OtherResource):
-            relation = BundleResources.objects.filter(bundle_other_resources=resource).first()
+            relations = BundleResources.objects.filter(
+                bundle_other_resources=resource
+            ).select_related("bundle")
         else:
-            relation = None
+            return []
 
-        return relation.bundle if relation else None
+        return [relation.bundle for relation in relations]

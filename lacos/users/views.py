@@ -22,8 +22,6 @@ from lacos.users.models import SamlCountry
 from lacos.users.models import SamlIdp
 from lacos.users.models import User
 
-from .adapters import TRUSTED_SAML_SESSION_KEY
-
 DIRECT_IDP_SELECTION_DISABLED_MESSAGE = "Direct SAML IdP selection is not enabled."
 logger = logging.getLogger(__name__)
 
@@ -66,10 +64,6 @@ user_redirect_view = UserRedirectView.as_view()
 def saml_login_view(request: HttpRequest) -> HttpResponse:
     if not settings.SAML_LOGIN_ENABLED:
         raise Http404("SAML login is not enabled.")
-
-    request.trusted_saml_signup = True
-    request.session[TRUSTED_SAML_SESSION_KEY] = True
-    request.session.modified = True
 
     next_url = _safe_next(request, request.GET.get("next"))
     saml_login_url = _build_saml_login_url(

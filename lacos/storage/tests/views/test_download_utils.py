@@ -6,6 +6,7 @@ from django.contrib.auth.models import Group
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.contenttypes.models import ContentType
 from django.test import RequestFactory
+from django.test import override_settings
 
 from lacos.blam.models.bundle.bundle_general_info import BundleGeneralInfo, BundleLocation
 from lacos.blam.models.bundle.bundle_repository import Bundle
@@ -259,3 +260,49 @@ def test_check_resource_authorization_bundle_acl_overrides_public_collection():
     )
 
     assert error == "Access denied"
+
+
+@pytest.mark.django_db
+def test_check_resource_authorization_uses_any_readable_parent_bundle():
+    collection = _create_collection("download-utils-shared-collection")
+    restricted_bundle = _create_bundle(collection, "download-utils-shared-restricted")
+    public_bundle = _create_bundle(collection, "download-utils-shared-public")
+    resource = _create_media_resource(restricted_bundle, "shared-download.wav")
+    BundleResources.objects.create(bundle=public_bundle).bundle_media_resources.add(resource)
+    _store_acl(
+        restricted_bundle,
+        [{"agentClass": "foaf:Person", "agent": "urn:test:someone-else", "mode": ["acl:Read"]}],
+    )
+    _store_acl(public_bundle, [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}])
+    content_type = ContentType.objects.get_for_model(resource)
+    S3ResourceLocation.objects.create(
+        resource_pid=resource.file_pid,
+        s3_bucket="lacos-production",
+        s3_key="shared/shared-download.wav",
+        mime_type=resource.mime_type,
+        content_type=content_type,
+        object_id=str(resource.pk),
+    )
+
+    error = check_resource_authorization(
+        _request(),
+        "lacos-production",
+        "shared/shared-download.wav",
+    )
+
+    assert error is None
+
+
+@override_settings(REQUIRE_S3_LOCATION_FOR_DOWNLOAD=False)
+@pytest.mark.django_db
+def test_unmapped_download_cannot_be_enabled_by_client_header():
+    request = _request()
+    request.META["HTTP_X_ALLOW_UNMAPPED_S3_DOWNLOAD"] = "true"
+
+    error = check_resource_authorization(
+        request,
+        "lacos-production",
+        "unmapped/private-file.wav",
+    )
+
+    assert error == "Resource not found"

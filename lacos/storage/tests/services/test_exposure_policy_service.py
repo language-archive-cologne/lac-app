@@ -131,6 +131,24 @@ def test_binary_policy_denies_anonymous_for_restricted_bundle_resource():
 
 
 @pytest.mark.django_db
+def test_binary_policy_allows_resource_from_any_readable_parent_bundle():
+    collection = _create_collection("shared-resource-collection")
+    restricted_bundle = _create_bundle(collection, "shared-resource-restricted")
+    public_bundle = _create_bundle(collection, "shared-resource-public")
+    resource = _create_media_resource(restricted_bundle, "shared-resource.wav")
+    BundleResources.objects.create(bundle=public_bundle).bundle_media_resources.add(resource)
+    _store_acl(
+        restricted_bundle,
+        [{"agentClass": "foaf:Person", "agent": "urn:test:someone-else", "mode": ["acl:Read"]}],
+    )
+    _store_acl(public_bundle, [{"agentClass": "foaf:Agent", "mode": ["acl:Read"]}])
+
+    policy = ExposurePolicyService()
+
+    assert policy.can_download_binary(AnonymousUser(), resource) is True
+
+
+@pytest.mark.django_db
 def test_binary_policy_allows_assigned_collection_manager_for_restricted_resource():
     collection = _create_collection("manager-binary-collection")
     bundle = _create_bundle(collection, "manager-binary-bundle")

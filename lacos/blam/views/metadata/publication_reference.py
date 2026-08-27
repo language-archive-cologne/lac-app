@@ -174,6 +174,12 @@ class BasePublicationReferenceView(HtmxTemplateHelperMixin, View):
         parent_id = kwargs.get(self.parent_kwarg)
         return get_object_or_404(self.parent_model, pk=parent_id)
 
+    def get_authorized_parent(self, request, **kwargs):
+        parent = self.get_parent(**kwargs)
+        if not self._authorize(request, parent):
+            raise PermissionDenied("Collection manager access required.")
+        return parent
+
     def get_publication_info(self, parent):
         if self.use_parent_as_info:
             return parent
@@ -286,10 +292,8 @@ class BasePublicationReferenceView(HtmxTemplateHelperMixin, View):
         return render_to_string(self.template_name, context, request=request)
 
     def get(self, request, reference_slug: str, object_id=None, **kwargs):
-        parent = self.get_parent(**kwargs)
+        parent = self.get_authorized_parent(request, **kwargs)
         publication_info = self.get_publication_info(parent)
-        if not self._authorize(request, parent, publication_info):
-            raise PermissionDenied("Collection manager access required.")
         config = self.get_reference_config(reference_slug)
         edit_object = None
         form = None
@@ -314,10 +318,8 @@ class BasePublicationReferenceView(HtmxTemplateHelperMixin, View):
         return HttpResponse(panel_html)
 
     def post(self, request, reference_slug: str, object_id=None, **kwargs):
-        parent = self.get_parent(**kwargs)
+        parent = self.get_authorized_parent(request, **kwargs)
         publication_info = self.get_publication_info(parent)
-        if not self._authorize(request, parent, publication_info):
-            raise PermissionDenied("Collection manager access required.")
         config = self.get_reference_config(reference_slug)
         edit_object = None
 
@@ -376,7 +378,7 @@ class BasePublicationReferenceRemoveView(BasePublicationReferenceView):
         getattr(publication_info, relation).remove(obj)
 
     def post(self, request, reference_slug: str, object_id=None, **kwargs):
-        parent = self.get_parent(**kwargs)
+        parent = self.get_authorized_parent(request, **kwargs)
         publication_info = self.get_publication_info(parent)
         config = self.get_reference_config(reference_slug)
 
