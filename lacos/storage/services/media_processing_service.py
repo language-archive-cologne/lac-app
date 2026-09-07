@@ -30,6 +30,9 @@ N_MELS = 256
 TARGET_SAMPLE_RATE = 44100
 HOP_DIVISOR = 4  # hop = n_fft // 4 → 75% overlap
 STFT_CHUNK_FRAMES = 2048  # STFT frames per chunk (~50 MB peak RAM per chunk)
+# Format version for derivatives (spectrogram/pitch binary layout). Increment when
+# FFT_SAMPLES, N_MELS, HOP_DIVISOR, or binary layout changes.
+DERIVATIVE_FORMAT_VERSION = 2
 MEDIA_TMP_DIR_ENV = "LAC_MEDIA_TMP_DIR"
 MEDIA_TMP_MIN_FREE_BYTES_ENV = "LAC_MEDIA_TMP_MIN_FREE_BYTES"
 DEFAULT_MEDIA_TMP_MIN_FREE_BYTES = 512 * 1024 * 1024  # 512 MiB reserve
@@ -276,7 +279,10 @@ class MediaProcessingService:
                             Key=peaks_key,
                             Body=peaks_bytes,
                             ContentType="application/json",
-                            Metadata={"source-etag": source_etag},
+                            Metadata={
+                                "source-etag": source_etag,
+                                "format-version": str(DERIVATIVE_FORMAT_VERSION),
+                            },
                         )
                     except ClientError as exc:
                         logger.error("Failed to upload peaks for %s: %s", s3_key, exc)
@@ -303,7 +309,10 @@ class MediaProcessingService:
                             Key=spectrogram_data_key,
                             Body=spectrogram_data,
                             ContentType="application/octet-stream",
-                            Metadata={"source-etag": source_etag},
+                            Metadata={
+                                "source-etag": source_etag,
+                                "format-version": str(DERIVATIVE_FORMAT_VERSION),
+                            },
                         )
                     except ClientError as exc:
                         logger.error("Failed to upload spectrogram data for %s: %s", s3_key, exc)
@@ -329,7 +338,10 @@ class MediaProcessingService:
                                 Key=pitch_key,
                                 Body=pitch_data,
                                 ContentType="application/octet-stream",
-                                Metadata={"source-etag": source_etag},
+                                Metadata={
+                                    "source-etag": source_etag,
+                                    "format-version": str(DERIVATIVE_FORMAT_VERSION),
+                                },
                             )
                         except ClientError as exc:
                             logger.error("Failed to upload pitch for %s: %s", s3_key, exc)
@@ -606,8 +618,15 @@ class MediaProcessingService:
             response = self.bucket_service.s3_client.head_object(
                 Bucket=bucket, Key=key
             )
-            stored_etag = response.get("Metadata", {}).get("source-etag", "")
-            return stored_etag == source_etag
+            metadata = response.get("Metadata", {})
+            stored_etag = metadata.get("source-etag", "")
+            stored_version = metadata.get("format-version", "")
+
+            # Derivative is current only if both source-etag and format-version match
+            return (
+                stored_etag == source_etag
+                and stored_version == str(DERIVATIVE_FORMAT_VERSION)
+            )
         except ClientError:
             return False
 

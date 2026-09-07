@@ -245,3 +245,68 @@ def test_derivative_s3_key_ocfl_path():
     assert MediaProcessingService._derivative_s3_key(
         "col/bundle/v1/content/file.wav", ".peaks.json",
     ) == "col/bundle/v1/derivatives/file.wav.peaks.json"
+
+
+def test_artifact_is_current_returns_false_when_format_version_missing():
+    """Derivative with missing format version should be considered stale."""
+    from botocore.exceptions import ClientError
+
+    service = MediaProcessingService(bucket_service=MagicMock())
+
+    # Mock head_object to return a derivative with source-etag but no format version
+    mock_response = {
+        "Metadata": {
+            "source-etag": "source-etag-123"
+        }
+    }
+    service.bucket_service.s3_client.head_object = MagicMock(
+        return_value=mock_response
+    )
+
+    # The derivative has matching source-etag, but missing format-version
+    # It should be considered stale and require regeneration
+    result = service._artifact_is_current("bucket", "key", "source-etag-123")
+    assert result is False, "Derivative missing format-version should be considered stale"
+
+
+def test_artifact_is_current_returns_false_when_format_version_mismatch():
+    """Derivative with old format version should be considered stale."""
+    service = MediaProcessingService(bucket_service=MagicMock())
+
+    # Mock head_object to return a derivative with old format version
+    mock_response = {
+        "Metadata": {
+            "source-etag": "source-etag-123",
+            "format-version": "1"  # Old version
+        }
+    }
+    service.bucket_service.s3_client.head_object = MagicMock(
+        return_value=mock_response
+    )
+
+    # The derivative has matching source-etag but old format version
+    # It should be considered stale
+    result = service._artifact_is_current("bucket", "key", "source-etag-123")
+    assert result is False, "Derivative with old format-version should be considered stale"
+
+
+def test_artifact_is_current_returns_true_when_current():
+    """Derivative with matching etag and current format version should be current."""
+    service = MediaProcessingService(bucket_service=MagicMock())
+
+    from lacos.storage.services.media_processing_service import DERIVATIVE_FORMAT_VERSION
+
+    # Mock head_object to return a derivative with matching etag and version
+    mock_response = {
+        "Metadata": {
+            "source-etag": "source-etag-123",
+            "format-version": str(DERIVATIVE_FORMAT_VERSION)
+        }
+    }
+    service.bucket_service.s3_client.head_object = MagicMock(
+        return_value=mock_response
+    )
+
+    # The derivative has matching source-etag and current format version
+    result = service._artifact_is_current("bucket", "key", "source-etag-123")
+    assert result is True, "Derivative with matching etag and format-version should be current"
