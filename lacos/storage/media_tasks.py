@@ -2,9 +2,11 @@
 
 import errno
 import logging
+from pathlib import Path
 
 from huey.contrib.djhuey import db_task
 
+from lacos.explorer.media_utils import AUDIO_EXTENSIONS
 from lacos.storage.services.background_task_service import BackgroundTaskService
 from lacos.storage.services.media_processing_service import MediaProcessingService
 
@@ -44,7 +46,8 @@ def scan_and_generate_peaks_task(
         for page in paginator.paginate(**page_kwargs):
             for obj in page.get("Contents", []):
                 key = obj["Key"]
-                if not key.lower().endswith(".wav"):
+                extension = Path(key).suffix.lower()
+                if extension not in AUDIO_EXTENSIONS:
                     continue
                 scanned += 1
                 generate_peaks_task(bucket_name, key, force=force)

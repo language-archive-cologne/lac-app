@@ -30,9 +30,10 @@ def test_enqueues_audio_files(MockBucketService, mock_gen_task):
     )
 
     assert result["success"] is True
-    assert result["enqueued"] == 1
-    assert result["audio_files"] == 1
+    assert result["enqueued"] == 2
+    assert result["audio_files"] == 2
     mock_gen_task.assert_any_call("test-bucket", "folder/track1.wav", force=False)
+    mock_gen_task.assert_any_call("test-bucket", "folder/track2.mp3", force=False)
 
 
 @patch("lacos.storage.media_tasks.generate_peaks_task")
@@ -54,6 +55,33 @@ def test_skips_peaks_json_files(MockBucketService, mock_gen_task):
 
     assert result["enqueued"] == 1
     mock_gen_task.assert_called_once_with("b", "folder/track.wav", force=False)
+
+
+@patch("lacos.storage.media_tasks.generate_peaks_task")
+@patch("lacos.storage.services.bucket_service.BucketService")
+def test_enqueues_mp3_audio_files(MockBucketService, mock_gen_task):
+    """Test that .mp3 files (and other audio formats) are enqueued alongside .wav files."""
+    paginator = MagicMock()
+    paginator.paginate.return_value = [
+        _make_s3_page([
+            "folder/track1.wav",
+            "folder/track2.mp3",
+            "folder/track3.flac",
+            "folder/image.png",
+        ]),
+    ]
+    MockBucketService.return_value.s3_client.get_paginator.return_value = paginator
+
+    result = scan_and_generate_peaks_task.call_local(
+        bucket_name="test-bucket", folder_path="folder"
+    )
+
+    assert result["success"] is True
+    assert result["enqueued"] == 3  # All audio formats should be enqueued
+    assert result["audio_files"] == 3
+    mock_gen_task.assert_any_call("test-bucket", "folder/track1.wav", force=False)
+    mock_gen_task.assert_any_call("test-bucket", "folder/track2.mp3", force=False)
+    mock_gen_task.assert_any_call("test-bucket", "folder/track3.flac", force=False)
 
 
 @patch("lacos.storage.media_tasks.generate_peaks_task")

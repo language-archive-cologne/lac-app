@@ -1,9 +1,11 @@
 """Management command to backfill audio sidecars (peaks, spectrogram, pitch) for existing audio files."""
 
 import logging
+from pathlib import Path
 
 from django.core.management.base import BaseCommand
 
+from lacos.explorer.media_utils import AUDIO_EXTENSIONS
 from lacos.storage.media_tasks import generate_peaks_task
 from lacos.storage.services.bucket_service import BucketService
 from lacos.storage.services.media_processing_service import MediaProcessingService
@@ -62,7 +64,8 @@ class Command(BaseCommand):
         for page in paginator.paginate(**page_kwargs):
             for obj in page.get("Contents", []):
                 key = obj["Key"]
-                if key.lower().endswith(".wav"):
+                extension = Path(key).suffix.lower()
+                if extension in AUDIO_EXTENSIONS:
                     audio_keys.append(key)
 
         self.stdout.write(f"Found {len(audio_keys)} audio files")
