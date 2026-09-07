@@ -508,6 +508,75 @@ def test_bundle_elan_resource_handles_storage_fetch_failure(client, monkeypatch)
 
 
 @pytest.mark.django_db
+def test_resource_access_view_does_not_wrap_s3_calls_in_a_db_transaction(client, monkeypatch):
+    """ResourceAccessView performs no writes, so it must not hold a DB
+    transaction open around its S3 calls. Left wrapped, a slow S3 response
+    can hold a PgBouncer connection past its transaction-pool query_timeout,
+    which fails on COMMIT with "query timeout" (production incident
+    2026-09-04 on /resource/<id>/<handle>/?action=analyze).
+    """
+    collection = Collection.objects.create(identifier="hdl:test/collection-txn-probe")
+    bundle = Bundle.objects.create(identifier="hdl:test/bundle-txn-probe")
+    BundleStructuralInfo.objects.create(bundle=bundle, is_member_of_collection=collection)
+    bundle_resources = BundleResources.objects.create(bundle=bundle)
+    resource = WrittenResource.objects.create(
+        file_pid="hdl:test/txn-probe-file",
+        file_name="probe.txt",
+        mime_type="text/plain",
+    )
+    bundle_resources.bundle_written_resources.add(resource)
+
+    savepoints_before = len(connection.savepoint_ids)
+    observed = {}
+
+    def fake_resolve(*_args, **_kwargs):
+        # Stand-in for the S3 round trip: capture whether a DB transaction
+        # (savepoint) is open around this external call.
+        observed["savepoints_during_s3_call"] = len(connection.savepoint_ids)
+        return {
+            "bucket": "bucket-a",
+            "key": "path/probe.txt",
+            "url": "https://example.test/preview",
+        }
+
+    class DummyService:
+        def generate_presigned_url(self, _bucket, _key, response_headers=None):
+            return "https://example.test/download"
+
+    monkeypatch.setattr(
+        "lacos.explorer.views.bundles.ResourceMappingService",
+        lambda *args, **kwargs: DummyService(),
+    )
+    monkeypatch.setattr(
+        "lacos.explorer.views.bundles.resolve_resource_to_presigned",
+        fake_resolve,
+    )
+    monkeypatch.setattr(
+        "lacos.explorer.views.bundles.ACLEvaluationService.evaluate",
+        lambda *_args, **_kwargs: SimpleNamespace(allowed=True),
+    )
+    monkeypatch.setattr(
+        "lacos.explorer.views.bundles.ACLEvaluationService.enforcement_enabled",
+        True,
+        raising=False,
+    )
+
+    response = client.get(
+        reverse(
+            "explorer:resource_access",
+            kwargs={"bundle_id": bundle.pk, "resource_id": resource.pk},
+        ),
+        {"action": "view"},
+    )
+
+    assert response.status_code == 200
+    assert observed.get("savepoints_during_s3_call") == savepoints_before, (
+        "ResourceAccessView opened a nested DB transaction around an external "
+        "S3 call; mark the view non_atomic_requests"
+    )
+
+
+@pytest.mark.django_db
 def test_imdi_xml_view_rejects_requests_without_signed_token(client):
     response = client.get(reverse("explorer:imdi_xml"), {"bucket": "bucket-a", "key": "path/file.imdi"})
 

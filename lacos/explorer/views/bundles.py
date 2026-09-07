@@ -8,8 +8,10 @@ from urllib.parse import unquote
 
 from django.conf import settings
 from django.db.models import OuterRef, Prefetch, Subquery
+from django.db.transaction import non_atomic_requests
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import DetailView
@@ -469,8 +471,16 @@ class BundleResourcesView(View):
         return render(request, 'bundle_resources.html', context)
 
 
+@method_decorator(non_atomic_requests, name="dispatch")
 class ResourceAccessView(View):
-    """View for accessing resources either through direct download or streaming."""
+    """View for accessing resources either through direct download or streaming.
+
+    Performs no writes, only S3 lookups (presigned URLs, sidecar existence
+    checks) alongside its reads, so it opts out of ATOMIC_REQUESTS: wrapping
+    those external calls in an open DB transaction let a slow S3 response
+    hold a PgBouncer connection past its transaction-pool query_timeout,
+    which then failed on COMMIT with "query timeout".
+    """
 
     permission_denied_message = _("You do not have permission to access this resource.")
 
@@ -991,12 +1001,16 @@ class ResourceAccessView(View):
             return False
 
 
+@method_decorator(non_atomic_requests, name="dispatch")
 class ResourceByHandleView(View):
     """Resolve a flat resource handle to its resource landing page.
 
     Supports the direct URL pattern: /resource/<handle_id>/
     e.g. /resource/11341/00-0000-0000-0000-1B28-A
     which maps to file_pid = "hdl:11341/00-0000-0000-0000-1B28-A"
+
+    Performs no writes and delegates into ResourceAccessView, so it opts out
+    of ATOMIC_REQUESTS for the same reason (see ResourceAccessView).
     """
 
     @staticmethod
