@@ -1,10 +1,12 @@
 import logging
+from pathlib import Path
 from typing import Iterable, Optional, Set
 
 from django.conf import settings
 from django.db.models import Count, Q
 from django.utils import timezone
 
+from lacos.explorer.media_utils import AUDIO_EXTENSIONS
 from lacos.storage.models import UploadSession, S3FileObject
 from lacos.storage.services.upload_service import UploadService
 from lacos.storage.services.folder_cache_service import FolderStructureCacheService
@@ -168,7 +170,8 @@ class UploadVerificationService:
 
             for file_obj in session.files.filter(status="verified"):
                 file_name = file_obj.file_name or ""
-                if not file_name.lower().endswith(".wav"):
+                extension = Path(file_name).suffix.lower()
+                if extension not in AUDIO_EXTENSIONS:
                     continue
                 bucket = file_obj.bucket_name or session.bucket_name
                 if bucket and file_obj.s3_key:

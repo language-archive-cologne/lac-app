@@ -1,4 +1,4 @@
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 from unittest.mock import patch
 
 import pytest
@@ -228,3 +228,108 @@ def test_verify_keys_can_auto_enqueue_audio_sidecars_when_enabled(
     )
 
     mock_generate_peaks_task.assert_called_once_with("test-bucket", "uploads/audio.wav")
+
+
+@pytest.mark.django_db
+@patch("lacos.storage.services.upload_verification_service.settings")
+@patch("lacos.storage.media_tasks.generate_peaks_task")
+def test_verify_keys_auto_enqueues_mp3_audio_sidecars(
+    mock_generate_peaks_task,
+    mock_settings,
+    django_user_model,
+):
+    """Test that non-wav audio formats (like mp3) are also enqueued for sidecar generation."""
+    mock_settings.AUDIO_SIDECAR_AUTO_GENERATE = True
+    user = django_user_model.objects.create_user(username="verifier6", password="pass")
+    session = UploadSession.objects.create(
+        user=user,
+        folder_name="uploads",
+        bucket_name="test-bucket",
+        total_files=1,
+    )
+    file_obj = S3FileObject.objects.create(
+        session=session,
+        file_name="audio.mp3",
+        s3_key="uploads/audio.mp3",
+    )
+
+    upload_service = Mock()
+    upload_service.mark_upload_complete.return_value = {
+        "success": True,
+        "exists": True,
+        "s3_key": file_obj.s3_key,
+        "file_size": 10,
+        "content_type": "audio/mpeg",
+    }
+    upload_service._format_size.return_value = "10 B"
+
+    service = UploadVerificationService(upload_service=upload_service)
+    service.verify_keys(
+        [file_obj.s3_key],
+        upload_session=session,
+        bucket_name="test-bucket",
+    )
+
+    mock_generate_peaks_task.assert_called_once_with("test-bucket", "uploads/audio.mp3")
+
+
+@pytest.mark.django_db
+@patch("lacos.storage.services.upload_verification_service.settings")
+@patch("lacos.storage.media_tasks.generate_peaks_task")
+def test_verify_keys_auto_enqueues_multiple_audio_formats(
+    mock_generate_peaks_task,
+    mock_settings,
+    django_user_model,
+):
+    """Test that various audio formats are enqueued for sidecar generation."""
+    mock_settings.AUDIO_SIDECAR_AUTO_GENERATE = True
+    user = django_user_model.objects.create_user(username="verifier7", password="pass")
+    session = UploadSession.objects.create(
+        user=user,
+        folder_name="uploads",
+        bucket_name="test-bucket",
+        total_files=3,
+    )
+
+    # Create audio files with different formats
+    mp3_file = S3FileObject.objects.create(
+        session=session,
+        file_name="song.mp3",
+        s3_key="uploads/song.mp3",
+    )
+    flac_file = S3FileObject.objects.create(
+        session=session,
+        file_name="song.flac",
+        s3_key="uploads/song.flac",
+    )
+    m4a_file = S3FileObject.objects.create(
+        session=session,
+        file_name="song.m4a",
+        s3_key="uploads/song.m4a",
+    )
+
+    upload_service = Mock()
+    upload_service.mark_upload_complete.return_value = {
+        "success": True,
+        "exists": True,
+        "s3_key": "",
+        "file_size": 10,
+        "content_type": "audio/mpeg",
+    }
+    upload_service._format_size.return_value = "10 B"
+
+    service = UploadVerificationService(upload_service=upload_service)
+    service.verify_keys(
+        [mp3_file.s3_key, flac_file.s3_key, m4a_file.s3_key],
+        upload_session=session,
+        bucket_name="test-bucket",
+    )
+
+    # Verify that all audio files were enqueued
+    assert mock_generate_peaks_task.call_count == 3
+    expected_calls = [
+        call("test-bucket", "uploads/song.mp3"),
+        call("test-bucket", "uploads/song.flac"),
+        call("test-bucket", "uploads/song.m4a"),
+    ]
+    mock_generate_peaks_task.assert_has_calls(expected_calls, any_order=True)
