@@ -39,14 +39,29 @@ expected_theme_artifact="${deployment_dir}/.theme-output.${commit}.css"
 theme_destination="${deployment_dir}/theme/static/css/output.css"
 theme_temporary=
 
+# Raised while huey is intentionally stopped for the web-service recreate, so
+# an interrupted deployment never leaves the worker down. Anything that aborts
+# inside that window - a cancelled CI job, a health-check timeout - would
+# otherwise exit with huey stopped and nothing to notice.
+huey_stopped=0
+
 cleanup() {
   local status=$?
   rm -f -- "${theme_artifact}"
   if [[ -n "${theme_temporary}" ]]; then
     rm -f -- "${theme_temporary}"
   fi
+  if (( huey_stopped )); then
+    log "Deployment interrupted while huey was stopped; restoring the worker"
+    # Best effort: no --wait so the trap cannot hang, and failures must not
+    # mask the original exit status.
+    docker compose -f "${compose_file}" up -d --no-build --no-deps huey </dev/null || true
+  fi
   exit "${status}"
 }
+# Bash runs an EXIT trap when the shell is terminated by HUP, INT or TERM, so
+# this covers a cancelled job (the dying ssh client delivers HUP to this
+# script) without also trapping those signals, which would run cleanup twice.
 trap cleanup EXIT
 
 require_command docker
@@ -112,6 +127,7 @@ if [[ "${mode}" == "full" ]]; then
   log "Rebuilding Django and Huey"
   docker compose -f "${compose_file}" build django huey </dev/null
   docker compose -f "${compose_file}" stop -t 30 huey </dev/null
+  huey_stopped=1
   for web_service in "${web_services[@]}"; do
     docker compose -f "${compose_file}" up \
       -d \
@@ -128,9 +144,11 @@ if [[ "${mode}" == "full" ]]; then
     --wait \
     --wait-timeout 120 \
     huey </dev/null
+  huey_stopped=0
 else
   log "Restarting Django and Huey without rebuilding images"
   docker compose -f "${compose_file}" stop -t 30 huey </dev/null
+  huey_stopped=1
   for web_service in "${web_services[@]}"; do
     docker compose -f "${compose_file}" up \
       -d \
@@ -148,6 +166,7 @@ else
     --wait \
     --wait-timeout 120 \
     huey </dev/null
+  huey_stopped=0
 fi
 
 log "Ensuring the public search artifact directory is worker-writable"
