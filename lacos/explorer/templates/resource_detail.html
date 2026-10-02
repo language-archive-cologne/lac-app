@@ -156,6 +156,48 @@
             });
           }
         }
+
+        // Position on a segment cited in the URL, e.g.
+        //   /resource/11341/<pid>/#t=20.500,24.000&id=a2
+        // Seek and highlight only — never autoplay. Browsers block playback
+        // without a user gesture, and a cited link should open ready to play
+        // rather than start talking. See issue #1.
+        if (window.location.hash) {
+          var seekTo = null;
+          if (ws) {
+            seekTo = function(start) { ws.setTime(start); };
+          } else {
+            var citedAudioEl = viewerRoot.querySelector('audio');
+            if (citedAudioEl) {
+              seekTo = function(start) {
+                citedAudioEl.currentTime = Math.max(start, 0);
+              };
+            }
+          }
+
+          import('{% static "js/src/elan-segment-link.js" %}')
+            .then(function(segmentLink) {
+              var cited = segmentLink.initSegmentLink(viewerRoot, {
+                hash: window.location.hash,
+                seek: seekTo,
+              });
+              if (!cited) return;
+              // Keep the sync loop's bookkeeping consistent with the row we
+              // just highlighted, so the first timeupdate does not leave two
+              // rows marked.
+              if (cited.row && cited.row.element) {
+                activeRow = cited.row.element;
+              }
+              // WaveSurfer ignores setTime before the waveform is decoded, so
+              // repeat the seek once it is ready. Harmless if it already was.
+              if (ws && cited.start !== null) {
+                ws.on('ready', function() { ws.setTime(cited.start); });
+              }
+            })
+            .catch(function(error) {
+              console.error('Segment link init failed:', error);
+            });
+        }
       }
 
       // Keyboard shortcuts
