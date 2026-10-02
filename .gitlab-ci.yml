@@ -20,6 +20,7 @@ theme_build:
   tags:
     - charch
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "main"'
   script:
     - cd theme/static_src
@@ -33,12 +34,26 @@ theme_build:
       - theme/static/css/output.css
     expire_in: 1 day
 
+js_tests:
+  stage: validate
+  image: node:22-alpine
+  tags:
+    - charch
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "main"'
+  script:
+    - cd lacos
+    - npm ci --no-audit --no-fund
+    - npx jest --ci
+
 production_nginx_config:
   stage: validate
   image: nginx:1.28-alpine
   tags:
     - charch
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "main"'
   script:
     # Private production values are not available to validation jobs. Empty
