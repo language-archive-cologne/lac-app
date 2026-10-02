@@ -72,6 +72,7 @@ from .utils import (
     resolve_existing_object,
     resolve_resource_to_presigned,
 )
+from ..templatetags.explorer_extras import handle_resolver_url
 
 
 logger = logging.getLogger(__name__)
@@ -902,6 +903,13 @@ class ResourceAccessView(View):
             'download_key': download_key,
             'download_filename': getattr(resource, 'file_name', None),
             'elan_context': elan_context,
+            # Per-segment citation links are absolute handle URLs, so they are
+            # valid from any context - including this modal, which the player
+            # mode tabs swap into the standalone page. Only *consuming* the
+            # fragment is standalone-only. See issue #1.
+            'segment_link_base': handle_resolver_url(
+                getattr(resource, 'file_pid', None) or '',
+            ) or None,
             'xml_content': xml_preview,
             'markdown_html': markdown_html,
             'peaks_url': peaks_url,
@@ -960,6 +968,12 @@ class ResourceAccessView(View):
             'bundle': bundle,
             'parent_title': bundle.resource_page_title or bundle.identifier,
             'resource': resource,
+            # Base for per-segment citation links. Set on the standalone page
+            # only: the HTMX modal is injected into the bundle page, whose URL
+            # owns the fragment. See issue #1.
+            'segment_link_base': handle_resolver_url(
+                getattr(resource, 'file_pid', None) or '',
+            ) or None,
         }
 
         return render(request, 'resource_detail.html', context)

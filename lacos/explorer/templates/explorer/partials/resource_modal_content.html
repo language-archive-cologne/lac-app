@@ -412,6 +412,7 @@
                 <tbody class="divide-y divide-slate-200">
                   {% for annotation in elan_context.annotations %}
                     <tr class="hover:bg-blue-50 transition-colors"
+                        {% if annotation.id %}id="ann-{{ annotation.id }}" data-annotation-id="{{ annotation.id }}"{% endif %}
                         {% if annotation.start is not None %}data-annotation-start="{{ annotation.start|stringformat:'.3f' }}"{% endif %}
                         {% if annotation.end is not None %}data-annotation-end="{{ annotation.end|stringformat:'.3f' }}"{% endif %}>
                       {% if elan_context and elan_context.audio_url %}
@@ -429,7 +430,7 @@
                           {% endif %}
                         </td>
                       {% endif %}
-                      <td class="px-3 py-2 text-slate-500 whitespace-nowrap font-mono text-xs" data-col-key="__time">
+                      <td class="px-3 py-2 text-slate-500 whitespace-nowrap font-mono text-xs group" data-col-key="__time">
                         {% if annotation.start is not None %}
                           {{ annotation.start|floatformat:2 }}s
                         {% else %}
@@ -440,6 +441,20 @@
                           {{ annotation.end|floatformat:2 }}s
                         {% else %}
                           &mdash;
+                        {% endif %}
+                        {% if segment_link_base %}
+                          {% segment_fragment annotation as segment_anchor %}
+                          {% if segment_anchor %}
+                            <button type="button"
+                                    class="btn btn-ghost btn-xs btn-square align-middle opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                                    data-copy-text="{{ segment_link_base }}{{ segment_anchor }}"
+                                    title="{{ segment_link_base }}{{ segment_anchor }}"
+                                    aria-label="{% translate 'Copy link to this segment' %}">
+                              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5m4.5-4.5l1.5-1.5a4 4 0 115.656 5.656l-3 3a4 4 0 01-5.656 0" />
+                              </svg>
+                            </button>
+                          {% endif %}
                         {% endif %}
                       </td>
                       {% if elan_context.tier_headers %}
