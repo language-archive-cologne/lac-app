@@ -13,5 +13,8 @@
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.1.18"
+  },
+  "overrides": {
+    "@parcel/watcher": "^2.6.0"
   }
 }
