@@ -277,6 +277,13 @@ LOGGING = {
             "handlers": ["console", "mail_admins"],
             "propagate": False,
         },
+        # A failed database backup logs one ERROR per run, so admins get one
+        # email per failed night.
+        "lacos.common.db_backup_tasks": {
+            "level": "INFO",
+            "handlers": ["console", "mail_admins"],
+            "propagate": False,
+        },
     },
 }
 

@@ -91,3 +91,11 @@ def test_production_saml_config_does_not_depend_on_stale_local_metadata_file():
 
         assert env["SAML_IDP_METADATA_LOCAL"] == ""
         assert env["SAML_METADATA_REFRESH_ENABLED"] == "false"
+
+
+def test_production_huey_backs_up_with_docker_exec_into_its_own_prefix():
+    env = _service_environment("huey")
+
+    assert env["DB_BACKUP_ENVIRONMENT"] == "production"
+    # docker exec avoids `docker compose run`, which must read the 0600 env files.
+    assert env["DB_BACKUP_POSTGRES_CONTAINER"] == "lacos_production_postgres"

@@ -37,13 +37,36 @@ def _run_backup(*, trigger: str = "manual") -> dict:
         logger.info("Database backup skipped (disabled), trigger=%s", trigger)
         return {"success": False, "skipped": "db_backup_disabled"}
 
-    logger.info("Database backup started, trigger=%s", trigger)
-    service = DatabaseBackupService()
-    result = service.run()
+    environment = getattr(settings, "DB_BACKUP_ENVIRONMENT", "local")
+    logger.info(
+        "Database backup started, environment=%s, trigger=%s",
+        environment,
+        trigger,
+    )
+    # One ERROR per failed run on this logger. Production routes it to mail_admins.
+    try:
+        result = DatabaseBackupService().run()
+    except Exception:
+        logger.exception(
+            "Database backup failed, environment=%s, trigger=%s",
+            environment,
+            trigger,
+        )
+        raise
     if result.get("success"):
-        logger.info("Database backup succeeded, trigger=%s, key=%s", trigger, result.get("key"))
+        logger.info(
+            "Database backup succeeded, environment=%s, trigger=%s, key=%s",
+            environment,
+            trigger,
+            result.get("key"),
+        )
     else:
-        logger.error("Database backup failed, trigger=%s, error=%s", trigger, result)
+        logger.error(
+            "Database backup failed, environment=%s, trigger=%s, error=%s",
+            environment,
+            trigger,
+            result,
+        )
     return result
 
 

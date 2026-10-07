@@ -68,3 +68,13 @@ def test_loggers_with_admin_email_handlers_log_once_and_keep_console_output():
         if "mail_admins" in logger_config.get("handlers", []):
             assert logger_config["propagate"] is False, logger_name
             assert "console" in logger_config["handlers"], logger_name
+
+
+def test_database_backup_failures_are_routed_to_admin_email():
+    logging_config = _production_logging()
+
+    backup_logger = logging_config["loggers"]["lacos.common.db_backup_tasks"]
+
+    assert "mail_admins" in backup_logger["handlers"]
+    assert "console" in backup_logger["handlers"]
+    assert backup_logger["propagate"] is False

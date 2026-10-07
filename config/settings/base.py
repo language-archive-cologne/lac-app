@@ -595,6 +595,14 @@ DB_BACKUP_BACKUP_DIR = env("DB_BACKUP_BACKUP_DIR", default="/backups")
 DB_BACKUP_S3_BUCKET = env("DB_BACKUP_S3_BUCKET", default="backups")
 DB_BACKUP_S3_PREFIX = env("DB_BACKUP_S3_PREFIX", default="db-backups")
 DB_BACKUP_RETENTION_DAYS = env.int("DB_BACKUP_RETENTION_DAYS", default=7)
+# Names the environment in the S3 key (<prefix>/<env>/backup_<env>_<ts>.sql.gz) so
+# environments that share a bucket never overwrite or prune each other's dumps.
+DB_BACKUP_ENVIRONMENT = env("DB_BACKUP_ENVIRONMENT", default="local")
+# Newest dumps that retention always keeps, however old they are.
+DB_BACKUP_KEEP_MIN = env.int("DB_BACKUP_KEEP_MIN", default=3)
+# When set, run backup/rmbackup with `docker exec` in this container instead of
+# `docker compose run`, which must read env files the worker user cannot read.
+DB_BACKUP_POSTGRES_CONTAINER = env("DB_BACKUP_POSTGRES_CONTAINER", default="")
 DB_BACKUP_CRON_HOUR = env.int("DB_BACKUP_CRON_HOUR", default=2)
 DB_BACKUP_CRON_MINUTE = env.int("DB_BACKUP_CRON_MINUTE", default=0)
 

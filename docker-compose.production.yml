@@ -314,6 +314,8 @@ services:
       DB_BACKUP_COMPOSE_FILE: "docker-compose.production.yml"
       DB_BACKUP_COMPOSE_PROJECT_DIR: "/app"
       DB_BACKUP_COMPOSE_PROJECT_NAME: "${COMPOSE_PROJECT_NAME:-lac-app}"
+      DB_BACKUP_ENVIRONMENT: "production"
+      DB_BACKUP_POSTGRES_CONTAINER: "lacos_production_postgres"
       HUEY_IMMEDIATE: "false"
       HUEY_WORKERS: "4"
       LAC_MEDIA_TMP_DIR: "/app/.tmp/media-processing"

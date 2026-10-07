@@ -21,6 +21,8 @@ def test_database_backup_service_uploads_and_prunes(settings, tmp_path):
     settings.DB_BACKUP_S3_BUCKET = "backups"
     settings.DB_BACKUP_S3_PREFIX = "db-backups"
     settings.DB_BACKUP_RETENTION_DAYS = 7
+    settings.DB_BACKUP_ENVIRONMENT = "dev"
+    settings.DB_BACKUP_KEEP_MIN = 1
 
     backup_dir = tmp_path / "backups"
     backup_dir.mkdir(parents=True, exist_ok=True)
@@ -35,9 +37,15 @@ def test_database_backup_service_uploads_and_prunes(settings, tmp_path):
     paginator.paginate.return_value = [
         {
             "Contents": [
-                {"Key": "db-backups/backup_old.sql.gz", "LastModified": old_timestamp},
-                {"Key": "db-backups/backup_recent.sql.gz", "LastModified": fresh_timestamp},
-                {"Key": "db-backups/notes.txt", "LastModified": old_timestamp},
+                {
+                    "Key": "db-backups/dev/backup_dev_old.sql.gz",
+                    "LastModified": old_timestamp,
+                },
+                {
+                    "Key": "db-backups/dev/backup_dev_recent.sql.gz",
+                    "LastModified": fresh_timestamp,
+                },
+                {"Key": "db-backups/dev/notes.txt", "LastModified": old_timestamp},
             ]
         }
     ]
@@ -52,21 +60,26 @@ def test_database_backup_service_uploads_and_prunes(settings, tmp_path):
 
     result = service.run()
 
+    expected_key = "db-backups/dev/backup_dev_2026_02_06T02_00_00.sql.gz"
     assert result["success"] is True
     assert result["backup_file"] == dump_file.name
     assert result["bucket"] == "backups"
-    assert result["key"] == f"db-backups/{dump_file.name}"
+    assert result["key"] == expected_key
     assert result["remote_removed"] == 1
     assert result["local_removed"] == 1
 
     s3_client.upload_file.assert_called_once_with(
         str(dump_file),
         "backups",
-        f"db-backups/{dump_file.name}",
+        expected_key,
+    )
+    paginator.paginate.assert_called_once_with(
+        Bucket="backups",
+        Prefix="db-backups/dev/",
     )
     s3_client.delete_object.assert_called_once_with(
         Bucket="backups",
-        Key="db-backups/backup_old.sql.gz",
+        Key="db-backups/dev/backup_dev_old.sql.gz",
     )
 
 
@@ -421,3 +434,156 @@ def test_database_backup_service_ignores_local_cleanup_os_error(settings, tmp_pa
     assert result["success"] is True
     assert result["local_removed"] == 0
     assert dump_file.exists()
+
+
+def _paginator_with(contents):
+    paginator = Mock()
+    paginator.paginate.return_value = [{"Contents": contents}]
+    return paginator
+
+
+def _write_dump(tmp_path, name="backup_2026_10_07T02_00_00.sql.gz"):
+    backup_dir = tmp_path / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    dump_file = backup_dir / name
+    dump_file.write_bytes(b"dump")
+    return dump_file
+
+
+def _backup_settings(settings, tmp_path, environment):
+    settings.DB_BACKUP_COMPOSE_PROJECT_DIR = str(tmp_path)
+    settings.DB_BACKUP_BACKUP_DIR = str(tmp_path / "backups")
+    settings.DB_BACKUP_S3_BUCKET = "backups"
+    settings.DB_BACKUP_S3_PREFIX = "db-backups"
+    settings.DB_BACKUP_RETENTION_DAYS = 7
+    settings.DB_BACKUP_ENVIRONMENT = environment
+    settings.DB_BACKUP_KEEP_MIN = 0
+    settings.DB_BACKUP_POSTGRES_CONTAINER = ""
+
+
+def test_retention_never_deletes_dumps_of_another_environment(settings, tmp_path):
+    _backup_settings(settings, tmp_path, "dev")
+    _write_dump(tmp_path)
+    fixed_now = timezone.now()
+    old = fixed_now - timedelta(days=30)
+
+    s3_client = Mock()
+    s3_client.get_paginator.return_value = _paginator_with(
+        [
+            {"Key": f"{key}.sql.gz", "LastModified": old}
+            for key in (
+                "db-backups/dev/backup_dev_2026_09_01T02_00_00",
+                # A misplaced production dump and a nested key under the dev
+                # prefix must stay.
+                "db-backups/dev/backup_production_2026_09_01T02_00_00",
+                "db-backups/dev/archive/backup_dev_2026_08_01T02_00_00",
+            )
+        ],
+    )
+
+    result = DatabaseBackupService(
+        s3_client=s3_client,
+        command_runner=_runner_success,
+        now_fn=lambda: fixed_now,
+    ).run()
+
+    assert result["success"] is True
+    s3_client.get_paginator.return_value.paginate.assert_called_once_with(
+        Bucket="backups",
+        Prefix="db-backups/dev/",
+    )
+    s3_client.delete_object.assert_called_once_with(
+        Bucket="backups",
+        Key="db-backups/dev/backup_dev_2026_09_01T02_00_00.sql.gz",
+    )
+
+
+def test_production_and_dev_dumps_get_separate_keys(settings, tmp_path):
+    keys = {}
+    for environment in ("production", "dev"):
+        _backup_settings(settings, tmp_path, environment)
+        dump_file = _write_dump(tmp_path)
+        s3_client = Mock()
+        s3_client.get_paginator.return_value = _paginator_with([])
+        keys[environment] = DatabaseBackupService(
+            s3_client=s3_client,
+            command_runner=_runner_success,
+        ).run()["key"]
+        dump_file.unlink(missing_ok=True)
+
+    timestamp = "2026_10_07T02_00_00"
+    assert keys == {
+        "production": f"db-backups/production/backup_production_{timestamp}.sql.gz",
+        "dev": f"db-backups/dev/backup_dev_{timestamp}.sql.gz",
+    }
+
+
+def test_retention_keeps_newest_dumps_even_when_old(settings, tmp_path):
+    _backup_settings(settings, tmp_path, "production")
+    settings.DB_BACKUP_KEEP_MIN = 2
+    _write_dump(tmp_path)
+    fixed_now = timezone.now()
+
+    def item(days, name):
+        return {
+            "Key": f"db-backups/production/backup_production_{name}.sql.gz",
+            "LastModified": fixed_now - timedelta(days=days),
+        }
+
+    s3_client = Mock()
+    s3_client.get_paginator.return_value = _paginator_with(
+        [item(40, "oldest"), item(20, "newest"), item(30, "middle")],
+    )
+
+    result = DatabaseBackupService(
+        s3_client=s3_client,
+        command_runner=_runner_success,
+        now_fn=lambda: fixed_now,
+    ).run()
+
+    assert result["remote_removed"] == 1
+    s3_client.delete_object.assert_called_once_with(
+        Bucket="backups",
+        Key="db-backups/production/backup_production_oldest.sql.gz",
+    )
+
+
+def test_postgres_container_setting_uses_docker_exec_only(settings, tmp_path):
+    _backup_settings(settings, tmp_path, "production")
+    settings.DB_BACKUP_POSTGRES_CONTAINER = "lacos_production_postgres"
+    dump_file = _write_dump(tmp_path)
+    calls = []
+
+    def _runner(command, **kwargs):
+        calls.append(list(command))
+        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+
+    s3_client = Mock()
+    s3_client.get_paginator.return_value = _paginator_with([])
+
+    result = DatabaseBackupService(s3_client=s3_client, command_runner=_runner).run()
+
+    assert result["success"] is True
+    assert calls == [
+        ["docker", "exec", "lacos_production_postgres", "backup"],
+        ["docker", "exec", "lacos_production_postgres", "rmbackup", dump_file.name],
+    ]
+
+
+def test_upload_failure_is_reported_and_keeps_local_dump(settings, tmp_path):
+    _backup_settings(settings, tmp_path, "production")
+    dump_file = _write_dump(tmp_path)
+
+    s3_client = Mock()
+    s3_client.upload_file.side_effect = RuntimeError("bucket missing")
+
+    result = DatabaseBackupService(
+        s3_client=s3_client,
+        command_runner=_runner_success,
+    ).run()
+
+    assert result["success"] is False
+    assert result["error"] == "upload_failed"
+    assert "bucket missing" in result["detail"]
+    assert dump_file.exists()
+    s3_client.delete_object.assert_not_called()

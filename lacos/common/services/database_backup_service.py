@@ -40,6 +40,13 @@ class DatabaseBackupService:
         self.s3_prefix = str(getattr(settings, "DB_BACKUP_S3_PREFIX", ""))
         self.retention_days = int(getattr(settings, "DB_BACKUP_RETENTION_DAYS", 7))
         self.docker_api_version = str(getattr(settings, "DB_BACKUP_DOCKER_API_VERSION", "")).strip()
+        self.environment = self._normalize_environment(
+            getattr(settings, "DB_BACKUP_ENVIRONMENT", "local"),
+        )
+        self.keep_min = max(0, int(getattr(settings, "DB_BACKUP_KEEP_MIN", 3)))
+        self.postgres_container = str(
+            getattr(settings, "DB_BACKUP_POSTGRES_CONTAINER", ""),
+        ).strip()
 
         self.command_runner = command_runner or subprocess.run
         self.now_fn = now_fn or timezone.now
@@ -47,7 +54,10 @@ class DatabaseBackupService:
 
     def run(self) -> dict:
         """Run full workflow: backup, upload, local cleanup, and S3 retention cleanup."""
-        command_result = self._run_backup_command()
+        if self.postgres_container:
+            command_result = self._run_exec_command("backup")
+        else:
+            command_result = self._run_backup_command()
         if command_result.returncode != 0:
             logger.error(
                 "Database backup command failed with return code %s: %s",
@@ -70,7 +80,25 @@ class DatabaseBackupService:
             }
 
         s3_key = self._build_s3_key(backup_file.name)
-        self.s3_client.upload_file(str(backup_file), self.bucket_name, s3_key)
+        try:
+            self.s3_client.upload_file(str(backup_file), self.bucket_name, s3_key)
+        except Exception as exc:
+            # Any upload failure must be reported, not raised.
+            # Keep the local dump: it is the only copy of this backup.
+            logger.exception(
+                "Upload of %s to s3://%s/%s failed",
+                backup_file.name,
+                self.bucket_name,
+                s3_key,
+            )
+            return {
+                "success": False,
+                "error": "upload_failed",
+                "detail": f"{type(exc).__name__}: {exc}",
+                "backup_file": backup_file.name,
+                "bucket": self.bucket_name,
+                "key": s3_key,
+            }
         logger.info("Uploaded backup file %s to s3://%s/%s", backup_file.name, self.bucket_name, s3_key)
 
         local_removed = self._remove_local_backups()
@@ -84,6 +112,11 @@ class DatabaseBackupService:
             "local_removed": local_removed,
             "remote_removed": remote_removed,
         }
+
+    def _run_exec_command(self, *args: str) -> CompletedProcess[str]:
+        """Run a maintenance script in the postgres container named by the settings."""
+        command = ["docker", "exec", self.postgres_container, *args]
+        return self._run_command(command, "docker exec")
 
     def _run_backup_command(self) -> subprocess.CompletedProcess[str]:
         command = self._backup_command()
@@ -320,7 +353,10 @@ class DatabaseBackupService:
     def _remove_local_backups(self) -> int:
         removed = 0
         for backup_file in self.backup_dir.glob("backup_*.sql.gz"):
-            command_result = self._run_remove_backup_command(backup_file.name)
+            if self.postgres_container:
+                command_result = self._run_exec_command("rmbackup", backup_file.name)
+            else:
+                command_result = self._run_remove_backup_command(backup_file.name)
             if command_result.returncode == 0:
                 removed += 1
                 continue
@@ -339,27 +375,55 @@ class DatabaseBackupService:
         return removed
 
     def _remove_old_remote_backups(self) -> int:
+        """Delete this environment's dumps older than the retention period.
+
+        Only keys directly under ``<prefix>/<env>/`` named ``backup_<env>_*.sql.gz``
+        are candidates, so one environment never prunes another's dumps. The newest
+        ``keep_min`` dumps are always kept, however old they are.
+        """
         removed = 0
         cutoff = self.now_fn() - timedelta(days=self.retention_days)
+        env_prefix = self._environment_prefix()
 
+        backups = []
         paginator = self.s3_client.get_paginator("list_objects_v2")
-        for page in paginator.paginate(Bucket=self.bucket_name, Prefix=self._prefix_with_slash()):
+        for page in paginator.paginate(Bucket=self.bucket_name, Prefix=env_prefix):
             for item in page.get("Contents", []):
                 key = item.get("Key", "")
-                if not self._is_backup_key(key):
-                    continue
-
                 last_modified = item.get("LastModified")
-                if last_modified and last_modified < cutoff:
-                    self.s3_client.delete_object(Bucket=self.bucket_name, Key=key)
-                    removed += 1
+                if last_modified and self._is_own_backup_key(key, env_prefix):
+                    backups.append((last_modified, key))
 
-        logger.info("Removed %s remote backup files older than %s days.", removed, self.retention_days)
+        backups.sort(reverse=True)
+        for last_modified, key in backups[self.keep_min:]:
+            if last_modified < cutoff:
+                self.s3_client.delete_object(Bucket=self.bucket_name, Key=key)
+                removed += 1
+
+        logger.info(
+            "Removed %s remote %s backup files older than %s days (kept newest %s).",
+            removed,
+            self.environment,
+            self.retention_days,
+            self.keep_min,
+        )
         return removed
 
-    def _is_backup_key(self, key: str) -> bool:
-        filename = Path(key).name
-        return filename.startswith("backup_") and filename.endswith(".sql.gz")
+    def _is_own_backup_key(self, key: str, env_prefix: str) -> bool:
+        if not key.startswith(env_prefix):
+            return False
+        filename = key[len(env_prefix):]
+        return (
+            "/" not in filename
+            and filename.startswith(f"backup_{self.environment}_")
+            and filename.endswith(".sql.gz")
+        )
+
+    @staticmethod
+    def _normalize_environment(value) -> str:
+        raw = str(value or "").strip().lower()
+        environment = re.sub(r"[^a-z0-9-]+", "-", raw).strip("-")
+        return environment or "local"
 
     def _prefix_with_slash(self) -> str:
         prefix = self.s3_prefix.strip("/")
@@ -367,11 +431,13 @@ class DatabaseBackupService:
             return ""
         return f"{prefix}/"
 
+    def _environment_prefix(self) -> str:
+        return f"{self._prefix_with_slash()}{self.environment}/"
+
     def _build_s3_key(self, filename: str) -> str:
-        prefix = self._prefix_with_slash()
-        if not prefix:
-            return filename
-        return f"{prefix}{filename}"
+        """``backup_<ts>.sql.gz`` -> ``<prefix>/<env>/backup_<env>_<ts>.sql.gz``."""
+        stem = filename.removeprefix("backup_")
+        return f"{self._environment_prefix()}backup_{self.environment}_{stem}"
 
     def _build_s3_client(self):
         endpoint_url = getattr(settings, "AWS_S3_ENDPOINT_URL", None)
