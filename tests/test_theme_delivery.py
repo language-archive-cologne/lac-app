@@ -17,10 +17,17 @@ def test_theme_uses_the_locked_local_tailwind_binary():
     assert "npx" not in package["scripts"]["build"]
 
 
+def _version_tuple(version: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in version.split("-")[0].split("."))
+
+
 def test_theme_lockfile_contains_the_patched_picomatch_release():
     lockfile = json.loads(THEME_LOCK.read_text())
 
-    assert lockfile["packages"]["node_modules/picomatch"]["version"] == "2.3.2"
+    # 2.3.2 is the first patched release. Newer majors (pulled in by
+    # @parcel/watcher) are fine.
+    version = lockfile["packages"]["node_modules/picomatch"]["version"]
+    assert _version_tuple(version) >= (2, 3, 2), version
 
 
 def test_pipeline_audits_builds_and_exports_the_theme_artifact():
