@@ -30,7 +30,9 @@ drf-spectacular==0.28.0  # https://github.com/tfranzel/drf-spectacular
 #xsdata
 xsdata==24.12 # https://github.com/xsdata/xsdata
 #boto3
-boto3==1.37.9
+boto3==1.43.106
+#ocfl-py - OCFL object versioning
+ocfl-py==2.1.0 # https://github.com/zimeon/ocfl-py
 #huey
 huey==2.5.3 # https://github.com/coleifer/huey
 #geopy 2.4.1

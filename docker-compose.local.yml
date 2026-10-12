@@ -2,7 +2,7 @@ volumes:
   lacos_local_postgres_data: {}
   lacos_local_postgres_data_backups: {}
   lacos_local_redis_data: {}
-  minio_data: {}
+  seaweedfs_data: {}
 
 networks:
   lacos_network_ws:
@@ -105,8 +105,10 @@ services:
     networks:
       - lacos_network_ws
 
+  # SeaweedFS S3 gateway. MinIO no longer publishes its images. The service
+  # keeps the name "minio" so that AWS_S3_ENDPOINT_URL needs no change.
   minio:
-    image: minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
     logging:
       driver: "json-file"
       options:
@@ -114,28 +116,22 @@ services:
         max-file: "3"
     ports:
       - "127.0.0.1:9100:9000"
-      - "127.0.0.1:9101:9001"
     volumes:
-      - minio_data:/data
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-      MINIO_API_ALLOW_CORS_ORIGIN: "*"
-      MINIO_BROWSER_REDIRECT_URL: "http://localhost:9101"
-      MINIO_DOMAIN_NAME: "localhost:9100"
-      MINIO_LOGGER: "console"
-      MINIO_LOGGER_LEVEL: "debug"
-      MINIO_CORS_ALLOW_ORIGINS: "*"
-      MINIO_CORS_ALLOW_METHODS: "GET,PUT,POST,DELETE,OPTIONS"
-      MINIO_CORS_ALLOW_HEADERS: "*"
-      MINIO_CORS_EXPOSE_HEADERS: "ETag"
-      MINIO_CORS_MAX_AGE_SECONDS: "3600"
-    command: server /data --console-address ":9001"
+      - seaweedfs_data:/data
+      - ./compose/local/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+    entrypoint: ["/entrypoint.sh"]
+    command: >
+      server -dir=/data -ip=minio -ip.bind=0.0.0.0
+      -master.volumeSizeLimitMB=1024
+      -s3 -s3.port=9000 -s3.ip.bind=0.0.0.0
+      -s3.config=/etc/seaweedfs/s3.json
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
+      # An anonymous request gets 403, which also means the gateway is up.
+      test: ["CMD-SHELL", "wget -S -q -O /dev/null http://127.0.0.1:9000/ 2>&1 | grep -qE 'HTTP/1.1 (200|403)'"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
     networks:
       - lacos_network_ws
 
