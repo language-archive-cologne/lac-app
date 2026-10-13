@@ -8,8 +8,8 @@ from django.test.utils import CaptureQueriesContext
 
 from lacos.blam.models import Bundle
 from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
+from lacos.explorer.facet_definitions import BUNDLE_FACET_DEFINITIONS
 from lacos.explorer.facet_querysets import bundle_facet_queryset
-from lacos.explorer.facets import BUNDLE_FACET_DEFINITIONS
 from lacos.explorer.facets import FacetService
 from lacos.explorer.models import BundleFileTypeFacet
 from lacos.explorer.tests.test_bundle_facets import _create_bundle

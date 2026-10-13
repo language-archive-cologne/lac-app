@@ -12,14 +12,14 @@ from typing import Any
 if TYPE_CHECKING:
     from django.http import QueryDict
 
+from lacos.explorer.facet_definitions import Facet
+from lacos.explorer.facet_definitions import FacetDefinition
+from lacos.explorer.facet_definitions import FacetValue
+from lacos.explorer.facet_definitions import limit_facet_values
+from lacos.explorer.facet_definitions import sort_facet_values
 from lacos.explorer.facets import FACET_MAX_SELECTED_VALUES
 from lacos.explorer.facets import FACET_MAX_TOTAL_SELECTED_VALUES
-from lacos.explorer.facets import Facet
-from lacos.explorer.facets import FacetDefinition
 from lacos.explorer.facets import FacetSelectionLimitError
-from lacos.explorer.facets import FacetValue
-from lacos.explorer.facets import limit_facet_values
-from lacos.explorer.facets import sort_facet_values
 from lacos.explorer.public_search.records import PublicSearchRecord
 from lacos.explorer.public_search.records import record_from_index
 from lacos.explorer.text_search import expand_prefix_variants

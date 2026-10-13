@@ -6,10 +6,10 @@ from dataclasses import dataclass
 
 from django.http import QueryDict
 
+from lacos.explorer.facet_definitions import BUNDLE_FACET_DEFINITIONS
 from lacos.explorer.facet_querysets import bundle_facet_queryset
 from lacos.explorer.facet_querysets import collection_facet_queryset
 from lacos.explorer.facets import BUNDLE_FACET_CACHE_KEY
-from lacos.explorer.facets import BUNDLE_FACET_DEFINITIONS
 from lacos.explorer.facets import FACET_CACHE_KEY
 from lacos.explorer.facets import FacetService
 

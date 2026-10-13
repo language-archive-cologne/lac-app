@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 from django.http import QueryDict
 
-from lacos.explorer.facets import BUNDLE_FACET_DEFINITIONS
-from lacos.explorer.facets import FACET_MAX_VALUES
+from lacos.explorer.facet_definitions import BUNDLE_FACET_DEFINITIONS
+from lacos.explorer.facet_definitions import FACET_MAX_VALUES
 from lacos.explorer.facets import FacetSelectionLimitError
 from lacos.explorer.public_search.query import PublicSearchQueryEngine
 

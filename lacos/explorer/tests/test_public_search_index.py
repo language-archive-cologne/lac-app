@@ -10,7 +10,7 @@ from django.core.management import call_command
 from django.http import QueryDict
 
 from lacos.blam.models import Bundle
-from lacos.explorer.facets import BUNDLE_FACET_DEFINITIONS
+from lacos.explorer.facet_definitions import BUNDLE_FACET_DEFINITIONS
 from lacos.explorer.public_search.builder import build_public_search_index
 from lacos.explorer.public_search.query import PublicSearchQueryEngine
 from lacos.explorer.public_search.store import PublicSearchIndexError

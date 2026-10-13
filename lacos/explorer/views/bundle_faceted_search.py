@@ -7,9 +7,9 @@ from django.views.generic import ListView
 from lacos.blam.models import Bundle
 from lacos.explorer.advanced_search import BUNDLE_FIELD_DEFINITIONS
 from lacos.explorer.advanced_search import apply_field_scoped_search
+from lacos.explorer.facet_definitions import BUNDLE_FACET_DEFINITIONS
 from lacos.explorer.facet_querysets import bundle_facet_queryset
 from lacos.explorer.facets import BUNDLE_FACET_CACHE_KEY
-from lacos.explorer.facets import BUNDLE_FACET_DEFINITIONS
 from lacos.explorer.facets import FacetedSearchResult
 from lacos.explorer.facets import FacetService
 from lacos.explorer.match_reasons import attach_bundle_match_reasons

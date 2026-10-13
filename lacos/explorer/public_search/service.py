@@ -9,8 +9,8 @@ from django.http import HttpResponse
 
 from lacos.explorer.advanced_search import BUNDLE_FIELD_DEFINITIONS
 from lacos.explorer.advanced_search import COLLECTION_FIELD_DEFINITIONS
-from lacos.explorer.facets import BUNDLE_FACET_DEFINITIONS
-from lacos.explorer.facets import FACET_DEFINITIONS
+from lacos.explorer.facet_definitions import BUNDLE_FACET_DEFINITIONS
+from lacos.explorer.facet_definitions import FACET_DEFINITIONS
 from lacos.explorer.public_search.query import PublicSearchQueryEngine
 from lacos.explorer.public_search.store import load_public_search_index
 

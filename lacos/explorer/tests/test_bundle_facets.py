@@ -23,7 +23,8 @@ from lacos.blam.models.collection.collection_general_info import (
     CollectionGeneralInfo,
     CollectionLocation,
 )
-from lacos.explorer.facets import BUNDLE_FACET_DEFINITIONS, FacetService
+from lacos.explorer.facet_definitions import BUNDLE_FACET_DEFINITIONS
+from lacos.explorer.facets import FacetService
 from lacos.explorer import match_reasons
 from lacos.explorer.search_indexing import update_bundle_search_vector
 

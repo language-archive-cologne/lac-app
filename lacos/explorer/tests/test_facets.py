@@ -38,17 +38,17 @@ from lacos.blam.models.collection.collection_general_info import (
 from lacos.blam.models.collection.collection_publication_info import (
     CollectionPublicationInfo,
 )
+from lacos.explorer.facet_definitions import FACET_MAX_VALUES
+from lacos.explorer.facet_definitions import Facet
+from lacos.explorer.facet_definitions import FacetValue
 from lacos.explorer.facets import BUNDLE_FACET_CACHE_KEY
 from lacos.explorer.facets import FACET_CACHE_KEY
 from lacos.explorer.facets import FACET_CACHE_TIMEOUT
 from lacos.explorer.facets import FACET_MAX_SELECTED_VALUES
 from lacos.explorer.facets import FACET_MAX_TOTAL_SELECTED_VALUES
-from lacos.explorer.facets import FACET_MAX_VALUES
-from lacos.explorer.facets import Facet
 from lacos.explorer.facets import FacetCacheBusyError
 from lacos.explorer.facets import FacetSelectionLimitError
 from lacos.explorer.facets import FacetService
-from lacos.explorer.facets import FacetValue
 from lacos.explorer.models import BundleFileTypeFacet
 from lacos.explorer.search_indexing import update_collection_search_vector
 from lacos.storage.models.acl_permissions import ACLPermissions
