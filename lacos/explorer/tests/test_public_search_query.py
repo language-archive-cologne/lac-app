@@ -171,3 +171,61 @@ def test_public_search_caps_rendered_facet_values_and_keeps_selection():
     assert len(keyword_facet.values) == FACET_MAX_VALUES
     assert keyword_facet.values[0].value == selected
     assert keyword_facet.values[0].selected is True
+
+
+def _ordering_records():
+    records = [
+        _record(f"zu-{index}", "Zulu", language=("zul", "Zulu"), country="Zambia")
+        for index in range(3)
+    ]
+    records.append(
+        _record("ak", "Akan", language=("aka", "Akan"), country="Austria"),
+    )
+    for record in records[:2]:
+        record["facets"]["access"] = ["restricted"]
+    records[2]["facets"]["license"] = ["CC BY"]
+    records[3]["facets"]["license"] = ["Apache"]
+    records[0]["facets"]["license"] = ["CC BY"]
+    return records
+
+
+def _facet_values(result, name: str) -> list[str]:
+    facet = next(facet for facet in result.facets if facet.name == name)
+    return [value.value for value in facet.values]
+
+
+def test_public_search_orders_facets_as_requested_in_issue_195():
+    result = PublicSearchQueryEngine(
+        records=_ordering_records(),
+        definitions=BUNDLE_FACET_DEFINITIONS,
+    ).search(_params(""))
+
+    assert _facet_values(result, "language") == ["aka", "zul"]
+    assert _facet_values(result, "country") == ["Austria", "Zambia"]
+    assert _facet_values(result, "license") == ["Apache", "CC BY"]
+    assert _facet_values(result, "access") == ["public", "restricted"]
+
+
+@pytest.mark.parametrize("name", ["language", "collection", "country", "region"])
+def test_public_search_lists_every_value_of_complete_facets(name):
+    records = [
+        _record(
+            f"bundle-{index}",
+            f"Bundle {index}",
+            language=(f"l{index:02d}", f"Language {index:02d}"),
+            country=f"Country {index:02d}",
+            collection=f"Collection {index:02d}",
+        )
+        for index in range(FACET_MAX_VALUES + 5)
+    ]
+    for index, record in enumerate(records):
+        record["facets"]["region"] = [f"Region {index:02d}"]
+
+    result = PublicSearchQueryEngine(
+        records=records,
+        definitions=BUNDLE_FACET_DEFINITIONS,
+    ).search(_params(""))
+
+    facet = next(facet for facet in result.facets if facet.name == name)
+    assert facet.truncated is False
+    assert len(facet.values) == FACET_MAX_VALUES + 5

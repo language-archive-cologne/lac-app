@@ -43,6 +43,7 @@ from lacos.explorer.facets import FACET_CACHE_KEY
 from lacos.explorer.facets import FACET_CACHE_TIMEOUT
 from lacos.explorer.facets import FACET_MAX_SELECTED_VALUES
 from lacos.explorer.facets import FACET_MAX_TOTAL_SELECTED_VALUES
+from lacos.explorer.facets import FACET_MAX_VALUES
 from lacos.explorer.facets import Facet
 from lacos.explorer.facets import FacetCacheBusyError
 from lacos.explorer.facets import FacetSelectionLimitError
@@ -1029,3 +1030,75 @@ def test_year_facet_keeps_selected_values_pinned_first():
 
     year_facet = next(f for f in result.facets if f.name == "year")
     assert [fv.value for fv in year_facet.values] == ["2003", "2024", "2011"]
+
+
+def _values(result, name: str) -> list[str]:
+    facet = next(f for f in result.facets if f.name == name)
+    return [fv.value for fv in facet.values]
+
+
+@pytest.mark.django_db
+def test_facets_follow_the_order_requested_in_issue_195():
+    collection_ct = ContentType.objects.get_for_model(Collection)
+    for index in range(3):
+        collection = _create_collection(
+            f"Z{index}",
+            f"Zulu {index}",
+            languages=[("Zulu", "zul")],
+            country="Zambia",
+            region="Zambezi",
+        )
+        ACLPermissions.objects.create(
+            content_type=collection_ct,
+            object_id=str(collection.pk),
+            access_level="restricted",
+        )
+    akan = _create_collection(
+        "A1",
+        "Akan",
+        languages=[("Akan", "aka")],
+        country="Austria",
+        region="Alps",
+    )
+    ACLPermissions.objects.create(
+        content_type=collection_ct,
+        object_id=str(akan.pk),
+        access_level="public",
+    )
+
+    result = FacetService().search(_make_params(), _collection_qs())
+
+    assert _values(result, "language") == ["aka", "zul"]
+    assert _values(result, "country") == ["Austria", "Zambia"]
+    assert _values(result, "region") == ["Alps", "Zambezi"]
+    assert _values(result, "access") == ["public", "restricted"]
+
+
+@pytest.mark.django_db
+def test_alphabetical_facets_keep_selected_values_first():
+    _create_collection("Z1", "Zulu", country="Zambia")
+    _create_collection("A1", "Akan", country="Austria")
+
+    result = FacetService().search(_make_params(country=["Zambia"]), _collection_qs())
+
+    assert _values(result, "country") == ["Zambia", "Austria"]
+
+
+@pytest.mark.django_db
+def test_complete_facets_are_not_truncated():
+    total = FACET_MAX_VALUES + 5
+    for index in range(total):
+        _create_collection(
+            f"C{index}",
+            f"Title {index}",
+            languages=[(f"Language {index:02d}", f"l{index:02d}")],
+            country=f"Country {index:02d}",
+            region=f"Region {index:02d}",
+        )
+
+    result = FacetService().search(_make_params(), _collection_qs())
+
+    for name in ("language", "country", "region"):
+        facet = next(f for f in result.facets if f.name == name)
+        assert facet.truncated is False
+        assert len(facet.values) == total

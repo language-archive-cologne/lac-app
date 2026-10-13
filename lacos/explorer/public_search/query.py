@@ -14,11 +14,12 @@ if TYPE_CHECKING:
 
 from lacos.explorer.facets import FACET_MAX_SELECTED_VALUES
 from lacos.explorer.facets import FACET_MAX_TOTAL_SELECTED_VALUES
-from lacos.explorer.facets import FACET_MAX_VALUES
 from lacos.explorer.facets import Facet
 from lacos.explorer.facets import FacetDefinition
 from lacos.explorer.facets import FacetSelectionLimitError
 from lacos.explorer.facets import FacetValue
+from lacos.explorer.facets import limit_facet_values
+from lacos.explorer.facets import sort_facet_values
 from lacos.explorer.public_search.records import PublicSearchRecord
 from lacos.explorer.public_search.records import record_from_index
 from lacos.explorer.text_search import expand_prefix_variants
@@ -249,33 +250,18 @@ class PublicSearchQueryEngine:
                 FacetValue(value=value, label=value, count=0, selected=True)
                 for value in selected - present
             )
-            if definition.sort_newest_first:
-                values.sort(
-                    key=lambda item: (
-                        not item.selected,
-                        -int(item.value) if item.value.isdigit() else 0,
-                    ),
-                )
-            else:
-                values.sort(
-                    key=lambda item: (
-                        not item.selected,
-                        -item.count,
-                        item.label.casefold(),
-                    ),
-                )
-            truncated = len(values) > FACET_MAX_VALUES
-            if truncated:
-                chosen = [value for value in values if value.selected]
-                remaining = [value for value in values if not value.selected]
-                values = chosen + remaining[: FACET_MAX_VALUES - len(chosen)]
+            values, truncated = limit_facet_values(
+                values,
+                complete=definition.list_all,
+            )
+            sort_facet_values(values, definition)
             facets.append(
                 Facet(
                     name=definition.name,
                     label=definition.label,
                     values=values,
                     truncated=truncated,
-                    filterable=definition.show_all,
+                    filterable=definition.filterable,
                 ),
             )
         return facets

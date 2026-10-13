@@ -41,6 +41,12 @@ FACET_MAX_TOTAL_SELECTED_VALUES = 8
 FACET_CACHE_LOCK_TIMEOUT = 30
 FACET_CACHE_LOCK_WAIT_SECONDS = 2.0
 
+# Value orders for a facet. "fixed" uses the key order of the label map.
+FACET_ORDER_COUNT = "count"
+FACET_ORDER_LABEL = "label"
+FACET_ORDER_NEWEST = "newest"
+FACET_ORDER_FIXED = "fixed"
+
 FACET_VERSION_KEYS = {
     FACET_CACHE_KEY: COLLECTION_FACET_VERSION_KEY,
     BUNDLE_FACET_CACHE_KEY: BUNDLE_FACET_VERSION_KEY,
@@ -112,8 +118,15 @@ class FacetDefinition:
     filter_lookup: str
     label_map: dict[str, str] | None = None
     allowed_values: frozenset[str] | None = None
-    sort_newest_first: bool = False
+    order: str = FACET_ORDER_COUNT
+    # show_all: no value limit in the database search, with a filter input.
     show_all: bool = False
+    # list_all: no value limit in any search backend, with a filter input.
+    list_all: bool = False
+
+    @property
+    def filterable(self) -> bool:
+        return self.show_all or self.list_all
     integer_values: bool = False
 
 
@@ -132,6 +145,8 @@ FACET_DEFINITIONS: list[FacetDefinition] = [
         value_field="general_info__object_languages__iso_639_3_code",
         label_field="general_info__object_languages__name",
         filter_lookup="general_info__object_languages__iso_639_3_code__in",
+        order=FACET_ORDER_LABEL,
+        list_all=True,
     ),
     FacetDefinition(
         name="file_type",
@@ -149,7 +164,8 @@ FACET_DEFINITIONS: list[FacetDefinition] = [
         label_field="publication_info__publication_year",
         filter_lookup="publication_info__publication_year__in",
         integer_values=True,
-        sort_newest_first=True,
+        order=FACET_ORDER_NEWEST,
+        list_all=True,
     ),
     FacetDefinition(
         name="country",
@@ -157,6 +173,8 @@ FACET_DEFINITIONS: list[FacetDefinition] = [
         value_field="general_info__location__country_facet",
         label_field="general_info__location__country_facet",
         filter_lookup="general_info__location__country_facet__in",
+        order=FACET_ORDER_LABEL,
+        list_all=True,
     ),
     FacetDefinition(
         name="region",
@@ -164,6 +182,8 @@ FACET_DEFINITIONS: list[FacetDefinition] = [
         value_field="general_info__location__region_facet",
         label_field="general_info__location__region_facet",
         filter_lookup="general_info__location__region_facet__in",
+        order=FACET_ORDER_LABEL,
+        list_all=True,
     ),
     FacetDefinition(
         name="access",
@@ -171,6 +191,7 @@ FACET_DEFINITIONS: list[FacetDefinition] = [
         value_field="acl_access_level",
         label_field="acl_access_level",
         filter_lookup="acl_access_level__in",
+        order=FACET_ORDER_FIXED,
         label_map={
             "public": "Public",
             "academic": "Academic",
@@ -183,6 +204,7 @@ FACET_DEFINITIONS: list[FacetDefinition] = [
         value_field="administrative_info__licenses__license_name",
         label_field="administrative_info__licenses__license_name",
         filter_lookup="administrative_info__licenses__license_name__in",
+        order=FACET_ORDER_LABEL,
     ),
 ]
 
@@ -203,6 +225,8 @@ BUNDLE_FACET_DEFINITIONS: list[FacetDefinition] = [
         value_field="general_info__object_languages__iso_639_3_code",
         label_field="general_info__object_languages__name",
         filter_lookup="general_info__object_languages__iso_639_3_code__in",
+        order=FACET_ORDER_LABEL,
+        list_all=True,
     ),
     FacetDefinition(
         name="file_type",
@@ -219,6 +243,8 @@ BUNDLE_FACET_DEFINITIONS: list[FacetDefinition] = [
         value_field="structural_info__is_member_of_collection__identifier",
         label_field="structural_info__is_member_of_collection__general_info__display_title",
         filter_lookup="structural_info__is_member_of_collection__identifier__in",
+        order=FACET_ORDER_LABEL,
+        list_all=True,
     ),
     FacetDefinition(
         name="year",
@@ -227,7 +253,8 @@ BUNDLE_FACET_DEFINITIONS: list[FacetDefinition] = [
         label_field="publication_info__publication_year",
         filter_lookup="publication_info__publication_year__in",
         integer_values=True,
-        sort_newest_first=True,
+        order=FACET_ORDER_NEWEST,
+        list_all=True,
     ),
     FacetDefinition(
         name="country",
@@ -235,6 +262,8 @@ BUNDLE_FACET_DEFINITIONS: list[FacetDefinition] = [
         value_field="general_info__location__country_facet",
         label_field="general_info__location__country_facet",
         filter_lookup="general_info__location__country_facet__in",
+        order=FACET_ORDER_LABEL,
+        list_all=True,
     ),
     FacetDefinition(
         name="region",
@@ -242,6 +271,8 @@ BUNDLE_FACET_DEFINITIONS: list[FacetDefinition] = [
         value_field="general_info__location__region_facet",
         label_field="general_info__location__region_facet",
         filter_lookup="general_info__location__region_facet__in",
+        order=FACET_ORDER_LABEL,
+        list_all=True,
     ),
     FacetDefinition(
         name="access",
@@ -249,6 +280,7 @@ BUNDLE_FACET_DEFINITIONS: list[FacetDefinition] = [
         value_field="acl_access_level",
         label_field="acl_access_level",
         filter_lookup="acl_access_level__in",
+        order=FACET_ORDER_FIXED,
         label_map={
             "public": "Public",
             "academic": "Academic",
@@ -261,8 +293,46 @@ BUNDLE_FACET_DEFINITIONS: list[FacetDefinition] = [
         value_field="administrative_info__licenses__license_name",
         label_field="administrative_info__licenses__license_name",
         filter_lookup="administrative_info__licenses__license_name__in",
+        order=FACET_ORDER_LABEL,
     ),
 ]
+
+
+def _order_key(value: FacetValue, definition: FacetDefinition) -> tuple:
+    if definition.order == FACET_ORDER_NEWEST:
+        return (-int(value.value) if value.value.isdigit() else 0,)
+    if definition.order == FACET_ORDER_LABEL:
+        return (value.label.casefold(), value.value)
+    if definition.order == FACET_ORDER_FIXED:
+        positions = list(definition.label_map or {})
+        if value.value in positions:
+            return (positions.index(value.value), "")
+        return (len(positions), value.label.casefold())
+    return (-value.count, value.label.casefold())
+
+
+def sort_facet_values(values: list[FacetValue], definition: FacetDefinition) -> None:
+    """Sort *values* in place: selected values first, then the facet order."""
+    values.sort(key=lambda value: (not value.selected, *_order_key(value, definition)))
+
+
+def limit_facet_values(
+    values: list[FacetValue],
+    *,
+    complete: bool,
+) -> tuple[list[FacetValue], bool]:
+    """Keep the selected values and the most frequent others.
+
+    Returns the kept values and True when values were removed.
+    """
+    if complete or len(values) <= FACET_MAX_VALUES:
+        return values, False
+    selected = [value for value in values if value.selected]
+    others = sorted(
+        (value for value in values if not value.selected),
+        key=lambda value: (-value.count, value.label.casefold()),
+    )
+    return selected + others[: FACET_MAX_VALUES - len(selected)], True
 
 
 class FacetService:
@@ -454,21 +524,7 @@ class FacetService:
                 FacetValue(value=value, label=value, count=0, selected=True)
                 for value in selected - present
             )
-            if definitions[facet.name].sort_newest_first:
-                values.sort(
-                    key=lambda value: (
-                        not value.selected,
-                        -int(value.value) if value.value.isdigit() else 0,
-                    )
-                )
-            else:
-                values.sort(
-                    key=lambda value: (
-                        not value.selected,
-                        -value.count,
-                        value.label,
-                    )
-                )
+            sort_facet_values(values, definitions[facet.name])
             result.append(replace(facet, values=values))
         return result
 
@@ -535,21 +591,19 @@ class FacetService:
                 grouped.get(defn.name, []),
                 selections.get(defn.name, []),
                 label_map=defn.label_map,
-                sort_newest_first=defn.sort_newest_first,
             )
-            truncated = not defn.show_all and len(facet_values) > FACET_MAX_VALUES
-            if truncated:
-                # Keep selected values + top N by count
-                selected = [fv for fv in facet_values if fv.selected]
-                unselected = [fv for fv in facet_values if not fv.selected]
-                facet_values = selected + unselected[: FACET_MAX_VALUES - len(selected)]
+            facet_values, truncated = limit_facet_values(
+                facet_values,
+                complete=defn.filterable,
+            )
+            sort_facet_values(facet_values, defn)
             facets.append(
                 Facet(
                     name=defn.name,
                     label=defn.label,
                     values=facet_values,
                     truncated=truncated,
-                    filterable=defn.show_all,
+                    filterable=defn.filterable,
                 )
             )
         return facets
@@ -638,9 +692,8 @@ class FacetService:
         selected_list: list[str],
         *,
         label_map: dict[str, str] | None = None,
-        sort_newest_first: bool = False,
     ) -> list[FacetValue]:
-        """Convert raw DB rows into sorted FacetValue list."""
+        """Convert raw DB rows into an unsorted FacetValue list."""
         counts: dict[str, dict[str, Any]] = {}
         for row in rows:
             val = row["facet_value"]
@@ -670,15 +723,6 @@ class FacetService:
                     FacetValue(value=sel_val, label=sel_val, count=0, selected=True)
                 )
 
-        if sort_newest_first:
-            facet_values.sort(
-                key=lambda fv: (
-                    not fv.selected,
-                    -int(fv.value) if fv.value.isdigit() else 0,
-                )
-            )
-        else:
-            facet_values.sort(key=lambda fv: (not fv.selected, -fv.count, fv.label))
         return facet_values
 
     @staticmethod
