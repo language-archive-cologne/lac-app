@@ -109,6 +109,7 @@ class MediaResource(BaseModel):
         help_text="The name of the file as provided by the depositor"
     )
     file_pid = models.URLField(
+        db_index=True,
         null=False,
         help_text="PID that uniquely identifies the file described by this component"
     )
@@ -148,6 +149,7 @@ class WrittenResource(BaseModel):
         help_text="The name of the file as provided by the depositor"
     )
     file_pid = models.URLField(
+        db_index=True,
         null=False,
         help_text="PID that uniquely identifies the file described by this component"
     )
@@ -203,6 +205,7 @@ class OtherResource(BaseModel):
         help_text="The name of the file as provided by the depositor"
     )
     file_pid = models.URLField(
+        db_index=True,
         null=False,
         help_text="PID that uniquely identifies the file described by this component"
     )

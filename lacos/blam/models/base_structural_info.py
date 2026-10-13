@@ -20,6 +20,7 @@ class AdditionalMetadataFile(BaseModel):
         help_text="Name of the metadata file"
     )
     file_pid = models.URLField(
+        db_index=True,
         max_length=255,
         null=False,
         help_text="Persistent identifier URL for the metadata file"
