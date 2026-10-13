@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from django.contrib.postgres.search import SearchVector
-from django.db.models import Q, QuerySet
+from django.db.models import Exists, OuterRef, Q, QuerySet
 
 from lacos.explorer.text_search import build_fts_query
 
@@ -180,9 +180,11 @@ def apply_field_scoped_search(
         orm_fields.extend(field_map.get(key, []))
     if not orm_fields:
         return qs
-    vector = SearchVector(*orm_fields, config="simple")
-    return (
-        qs.annotate(_field_scoped_fts=vector)
+    # The vector joins multi-valued relations. Match inside an EXISTS
+    # subquery so that the outer query keeps one row per object.
+    matches = (
+        qs.model.objects.filter(pk=OuterRef("pk"))
+        .annotate(_field_scoped_fts=SearchVector(*orm_fields, config="simple"))
         .filter(_field_scoped_fts=fts_query)
-        .distinct()
     )
+    return qs.filter(Exists(matches))

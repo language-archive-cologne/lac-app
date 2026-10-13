@@ -72,6 +72,21 @@ def test_multi_field_is_or_combined():
 
 
 @pytest.mark.django_db
+def test_multi_valued_field_match_returns_each_collection_once():
+    target = _collection("C1", "Rock Art Interviews", keyword="ritual")
+    general_info = target.general_info.get()
+    general_info.keywords.add(CollectionKeyword.objects.create(value="ritual songs"))
+    _collection("C2", "Unrelated Songs", keyword="dance")
+
+    qs = apply_field_scoped_search(
+        Collection.objects.all(), "ritual", ["keyword"], COLLECTION_FIELD_DEFINITIONS
+    )
+
+    assert "DISTINCT" not in str(qs.query)
+    assert list(qs) == [target]
+
+
+@pytest.mark.django_db
 def test_empty_term_returns_qs_unchanged():
     _collection("C1", "Anything")
     base = Collection.objects.all()
