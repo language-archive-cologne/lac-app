@@ -1,11 +1,16 @@
 """Faceted search view for collection discovery."""
 
 from django.db.models import Count
+from django.db.models import IntegerField
 from django.db.models import Min
+from django.db.models import OuterRef
+from django.db.models import Subquery
+from django.db.models.functions import Coalesce
 from django.shortcuts import render
 from django.views.generic import ListView
 
 from lacos.blam.models import Collection
+from lacos.blam.models.bundle.bundle_structural_info import BundleStructuralInfo
 from lacos.explorer.advanced_search import COLLECTION_FIELD_DEFINITIONS
 from lacos.explorer.advanced_search import apply_field_scoped_search
 from lacos.explorer.facet_querysets import collection_facet_queryset
@@ -25,6 +30,28 @@ SORT_ALLOWLIST = {
     "language": "first_language",
     "bundles": "bundles_count",
 }
+
+
+def _bundles_count() -> Coalesce:
+    counts = (
+        BundleStructuralInfo.objects.filter(is_member_of_collection=OuterRef("pk"))
+        .order_by()
+        .values("is_member_of_collection")
+        .annotate(total=Count("pk"))
+        .values("total")
+    )
+    return Coalesce(Subquery(counts, output_field=IntegerField()), 0)
+
+
+def _first_language() -> Subquery:
+    names = (
+        Collection.objects.filter(pk=OuterRef("pk"))
+        .order_by()
+        .values("pk")
+        .annotate(first=Min("general_info__object_languages__name"))
+        .values("first")
+    )
+    return Subquery(names)
 
 
 class FacetedSearchView(
@@ -81,19 +108,16 @@ class FacetedSearchView(
         )
         qs = self._faceted_result.queryset
 
-        # bundles_count is always needed for display in the table
-        qs = qs.annotate(
-            bundles_count=Count("bundle_collection", distinct=True),
-        )
+        # bundles_count is always needed for display in the table. A correlated
+        # count keeps one row per collection; a join would need GROUP BY.
+        qs = qs.annotate(bundles_count=_bundles_count())
 
         sort_key = self.request.GET.get("sort", "name")
         order = self.request.GET.get("order", "asc")
 
-        # Only add expensive Min() annotation when sorting by language
+        # Only add the first-language subquery when sorting by language
         if sort_key == "language":
-            qs = qs.annotate(
-                first_language=Min("general_info__object_languages__name"),
-            )
+            qs = qs.annotate(first_language=_first_language())
 
         sort_field = SORT_ALLOWLIST.get(sort_key, "general_info__display_title")
         prefix = "-" if order == "desc" else ""

@@ -11,7 +11,16 @@ from typing import Any
 
 from django.contrib.contenttypes.models import ContentType
 from django.core.cache import cache as django_cache
-from django.db.models import CharField, Count, F, OuterRef, QuerySet, Subquery, Value
+from django.db.models import (
+    CharField,
+    Count,
+    Exists,
+    F,
+    OuterRef,
+    QuerySet,
+    Subquery,
+    Value,
+)
 from django.db.models.functions import Cast, Coalesce
 from django.http import QueryDict
 
@@ -470,8 +479,29 @@ class FacetService:
         for defn in self.definitions:
             values = selections.get(defn.name)
             if values:
-                qs = qs.filter(**{defn.filter_lookup: values})
-        return qs.distinct()
+                qs = self._filter_by_facet(qs, defn, values)
+        return qs
+
+    @staticmethod
+    def _filter_by_facet(
+        qs: QuerySet,
+        defn: FacetDefinition,
+        values: list[str],
+    ) -> QuerySet:
+        """Filter on one facet without multiplying the result rows.
+
+        A join on a multi-valued relation gives one row per matching related
+        row. An EXISTS semi-join keeps one row per object, so the caller does
+        not need DISTINCT. Annotations on *qs* are not visible inside the
+        subquery, so they are filtered directly.
+        """
+        if defn.filter_lookup.split("__", 1)[0] in qs.query.annotations:
+            return qs.filter(**{defn.filter_lookup: values})
+        matches = qs.model.objects.filter(
+            pk=OuterRef("pk"),
+            **{defn.filter_lookup: values},
+        )
+        return qs.filter(Exists(matches))
 
     def _compute_facets(
         self,
@@ -553,9 +583,7 @@ class FacetService:
         for defn in self.definitions:
             values = selections.get(defn.name)
             if values:
-                fully_filtered = fully_filtered.filter(
-                    **{defn.filter_lookup: values}
-                )
+                fully_filtered = self._filter_by_facet(fully_filtered, defn, values)
 
         for defn in self.definitions:
             if defn.name not in active_names:
@@ -567,9 +595,7 @@ class FacetService:
                         continue
                     other_values = selections.get(other_defn.name)
                     if other_values:
-                        qs = qs.filter(
-                            **{other_defn.filter_lookup: other_values}
-                        )
+                        qs = self._filter_by_facet(qs, other_defn, other_values)
                 cache[defn.name] = qs
         return cache
 
