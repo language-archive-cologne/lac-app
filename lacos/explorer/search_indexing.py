@@ -322,7 +322,12 @@ def update_bundle_search_vector(bundle: Bundle) -> None:
 
 
 def rebuild_all_search_vectors() -> tuple[int, int]:
-    """Rebuild search vectors for all collections and bundles."""
+    """Rebuild search vectors for all collections and bundles.
+
+    Rows whose vector did not change are not written. Each write updates the
+    GIN index and leaves a dead tuple, and most refreshes change few rows.
+    Returns the number of changed collections and bundles.
+    """
     from django.db import connection
 
     # Update all collections
@@ -383,6 +388,7 @@ def rebuild_all_search_vectors() -> tuple[int, int]:
                 GROUP BY c.id, gi.id, pi.id, loc.id
             ) subq
             WHERE c.id = subq.id
+              AND c.search_vector IS DISTINCT FROM subq.sv
             """
         )
         collections_updated = cursor.rowcount
@@ -450,6 +456,7 @@ def rebuild_all_search_vectors() -> tuple[int, int]:
                 GROUP BY b.id, gi.id, loc.id, si.id, pc.id, pcgi.id
             ) subq
             WHERE b.id = subq.id
+              AND b.search_vector IS DISTINCT FROM subq.sv
             """
         )
         bundles_updated = cursor.rowcount
