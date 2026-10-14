@@ -80,7 +80,7 @@
              data-peaks-url="{{ peaks_url }}"
              {% if spectrogram_data_url %}data-spectrogram-data-url="{{ spectrogram_data_url }}"{% endif %}
              {% if pitch_data_url %}data-pitch-data-url="{{ pitch_data_url }}"{% endif %}>
-          <audio class="w-full hidden" preload="metadata" src="{{ stream_url }}">
+          <audio crossorigin="anonymous" class="w-full hidden" preload="metadata" src="{{ stream_url }}">
             <p>{% translate "Your browser does not support the audio element." %}</p>
           </audio>
           <div data-ap-waveform-player class="relative">
@@ -197,21 +197,21 @@
           </div>
         </div>
       {% else %}
-        <audio controls preload="metadata" class="w-full">
+        <audio crossorigin="anonymous" controls preload="metadata" class="w-full">
           <source src="{{ stream_url }}" type="{{ source_mime_type }}">
           <p>{% translate "Your browser does not support the audio element." %}</p>
         </audio>
       {% endif %}
 
       <noscript>
-        <audio controls preload="metadata" class="w-full">
+        <audio crossorigin="anonymous" controls preload="metadata" class="w-full">
           <source src="{{ stream_url }}" type="{{ source_mime_type }}">
           <p>{% translate "Your browser does not support the audio element." %}</p>
         </audio>
       </noscript>
 
     {% elif media_type == 'video' and stream_url %}
-      <video controls preload="metadata" class="w-full rounded-lg" style="max-height: 70vh"{% if subtitle_url %} data-subtitle-url="{{ subtitle_url }}"{% endif %}>
+      <video crossorigin="anonymous" controls preload="metadata" class="w-full rounded-lg" style="max-height: 70vh"{% if subtitle_url %} data-subtitle-url="{{ subtitle_url }}"{% endif %}>
         <source src="{{ stream_url }}" type="{{ source_mime_type }}">
         <p>{% translate "Your browser does not support the video element." %}</p>
       </video>
@@ -232,7 +232,7 @@
                  data-peaks-url="{{ peaks_url }}"
                  {% if spectrogram_data_url %}data-spectrogram-data-url="{{ spectrogram_data_url }}"{% endif %}
                  {% if pitch_data_url %}data-pitch-data-url="{{ pitch_data_url }}"{% endif %}>
-              <audio class="w-full hidden" preload="metadata" src="{{ elan_context.audio_url }}">
+              <audio crossorigin="anonymous" class="w-full hidden" preload="metadata" src="{{ elan_context.audio_url }}">
                 <p>{% translate "Your browser does not support the audio element." %}</p>
               </audio>
               <div data-ap-waveform-player class="relative">
@@ -328,7 +328,7 @@
                     {% translate "Audio Track" %}
                   {% endif %}
                 </span>
-                <audio controls preload="metadata" class="flex-1" src="{{ elan_context.audio_url }}">
+                <audio crossorigin="anonymous" controls preload="metadata" class="flex-1" src="{{ elan_context.audio_url }}">
                   <p>{% translate "Your browser does not support the audio element." %}</p>
                 </audio>
               </div>

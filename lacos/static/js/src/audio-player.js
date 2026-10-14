@@ -128,6 +128,9 @@
       autoScroll: true,
       plugins: plugins,
     });
+    // Storage sends Cross-Origin-Resource-Policy: same-origin, so media must
+    // load in CORS mode or the browser blocks it.
+    this.wavesurfer.getMediaElement().crossOrigin = 'anonymous';
 
     this._bindControls();
     this._bindEvents();
@@ -156,6 +159,7 @@
     if (!audioEl && audioUrl) {
       // Explorer pattern: no <audio> in container — create one
       audioEl = document.createElement('audio');
+      audioEl.crossOrigin = 'anonymous';
       audioEl.src = audioUrl;
       audioEl.preload = 'metadata';
       audioEl.classList.add('w-full');

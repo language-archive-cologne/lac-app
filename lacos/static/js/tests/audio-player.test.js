@@ -39,6 +39,10 @@ function createMockWaveSurfer() {
             getCurrentTime: jest.fn(() => 0),
             isPlaying: jest.fn(() => false),
             getWrapper: jest.fn(() => document.createElement('div')),
+            getMediaElement: jest.fn(function () {
+                this._media = this._media || document.createElement('audio');
+                return this._media;
+            }),
             _eventHandlers: eventHandlers,
         })),
         Timeline: { create: jest.fn(() => ({})) },
@@ -284,6 +288,18 @@ describe('AudioPlayer', () => {
         expect(container.querySelector('audio')).toBeNull();
     });
 
+    test('loads WaveSurfer media in CORS mode', () => {
+        const container = buildContainer({
+            audioUrl: 'https://example.com/audio.wav',
+            peaksUrl: 'https://example.com/peaks.json',
+            audioElement: false,
+        });
+
+        const player = new AudioPlayer(container);
+
+        expect(player.wavesurfer.getMediaElement().crossOrigin).toBe('anonymous');
+    });
+
     // ── Fallback: creates <audio> dynamically when no element and no peaks ──
 
     test('creates native audio element dynamically for fallback without existing audio tag', () => {
@@ -298,6 +314,7 @@ describe('AudioPlayer', () => {
         expect(global.WaveSurfer.create).not.toHaveBeenCalled();
         expect(player.wavesurfer).toBeNull();
         expect(audio).toBeTruthy();
+        expect(audio.crossOrigin).toBe('anonymous');
         expect(audio.controls).toBe(true);
         expect(audio.src).toContain('audio.wav');
     });

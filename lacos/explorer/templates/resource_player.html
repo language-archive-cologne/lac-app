@@ -13,7 +13,7 @@
 
     <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
       {% if media_type == 'video' %}
-        <video controls preload="metadata" class="w-full rounded-lg shadow">
+        <video crossorigin="anonymous" controls preload="metadata" class="w-full rounded-lg shadow">
           <source src="{{ stream_url }}" type="{{ source_mime_type }}">
           <p>{% translate "Your browser does not support the video element." %}</p>
         </video>
@@ -21,7 +21,7 @@
           {% translate "If this video does not play, your browser may not support its codecs. Use the download button on the resource page or try a different browser." %}
         </p>
       {% else %}
-        <audio controls preload="metadata" class="w-full">
+        <audio crossorigin="anonymous" controls preload="metadata" class="w-full">
           <source src="{{ stream_url }}" type="{{ source_mime_type }}">
           <p>{% translate "Your browser does not support the audio element." %}</p>
         </audio>
