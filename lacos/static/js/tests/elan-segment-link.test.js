@@ -120,16 +120,43 @@ describe('resolveSegment', () => {
     { id: 'a3', start: 24.0, end: 29.75 },
   ];
 
-  test('uses the annotation id when it agrees with the time range', () => {
+  test('cites a single row when the range spans exactly that row', () => {
     const result = resolveSegment(rows, { start: 20.5, end: 24.0, id: 'a2' });
 
-    expect(result).toEqual({ row: rows[1], start: 20.5, end: 24.0, matched: true });
+    expect(result.row).toBe(rows[1]);
+    expect(result.rows).toEqual([rows[1]]);
+    expect(result.start).toBe(20.5);
+    expect(result.end).toBe(24.0);
+    expect(result.matched).toBe(true);
+  });
+
+  test('highlights every row a full range overlaps', () => {
+    // An utterance spanning two segments: the cited range is authoritative and
+    // names both, so the whole utterance shows, not just the first segment.
+    const result = resolveSegment(rows, { start: 21.0, end: 25.5, id: null });
+
+    expect(result.rows).toEqual([rows[1], rows[2]]);
+    expect(result.row).toBe(rows[1]);
+    expect(result.start).toBe(21.0);
+    expect(result.end).toBe(25.5);
+    expect(result.matched).toBe(true);
+  });
+
+  test('keeps the requested range rather than collapsing to one row', () => {
+    const result = resolveSegment(rows, { start: 20.6, end: 29.0, id: 'a2' });
+
+    expect(result.start).toBe(20.6);
+    expect(result.end).toBe(29.0);
+    expect(result.rows).toEqual([rows[1], rows[2]]);
   });
 
   test('uses the annotation id alone when no time range is given', () => {
     const result = resolveSegment(rows, { start: null, end: null, id: 'a3' });
 
-    expect(result).toEqual({ row: rows[2], start: 24.0, end: 29.75, matched: true });
+    expect(result.row).toBe(rows[2]);
+    expect(result.rows).toEqual([rows[2]]);
+    expect(result.start).toBe(24.0);
+    expect(result.end).toBe(29.75);
   });
 
   test('ignores a stale annotation id and falls back to the time range', () => {
@@ -137,43 +164,46 @@ describe('resolveSegment', () => {
     // names a different interval than the one the link was made for.
     const result = resolveSegment(rows, { start: 24.0, end: 29.75, id: 'a2' });
 
-    expect(result).toEqual({ row: rows[2], start: 24.0, end: 29.75, matched: true });
+    expect(result.rows).toEqual([rows[2]]);
+    expect(result.start).toBe(24.0);
+    expect(result.end).toBe(29.75);
   });
 
   test('ignores an annotation id that is absent from the table', () => {
     const result = resolveSegment(rows, { start: 20.5, end: 24.0, id: 'nope' });
 
-    expect(result).toEqual({ row: rows[1], start: 20.5, end: 24.0, matched: true });
-  });
-
-  test('matches a row by time range when no id is given', () => {
-    const result = resolveSegment(rows, { start: 20.5, end: 24.0, id: null });
-
-    expect(result).toEqual({ row: rows[1], start: 20.5, end: 24.0, matched: true });
+    expect(result.rows).toEqual([rows[1]]);
+    expect(result.matched).toBe(true);
   });
 
   test('matches the row whose interval contains a hand-written offset', () => {
     // "#t=22" — a human citing a moment, not an exact segment boundary.
     const result = resolveSegment(rows, { start: 22, end: null, id: null });
 
-    expect(result).toEqual({ row: rows[1], start: 20.5, end: 24.0, matched: true });
+    expect(result.rows).toEqual([rows[1]]);
+    expect(result.start).toBe(20.5);
+    expect(result.end).toBe(24.0);
   });
 
-  test('prefers an exact start match over a containing interval', () => {
+  test('prefers an exact row for a point over a containing interval', () => {
     const overlapping = [
       { id: 'wide', start: 18.0, end: 30.0 },
       { id: 'exact', start: 20.5, end: 24.0 },
     ];
 
-    const result = resolveSegment(overlapping, { start: 20.5, end: 24.0, id: null });
+    const result = resolveSegment(overlapping, { start: 20.5, end: null, id: null });
 
-    expect(result.row).toBe(overlapping[1]);
+    expect(result.rows).toEqual([overlapping[1]]);
   });
 
   test('seeks without highlighting when no row matches the time range', () => {
     const result = resolveSegment(rows, { start: 90.0, end: 95.0, id: null });
 
-    expect(result).toEqual({ row: null, start: 90.0, end: 95.0, matched: false });
+    expect(result.row).toBeNull();
+    expect(result.rows).toEqual([]);
+    expect(result.start).toBe(90.0);
+    expect(result.end).toBe(95.0);
+    expect(result.matched).toBe(false);
   });
 
   test('tolerates millisecond rounding in the emitted offsets', () => {
@@ -187,9 +217,14 @@ describe('resolveSegment', () => {
     expect(resolveSegment(rows, { start: null, end: null, id: null })).toBeNull();
   });
 
+  test('returns null for an id alone that is absent from the table', () => {
+    expect(resolveSegment(rows, { start: null, end: null, id: 'gone' })).toBeNull();
+  });
+
   test('returns null when the table has no rows', () => {
     expect(resolveSegment([], { start: 20.5, end: 24.0, id: 'a2' })).toEqual({
       row: null,
+      rows: [],
       start: 20.5,
       end: 24.0,
       matched: false,

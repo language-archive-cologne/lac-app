@@ -7,6 +7,8 @@
 
 /* eslint-env jest */
 
+import { initElanSegmentSelect } from '../src/elan-segment-select';
+
 // ─── Mock factories ─────────────────────────────────────────────────────
 
 function createMockWaveSurfer() {
@@ -34,6 +36,7 @@ function createMockWaveSurfer() {
             setTime: jest.fn(),
             setPlaybackRate: jest.fn(),
             getDuration: jest.fn(() => 120),
+            getCurrentTime: jest.fn(() => 0),
             isPlaying: jest.fn(() => false),
             getWrapper: jest.fn(() => document.createElement('div')),
             _eventHandlers: eventHandlers,
@@ -43,6 +46,7 @@ function createMockWaveSurfer() {
             create: jest.fn(() => ({
                 on: jest.fn(),
                 enableDragSelection: jest.fn(() => jest.fn()),
+                addRegion: jest.fn((options) => ({ ...options, remove: jest.fn() })),
             })),
         },
     };
@@ -471,6 +475,130 @@ describe('AudioPlayer', () => {
 
         player.destroy();
         expect(() => player.destroy()).not.toThrow();
+    });
+
+    test('annotation checkboxes create a blue range and main play stops at its end', () => {
+        const viewer = document.createElement('div');
+        viewer.dataset.viewerType = 'elan';
+        const container = buildContainer({ audioUrl: '/audio.wav', peaksUrl: '/peaks.json' });
+        viewer.appendChild(container);
+        const scope = document.createElement('div');
+        scope.innerHTML = `
+            <div data-elan-range-bar><button data-copy-text></button></div>
+            <input class="elan-segment-check" type="checkbox" data-annotation-start="20" data-annotation-end="21">
+            <input class="elan-segment-check" type="checkbox" data-annotation-start="23" data-annotation-end="25">
+            <button data-annotation-start="20" data-annotation-end="21">Play segment</button>
+        `;
+        viewer.appendChild(scope);
+        const player = new AudioPlayer(container);
+        initElanSegmentSelect(scope);
+        const boxes = scope.querySelectorAll('input');
+        boxes.forEach(box => {
+            box.checked = true;
+            box.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        expect(player._regionsPlugin.addRegion).toHaveBeenLastCalledWith(expect.objectContaining({
+            start: 20, end: 25, color: 'rgba(59, 130, 246, 0.2)',
+        }));
+        expect(player.wavesurfer.play).not.toHaveBeenCalled();
+        container.querySelector('[data-ap-play-pause]').click();
+        expect(player.wavesurfer.play).toHaveBeenLastCalledWith(20, 25);
+        const pauseCalls = player.wavesurfer.pause.mock.calls.length;
+        player.wavesurfer.getCurrentTime.mockReturnValue(24.9);
+        player.wavesurfer._eventHandlers.timeupdate.forEach(handler => handler(24.9));
+        expect(player.wavesurfer.pause).toHaveBeenCalledTimes(pauseCalls);
+        player.wavesurfer.getCurrentTime.mockReturnValue(25);
+        player.wavesurfer._eventHandlers.timeupdate.forEach(handler => handler(25));
+        expect(player.wavesurfer.pause).toHaveBeenCalledTimes(pauseCalls + 1);
+        scope.querySelector('button[data-annotation-start]').click();
+        expect(player.wavesurfer.play).toHaveBeenLastCalledWith(20, 25);
+        const region = player._activeRegion;
+        boxes.forEach(box => {
+            box.checked = false;
+            box.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        expect(region.remove).toHaveBeenCalled();
+        expect(player._activeRegion).toBeNull();
+        player.destroy();
+    });
+
+    test.each(['[data-ap-play-pause]', '[data-ap-play-selection]'])(
+        '%s replays a completed selection despite a stale end-time event', (selector) => {
+            const container = buildContainer({ audioUrl: '/audio.wav', peaksUrl: '/peaks.json' });
+            const player = new AudioPlayer(container);
+            const ws = player.wavesurfer;
+            player.setSelection(20, 25);
+            // Simulate the Regions plugin's creation notification.
+            const created = player._regionsPlugin.on.mock.calls.find(([event]) => event === 'region-created')[1];
+            created(player._activeRegion);
+            let currentTime = 25;
+            ws.getCurrentTime.mockImplementation(() => currentTime);
+            ws.setTime.mockImplementation(time => { currentTime = time; });
+            ws.play.mockImplementation(start => {
+                currentTime = start;
+                // WaveSurfer's reactive state can still carry the previous end
+                // while the media element has already sought to the start.
+                ws._eventHandlers.timeupdate.forEach(handler => handler(25));
+                ws._eventHandlers.play.forEach(handler => handler());
+            });
+            ws.pause.mockClear();
+            const button = container.querySelector(selector);
+            for (let replay = 0; replay < 2; replay++) {
+                const pauseCalls = ws.pause.mock.calls.length;
+                button.click();
+                expect(ws.play).toHaveBeenLastCalledWith(20, 25);
+                expect(ws.pause).toHaveBeenCalledTimes(pauseCalls);
+                expect(currentTime).toBe(20);
+                currentTime = 25;
+                ws._eventHandlers.timeupdate.forEach(handler => handler(25));
+                expect(ws.pause).toHaveBeenCalledTimes(pauseCalls + 1);
+            }
+            player.destroy();
+        },
+    );
+
+    test('native audio fallback also stops at the selected end', () => {
+        const viewer = document.createElement('div');
+        viewer.dataset.viewerType = 'elan';
+        const container = buildContainer({ audioUrl: '/audio.wav' });
+        viewer.appendChild(container);
+        const audio = container.querySelector('audio');
+        const pause = jest.spyOn(audio, 'pause').mockImplementation(() => {});
+        const play = jest.spyOn(audio, 'play').mockResolvedValue();
+        const player = new AudioPlayer(container);
+        viewer.dispatchEvent(new CustomEvent('elan:selection', { detail: { start: 20, end: 25, play: true } }));
+        expect(audio.currentTime).toBe(20);
+        expect(play).toHaveBeenCalledTimes(1);
+        pause.mockClear();
+        audio.currentTime = 24.9;
+        audio.dispatchEvent(new Event('timeupdate'));
+        expect(pause).not.toHaveBeenCalled();
+        audio.currentTime = 25;
+        audio.dispatchEvent(new Event('timeupdate'));
+        expect(pause).toHaveBeenCalledTimes(1);
+        viewer.dispatchEvent(new CustomEvent('elan:selection', { detail: { start: null, end: null } }));
+        pause.mockClear();
+        audio.dispatchEvent(new Event('timeupdate'));
+        expect(pause).not.toHaveBeenCalled();
+        player.destroy();
+    });
+
+    test('a cited range waits for waveform readiness without autoplay', () => {
+        const viewer = document.createElement('div');
+        viewer.dataset.viewerType = 'elan';
+        const container = buildContainer({ audioUrl: '/audio.wav', peaksUrl: '/peaks.json' });
+        viewer.appendChild(container);
+        const player = new AudioPlayer(container);
+        player.wavesurfer.getDuration.mockReturnValue(0);
+        viewer.dispatchEvent(new CustomEvent('elan:selection', { detail: { start: 20, end: 25 } }));
+        expect(player._regionsPlugin.addRegion).not.toHaveBeenCalled();
+        player.wavesurfer.getDuration.mockReturnValue(120);
+        player.wavesurfer._eventHandlers.ready.forEach(handler => handler());
+        expect(player._regionsPlugin.addRegion).toHaveBeenCalledWith(expect.objectContaining({ start: 20, end: 25 }));
+        expect(player.wavesurfer.setTime).toHaveBeenCalledWith(20);
+        expect(player.wavesurfer.play).not.toHaveBeenCalled();
+        player.destroy();
+        expect(() => viewer.dispatchEvent(new CustomEvent('elan:selection', { detail: { start: 30, end: 35 } }))).not.toThrow();
     });
 
     // ── formatTime ──

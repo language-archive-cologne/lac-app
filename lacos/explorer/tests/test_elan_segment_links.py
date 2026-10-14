@@ -8,7 +8,13 @@ Segment links are offered on the standalone resource page only. The HTMX modal
 is injected into the bundle page, where the host URL owns the fragment.
 """
 
+import pytest
 from django.template.loader import render_to_string
+from django.urls import reverse
+
+from lacos.blam.models import Bundle
+from lacos.blam.models.bundle.bundle_structural_info import WrittenResource
+from lacos.explorer.views.bundles import ResourceAccessView
 
 from lacos.explorer.templatetags.explorer_extras import segment_fragment
 
@@ -150,6 +156,53 @@ def test_segment_links_render_in_the_htmx_modal_too():
 
     assert body.count('data-copy-text="https://hdl.handle.net') == 2
     assert f'data-copy-text="{HANDLE}#t=20.500,24.000&amp;id=a2"' in body
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("debug", [True, False])
+@pytest.mark.parametrize("modal", [True, False])
+def test_segment_copy_destination_stays_local_only_in_development(
+    settings, rf, debug, modal,
+):
+    settings.DEBUG = debug
+    settings.ALLOWED_HOSTS = ["localhost"]
+    bundle = Bundle.objects.create(identifier="hdl:11341/test-bundle")
+    resource = WrittenResource.objects.create(
+        file_name="rec01.eaf",
+        file_pid="hdl:11341/0000-0000-0000-3233",
+    )
+    path = reverse(
+        "explorer:resource_access",
+        kwargs={"bundle_id": bundle.pk, "resource_id": resource.pk},
+    )
+    request = rf.get(
+        f"{path}?action=analyze",
+        HTTP_HOST="localhost:8101",
+        HTTP_HX_REQUEST="true" if modal else "false",
+    )
+    view = ResourceAccessView()
+    bundle = view._resolve_bundle(bundle_id=bundle.pk)
+    args = {
+        "request": request,
+        "resource": resource,
+        "mime_type": "text/x-eaf+xml",
+        "detected_media_type": "xml",
+        "source_mime_type": "text/x-eaf+xml",
+        "presigned_url": "https://example.test/rec01.eaf",
+        "download_url": "https://example.test/rec01.eaf",
+        "elan_context": _elan_context(),
+        "is_elan": True,
+    }
+    if modal:
+        response = view._render_htmx_modal(**args)
+    else:
+        response = view._render_resource_page(bundle=bundle, **args)
+    body = response.content.decode()
+    base = f"http://localhost:8101{path}" if debug else HANDLE
+
+    assert f'data-segment-link-base="{base}"' in body
+    assert f'data-copy-text="{base}#t=20.500,24.000&amp;id=a2"' in body
+    assert "?action=analyze#t=" not in body
 
 
 def test_segment_links_are_omitted_without_a_resolvable_handle():

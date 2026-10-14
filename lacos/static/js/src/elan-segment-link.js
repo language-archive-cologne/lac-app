@@ -119,14 +119,51 @@ function rowForOffset(rows, offset) {
 }
 
 /**
+ * Pick the single row a point- or id-based request points at, or null.
+ *
+ * A full [start, end] range does not come here: it is authoritative on its own
+ * and names whatever rows it overlaps. This resolves the degenerate cases — an
+ * id on its own, or a bare offset — to one row whose bounds then define the
+ * cited range.
+ */
+function resolveAnchorRow(rows, { start, id }) {
+  if (id) {
+    const row = rows.find((candidate) => candidate.id === id);
+    if (row) {
+      // Without a start offset the id is all we have, so trust it. With one,
+      // the id only stands if it agrees — otherwise it is stale.
+      if (
+        start === null ||
+        (isAligned(row) && Math.abs(row.start - start) <= OFFSET_TOLERANCE)
+      ) {
+        return row;
+      }
+    }
+  }
+
+  if (start !== null) {
+    return rowForOffset(rows, start);
+  }
+
+  return null;
+}
+
+/**
  * Resolve a parsed segment request against the rows of an annotation table.
+ *
+ * A citation is a time range. When the request carries a full [start, end]
+ * pair it is authoritative and names *every* row it overlaps — so a link can
+ * cite one segment or a whole utterance with the same shape. A point (a bare
+ * offset) or an id on its own names a single row, whose bounds then define the
+ * range.
  *
  * @param {Array<{id: string, start: number|null, end: number|null}>} rows
  * @param {{start: number|null, end: number|null, id: string|null}|null} parsed
- * @returns {{row: object|null, start: number|null, end: number|null,
- *            matched: boolean}|null}
- *   `matched` is false when playback should seek without highlighting a row.
- *   null when there is nothing to resolve.
+ * @returns {{row: object|null, rows: Array<object>, start: number|null,
+ *            end: number|null, matched: boolean}|null}
+ *   `rows` is every aligned row overlapping the cited range; `row` is the
+ *   first (earliest) of them, or null. `matched` is false when playback should
+ *   seek without highlighting a row. null when there is nothing to resolve.
  */
 export function resolveSegment(rows, parsed) {
   if (!parsed) return null;
@@ -135,35 +172,44 @@ export function resolveSegment(rows, parsed) {
   const hasTime = start !== null || end !== null;
   if (!hasTime && !id) return null;
 
-  const fromRow = (row) => ({
-    row,
-    start: row.start,
-    end: row.end,
-    matched: true,
-  });
+  let rangeStart = start;
+  let rangeEnd = end;
+  let anchor = null;
 
-  if (id) {
-    const row = rows.find((candidate) => candidate.id === id);
-    if (row) {
-      // Without a time range the id is all we have, so trust it.
-      if (!hasTime) return fromRow(row);
-      // With one, the id only stands if it agrees — otherwise it is stale.
-      if (
-        start !== null &&
-        isAligned(row) &&
-        Math.abs(row.start - start) <= OFFSET_TOLERANCE
-      ) {
-        return fromRow(row);
-      }
+  if (rangeStart === null || rangeEnd === null) {
+    // A point or an id names a single row; the anchor's bounds define the range.
+    anchor = resolveAnchorRow(rows, { start, id });
+    if (anchor) {
+      rangeStart = anchor.start;
+      rangeEnd = anchor.end;
+    } else if (rangeStart === null) {
+      // A stale/absent id, or an end-only request, with no start to position on.
+      return null;
     }
   }
 
-  if (start !== null) {
-    const row = rowForOffset(rows, start);
-    if (row) return fromRow(row);
-  }
+  const lo = rangeStart === null ? -Infinity : rangeStart;
+  const hi = rangeEnd === null ? Infinity : rangeEnd;
 
-  return { row: null, start, end, matched: false };
+  // A full [start, end] pair names every row it overlaps. A point resolved to
+  // an anchor names just that row, even when the point also falls inside a
+  // wider interval.
+  let matchedRows = rows
+    .filter((row) => {
+      if (!isAligned(row)) return false;
+      const rowEnd = typeof row.end === 'number' ? row.end : Infinity;
+      return rowEnd > lo && row.start < hi;
+    })
+    .sort((a, b) => a.start - b.start);
+  if (anchor) matchedRows = [anchor];
+
+  return {
+    row: matchedRows.length ? matchedRows[0] : anchor,
+    rows: matchedRows,
+    start: rangeStart,
+    end: rangeEnd,
+    matched: matchedRows.length > 0,
+  };
 }
 
 /** Read one numeric data attribute, or null when absent or unparseable. */
@@ -221,15 +267,24 @@ export function initSegmentLink(root, options = {}) {
   // and nothing to mark, so leave the page as it loaded.
   if (!result.matched && result.start === null) return null;
 
+  if (root && result.start !== null && result.end !== null) {
+    root.dispatchEvent(new CustomEvent('elan:selection', {
+      bubbles: true,
+      detail: { start: result.start, end: result.end, play: false },
+    }));
+  }
+
   if (result.start !== null && typeof seek === 'function') {
     seek(result.start, result.end);
   }
 
-  if (result.matched && result.row && result.row.element) {
-    const { element } = result.row;
-    element.classList.add(highlightClass);
-    if (typeof element.scrollIntoView === 'function') {
-      element.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  if (result.matched && result.rows.length) {
+    const first = result.rows[0];
+    result.rows.forEach(({ element }) => {
+      element.classList.add(highlightClass);
+    });
+    if (typeof first.element.scrollIntoView === 'function') {
+      first.element.scrollIntoView({ block: 'center', behavior: 'smooth' });
     }
   }
 

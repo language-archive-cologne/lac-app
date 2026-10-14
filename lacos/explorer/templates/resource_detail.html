@@ -118,19 +118,7 @@
         };
 
         if (ws) {
-          // Wire annotation play buttons to WaveSurfer
-          viewerRoot.querySelectorAll('button[data-annotation-start]').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-              var start = parseFloat(btn.dataset.annotationStart || '');
-              var end = parseFloat(btn.dataset.annotationEnd || '');
-              if (isNaN(start)) return;
-              audioPlayer._selectionEndTime = isNaN(end) ? null : end;
-              audioPlayer._selectionPlaybackActive = !isNaN(end);
-              audioPlayer._selectionPlayStartedAt = Date.now();
-              ws.setTime(start);
-              ws.play();
-            });
-          });
+          // Selection and segment playback are wired by elan-segment-select.
           ws.on('timeupdate', highlight);
         } else {
           // Fallback: native audio
@@ -138,7 +126,7 @@
           if (audioEl) {
             var segmentEnd = null;
             audioEl.addEventListener('timeupdate', function() { highlight(audioEl.currentTime); });
-            viewerRoot.querySelectorAll('button[data-annotation-start]').forEach(function(btn) {
+            if (!audioPlayer) viewerRoot.querySelectorAll('button[data-annotation-start]').forEach(function(btn) {
               btn.addEventListener('click', function() {
                 var start = parseFloat(btn.dataset.annotationStart || '');
                 var end = parseFloat(btn.dataset.annotationEnd || '');
@@ -207,7 +195,7 @@
         var tag = document.activeElement.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
         switch (event.code) {
-          case 'Space': event.preventDefault(); ws.playPause(); break;
+          case 'Space': event.preventDefault(); container.querySelector('[data-ap-play-pause]').click(); break;
           case 'ArrowLeft': event.preventDefault(); ws.skip(-1); break;
           case 'ArrowRight': event.preventDefault(); ws.skip(1); break;
         }

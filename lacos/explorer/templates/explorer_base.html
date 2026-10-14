@@ -20,6 +20,7 @@
   <script defer src="{% static 'js/src/explorer-copy.js' %}"></script>
   <script type="module" src="{% static 'js/src/facet-filter.js' %}"></script>
   <script type="module" src="{% static 'js/src/elan-table-columns.js' %}"></script>
+  <script type="module" src="{% static 'js/src/elan-segment-select.js' %}"></script>
 {% endblock javascript %}
 
 {% block modal %}
@@ -117,21 +118,7 @@
           const ws = audioPlayer.wavesurfer;
           const highlight = bindAnnotationHighlighting(viewerRoot);
 
-          // Wire annotation play buttons to WaveSurfer
-          viewerRoot.querySelectorAll('button[data-annotation-start]').forEach((btn) => {
-            btn.addEventListener('click', () => {
-              const start = parseFloat(btn.dataset.annotationStart || '');
-              const end = parseFloat(btn.dataset.annotationEnd || '');
-              if (Number.isNaN(start)) return;
-
-              audioPlayer._selectionEndTime = Number.isNaN(end) ? null : end;
-              audioPlayer._selectionPlaybackActive = !Number.isNaN(end);
-              audioPlayer._selectionPlayStartedAt = Date.now();
-              ws.setTime(start);
-              ws.play();
-            });
-          });
-
+          // Selection and segment playback are wired by elan-segment-select.
           ws.on('timeupdate', highlight);
           return;
         }
@@ -153,7 +140,7 @@
 
         audioElement.addEventListener('timeupdate', () => highlight(audioElement.currentTime));
 
-        viewerRoot.querySelectorAll('button[data-annotation-start]').forEach((btn) => {
+        if (!audioPlayer) viewerRoot.querySelectorAll('button[data-annotation-start]').forEach((btn) => {
           btn.addEventListener('click', () => {
             const start = parseFloat(btn.dataset.annotationStart || '');
             const end = parseFloat(btn.dataset.annotationEnd || '');
@@ -290,7 +277,7 @@
         switch (event.code) {
           case 'Space':
             event.preventDefault();
-            ws.playPause();
+            activePlayerContainer.querySelector('[data-ap-play-pause]')?.click();
             break;
           case 'ArrowLeft':
             event.preventDefault();

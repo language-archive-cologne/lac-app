@@ -343,7 +343,8 @@
           </div>
         {% endif %}
 
-        <div class="border border-slate-200 rounded-lg overflow-hidden">
+        <div class="border border-slate-200 rounded-lg overflow-hidden" data-elan-scope
+             data-segment-link-base="{{ segment_link_base|default:'' }}">
           <div class="bg-slate-100 px-4 py-2 text-sm font-medium text-slate-600 flex items-center justify-between gap-2">
             <span class="flex items-center gap-1.5">
               {% translate "Annotations" %}
@@ -362,6 +363,22 @@
               {% endif %}
             </span>
             <div class="flex items-center gap-2">
+              {% if segment_link_base and elan_context and elan_context.annotations %}
+                <div data-elan-range-bar class="hidden items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-2 py-1">
+                  <span class="text-xs font-medium text-blue-700 whitespace-nowrap"><span data-range-count>0 segments</span></span>
+                  <button type="button"
+                          data-copy-text=""
+                          class="btn btn-xs btn-primary text-xs whitespace-nowrap"
+                          title="{% translate 'Copy a shareable link to the selected segments' %}">
+                    <span data-copy-label>{% translate "Copy range link" %}</span>
+                  </button>
+                  <button type="button" data-elan-range-clear
+                          class="btn btn-ghost btn-xs text-blue-600 hover:text-blue-800 text-xs whitespace-nowrap"
+                          title="{% translate 'Clear selection' %}">
+                    {% translate "Clear" %}
+                  </button>
+                </div>
+              {% endif %}
               {% if elan_context.tier_headers %}
                 <button type="button" data-elan-reset class="btn btn-ghost btn-xs text-slate-500 hover:text-slate-700" title="{% translate 'Reset column order and widths' %}">
                   {% translate "Reset layout" %}
@@ -431,6 +448,15 @@
                         </td>
                       {% endif %}
                       <td class="px-3 py-2 text-slate-500 whitespace-nowrap font-mono text-xs group" data-col-key="__time">
+                        {% if segment_link_base %}
+                          {% if annotation.start is not None and annotation.end is not None %}
+                            <input type="checkbox"
+                                   class="elan-segment-check mr-1.5 align-middle h-3.5 w-3.5 accent-blue-600 opacity-0 group-hover:opacity-100 focus:opacity-100 checked:opacity-100 transition-opacity"
+                                   data-annotation-start="{{ annotation.start|stringformat:'.3f' }}"
+                                   data-annotation-end="{{ annotation.end|stringformat:'.3f' }}"
+                                   aria-label="{% translate 'Select this segment for a range link' %}" />
+                          {% endif %}
+                        {% endif %}
                         {% if annotation.start is not None %}
                           {{ annotation.start|floatformat:2 }}s
                         {% else %}

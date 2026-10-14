@@ -39,6 +39,7 @@
     this._destroyed = false;
 
     this._init();
+    this._bindAnnotationSelection();
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────
@@ -185,7 +186,7 @@
             self._selectionEndTime = end;
             self._selectionPlaybackActive = true;
             self._selectionPlayStartedAt = Date.now();
-            ws.play(start);
+            ws.play(start, end);
             return;
           }
         }
@@ -307,15 +308,23 @@
     ws.on('timeupdate', function (time) {
       hideLoading();
       if (currentTimeEl) currentTimeEl.textContent = self.formatTime(time);
-      if (self._selectionPlaybackActive && self._selectionEndTime !== null && time >= self._selectionEndTime) {
-        // Skip end-check briefly after play(start) to let the seek take effect
-        if (Date.now() - self._selectionPlayStartedAt < 150) return;
+      // After a replay seek, WaveSurfer can emit the previous end time from
+      // its reactive state. Use the media position, not that stale event value,
+      // or the new playback is immediately paused and snapped back to the end.
+      if (self._selectionPlaybackActive && self._selectionEndTime !== null && ws.getCurrentTime() >= self._selectionEndTime) {
         self._selectionPlaybackActive = false;
         ws.pause();
+        ws.setTime(self._selectionEndTime);
       }
     });
 
-    ws.on('play', function () { updatePlayPauseIcon(true); });
+    ws.on('play', function () {
+      if (self._activeRegion) {
+        self._selectionEndTime = self._activeRegion.end;
+        self._selectionPlaybackActive = true;
+      }
+      updatePlayPauseIcon(true);
+    });
     ws.on('pause', function () { updatePlayPauseIcon(false); });
 
     ws.on('finish', function () {
@@ -453,6 +462,93 @@
     ws.on('zoom', syncAll);
   };
 
+  // Annotation tables communicate through their own viewer, not global state.
+  AudioPlayer.prototype._bindAnnotationSelection = function () {
+    var self = this;
+    this._annotationRoot = this._container.closest('[data-viewer-type="elan"]');
+    if (!this._annotationRoot) return;
+    this._annotationSelectionHandler = function (event) {
+      var range = event.detail;
+      self.setSelection(range.start, range.end);
+      if (range.play) self.playSelection();
+    };
+    this._annotationRoot.addEventListener('elan:selection', this._annotationSelectionHandler);
+    if (this.wavesurfer) {
+      this.wavesurfer.on('ready', function () {
+        if (!self._destroyed && self._pendingSelection) {
+          var range = self._pendingSelection;
+          self._pendingSelection = null;
+          self.setSelection(range.start, range.end);
+          if (range.play) self.playSelection();
+        }
+      });
+    } else {
+      var audio = this._q('audio');
+      this._nativeTimeHandler = function () {
+        if (self._selectionEndTime !== null && audio.currentTime >= self._selectionEndTime) {
+          audio.pause();
+        }
+      };
+      if (audio) audio.addEventListener('timeupdate', this._nativeTimeHandler);
+    }
+  };
+
+  /** Show one blue region without autoplay; null bounds clear it. */
+  AudioPlayer.prototype.setSelection = function (start, end) {
+    var valid = Number.isFinite(start) && Number.isFinite(end) && end > start;
+    this._pendingSelection = null;
+    this._selectionPlaybackActive = false;
+    this._selectionEndTime = null;
+    if (this._activeRegion) {
+      this._activeRegion.remove();
+      this._activeRegion = null;
+    }
+    this._annotationRange = valid ? { start: start, end: end } : null;
+    if (!valid) return;
+    if (this.wavesurfer) {
+      this.wavesurfer.pause();
+      if (!this.wavesurfer.getDuration()) {
+        this._pendingSelection = { start: start, end: end };
+        return;
+      }
+      if (this._regionsPlugin) {
+        this._activeRegion = this._regionsPlugin.addRegion({
+          start: start, end: end, color: 'rgba(59, 130, 246, 0.2)',
+          drag: false, resize: false,
+        });
+      }
+      this.wavesurfer.setTime(start);
+    } else {
+      var audio = this._q('audio');
+      if (audio) {
+        audio.pause();
+        audio.currentTime = start;
+        this._selectionEndTime = end;
+      }
+    }
+  };
+
+  /** Play the visible selection through the main player, bounded at its end. */
+  AudioPlayer.prototype.playSelection = function () {
+    var range = this._activeRegion || this._annotationRange;
+    if (!range) return;
+    if (this._pendingSelection) {
+      this._pendingSelection.play = true;
+      return;
+    }
+    this._selectionEndTime = range.end;
+    this._selectionPlaybackActive = true;
+    if (this.wavesurfer) {
+      this.wavesurfer.play(range.start, range.end);
+    } else {
+      var audio = this._q('audio');
+      if (audio) {
+        audio.currentTime = range.start;
+        audio.play().catch(function () {});
+      }
+    }
+  };
+
   // ─── Regions (selection) ──────────────────────────────────────────────
 
   AudioPlayer.prototype._bindRegions = function () {
@@ -482,14 +578,7 @@
     };
 
     var playSelection = function (region) {
-      if (!region) return;
-      var start = Math.min(region.start, region.end);
-      var end = Math.max(region.start, region.end);
-      if (end <= start) return;
-      self._selectionEndTime = end;
-      self._selectionPlaybackActive = true;
-      self._selectionPlayStartedAt = Date.now();
-      self.wavesurfer.play(start);
+      if (region) self.playSelection();
     };
 
     rp.on('region-created', function (region) {
@@ -508,6 +597,7 @@
     rp.on('region-removed', function (region) {
       if (self._activeRegion === region) {
         self._activeRegion = null;
+        self._annotationRange = null;
         self._selectionPlaybackActive = false;
         self._selectionEndTime = null;
       }
@@ -816,6 +906,13 @@
     if (this._spectrogramFetchController) {
       this._spectrogramFetchController.abort();
       this._spectrogramFetchController = null;
+    }
+
+    if (this._annotationRoot) {
+      this._annotationRoot.removeEventListener('elan:selection', this._annotationSelectionHandler);
+    }
+    if (this._nativeTimeHandler) {
+      this._q('audio').removeEventListener('timeupdate', this._nativeTimeHandler);
     }
 
     if (this.wavesurfer) {
