@@ -7,6 +7,9 @@
 
 {% block modal %}{% endblock modal %}
 
+{# Annotation tables are wide: use the whole window instead of the site max width. #}
+{% block main_width %}max-w-none{% endblock main_width %}
+
 {% block explorer_content %}
   <!-- Breadcrumb -->
   <nav class="text-sm breadcrumbs mb-4">

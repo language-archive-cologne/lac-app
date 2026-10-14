@@ -106,7 +106,7 @@
   {% include 'navbar.html' %}
 
   <!-- Main Content -->
-  <div class="max-w-[95rem] mx-auto px-6 py-8 flex-grow w-full">
+  <div class="{% block main_width %}max-w-[95rem]{% endblock main_width %} mx-auto px-6 py-8 flex-grow w-full">
     {% if messages %}
       {% for message in messages %}
         <div role="alert" class="alert mb-4 {% if message.tags == 'success' %}alert-success{% elif message.tags == 'error' %}alert-error{% elif message.tags == 'warning' %}alert-warning{% else %}alert-info{% endif %}">
