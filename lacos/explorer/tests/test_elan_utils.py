@@ -108,6 +108,99 @@ def test_parse_elan_text_reads_legacy_header_media_file():
     assert result["media_files"] == ["file:///archive/session.wav"]
 
 
+def test_parse_elan_text_joins_symbolic_subdivision_tokens_in_order():
+    elan_text = """
+    <ANNOTATION_DOCUMENT>
+      <TIME_ORDER>
+        <TIME_SLOT TIME_SLOT_ID="ts1" TIME_VALUE="0" />
+        <TIME_SLOT TIME_SLOT_ID="ts2" TIME_VALUE="1500" />
+      </TIME_ORDER>
+      <TIER TIER_ID="ref">
+        <ANNOTATION>
+          <ALIGNABLE_ANNOTATION ANNOTATION_ID="a0" TIME_SLOT_REF1="ts1" TIME_SLOT_REF2="ts2">
+            <ANNOTATION_VALUE>SEG.001</ANNOTATION_VALUE>
+          </ALIGNABLE_ANNOTATION>
+        </ANNOTATION>
+      </TIER>
+      <TIER TIER_ID="tx" PARENT_REF="ref">
+        <ANNOTATION>
+          <REF_ANNOTATION ANNOTATION_ID="a3" ANNOTATION_REF="a0" PREVIOUS_ANNOTATION="a2">
+            <ANNOTATION_VALUE>kembali</ANNOTATION_VALUE>
+          </REF_ANNOTATION>
+        </ANNOTATION>
+        <ANNOTATION>
+          <REF_ANNOTATION ANNOTATION_ID="a1" ANNOTATION_REF="a0">
+            <ANNOTATION_VALUE>saya</ANNOTATION_VALUE>
+          </REF_ANNOTATION>
+        </ANNOTATION>
+        <ANNOTATION>
+          <REF_ANNOTATION ANNOTATION_ID="a2" ANNOTATION_REF="a0" PREVIOUS_ANNOTATION="a1">
+            <ANNOTATION_VALUE>lihat</ANNOTATION_VALUE>
+          </REF_ANNOTATION>
+        </ANNOTATION>
+      </TIER>
+    </ANNOTATION_DOCUMENT>
+    """
+
+    result = parse_elan_text(elan_text)
+
+    assert len(result["annotations"]) == 1
+    assert result["annotations"][0]["ordered_tiers"] == [
+        {"name": "ref", "value": "SEG.001"},
+        {"name": "tx", "value": "saya lihat kembali"},
+    ]
+
+
+def test_parse_elan_text_orders_nested_tier_by_parent_token():
+    elan_text = """
+    <ANNOTATION_DOCUMENT>
+      <TIME_ORDER>
+        <TIME_SLOT TIME_SLOT_ID="ts1" TIME_VALUE="0" />
+        <TIME_SLOT TIME_SLOT_ID="ts2" TIME_VALUE="1500" />
+      </TIME_ORDER>
+      <TIER TIER_ID="ref">
+        <ANNOTATION>
+          <ALIGNABLE_ANNOTATION ANNOTATION_ID="a0" TIME_SLOT_REF1="ts1" TIME_SLOT_REF2="ts2">
+            <ANNOTATION_VALUE>SEG.001</ANNOTATION_VALUE>
+          </ALIGNABLE_ANNOTATION>
+        </ANNOTATION>
+      </TIER>
+      <TIER TIER_ID="tx" PARENT_REF="ref">
+        <ANNOTATION>
+          <REF_ANNOTATION ANNOTATION_ID="t1" ANNOTATION_REF="a0">
+            <ANNOTATION_VALUE>saya</ANNOTATION_VALUE>
+          </REF_ANNOTATION>
+        </ANNOTATION>
+        <ANNOTATION>
+          <REF_ANNOTATION ANNOTATION_ID="t2" ANNOTATION_REF="a0" PREVIOUS_ANNOTATION="t1">
+            <ANNOTATION_VALUE>lihat</ANNOTATION_VALUE>
+          </REF_ANNOTATION>
+        </ANNOTATION>
+      </TIER>
+      <TIER TIER_ID="ge" PARENT_REF="tx">
+        <ANNOTATION>
+          <REF_ANNOTATION ANNOTATION_ID="g2" ANNOTATION_REF="t2">
+            <ANNOTATION_VALUE>see</ANNOTATION_VALUE>
+          </REF_ANNOTATION>
+        </ANNOTATION>
+        <ANNOTATION>
+          <REF_ANNOTATION ANNOTATION_ID="g1" ANNOTATION_REF="t1">
+            <ANNOTATION_VALUE>1SG</ANNOTATION_VALUE>
+          </REF_ANNOTATION>
+        </ANNOTATION>
+      </TIER>
+    </ANNOTATION_DOCUMENT>
+    """
+
+    result = parse_elan_text(elan_text)
+
+    assert result["annotations"][0]["ordered_tiers"] == [
+        {"name": "ref", "value": "SEG.001"},
+        {"name": "tx", "value": "saya lihat"},
+        {"name": "ge", "value": "1SG see"},
+    ]
+
+
 def _bundle_with_resources(*resources):
     bundle = Bundle.objects.create(identifier="BND-ELAN-AUDIO")
     resource_container = BundleResources.objects.create(bundle=bundle)

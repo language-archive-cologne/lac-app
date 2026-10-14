@@ -143,9 +143,12 @@ def parse_elan_text(elan_text: str) -> dict:
     # Maps each REF_ANNOTATION's own ID to its ANNOTATION_REF target.
     # Used to resolve multi-level chains (grandchild -> child -> root).
     ref_chain: dict[str, str] = {}
-    # Deferred REF_ANNOTATION data: (tier_id, reference_id, value_text).
+    # Maps each REF_ANNOTATION's own ID to its PREVIOUS_ANNOTATION sibling,
+    # which orders Symbolic_Subdivision tokens under the same parent.
+    previous_refs: dict[str, str] = {}
+    # Deferred REF_ANNOTATION data: (tier_id, ann_id, reference_id, value_text).
     # Processed after all tiers so the full reference chain is available.
-    deferred_refs: list[tuple[str, str, str]] = []
+    deferred_refs: list[tuple[str, Optional[str], str, str]] = []
 
     for tier in root.findall("TIER"):
         tier_id = tier.attrib.get("TIER_ID", "Tier")
@@ -185,6 +188,9 @@ def parse_elan_text(elan_text: str) -> dict:
 
                 if ann_id:
                     ref_chain[ann_id] = reference_id
+                    previous_id = ref_annotation.attrib.get("PREVIOUS_ANNOTATION")
+                    if previous_id:
+                        previous_refs[ann_id] = previous_id
 
                 value_element = ref_annotation.find("ANNOTATION_VALUE")
                 value_text = (
@@ -194,7 +200,7 @@ def parse_elan_text(elan_text: str) -> dict:
                 )
 
                 if value_text:
-                    deferred_refs.append((tier_id, reference_id, value_text))
+                    deferred_refs.append((tier_id, ann_id, reference_id, value_text))
 
     # Resolve multi-level reference chains to the root ALIGNABLE_ANNOTATION.
     def resolve_root(ref_id: str) -> str:
@@ -205,10 +211,44 @@ def parse_elan_text(elan_text: str) -> dict:
             current = ref_chain[current]
         return current
 
-    for tier_id, reference_id, value_text in deferred_refs:
+    # Position of a REF_ANNOTATION among its siblings, following the
+    # PREVIOUS_ANNOTATION chain back to the first subdivision token.
+    def sibling_position(ann_id: str) -> int:
+        visited: set[str] = set()
+        position = 0
+        current = ann_id
+        while current in previous_refs and current not in visited:
+            visited.add(current)
+            current = previous_refs[current]
+            position += 1
+        return position
+
+    # Ordering key from the root down, so tokens on a tier that subdivides
+    # another subdivision tier follow their parent token's position.
+    def ordering_key(ann_id: Optional[str]) -> tuple[int, ...]:
+        key: list[int] = []
+        visited: set[str] = set()
+        current = ann_id
+        while current in ref_chain and current not in visited:
+            visited.add(current)
+            key.append(sibling_position(current))
+            current = ref_chain[current]
+        return tuple(reversed(key))
+
+    # A Symbolic_Subdivision tier holds several REF_ANNOTATIONs per parent;
+    # collect them all instead of letting the last token overwrite the rest.
+    ref_values: dict[tuple[str, str], list[tuple[tuple[int, ...], int, str]]] = {}
+    for index, (tier_id, ann_id, reference_id, value_text) in enumerate(deferred_refs):
         root_id = resolve_root(reference_id)
+        ref_values.setdefault((root_id, tier_id), []).append(
+            (ordering_key(ann_id), index, value_text)
+        )
+
+    for (root_id, tier_id), values in ref_values.items():
         entry = ensure_entry(root_id)
-        entry.setdefault("tiers", {})[tier_id] = value_text
+        entry.setdefault("tiers", {})[tier_id] = " ".join(
+            value_text for _, _, value_text in sorted(values)
+        )
 
     annotations = _merge_annotations_by_time(list(annotations_map.values()))
 
