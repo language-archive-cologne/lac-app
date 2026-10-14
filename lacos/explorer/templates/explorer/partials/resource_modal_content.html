@@ -299,9 +299,9 @@
                   </div>
                 </div>
 
-                <!-- Top scrollbar (synced with waveform) -->
-                <div data-ap-top-scrollbar class="overflow-x-auto border-x border-base-300" style="overflow-y: hidden;">
-                  <div data-ap-top-scrollbar-inner style="height: 1px;"></div>
+                <!-- Top scrollbar track (synced with waveform) -->
+                <div data-ap-top-scrollbar class="border-x border-base-300 bg-base-200/50 relative touch-none" style="height: 16px; display: none;">
+                  <div data-ap-top-scrollbar-thumb class="absolute top-1 bottom-1 rounded-full bg-primary/70 active:bg-primary cursor-pointer" style="left: 0; width: 50px;"></div>
                 </div>
 
                 <!-- Waveform -->
@@ -310,8 +310,13 @@
                 </div>
 
                 <!-- Timeline -->
-                <div class="bg-base-200 rounded-b-lg border-x border-b border-base-300">
+                <div class="bg-base-200 border-x border-b border-base-300">
                   <div data-ap-timeline style="height: 24px;"></div>
+                </div>
+
+                <!-- Bottom scrollbar track -->
+                <div data-ap-bottom-scrollbar class="border-x border-b border-base-300 bg-base-200/50 relative touch-none rounded-b-lg" style="height: 16px; display: none;">
+                  <div data-ap-bottom-scrollbar-thumb class="absolute top-1 bottom-1 rounded-full bg-primary/70 active:bg-primary cursor-pointer" style="left: 0; width: 50px;"></div>
                 </div>
                 <div data-ap-loading class="absolute inset-0 bg-base-100/80 flex items-center justify-center rounded-lg pointer-events-none">
                   <span class="loading loading-spinner loading-lg text-primary"></span>
