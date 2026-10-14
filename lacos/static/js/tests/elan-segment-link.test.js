@@ -3,10 +3,10 @@
  *
  * A segment link is a W3C Media Fragments anchor on a resource's handle URL:
  *
- *   https://hdl.handle.net/11341/<pid>#t=20.5,24.0&id=a1
+ *   https://hdl.handle.net/11341/<pid>#t=20.5,24.0
  *
- * `t` is authoritative; `id` (the ELAN ANNOTATION_ID) is an advisory hint that
- * can sharpen the link but must never misdirect it. See issue #1.
+ * Only `t` is used: ELAN renumbers ANNOTATION_IDs on some exports, so an `id`
+ * left over in an older link is ignored. See issue #1.
  */
 
 /* eslint-env jest */
@@ -21,11 +21,10 @@ import {
 // ─── parseSegmentHash ────────────────────────────────────────────────────
 
 describe('parseSegmentHash', () => {
-  test('reads a time range and an annotation id', () => {
+  test('ignores an annotation id left over in an older link', () => {
     expect(parseSegmentHash('#t=20.5,24.0&id=a1')).toEqual({
       start: 20.5,
       end: 24.0,
-      id: 'a1',
     });
   });
 
@@ -33,15 +32,13 @@ describe('parseSegmentHash', () => {
     expect(parseSegmentHash('#t=20.5')).toEqual({
       start: 20.5,
       end: null,
-      id: null,
     });
   });
 
-  test('reads a time range without an annotation id', () => {
+  test('reads a time range', () => {
     expect(parseSegmentHash('#t=20.5,24.0')).toEqual({
       start: 20.5,
       end: 24.0,
-      id: null,
     });
   });
 
@@ -49,7 +46,6 @@ describe('parseSegmentHash', () => {
     expect(parseSegmentHash('#t=npt:20.5,24.0')).toEqual({
       start: 20.5,
       end: 24.0,
-      id: null,
     });
   });
 
@@ -57,23 +53,17 @@ describe('parseSegmentHash', () => {
     expect(parseSegmentHash('#t=,24.0')).toEqual({
       start: null,
       end: 24.0,
-      id: null,
     });
   });
 
-  test('reads an annotation id with no time range', () => {
-    expect(parseSegmentHash('#id=a1')).toEqual({
-      start: null,
-      end: null,
-      id: 'a1',
-    });
+  test('returns null for an annotation id with no time range', () => {
+    expect(parseSegmentHash('#id=a1')).toBeNull();
   });
 
   test('tolerates a missing leading hash', () => {
-    expect(parseSegmentHash('t=20.5,24.0&id=a1')).toEqual({
+    expect(parseSegmentHash('t=20.5,24.0')).toEqual({
       start: 20.5,
       end: 24.0,
-      id: 'a1',
     });
   });
 
@@ -81,7 +71,6 @@ describe('parseSegmentHash', () => {
     expect(parseSegmentHash('#t=20.5&track=Source&xywh=0,0,10,10')).toEqual({
       start: 20.5,
       end: null,
-      id: null,
     });
   });
 
@@ -121,7 +110,7 @@ describe('resolveSegment', () => {
   ];
 
   test('cites a single row when the range spans exactly that row', () => {
-    const result = resolveSegment(rows, { start: 20.5, end: 24.0, id: 'a2' });
+    const result = resolveSegment(rows, { start: 20.5, end: 24.0 });
 
     expect(result.row).toBe(rows[1]);
     expect(result.rows).toEqual([rows[1]]);
@@ -133,7 +122,7 @@ describe('resolveSegment', () => {
   test('highlights every row a full range overlaps', () => {
     // An utterance spanning two segments: the cited range is authoritative and
     // names both, so the whole utterance shows, not just the first segment.
-    const result = resolveSegment(rows, { start: 21.0, end: 25.5, id: null });
+    const result = resolveSegment(rows, { start: 21.0, end: 25.5 });
 
     expect(result.rows).toEqual([rows[1], rows[2]]);
     expect(result.row).toBe(rows[1]);
@@ -143,42 +132,19 @@ describe('resolveSegment', () => {
   });
 
   test('keeps the requested range rather than collapsing to one row', () => {
-    const result = resolveSegment(rows, { start: 20.6, end: 29.0, id: 'a2' });
+    const result = resolveSegment(rows, { start: 20.6, end: 29.0 });
 
     expect(result.start).toBe(20.6);
     expect(result.end).toBe(29.0);
     expect(result.rows).toEqual([rows[1], rows[2]]);
   });
 
-  test('uses the annotation id alone when no time range is given', () => {
-    const result = resolveSegment(rows, { start: null, end: null, id: 'a3' });
 
-    expect(result.row).toBe(rows[2]);
-    expect(result.rows).toEqual([rows[2]]);
-    expect(result.start).toBe(24.0);
-    expect(result.end).toBe(29.75);
-  });
 
-  test('ignores a stale annotation id and falls back to the time range', () => {
-    // The .eaf was re-exported and ANNOTATION_IDs were renumbered: a2 now
-    // names a different interval than the one the link was made for.
-    const result = resolveSegment(rows, { start: 24.0, end: 29.75, id: 'a2' });
-
-    expect(result.rows).toEqual([rows[2]]);
-    expect(result.start).toBe(24.0);
-    expect(result.end).toBe(29.75);
-  });
-
-  test('ignores an annotation id that is absent from the table', () => {
-    const result = resolveSegment(rows, { start: 20.5, end: 24.0, id: 'nope' });
-
-    expect(result.rows).toEqual([rows[1]]);
-    expect(result.matched).toBe(true);
-  });
 
   test('matches the row whose interval contains a hand-written offset', () => {
     // "#t=22" — a human citing a moment, not an exact segment boundary.
-    const result = resolveSegment(rows, { start: 22, end: null, id: null });
+    const result = resolveSegment(rows, { start: 22, end: null });
 
     expect(result.rows).toEqual([rows[1]]);
     expect(result.start).toBe(20.5);
@@ -191,13 +157,13 @@ describe('resolveSegment', () => {
       { id: 'exact', start: 20.5, end: 24.0 },
     ];
 
-    const result = resolveSegment(overlapping, { start: 20.5, end: null, id: null });
+    const result = resolveSegment(overlapping, { start: 20.5, end: null });
 
     expect(result.rows).toEqual([overlapping[1]]);
   });
 
   test('seeks without highlighting when no row matches the time range', () => {
-    const result = resolveSegment(rows, { start: 90.0, end: 95.0, id: null });
+    const result = resolveSegment(rows, { start: 90.0, end: 95.0 });
 
     expect(result.row).toBeNull();
     expect(result.rows).toEqual([]);
@@ -207,22 +173,19 @@ describe('resolveSegment', () => {
   });
 
   test('tolerates millisecond rounding in the emitted offsets', () => {
-    const result = resolveSegment(rows, { start: 20.5004, end: 24.0, id: null });
+    const result = resolveSegment(rows, { start: 20.5004, end: 24.0 });
 
     expect(result.row).toBe(rows[1]);
   });
 
   test('returns null when there is nothing to resolve', () => {
     expect(resolveSegment(rows, null)).toBeNull();
-    expect(resolveSegment(rows, { start: null, end: null, id: null })).toBeNull();
+    expect(resolveSegment(rows, { start: null, end: null })).toBeNull();
   });
 
-  test('returns null for an id alone that is absent from the table', () => {
-    expect(resolveSegment(rows, { start: null, end: null, id: 'gone' })).toBeNull();
-  });
 
   test('returns null when the table has no rows', () => {
-    expect(resolveSegment([], { start: 20.5, end: 24.0, id: 'a2' })).toEqual({
+    expect(resolveSegment([], { start: 20.5, end: 24.0 })).toEqual({
       row: null,
       rows: [],
       start: 20.5,
@@ -293,7 +256,7 @@ describe('initSegmentLink', () => {
   });
 
   test('seeks to the segment start and highlights the matched row', () => {
-    const result = initSegmentLink(root, { hash: '#t=20.5,24.0&id=a2', seek });
+    const result = initSegmentLink(root, { hash: '#t=20.5,24.0', seek });
 
     expect(seek).toHaveBeenCalledWith(20.5, 24.0);
     expect(root.querySelector('#ann-a2').classList.contains('bg-blue-100')).toBe(true);
@@ -320,13 +283,6 @@ describe('initSegmentLink', () => {
     expect(result.matched).toBe(false);
   });
 
-  test('falls back to the time range when the annotation id is stale', () => {
-    // Link says a2, but a2 in this file spans a different interval.
-    const result = initSegmentLink(root, { hash: '#t=0.0,4.2&id=a2', seek });
-
-    expect(result.row.id).toBe('a1');
-    expect(seek).toHaveBeenCalledWith(0.0, 4.2);
-  });
 
   test('does nothing when the hash carries no segment', () => {
     const result = initSegmentLink(root, { hash: '#section-metadata', seek });
@@ -336,12 +292,6 @@ describe('initSegmentLink', () => {
     expect(root.querySelectorAll('.bg-blue-100')).toHaveLength(0);
   });
 
-  test('does not seek for an id-only link that matches no row', () => {
-    const result = initSegmentLink(root, { hash: '#id=gone', seek });
-
-    expect(result).toBeNull();
-    expect(seek).not.toHaveBeenCalled();
-  });
 
   test('honours a caller-supplied highlight class', () => {
     initSegmentLink(root, { hash: '#t=20.5', seek, highlightClass: 'ring' });

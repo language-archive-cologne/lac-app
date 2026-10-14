@@ -2,14 +2,13 @@
  * Shareable ELAN segment links (issue #1).
  *
  * A segment link is a W3C Media Fragments anchor appended to a resource's
- * handle URL, carrying a time range and optionally the ELAN annotation id:
+ * handle URL, carrying a time range:
  *
- *   https://hdl.handle.net/11341/<pid>#t=20.5,24.0&id=a1
+ *   https://hdl.handle.net/11341/<pid>#t=20.5,24.0
  *
- * The time range is authoritative. The annotation id is advisory: it pins the
- * link to an exact row while the .eaf is untouched, but ELAN renumbers
- * ANNOTATION_IDs on some exports, so a stale id is ignored rather than
- * followed. That way the id can only ever sharpen a link, never misdirect it.
+ * Only the time range is used. ELAN renumbers ANNOTATION_IDs on some exports,
+ * so annotation ids are not part of a citation; an "id" parameter left over in
+ * an older link is ignored.
  */
 
 /**
@@ -51,9 +50,8 @@ function parseTimeDimension(value) {
  * Parse a location hash into a segment request.
  *
  * @param {string|null|undefined} hash Hash with or without its leading "#".
- * @returns {{start: number|null, end: number|null, id: string|null}|null}
- *   null when the hash carries no usable segment dimension, or when the time
- *   range it carries is malformed.
+ * @returns {{start: number|null, end: number|null}|null}
+ *   null when the hash carries no time range, or when it is malformed.
  */
 export function parseSegmentHash(hash) {
   if (typeof hash !== 'string') return null;
@@ -62,7 +60,6 @@ export function parseSegmentHash(hash) {
   if (!body) return null;
 
   let time = null;
-  let id = null;
 
   for (const part of body.split('&')) {
     const separator = part.indexOf('=');
@@ -77,18 +74,12 @@ export function parseSegmentHash(hash) {
       // the page unpositioned than to seek somewhere we were not asked to.
       if (parsed === undefined) return null;
       time = parsed;
-    } else if (name === 'id' && value) {
-      id = value;
     }
   }
 
-  if (!time && !id) return null;
+  if (!time) return null;
 
-  return {
-    start: time ? time.start : null,
-    end: time ? time.end : null,
-    id,
-  };
+  return { start: time.start, end: time.end };
 }
 
 /** True when a row is time-aligned and so can be matched against an offset. */
@@ -119,46 +110,15 @@ function rowForOffset(rows, offset) {
 }
 
 /**
- * Pick the single row a point- or id-based request points at, or null.
- *
- * A full [start, end] range does not come here: it is authoritative on its own
- * and names whatever rows it overlaps. This resolves the degenerate cases — an
- * id on its own, or a bare offset — to one row whose bounds then define the
- * cited range.
- */
-function resolveAnchorRow(rows, { start, id }) {
-  if (id) {
-    const row = rows.find((candidate) => candidate.id === id);
-    if (row) {
-      // Without a start offset the id is all we have, so trust it. With one,
-      // the id only stands if it agrees — otherwise it is stale.
-      if (
-        start === null ||
-        (isAligned(row) && Math.abs(row.start - start) <= OFFSET_TOLERANCE)
-      ) {
-        return row;
-      }
-    }
-  }
-
-  if (start !== null) {
-    return rowForOffset(rows, start);
-  }
-
-  return null;
-}
-
-/**
  * Resolve a parsed segment request against the rows of an annotation table.
  *
  * A citation is a time range. When the request carries a full [start, end]
  * pair it is authoritative and names *every* row it overlaps — so a link can
  * cite one segment or a whole utterance with the same shape. A point (a bare
- * offset) or an id on its own names a single row, whose bounds then define the
- * range.
+ * offset) names a single row, whose bounds then define the range.
  *
  * @param {Array<{id: string, start: number|null, end: number|null}>} rows
- * @param {{start: number|null, end: number|null, id: string|null}|null} parsed
+ * @param {{start: number|null, end: number|null}|null} parsed
  * @returns {{row: object|null, rows: Array<object>, start: number|null,
  *            end: number|null, matched: boolean}|null}
  *   `rows` is every aligned row overlapping the cited range; `row` is the
@@ -168,22 +128,21 @@ function resolveAnchorRow(rows, { start, id }) {
 export function resolveSegment(rows, parsed) {
   if (!parsed) return null;
 
-  const { start, end, id } = parsed;
-  const hasTime = start !== null || end !== null;
-  if (!hasTime && !id) return null;
+  const { start, end } = parsed;
+  if (start === null && end === null) return null;
 
   let rangeStart = start;
   let rangeEnd = end;
   let anchor = null;
 
   if (rangeStart === null || rangeEnd === null) {
-    // A point or an id names a single row; the anchor's bounds define the range.
-    anchor = resolveAnchorRow(rows, { start, id });
+    // A point names a single row; the anchor's bounds define the range.
+    anchor = start !== null ? rowForOffset(rows, start) : null;
     if (anchor) {
       rangeStart = anchor.start;
       rangeEnd = anchor.end;
     } else if (rangeStart === null) {
-      // A stale/absent id, or an end-only request, with no start to position on.
+      // An end-only request, with no start to position on.
       return null;
     }
   }
@@ -263,8 +222,7 @@ export function initSegmentLink(root, options = {}) {
 
   const result = resolveSegment(readAnnotationRows(root), parsed);
   if (!result) return null;
-  // An id-only link naming a row this file no longer has: nothing to seek to
-  // and nothing to mark, so leave the page as it loaded.
+  // Nothing to seek to and nothing to mark, so leave the page as it loaded.
   if (!result.matched && result.start === null) return null;
 
   if (root && result.start !== null && result.end !== null) {

@@ -36,7 +36,7 @@ test('a cited segment link resolves against the real markup', () => {
   const seek = jest.fn();
 
   const result = initSegmentLink(root, {
-    hash: '#t=20.500,24.000&id=a4',
+    hash: '#t=20.500,24.000',
     seek,
   });
 
@@ -71,7 +71,7 @@ test('a hand-written offset inside an utterance lands on that utterance', () => 
   expect(result.row.id).toBe('a4');
 });
 
-test('a stale annotation id still resolves via its time range', () => {
+test('an annotation id left over in an older link is ignored', () => {
   const result = initSegmentLink(loadPage(), {
     hash: '#t=24.000,29.750&id=a2',
     seek: jest.fn(),

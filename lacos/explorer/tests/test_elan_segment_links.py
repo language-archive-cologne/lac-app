@@ -2,7 +2,7 @@
 
 A segment link is a W3C Media Fragments anchor on the resource's handle URL:
 
-    https://hdl.handle.net/11341/<pid>#t=20.500,24.000&id=a2
+    https://hdl.handle.net/11341/<pid>#t=20.500,24.000
 
 Segment links are offered on the standalone resource page only. The HTMX modal
 is injected into the bundle page, where the host URL owns the fragment.
@@ -24,21 +24,15 @@ HANDLE = "https://hdl.handle.net/11341/0000-0000-0000-3233"
 # ─── segment_fragment ────────────────────────────────────────────────────
 
 
-def test_segment_fragment_carries_the_range_and_the_annotation_id():
+def test_segment_fragment_carries_only_the_time_range():
     assert segment_fragment({"id": "a2", "start": 20.5, "end": 24.0}) == (
-        "#t=20.500,24.000&id=a2"
+        "#t=20.500,24.000"
     )
 
 
 def test_segment_fragment_omits_an_absent_end_bound():
     assert segment_fragment({"id": "a2", "start": 20.5, "end": None}) == (
-        "#t=20.500&id=a2"
-    )
-
-
-def test_segment_fragment_omits_an_absent_annotation_id():
-    assert segment_fragment({"id": "", "start": 20.5, "end": 24.0}) == (
-        "#t=20.500,24.000"
+        "#t=20.500"
     )
 
 
@@ -48,7 +42,7 @@ def test_segment_fragment_is_empty_for_an_unaligned_annotation():
 
 def test_segment_fragment_pads_offsets_to_milliseconds():
     assert segment_fragment({"id": "a1", "start": 0.0, "end": 4.2}) == (
-        "#t=0.000,4.200&id=a1"
+        "#t=0.000,4.200"
     )
 
 
@@ -116,7 +110,7 @@ def test_annotation_rows_carry_the_annotation_id_as_data():
 def test_copy_button_emits_the_handle_url_with_a_media_fragment():
     body = _render()
 
-    assert f'data-copy-text="{HANDLE}#t=20.500,24.000&amp;id=a2"' in body
+    assert f'data-copy-text="{HANDLE}#t=20.500,24.000"' in body
 
 
 def test_copy_button_omits_the_end_bound_for_an_unaligned_end():
@@ -125,7 +119,7 @@ def test_copy_button_omits_the_end_bound_for_an_unaligned_end():
 
     body = _render(elan_context=_elan_context(annotations=annotations))
 
-    assert f'data-copy-text="{HANDLE}#t=20.500&amp;id=a2"' in body
+    assert f'data-copy-text="{HANDLE}#t=20.500"' in body
 
 
 def test_rows_without_a_start_offset_get_no_copy_button():
@@ -137,8 +131,8 @@ def test_rows_without_a_start_offset_get_no_copy_button():
 
     # The aligned row is still citable, so the omission is selective rather
     # than the whole feature being absent.
-    assert "&amp;id=a1" in body
-    assert "&amp;id=a2" not in body
+    assert f'data-copy-text="{HANDLE}#t=0.000,4.200"' in body
+    assert "#t=20.500" not in body
 
 
 def test_segment_links_render_in_the_htmx_modal_too():
@@ -155,7 +149,7 @@ def test_segment_links_render_in_the_htmx_modal_too():
     body = _render()
 
     assert body.count('data-copy-text="https://hdl.handle.net') == 2
-    assert f'data-copy-text="{HANDLE}#t=20.500,24.000&amp;id=a2"' in body
+    assert f'data-copy-text="{HANDLE}#t=20.500,24.000"' in body
 
 
 @pytest.mark.django_db
@@ -201,7 +195,7 @@ def test_segment_copy_destination_stays_local_only_in_development(
     base = f"http://localhost:8101{path}" if debug else HANDLE
 
     assert f'data-segment-link-base="{base}"' in body
-    assert f'data-copy-text="{base}#t=20.500,24.000&amp;id=a2"' in body
+    assert f'data-copy-text="{base}#t=20.500,24.000"' in body
     assert "?action=analyze#t=" not in body
 
 

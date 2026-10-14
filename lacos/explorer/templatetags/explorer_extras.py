@@ -130,11 +130,11 @@ def handle_resolver_url(value):
 def segment_fragment(annotation):
     """Return the Media Fragments anchor citing one ELAN annotation.
 
-    The time range is the authoritative part; the annotation id is an advisory
-    hint, since ELAN renumbers ANNOTATION_IDs on some exports. Appended to a
-    resource's handle URL this yields a citable segment link (issue #1):
+    Only the time range is cited: ELAN renumbers ANNOTATION_IDs on some
+    exports, so an id would not survive. Appended to a resource's handle URL
+    this yields a citable segment link (issue #1):
 
-        https://hdl.handle.net/11341/<pid>#t=20.500,24.000&id=a2
+        https://hdl.handle.net/11341/<pid>#t=20.500,24.000
 
     Returns "" for an annotation with no start offset, which cannot be cited.
     """
@@ -147,10 +147,6 @@ def segment_fragment(annotation):
     end = annotation.get("end")
     if end is not None:
         fragment += f",{end:.3f}"
-
-    annotation_id = annotation.get("id")
-    if annotation_id:
-        fragment += f"&id={annotation_id}"
 
     return fragment
 
