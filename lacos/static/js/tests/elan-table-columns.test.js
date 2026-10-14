@@ -154,14 +154,77 @@ describe('ensureFixed', () => {
     expect(table.dataset.fixed).toBe('1');
     expect(parseInt(table.style.width, 10)).toBeGreaterThan(0);
     // Body cells clip instead of forcing the column wider.
-    expect(table.querySelector('tbody td').style.overflow).toBe('hidden');
+    expect(table.querySelector('td[data-col-key="tx"]').style.overflow).toBe('hidden');
   });
+
+  test.each([[48, 64], [80, 80]])(
+    'keeps play controls visible when the initial width is %i px', (initial, expected) => {
+      const table = buildTable();
+      const header = table.querySelector('th[data-col-key="__play"]');
+      const cell = table.querySelector('td[data-col-key="__play"]');
+      header.style.width = `${initial}px`;
+      cell.innerHTML = '<button type="button">Play</button>';
+
+      ensureFixed(table);
+      ensureFixed(table);
+
+      expect(header.style.width).toBe(`${expected}px`);
+      expect(cell.style.overflow).toBe('visible');
+      expect(cell.style.textOverflow).toBe('clip');
+      expect(table.querySelector('td[data-col-key="tx"]').style.textOverflow).toBe('ellipsis');
+    },
+  );
 
   test('preserves widths already set on the headers', () => {
     const table = buildTable();
     applyLayout(table, { order: ['tx', 'tl'], widths: { tx: 240 } });
     ensureFixed(table);
     expect(table.querySelector('th[data-col-key="tx"]').style.width).toBe('240px');
+  });
+});
+
+describe('top horizontal scrollbar', () => {
+  function buildScrollableTable() {
+    const table = buildTable();
+    const scope = document.createElement('div');
+    scope.dataset.elanScope = '';
+    scope.innerHTML = `
+      <div data-elan-top-scrollbar class="hidden"><div data-elan-scrollbar-spacer></div></div>
+      <div data-elan-scroll-viewport></div>
+    `;
+    const viewport = scope.querySelector('[data-elan-scroll-viewport]');
+    viewport.appendChild(table);
+    document.body.appendChild(scope);
+    Object.defineProperty(viewport, 'scrollWidth', { configurable: true, value: 900 });
+    Object.defineProperty(viewport, 'clientWidth', { value: 300 });
+    return { table, scope, viewport, top: scope.querySelector('[data-elan-top-scrollbar]') };
+  }
+
+  test('shows a matching scroll track and synchronizes both directions', () => {
+    window.localStorage.clear();
+    const { table, viewport, top } = buildScrollableTable();
+    initElanTableColumns(table);
+    initElanTableColumns(table);
+    expect(top.classList.contains('hidden')).toBe(false);
+    expect(top.firstElementChild.style.width).toBe('900px');
+    top.scrollLeft = 175;
+    top.dispatchEvent(new Event('scroll'));
+    expect(viewport.scrollLeft).toBe(175);
+    viewport.scrollLeft = 350;
+    viewport.dispatchEvent(new Event('scroll'));
+    expect(top.scrollLeft).toBe(350);
+  });
+
+  test('updates on layout changes and hides when columns fit', () => {
+    window.localStorage.clear();
+    const { table, viewport, top } = buildScrollableTable();
+    initElanTableColumns(table);
+    Object.defineProperty(viewport, 'scrollWidth', { configurable: true, value: 1200 });
+    applyLayout(table, { widths: { tx: 400 } });
+    expect(top.firstElementChild.style.width).toBe('1200px');
+    Object.defineProperty(viewport, 'scrollWidth', { configurable: true, value: 300 });
+    ensureFixed(table);
+    expect(top.classList.contains('hidden')).toBe(true);
   });
 });
 

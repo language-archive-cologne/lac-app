@@ -69,7 +69,7 @@ function allRows(table) {
   return [head, ...table.querySelectorAll('tbody tr')].filter(Boolean);
 }
 
-const DEFAULT_WIDTHS = { __play: 56, __time: 150 };
+const DEFAULT_WIDTHS = { __play: 64, __time: 150 };
 const DEFAULT_TIER_WIDTH = 200;
 
 function defaultWidthFor(th) {
@@ -77,6 +77,8 @@ function defaultWidthFor(th) {
 }
 
 function applyWidth(th, px) {
+  // A 24px button plus cell padding, borders and spacing must never collapse.
+  if (th.dataset.colKey === '__play') px = Math.max(px, DEFAULT_WIDTHS.__play);
   const width = `${px}px`;
   th.style.width = width;
   th.style.minWidth = width;
@@ -92,6 +94,7 @@ function recalcTableWidth(table) {
   if (sum > 0) {
     table.style.width = `${sum}px`;
   }
+  table.dispatchEvent(new Event('elan:layout'));
 }
 
 /**
@@ -100,7 +103,8 @@ function recalcTableWidth(table) {
  * Under the default `table-layout: auto` with `whitespace-nowrap` cells, the
  * widest body cell dictates column width and an explicit `<th>` width is
  * ignored — so resizing has no visible effect. Fixed layout makes the `<th>`
- * width win; body cells clip with an ellipsis. Idempotent.
+ * width win; text cells clip with an ellipsis, but play controls stay visible.
+ * Idempotent.
  */
 export function ensureFixed(table) {
   const ths = [...table.querySelectorAll('thead th')];
@@ -117,8 +121,9 @@ export function ensureFixed(table) {
       applyWidth(th, width);
     });
     table.querySelectorAll('tbody td').forEach((td) => {
-      td.style.overflow = 'hidden';
-      td.style.textOverflow = 'ellipsis';
+      const isPlayControl = td.dataset.colKey === '__play';
+      td.style.overflow = isPlayControl ? 'visible' : 'hidden';
+      td.style.textOverflow = isPlayControl ? 'clip' : 'ellipsis';
     });
     table.style.tableLayout = 'fixed';
     table.dataset.fixed = '1';
@@ -149,6 +154,7 @@ function clearWidths(table) {
   table.style.tableLayout = '';
   table.style.width = '';
   delete table.dataset.fixed;
+  table.dispatchEvent(new Event('elan:layout'));
 }
 
 /** Reorder one row's tier cells to `tierOrder`, leaving fixed cells in place. */
@@ -329,6 +335,36 @@ function wireReset(table, defaultOrder, persist, storage, resourceId, tierKeys) 
   });
 }
 
+function wireTopScrollbar(table) {
+  const scope = table.closest('[data-elan-scope]');
+  const top = scope?.querySelector('[data-elan-top-scrollbar]');
+  const spacer = top?.querySelector('[data-elan-scrollbar-spacer]');
+  const viewport = table.closest('[data-elan-scroll-viewport]');
+  if (!top || !spacer || !viewport) return;
+
+  const update = () => {
+    spacer.style.width = `${viewport.scrollWidth}px`;
+    top.classList.toggle('hidden', viewport.scrollWidth <= viewport.clientWidth);
+    top.scrollLeft = viewport.scrollLeft;
+  };
+  top.addEventListener('scroll', () => {
+    if (viewport.scrollLeft !== top.scrollLeft) viewport.scrollLeft = top.scrollLeft;
+  });
+  viewport.addEventListener('scroll', () => {
+    if (top.scrollLeft !== viewport.scrollLeft) top.scrollLeft = viewport.scrollLeft;
+  });
+  if (typeof ResizeObserver !== 'undefined') {
+    const observer = new ResizeObserver(update);
+    observer.observe(table);
+    observer.observe(viewport);
+    scope.addEventListener('htmx:beforeCleanupElement', (event) => {
+      if (event.target.contains(table)) observer.disconnect();
+    });
+  }
+  table.addEventListener('elan:layout', update);
+  update();
+}
+
 /** Initialise reorder/resize/persistence on one ELAN table. Idempotent. */
 export function initElanTableColumns(table, opts = {}) {
   if (!table || table.dataset.colsInit === '1') {
@@ -370,6 +406,7 @@ export function initElanTableColumns(table, opts = {}) {
     }
   };
 
+  wireTopScrollbar(table);
   wireResize(table, persist);
   wireReorder(table, persist);
   wireReset(table, defaultOrder, persist, storage, resourceId, tierKeys);

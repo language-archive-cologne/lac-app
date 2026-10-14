@@ -387,7 +387,14 @@
               <span class="text-xs text-slate-400">{{ elan_context.annotations|length }} {% translate "segments" %}</span>
             </div>
           </div>
-          <div class="max-h-[65vh] overflow-auto">
+          {% if elan_context and elan_context.annotations %}
+            <div data-elan-top-scrollbar class="hidden overflow-x-auto overflow-y-hidden"
+                 style="height: 16px;" tabindex="0"
+                 aria-label="{% translate 'Scroll annotation columns horizontally' %}">
+              <div data-elan-scrollbar-spacer style="height: 1px;"></div>
+            </div>
+          {% endif %}
+          <div class="max-h-[65vh] overflow-auto" data-elan-scroll-viewport>
             {% if elan_context and elan_context.annotations %}
               <style>
                 /* Column boundaries — signal a resizable grid (issue #142 follow-up). */
