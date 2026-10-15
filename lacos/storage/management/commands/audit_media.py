@@ -28,13 +28,15 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        if options["all"]:
-            collections = Collection.objects.order_by("identifier")
-        else:
-            collections = [self._get_collection(options["collection"])]
-
         service = MediaAuditService()
-        for collection in collections:
+        if options["all"]:
+            service.audit_all_collections(
+                on_collection=lambda c: self.stdout.write(
+                    f"Auditing {c.identifier} ..."
+                ),
+            )
+        else:
+            collection = self._get_collection(options["collection"])
             self.stdout.write(f"Auditing {collection.identifier} ...")
             service.audit_collection(collection)
 

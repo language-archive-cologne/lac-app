@@ -34,6 +34,18 @@ def _check_minute() -> int:
     return int(getattr(settings, "MEDIA_DERIVATIVE_CHECK_CRON_MINUTE", 30))
 
 
+def _audit_day_of_week() -> str:
+    return str(getattr(settings, "MEDIA_AUDIT_CRON_DAY_OF_WEEK", "0"))
+
+
+def _audit_hour() -> int:
+    return int(getattr(settings, "MEDIA_AUDIT_CRON_HOUR", 3))
+
+
+def _audit_minute() -> int:
+    return int(getattr(settings, "MEDIA_AUDIT_CRON_MINUTE", 30))
+
+
 def recheck_derivative_rows(queryset) -> dict:
     """Update each row from HEAD requests. Errors on one row do not stop the run."""
     media_service = MediaProcessingService()
@@ -81,6 +93,13 @@ def _check_all_derivatives() -> dict:
     return recheck_derivative_rows(MediaDerivativeStatus.objects.all())
 
 
+def _audit_all_collections() -> dict:
+    from lacos.storage.services.media_audit_service import MediaAuditService
+
+    counts = MediaAuditService().audit_all_collections()
+    return {"success": counts["collection_errors"] == 0, **counts}
+
+
 if HUEY_PERIODIC_AVAILABLE:
 
     @db_periodic_task(crontab(minute=_check_minute(), hour=_check_hour()))
@@ -92,7 +111,24 @@ if HUEY_PERIODIC_AVAILABLE:
     def check_media_derivatives_periodic() -> dict:
         """Update the status of all recorded audio objects. Generate nothing."""
         return _check_all_derivatives()
+
+    @db_periodic_task(
+        crontab(
+            minute=_audit_minute(), hour=_audit_hour(), day_of_week=_audit_day_of_week()
+        )
+    )
+    @tracked_periodic(
+        task_name="periodic_media_audit",
+        description="Media Audit of all collections (periodic)",
+        schedule=f"{_audit_minute()} {_audit_hour()} * * {_audit_day_of_week()}",
+    )
+    def audit_media_periodic() -> dict:
+        """Audit all collections, so new audio and ELAN files get rows."""
+        return _audit_all_collections()
 else:
 
     def check_media_derivatives_periodic() -> dict:  # pragma: no cover - fallback
         return _check_all_derivatives()
+
+    def audit_media_periodic() -> dict:  # pragma: no cover - fallback
+        return _audit_all_collections()

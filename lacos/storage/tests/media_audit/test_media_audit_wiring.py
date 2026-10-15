@@ -148,3 +148,56 @@ def test_admin_changelists_render_with_filters(admin_client):
     for model in ("mediaderivativestatus", "elanmedialink"):
         response = admin_client.get(reverse(f"admin:storage_{model}_changelist"))
         assert response.status_code == 200
+
+
+def test_weekly_audit_runs_on_sundays_only():
+    from datetime import datetime
+
+    from lacos.storage.media_audit_tasks import audit_media_periodic
+
+    sunday = datetime(2026, 10, 18, 3, 30)
+    monday = datetime(2026, 10, 19, 3, 30)
+    task = audit_media_periodic.task_class()
+    assert task.validate_datetime(sunday)
+    assert not task.validate_datetime(monday)
+
+
+def test_weekly_audit_covers_all_collections_and_survives_errors(
+    fake_s3, media_service, resolve_by_name
+):
+    from lacos.storage.media_audit_tasks import audit_media_periodic
+    from lacos.storage.services.media_audit_service import MediaAuditService
+
+    from .conftest import FakeStorage
+
+    for name in ("col-a", "col-b", "col-c"):
+        bundle = make_bundle(make_collection(name), identifier=f"{name}-bundle")
+        add_elan(bundle, f"{name}.eaf")
+        fake_s3.put(content_key(f"{name}.eaf"), body=elan_xml())
+
+    original = MediaAuditService.audit_collection
+
+    def audit_collection(self, collection):
+        if collection.identifier == "col-b":
+            raise RuntimeError("S3 timeout")
+        return original(self, collection)
+
+    with (
+        patch(
+            "lacos.storage.services.resource_mapping_service.ResourceMappingService",
+            return_value=FakeStorage(fake_s3),
+        ),
+        patch(
+            "lacos.storage.services.media_audit_service.MediaProcessingService",
+            return_value=media_service,
+        ),
+        patch.object(MediaAuditService, "audit_collection", audit_collection),
+    ):
+        result = audit_media_periodic.call_local()
+
+    assert result["success"] is False
+    assert result["collection_errors"] == 1
+    assert sorted(ElanMediaLink.objects.values_list("elan_file_name", flat=True)) == [
+        "col-a.eaf",
+        "col-c.eaf",
+    ]

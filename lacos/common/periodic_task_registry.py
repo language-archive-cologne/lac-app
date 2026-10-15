@@ -1,4 +1,5 @@
 """Registry of known periodic tasks for dashboard display."""
+
 from __future__ import annotations
 
 PERIODIC_TASKS = [
@@ -19,5 +20,17 @@ PERIODIC_TASKS = [
         "label": "SAML Metadata Refresh",
         "schedule": "5 3 * * *",
         "schedule_human": "Daily at 3:05 AM UTC",
+    },
+    {
+        "task_name": "periodic_media_audit",
+        "label": "Media Audit (all collections)",
+        "schedule": "30 3 * * 0",
+        "schedule_human": "Sundays at 3:30 AM UTC",
+    },
+    {
+        "task_name": "periodic_media_derivative_check",
+        "label": "Media Derivative Check",
+        "schedule": "30 4 * * *",
+        "schedule_human": "Daily at 4:30 AM UTC",
     },
 ]

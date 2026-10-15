@@ -72,6 +72,22 @@ class MediaAuditService:
             self.audit_bundle(bundle, collection)
         return self.counts
 
+    def audit_all_collections(self, on_collection=None) -> Counter:
+        """Audit every collection. An error in one collection is counted and logged."""
+        from lacos.blam.models.collection.collection_repository import Collection
+
+        for collection in Collection.objects.order_by("identifier"):
+            if on_collection:
+                on_collection(collection)
+            try:
+                self.audit_collection(collection)
+            except Exception:
+                self.counts["collection_errors"] += 1
+                logger.exception(
+                    "Media audit failed for collection %s", collection.identifier
+                )
+        return self.counts
+
     def audit_bundle(self, bundle, collection=None) -> Counter:
         collection = collection or collection_of_bundle(bundle)
         _, _, iter_bundle_resources, _ = _explorer_utils()
