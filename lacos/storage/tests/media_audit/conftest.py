@@ -1,9 +1,10 @@
 """Shared fixtures for the media audit tests: a small in-memory S3 and BLAM data."""
 
 import io
+import json
+import struct
 from datetime import UTC
 from datetime import datetime
-from datetime import timezone
 
 import pytest
 from botocore.exceptions import ClientError
@@ -23,32 +24,104 @@ BUCKET = "lac-test"
 MODIFIED = datetime(2026, 10, 1, tzinfo=UTC)
 
 
+def wav_header(duration: float, byte_rate: int = 88200) -> tuple[bytes, int]:
+    """Return a 44-byte WAV header and the size of the whole file."""
+    data_size = int(duration * byte_rate)
+    header = (
+        b"RIFF"
+        + struct.pack("<I", 36 + data_size)
+        + b"WAVE"
+        + b"fmt "
+        + struct.pack("<IHHIIHH", 16, 1, 1, byte_rate // 2, byte_rate, 2, 16)
+        + b"data"
+        + struct.pack("<I", data_size)
+    )
+    return header, len(header) + data_size
+
+
+def spectrogram_frames(duration: float) -> int:
+    return (int(duration * 44100) - 2048) // 512 + 1
+
+
 class FakeS3:
-    """Store objects by (bucket, key); answer head_object and get_object."""
+    """Store objects by (bucket, key); answer head_object and ranged get_object.
+
+    An object stores only its first bytes; ``size`` is the size S3 reports.
+    """
 
     def __init__(self):
         self.objects: dict[tuple[str, str], dict] = {}
 
-    def put(self, key, *, etag="abc", metadata=None, body=b"", bucket=BUCKET):
-        self.objects[(bucket, key)] = {
+    def put(
+        self,
+        key,
+        *,
+        etag="abc",
+        metadata=None,
+        body=b"",
+        size=None,
+        encoding=None,
+        bucket=BUCKET,
+    ):
+        obj = {
             "ETag": f'"{etag}"',
             "Metadata": metadata or {},
             "LastModified": MODIFIED,
+            "ContentLength": len(body) if size is None else size,
             "Body": body,
         }
+        if encoding:
+            obj["ContentEncoding"] = encoding
+        self.objects[(bucket, key)] = obj
+
+    def put_wav(self, key, *, duration=10.0, etag="abc"):
+        header, size = wav_header(duration)
+        self.put(key, etag=etag, body=header, size=size)
 
     def put_derivatives(
-        self, content_key, *, source_etag="abc", version=None, pitch=True
+        self,
+        content_key,
+        *,
+        duration=10.0,
+        source_etag="abc",
+        version=None,
+        pitch=True,
+        metadata=True,
     ):
-        metadata = {
-            "source-etag": source_etag,
-            "format-version": str(version or DERIVATIVE_FORMAT_VERSION),
-        }
-        derivative_base = content_key.replace("/content/", "/derivatives/")
-        self.put(f"{derivative_base}.peaks.json", metadata=metadata)
-        self.put(f"{derivative_base}.spectrogram.bin", metadata=metadata)
+        meta = (
+            {
+                "source-etag": source_etag,
+                "format-version": str(version or DERIVATIVE_FORMAT_VERSION),
+            }
+            if metadata
+            else {"mtime": "1777379171.3"}
+        )
+        base = content_key.replace("/content/", "/derivatives/")
+        peaks = json.dumps(
+            {
+                "data": [0.1] * 400,
+                "channels": 1,
+                "duration": duration,
+                "sample_rate": 44100,
+                "samples_per_pixel": 441,
+            },
+            separators=(",", ":"),
+        ).encode()
+        self.put(f"{base}.peaks.json", metadata=meta, body=peaks)
+        n_frames = spectrogram_frames(duration)
+        self.put(
+            f"{base}.spectrogram.bin",
+            metadata=meta,
+            body=struct.pack("<IH", n_frames, 256),
+            size=6 + n_frames * 256,
+        )
         if pitch:
-            self.put(f"{derivative_base}.pitch.bin", metadata=metadata)
+            self.put(
+                f"{base}.pitch.bin",
+                metadata=meta,
+                body=struct.pack("<IHff", n_frames, 512, 50.0, 500.0),
+                size=14 + 4 * n_frames,
+            )
 
     def _get(self, Bucket, Key):
         try:
@@ -60,9 +133,12 @@ class FakeS3:
         obj = self._get(Bucket, Key)
         return {k: v for k, v in obj.items() if k != "Body"}
 
-    def get_object(self, Bucket, Key):
-        obj = self._get(Bucket, Key)
-        return {"Body": io.BytesIO(obj["Body"])}
+    def get_object(self, Bucket, Key, Range=None):
+        body = self._get(Bucket, Key)["Body"]
+        if Range:
+            start, _, end = Range.removeprefix("bytes=").partition("-")
+            body = body[-int(end) :] if not start else body[int(start) : int(end) + 1]
+        return {"Body": io.BytesIO(body)}
 
 
 class FakeStorage:

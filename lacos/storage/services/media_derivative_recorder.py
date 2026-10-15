@@ -1,4 +1,9 @@
-"""Record the state of audio derivatives in ``MediaDerivativeStatus``.
+"""Record whether the player files of each audio object work.
+
+The status comes from the files themselves (see ``media_derivative_checks``),
+not from the ``source-etag`` and ``format-version`` metadata: that metadata
+is missing on files uploaded outside the app, and a multipart ETag changes
+when the same audio is uploaded again with another part size.
 
 The generation task, the ``generate_peaks`` command, ``audit_media`` and the
 nightly check all write through this module, so the rules for a status live
@@ -13,7 +18,7 @@ from django.utils import timezone
 from lacos.storage.models import MediaDerivativeStatus
 from lacos.storage.models import S3ResourceLocation
 from lacos.storage.models.media_derivatives import DerivativeStatus
-from lacos.storage.services.media_processing_service import DERIVATIVE_FORMAT_VERSION
+from lacos.storage.services.media_derivative_checks import check_player_files
 from lacos.storage.services.media_processing_service import MediaProcessingService
 
 logger = logging.getLogger(__name__)
@@ -21,6 +26,7 @@ logger = logging.getLogger(__name__)
 NOT_FOUND_CODES = {"404", "NoSuchKey", "NotFound"}
 SOURCE_MISSING_PREFIX = "Source file not found"
 
+DERIVATIVES = ("peaks", "spectrogram", "pitch")
 # Pitch is optional: generation writes no pitch file for very short audio.
 REQUIRED_DERIVATIVES = ("peaks", "spectrogram")
 
@@ -38,56 +44,53 @@ def _head(s3_client, bucket: str, key: str) -> dict | None:
 def inspect_derivatives(
     media_service: MediaProcessingService, bucket: str, s3_key: str
 ) -> dict:
-    """Read the source and derivative objects with HEAD requests only."""
+    """Check with HEAD requests and short range reads that the player files work."""
     s3_client = media_service.bucket_service.s3_client
     source = _head(s3_client, bucket, s3_key)
     if source is None:
-        return {"status": DerivativeStatus.SOURCE_MISSING, "source_etag": ""}
+        return {
+            "status": DerivativeStatus.SOURCE_MISSING,
+            "source_etag": "",
+            "problems": "",
+        }
 
-    source_etag = (source.get("ETag") or "").strip('"')
-    derivative_keys = {
+    keys = {
+        "source": s3_key,
         "peaks": media_service._peaks_key(s3_key),
         "spectrogram": media_service._spectrogram_data_key(s3_key),
         "pitch": media_service._pitch_key(s3_key),
     }
+    heads = {name: _head(s3_client, bucket, keys[name]) for name in DERIVATIVES}
 
-    states: dict[str, str] = {}
-    last_modified: dict[str, object] = {}
-    format_version = None
-    for name, key in derivative_keys.items():
-        response = _head(s3_client, bucket, key)
-        if response is None:
-            states[name] = DerivativeStatus.MISSING
-            last_modified[name] = None
-            continue
-
-        metadata = response.get("Metadata", {})
-        stored_version = metadata.get("format-version", "")
-        if name == "peaks" and stored_version.isdigit():
-            format_version = int(stored_version)
-        is_current = metadata.get(
-            "source-etag", ""
-        ) == source_etag and stored_version == str(DERIVATIVE_FORMAT_VERSION)
-        states[name] = (
-            DerivativeStatus.CURRENT if is_current else DerivativeStatus.STALE
-        )
-        last_modified[name] = response.get("LastModified")
-
-    if any(states[name] == DerivativeStatus.MISSING for name in REQUIRED_DERIVATIVES):
-        status = DerivativeStatus.MISSING
-    elif DerivativeStatus.STALE in states.values():
-        status = DerivativeStatus.STALE
-    else:
-        status = DerivativeStatus.CURRENT
-
-    return {
-        "status": status,
-        "source_etag": source_etag,
-        "format_version": format_version,
-        "peaks_last_modified": last_modified["peaks"],
-        "spectrogram_last_modified": last_modified["spectrogram"],
-        "pitch_last_modified": last_modified["pitch"],
+    inspection = {
+        "source_etag": (source.get("ETag") or "").strip('"'),
+        "format_version": None,
+        "audio_duration": None,
+        "problems": "",
+        "peaks_last_modified": None,
+        "spectrogram_last_modified": None,
+        "pitch_last_modified": None,
     }
+    for name, head in heads.items():
+        if head is not None:
+            inspection[f"{name}_last_modified"] = head.get("LastModified")
+    stored_version = ((heads["peaks"] or {}).get("Metadata") or {}).get(
+        "format-version", ""
+    )
+    if stored_version.isdigit():
+        inspection["format_version"] = int(stored_version)
+
+    if any(heads[name] is None for name in REQUIRED_DERIVATIVES):
+        inspection["status"] = DerivativeStatus.MISSING
+        return inspection
+
+    result = check_player_files(s3_client, bucket, source, keys, heads)
+    inspection["audio_duration"] = result["audio_duration"]
+    inspection["problems"] = "; ".join(result["problems"] + result["notes"])
+    inspection["status"] = (
+        DerivativeStatus.BROKEN if result["problems"] else DerivativeStatus.WORKS
+    )
+    return inspection
 
 
 def collection_for_object(bucket: str, s3_key: str):
@@ -150,16 +153,16 @@ def record_check(
     inspection = inspect_derivatives(media_service, bucket, s3_key)
     row = _get_row(bucket, s3_key, collection)
 
-    # A failed generation leaves missing or stale files behind. Keep the
-    # failure visible until the files are current or the source is gone.
+    # A failed generation leaves missing or broken files behind. Keep the
+    # failure visible until the files work or the source is gone.
     keep_failure = row.status == DerivativeStatus.FAILED and inspection["status"] in {
         DerivativeStatus.MISSING,
-        DerivativeStatus.STALE,
+        DerivativeStatus.BROKEN,
     }
     _apply_inspection(row, inspection)
     if keep_failure:
         row.status = DerivativeStatus.FAILED
-    elif row.status == DerivativeStatus.CURRENT:
+    elif row.status == DerivativeStatus.WORKS:
         row.last_error = ""
     row.save()
     return row

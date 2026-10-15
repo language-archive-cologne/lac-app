@@ -25,13 +25,13 @@ class MediaDerivativeStatusAdmin(admin.ModelAdmin):
         "s3_key",
         "bucket",
         "status",
+        "problems",
         "collection",
-        "format_version",
-        "peaks_last_modified",
+        "audio_duration",
         "last_checked_at",
     )
     list_filter = ("status", "collection", "bucket")
-    search_fields = ("s3_key", "bucket", "last_error")
+    search_fields = ("s3_key", "bucket", "problems", "last_error")
     list_select_related = ("collection",)
     ordering = ("bucket", "s3_key")
     list_per_page = 100

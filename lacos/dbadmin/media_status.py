@@ -11,17 +11,18 @@ from lacos.storage.models.media_derivatives import DerivativeStatus
 from lacos.storage.models.media_derivatives import ElanLinkStatus
 
 DERIVATIVE_HELP = {
-    DerivativeStatus.CURRENT: (
-        "Waveform and spectrogram exist. The app made them from this audio file, "
-        "in the current format."
+    DerivativeStatus.WORKS: (
+        "The player shows the waveform and the spectrogram, and they line up with "
+        "the audio. Checked in the files themselves."
     ),
-    DerivativeStatus.STALE: (
-        "Waveform and spectrogram exist, and the player shows them. Nothing proves "
-        "that they match this audio file and the current format: they lack that "
-        "information, or they were made from an older version."
+    DerivativeStatus.BROKEN: (
+        "The files exist, but the player cannot show them correctly: a header or "
+        "size is wrong, or they do not line up with the audio. The admin shows the "
+        "failed check. The audio itself still plays."
     ),
     DerivativeStatus.MISSING: (
-        "No waveform or no spectrogram. The player shows only a plain audio bar."
+        "No waveform or no spectrogram. The player shows only a plain audio bar. "
+        "The audio itself still plays."
     ),
     DerivativeStatus.FAILED: (
         "The last attempt to make the files failed. The error is in the admin."
@@ -54,8 +55,8 @@ LINK_HELP = {
 
 # Short column headings for the collection table; the cards show the full labels.
 SHORT_LABELS = {
-    DerivativeStatus.CURRENT: "Up to date",
-    DerivativeStatus.STALE: "Not verified",
+    DerivativeStatus.WORKS: "Works",
+    DerivativeStatus.BROKEN: "Broken",
     DerivativeStatus.MISSING: "Missing",
     DerivativeStatus.FAILED: "Failed",
     DerivativeStatus.SOURCE_MISSING: "Audio missing",
@@ -68,8 +69,8 @@ SHORT_LABELS = {
 }
 
 BADGES = {
-    DerivativeStatus.CURRENT: "badge-success",
-    DerivativeStatus.STALE: "badge-warning",
+    DerivativeStatus.WORKS: "badge-success",
+    DerivativeStatus.BROKEN: "badge-error",
     DerivativeStatus.MISSING: "badge-error",
     DerivativeStatus.FAILED: "badge-error",
     DerivativeStatus.SOURCE_MISSING: "badge-error",

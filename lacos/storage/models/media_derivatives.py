@@ -6,8 +6,8 @@ from lacos.blam.models.base_model import UUIDTimestampModel
 
 
 class DerivativeStatus(models.TextChoices):
-    CURRENT = "current", "Up to date"
-    STALE = "stale", "Not verified"
+    WORKS = "works", "Works"
+    BROKEN = "broken", "Broken"
     MISSING = "missing", "Missing"
     FAILED = "failed", "Generation failed"
     SOURCE_MISSING = "source_missing", "Audio file missing"
@@ -44,6 +44,11 @@ class MediaDerivativeStatus(UUIDTimestampModel):
     peaks_last_modified = models.DateTimeField(null=True, blank=True)
     spectrogram_last_modified = models.DateTimeField(null=True, blank=True)
     pitch_last_modified = models.DateTimeField(null=True, blank=True)
+    audio_duration = models.FloatField(null=True, blank=True)
+    problems = models.TextField(
+        blank=True,
+        help_text="The checks that failed, and the checks that could not run.",
+    )
     last_error = models.TextField(blank=True)
     last_checked_at = models.DateTimeField(null=True, blank=True)
 

@@ -20,7 +20,7 @@
     <div class="card bg-base-100 shadow">
         <div class="card-body">
             <h3 class="card-title text-base">Audio Derivatives</h3>
-            <p class="text-sm text-base-content/60">The waveform, spectrogram and pitch files that the player shows with the audio. One row per audio file.</p>
+            <p class="text-sm text-base-content/60">The waveform, spectrogram and pitch files that the player shows with the audio. The audio plays without them. One row per audio file. Checked with short reads in S3; no file is downloaded.</p>
             <ul class="mt-2 divide-y divide-base-300 text-sm">
                 {% for cell in media.derivative_totals %}
                 <li class="flex justify-between items-center gap-4 py-2">

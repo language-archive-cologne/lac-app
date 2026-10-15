@@ -124,9 +124,9 @@ def test_nightly_check_updates_status_and_continues_after_errors(
     ):
         result = check_media_derivatives_periodic.call_local()
 
-    assert result["current"] == 1
+    assert result["works"] == 1
     assert result["errors"] == 1
-    assert MediaDerivativeStatus.objects.get(s3_key=KEY).status == "current"
+    assert MediaDerivativeStatus.objects.get(s3_key=KEY).status == "works"
 
 
 def test_admin_actions_queue_tasks(admin_client):

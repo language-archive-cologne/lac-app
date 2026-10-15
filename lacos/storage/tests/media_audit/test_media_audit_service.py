@@ -46,7 +46,7 @@ def test_referenced_audio_is_linked_with_its_derivative_status(
     assert link.link_status == "referenced_found"
     assert link.audio_file_name == "s1_audio.wav"
     assert link.referenced_media == ["file:///C:/data/s1_audio.wav"]
-    assert link.audio_derivative.status == "current"
+    assert link.audio_derivative.status == "works"
     assert link.collection == bundle.structural_info.first().is_member_of_collection
     # The audio is checked once even though both the ELAN file and the
     # audio resource lead to it.

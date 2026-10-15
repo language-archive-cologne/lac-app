@@ -40,7 +40,7 @@ def _collection(identifier, title):
 def data():
     totoli = _collection("totoli", "Totoli Archive")
     other = _collection("other", "Another Archive")
-    for index, status in enumerate(["missing", "missing", "stale"]):
+    for index, status in enumerate(["missing", "missing", "broken"]):
         MediaDerivativeStatus.objects.create(
             bucket="b",
             s3_key=f"t{index}.wav",
@@ -48,7 +48,7 @@ def data():
             collection=totoli,
         )
     MediaDerivativeStatus.objects.create(
-        bucket="b", s3_key="o.wav", status="current", collection=other
+        bucket="b", s3_key="o.wav", status="works", collection=other
     )
     bundle = Bundle.objects.create(identifier="bundle")
     ElanMediaLink.objects.create(
