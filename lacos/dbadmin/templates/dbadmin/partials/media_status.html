@@ -1,0 +1,90 @@
+{% load humanize %}
+
+<div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-base-content/70 mb-4">
+    <span><span class="font-semibold text-base-content">{{ media.audio_total|intcomma }}</span> audio files</span>
+    <span class="text-base-content/30">|</span>
+    <span><span class="font-semibold text-base-content">{{ media.elan_total|intcomma }}</span> ELAN files</span>
+    <span class="text-base-content/30">|</span>
+    <span>last check {% if media.last_checked %}{{ media.last_checked|naturaltime }}{% else %}<span class="text-warning font-semibold">never</span>{% endif %}</span>
+</div>
+
+<div role="alert" class="alert alert-info mb-6 py-2 text-xs">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+    <span>Read-only overview. <code>manage.py audit_media --collection &lt;id&gt;</code> fills both tables. The nightly check updates the audio status only. Nothing here generates derivatives. Click a count to open the rows in the admin.</span>
+</div>
+
+{% if not media.audio_total and not media.elan_total %}
+    <p class="text-sm text-base-content/60">No audit data yet. Run <code>manage.py audit_media --collection &lt;id&gt;</code> or <code>--all</code>.</p>
+{% else %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="card bg-base-100 shadow">
+        <div class="card-body">
+            <h3 class="card-title text-base">Audio Derivatives</h3>
+            <ul class="mt-2 divide-y divide-base-300 text-sm">
+                {% for cell in media.derivative_totals %}
+                <li class="flex justify-between items-center gap-4 py-2">
+                    <span>
+                        <span class="font-medium">{{ cell.label }}</span>
+                        <span class="block text-xs text-base-content/60">{{ cell.help }}</span>
+                    </span>
+                    <a href="{{ cell.url }}" class="badge badge-sm {% if cell.count %}{{ cell.badge }}{% else %}badge-ghost{% endif %}">{{ cell.count|intcomma }}</a>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <div class="card bg-base-100 shadow">
+        <div class="card-body">
+            <h3 class="card-title text-base">ELAN Audio Links</h3>
+            <ul class="mt-2 divide-y divide-base-300 text-sm">
+                {% for cell in media.link_totals %}
+                <li class="flex justify-between items-center gap-4 py-2">
+                    <span>
+                        <span class="font-medium">{{ cell.label }}</span>
+                        <span class="block text-xs text-base-content/60">{{ cell.help }}</span>
+                    </span>
+                    <a href="{{ cell.url }}" class="badge badge-sm {% if cell.count %}{{ cell.badge }}{% else %}badge-ghost{% endif %}">{{ cell.count|intcomma }}</a>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+
+<div class="mt-6">
+    <h3 class="text-lg font-semibold mb-3">By Collection</h3>
+    <div class="overflow-x-auto">
+        <table class="table table-sm table-zebra">
+            <thead>
+                <tr>
+                    <th rowspan="2">Collection</th>
+                    <th colspan="{{ media.derivative_columns|length|add:1 }}" class="text-center border-l border-base-300">Audio derivatives</th>
+                    <th colspan="{{ media.link_columns|length|add:1 }}" class="text-center border-l border-base-300">ELAN audio links</th>
+                </tr>
+                <tr>
+                    <th class="text-right border-l border-base-300">Total</th>
+                    {% for label in media.derivative_columns %}<th class="text-right whitespace-nowrap">{{ label }}</th>{% endfor %}
+                    <th class="text-right border-l border-base-300">Total</th>
+                    {% for label in media.link_columns %}<th class="text-right whitespace-nowrap">{{ label }}</th>{% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in media.collections %}
+                <tr>
+                    <td class="text-xs whitespace-nowrap">{{ row.title }}</td>
+                    <td class="text-right font-mono text-xs border-l border-base-300">{{ row.audio_total|intcomma }}</td>
+                    {% for cell in row.derivatives %}
+                    <td class="text-right font-mono text-xs">{% if cell.count %}<a href="{{ cell.url }}" class="badge badge-sm {{ cell.badge }}">{{ cell.count|intcomma }}</a>{% else %}<span class="text-base-content/30">0</span>{% endif %}</td>
+                    {% endfor %}
+                    <td class="text-right font-mono text-xs border-l border-base-300">{{ row.elan_total|intcomma }}</td>
+                    {% for cell in row.links %}
+                    <td class="text-right font-mono text-xs">{% if cell.count %}<a href="{{ cell.url }}" class="badge badge-sm {{ cell.badge }}">{{ cell.count|intcomma }}</a>{% else %}<span class="text-base-content/30">0</span>{% endif %}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}

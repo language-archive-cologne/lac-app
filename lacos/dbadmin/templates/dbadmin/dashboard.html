@@ -196,6 +196,22 @@
             </div>
         </div>
 
+        <input type="radio" name="dbadmin_tabs" class="tab" aria-label="Media" />
+        <div class="tab-content bg-base-100 border-base-300 p-6">
+            <div
+                id="media-status"
+                hx-get="{% url 'dbadmin:media_status' %}"
+                hx-trigger="load"
+                hx-target="#media-status"
+                hx-swap="innerHTML"
+            >
+                <div class="flex items-center justify-center py-10">
+                    <span class="loading loading-spinner loading-md"></span>
+                    <span class="ml-3 text-sm text-base-content/60">Loading media status...</span>
+                </div>
+            </div>
+        </div>
+
         <input type="radio" name="dbadmin_tabs" class="tab" aria-label="Management" />
         <div class="tab-content bg-base-100 border-base-300 p-6">
             <!-- Metadata stats cards -->
