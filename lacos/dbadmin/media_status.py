@@ -12,48 +12,58 @@ from lacos.storage.models.media_derivatives import ElanLinkStatus
 
 DERIVATIVE_HELP = {
     DerivativeStatus.CURRENT: (
-        "Peaks and spectrogram exist and match the audio file and format version."
+        "Waveform and spectrogram exist. The app made them from this audio file, "
+        "in the current format."
     ),
     DerivativeStatus.STALE: (
-        "Files exist, but their source ETag or format version is missing or different."
+        "Waveform and spectrogram exist, and the player shows them. Nothing proves "
+        "that they match this audio file and the current format: they lack that "
+        "information, or they were made from an older version."
     ),
-    DerivativeStatus.MISSING: "No peaks or no spectrogram file.",
-    DerivativeStatus.FAILED: "The last generation failed. See the error in the admin.",
-    DerivativeStatus.SOURCE_MISSING: "The audio file is not in storage.",
+    DerivativeStatus.MISSING: (
+        "No waveform or no spectrogram. The player shows only a plain audio bar."
+    ),
+    DerivativeStatus.FAILED: (
+        "The last attempt to make the files failed. The error is in the admin."
+    ),
+    DerivativeStatus.SOURCE_MISSING: "The audio file itself is not in storage.",
 }
 
 LINK_HELP = {
     ElanLinkStatus.REFERENCED_FOUND: (
-        "The audio named in the ELAN file is in the bundle."
+        "The ELAN file names an audio file, and the bundle contains it."
     ),
     ElanLinkStatus.NAME_FALLBACK: (
-        "No media reference; an audio file with the same name was found."
+        "The ELAN file names no audio file. The app uses the audio file with the "
+        "same name."
     ),
     ElanLinkStatus.REFERENCED_MISSING: (
-        "The ELAN file names an audio file that is not in the bundle."
+        "The ELAN file names an audio file that the bundle does not contain. "
+        "The transcription has no audio."
     ),
-    ElanLinkStatus.NO_AUDIO: "No media reference and no audio file with the same name.",
+    ElanLinkStatus.NO_AUDIO: (
+        "The ELAN file names no audio file, and no audio file has the same name."
+    ),
     ElanLinkStatus.AUDIO_NO_LOCATION: (
-        "The matching audio file has no storage location."
+        "The bundle lists the matching audio file, but it is not in storage."
     ),
     ElanLinkStatus.ELAN_UNREADABLE: (
         "The ELAN file is not in storage or is not valid XML."
     ),
 }
 
-
 # Short column headings for the collection table; the cards show the full labels.
 SHORT_LABELS = {
-    DerivativeStatus.CURRENT: "Current",
-    DerivativeStatus.STALE: "Stale",
+    DerivativeStatus.CURRENT: "Up to date",
+    DerivativeStatus.STALE: "Not verified",
     DerivativeStatus.MISSING: "Missing",
     DerivativeStatus.FAILED: "Failed",
-    DerivativeStatus.SOURCE_MISSING: "No source",
-    ElanLinkStatus.REFERENCED_FOUND: "Found",
-    ElanLinkStatus.NAME_FALLBACK: "By name",
-    ElanLinkStatus.REFERENCED_MISSING: "Ref. missing",
+    DerivativeStatus.SOURCE_MISSING: "Audio missing",
+    ElanLinkStatus.REFERENCED_FOUND: "By ELAN ref.",
+    ElanLinkStatus.NAME_FALLBACK: "By file name",
+    ElanLinkStatus.REFERENCED_MISSING: "Not in bundle",
     ElanLinkStatus.NO_AUDIO: "No audio",
-    ElanLinkStatus.AUDIO_NO_LOCATION: "No location",
+    ElanLinkStatus.AUDIO_NO_LOCATION: "Not in storage",
     ElanLinkStatus.ELAN_UNREADABLE: "Unreadable",
 }
 

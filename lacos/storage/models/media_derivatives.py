@@ -6,19 +6,19 @@ from lacos.blam.models.base_model import UUIDTimestampModel
 
 
 class DerivativeStatus(models.TextChoices):
-    CURRENT = "current", "Current"
-    STALE = "stale", "Stale"
+    CURRENT = "current", "Up to date"
+    STALE = "stale", "Not verified"
     MISSING = "missing", "Missing"
-    FAILED = "failed", "Failed"
-    SOURCE_MISSING = "source_missing", "Source missing"
+    FAILED = "failed", "Generation failed"
+    SOURCE_MISSING = "source_missing", "Audio file missing"
 
 
 class ElanLinkStatus(models.TextChoices):
-    REFERENCED_FOUND = "referenced_found", "Referenced audio found"
-    NAME_FALLBACK = "name_fallback", "Audio found by file name"
-    REFERENCED_MISSING = "referenced_missing", "Referenced audio missing"
+    REFERENCED_FOUND = "referenced_found", "Linked by ELAN reference"
+    NAME_FALLBACK = "name_fallback", "Linked by file name"
+    REFERENCED_MISSING = "referenced_missing", "Named audio not in bundle"
     NO_AUDIO = "no_audio", "No audio"
-    AUDIO_NO_LOCATION = "audio_no_location", "Audio has no storage location"
+    AUDIO_NO_LOCATION = "audio_no_location", "Audio not in storage"
     ELAN_UNREADABLE = "elan_unreadable", "ELAN file unreadable"
 
 

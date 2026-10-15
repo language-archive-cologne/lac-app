@@ -10,7 +10,7 @@
 
 <div role="alert" class="alert alert-info mb-6 py-2 text-xs">
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-    <span>Read-only overview. <code>manage.py audit_media --collection &lt;id&gt;</code> fills both tables. The nightly check updates the audio status only. Nothing here generates derivatives. Click a count to open the rows in the admin.</span>
+    <span>Read-only overview. Only audited collections are listed. <code>manage.py audit_media --collection &lt;id&gt;</code> or <code>--all</code> fills both tables. The nightly check updates the audio status only. Nothing here generates files. Click a count to open the rows in the admin.</span>
 </div>
 
 {% if not media.audio_total and not media.elan_total %}
@@ -20,6 +20,7 @@
     <div class="card bg-base-100 shadow">
         <div class="card-body">
             <h3 class="card-title text-base">Audio Derivatives</h3>
+            <p class="text-sm text-base-content/60">The waveform, spectrogram and pitch files that the player shows with the audio. One row per audio file.</p>
             <ul class="mt-2 divide-y divide-base-300 text-sm">
                 {% for cell in media.derivative_totals %}
                 <li class="flex justify-between items-center gap-4 py-2">
@@ -37,6 +38,7 @@
     <div class="card bg-base-100 shadow">
         <div class="card-body">
             <h3 class="card-title text-base">ELAN Audio Links</h3>
+            <p class="text-sm text-base-content/60">Which audio file the player uses for an ELAN transcription. One row per ELAN file.</p>
             <ul class="mt-2 divide-y divide-base-300 text-sm">
                 {% for cell in media.link_totals %}
                 <li class="flex justify-between items-center gap-4 py-2">
@@ -64,9 +66,9 @@
                 </tr>
                 <tr>
                     <th class="text-right border-l border-base-300">Total</th>
-                    {% for label in media.derivative_columns %}<th class="text-right whitespace-nowrap">{{ label }}</th>{% endfor %}
+                    {% for label in media.derivative_columns %}<th class="text-right whitespace-normal">{{ label }}</th>{% endfor %}
                     <th class="text-right border-l border-base-300">Total</th>
-                    {% for label in media.link_columns %}<th class="text-right whitespace-nowrap">{{ label }}</th>{% endfor %}
+                    {% for label in media.link_columns %}<th class="text-right whitespace-normal">{{ label }}</th>{% endfor %}
                 </tr>
             </thead>
             <tbody>

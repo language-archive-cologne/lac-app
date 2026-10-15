@@ -83,7 +83,9 @@ class ElanMediaLinkAdmin(admin.ModelAdmin):
 
     @admin.display(description="Derivatives", ordering="audio_derivative__status")
     def derivative_status(self, obj):
-        return obj.audio_derivative.status if obj.audio_derivative else "-"
+        if obj.audio_derivative is None:
+            return "-"
+        return obj.audio_derivative.get_status_display()
 
     @admin.action(description="Regenerate derivatives")
     def regenerate_derivatives(self, request, queryset):
