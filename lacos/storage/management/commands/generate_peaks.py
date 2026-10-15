@@ -8,6 +8,7 @@ from django.core.management.base import BaseCommand
 from lacos.explorer.media_utils import AUDIO_EXTENSIONS
 from lacos.storage.media_tasks import generate_peaks_task
 from lacos.storage.services.bucket_service import BucketService
+from lacos.storage.services.media_derivative_recorder import record_generation
 from lacos.storage.services.media_processing_service import MediaProcessingService
 
 logger = logging.getLogger(__name__)
@@ -87,6 +88,7 @@ class Command(BaseCommand):
 
             if inline:
                 result = media_service.generate_peaks(bucket, key, force=force)
+                record_generation(bucket, key, result, media_service=media_service)
                 status = "OK" if result.get("success") else f"FAIL: {result.get('error')}"
                 self.stdout.write(f"  [{status}] {key}")
             else:
