@@ -8,6 +8,7 @@ from huey.contrib.djhuey import db_task
 
 from lacos.explorer.media_utils import AUDIO_EXTENSIONS
 from lacos.storage.services.background_task_service import BackgroundTaskService
+from lacos.storage.services.media_derivative_recorder import record_generation
 from lacos.storage.services.media_processing_service import MediaProcessingService
 
 logger = logging.getLogger(__name__)
@@ -99,6 +100,7 @@ def generate_peaks_task(
                 "error": "No space left on device while generating peaks sidecars",
             }
         else:
+            record_generation(bucket_name, s3_key, {"success": False, "error": str(exc)})
             raise
     except Exception as exc:
         if "No space left on device" in str(exc):
@@ -108,7 +110,10 @@ def generate_peaks_task(
                 "error": f"No space left on device while generating peaks sidecars: {exc}",
             }
         else:
+            record_generation(bucket_name, s3_key, {"success": False, "error": str(exc)})
             raise
+
+    record_generation(bucket_name, s3_key, result, media_service=service)
 
     if tracking_id:
         if result.get("success"):

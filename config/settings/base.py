@@ -351,6 +351,7 @@ HUEY = {
         'periodic': True,  # Enable crontab feature
         'check_worker_health': True,  # Enable worker health checks
         'health_check_interval': 1,  # Check worker health every second
+        'flush_locks': True,  # Clear task locks left by a killed worker
     },
 }
 
@@ -629,6 +630,18 @@ BACKGROUND_TASK_RETENTION_ENABLED = env.bool("BACKGROUND_TASK_RETENTION_ENABLED"
 BACKGROUND_TASK_RETENTION_DAYS = env.int("BACKGROUND_TASK_RETENTION_DAYS", default=30)
 BACKGROUND_TASK_RETENTION_CRON_HOUR = env.int("BACKGROUND_TASK_RETENTION_CRON_HOUR", default=4)
 BACKGROUND_TASK_RETENTION_CRON_MINUTE = env.int("BACKGROUND_TASK_RETENTION_CRON_MINUTE", default=30)
+
+# Media derivative status (issue #211)
+# ------------------------------------------------------------------------------
+# Both tasks only read S3; they never generate derivatives. Times are UTC.
+# The nightly check updates the audio files that already have a status row.
+MEDIA_DERIVATIVE_CHECK_CRON_HOUR = env.int("MEDIA_DERIVATIVE_CHECK_CRON_HOUR", default=4)
+MEDIA_DERIVATIVE_CHECK_CRON_MINUTE = env.int("MEDIA_DERIVATIVE_CHECK_CRON_MINUTE", default=30)
+# The weekly audit covers all collections, so new audio and ELAN files get rows.
+# Day of week as in cron: 0 is Sunday.
+MEDIA_AUDIT_CRON_DAY_OF_WEEK = env("MEDIA_AUDIT_CRON_DAY_OF_WEEK", default="0")
+MEDIA_AUDIT_CRON_HOUR = env.int("MEDIA_AUDIT_CRON_HOUR", default=3)
+MEDIA_AUDIT_CRON_MINUTE = env.int("MEDIA_AUDIT_CRON_MINUTE", default=30)
 
 # django-allauth
 # ------------------------------------------------------------------------------

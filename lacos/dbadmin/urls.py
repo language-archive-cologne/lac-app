@@ -1,5 +1,6 @@
 from django.urls import path
 
+from . import media_views
 from . import views
 
 app_name = "dbadmin"
@@ -12,6 +13,7 @@ urlpatterns = [
     path("tasks/<uuid:task_id>/cancel/", views.TaskCancelView.as_view(), name="task_cancel"),
     path("tasks/history/", views.TaskHistoryView.as_view(), name="task_history"),
     path("tasks/scheduled/", views.ScheduledTasksView.as_view(), name="scheduled_tasks"),
+    path("media/", media_views.MediaStatusView.as_view(), name="media_status"),
     # Database management
     path("cleanup/", views.DatabaseCleanupView.as_view(), name="cleanup"),
     path("delete/all/", views.DatabaseDeleteAllView.as_view(), name="delete_all"),

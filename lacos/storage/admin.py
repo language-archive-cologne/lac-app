@@ -179,3 +179,6 @@ class UploadSessionAdmin(admin.ModelAdmin):
 class ACLPermissionsAdmin(admin.ModelAdmin):
     list_display = ('id', 'content_type', 'object_id')
     list_filter = ('content_type',)
+
+
+from . import admin_media  # noqa: E402,F401
