@@ -7,7 +7,9 @@ import logging
 from collections import Counter
 
 from django.conf import settings
+from huey.contrib.djhuey import HUEY
 from huey.contrib.djhuey import db_task
+from huey.exceptions import TaskLockedException
 
 try:
     from huey import crontab
@@ -24,6 +26,13 @@ from lacos.storage.services.media_derivative_recorder import record_check
 from lacos.storage.services.media_processing_service import MediaProcessingService
 
 logger = logging.getLogger(__name__)
+
+# The nightly check and the weekly audit write the same rows. They share one
+# lock, so they never run at the same time. The task that finds the lock
+# taken skips its run. The consumer clears the lock when it starts
+# (``flush_locks``), so a killed worker does not block the tasks.
+media_status_lock = HUEY.lock_task("media-derivative-status")
+SKIPPED_LOCKED = {"success": False, "skipped": "media_status_task_running"}
 
 
 def _check_hour() -> int:
@@ -89,15 +98,30 @@ def recheck_elan_links_task(link_ids: list[str]) -> dict:
     return {"success": errors == 0, "errors": errors, **service.counts}
 
 
+def _run_locked(name: str, run) -> dict:
+    try:
+        with media_status_lock:
+            return run()
+    except TaskLockedException:
+        logger.warning("%s skipped: another media status task is running", name)
+        return dict(SKIPPED_LOCKED)
+
+
 def _check_all_derivatives() -> dict:
-    return recheck_derivative_rows(MediaDerivativeStatus.objects.all())
+    return _run_locked(
+        "Media derivative check",
+        lambda: recheck_derivative_rows(MediaDerivativeStatus.objects.all()),
+    )
 
 
 def _audit_all_collections() -> dict:
     from lacos.storage.services.media_audit_service import MediaAuditService
 
-    counts = MediaAuditService().audit_all_collections()
-    return {"success": counts["collection_errors"] == 0, **counts}
+    def run() -> dict:
+        counts = MediaAuditService().audit_all_collections()
+        return {"success": counts["collection_errors"] == 0, **counts}
+
+    return _run_locked("Media audit", run)
 
 
 if HUEY_PERIODIC_AVAILABLE:

@@ -20,6 +20,18 @@ from lacos.blam.models.bundle.bundle_structural_info import WrittenResource
 from lacos.blam.models.collection.collection_repository import Collection
 from lacos.storage.services.media_processing_service import DERIVATIVE_FORMAT_VERSION
 
+
+@pytest.fixture(autouse=True)
+def huey_in_memory():
+    """Keep Huey data, such as the task lock, in memory: no Redis is needed."""
+    from huey.contrib.djhuey import HUEY
+
+    immediate = HUEY.immediate
+    HUEY.immediate = True
+    yield
+    HUEY.immediate = immediate
+
+
 BUCKET = "lac-test"
 MODIFIED = datetime(2026, 10, 1, tzinfo=UTC)
 

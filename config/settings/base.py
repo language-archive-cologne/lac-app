@@ -351,6 +351,7 @@ HUEY = {
         'periodic': True,  # Enable crontab feature
         'check_worker_health': True,  # Enable worker health checks
         'health_check_interval': 1,  # Check worker health every second
+        'flush_locks': True,  # Clear task locks left by a killed worker
     },
 }
 

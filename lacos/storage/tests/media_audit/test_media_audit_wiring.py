@@ -201,3 +201,55 @@ def test_weekly_audit_covers_all_collections_and_survives_errors(
         "col-a.eaf",
         "col-c.eaf",
     ]
+
+
+def test_nightly_check_skips_while_the_weekly_audit_runs():
+    from lacos.storage.media_audit_tasks import media_status_lock
+
+    MediaDerivativeStatus.objects.create(bucket=BUCKET, s3_key=KEY)
+    with (
+        media_status_lock,
+        patch("lacos.storage.media_audit_tasks.record_check") as mock_check,
+    ):
+        result = check_media_derivatives_periodic.call_local()
+
+    assert result == {"success": False, "skipped": "media_status_task_running"}
+    mock_check.assert_not_called()
+    assert not media_status_lock.is_locked()
+
+
+def test_weekly_audit_skips_while_the_nightly_check_runs():
+    from lacos.storage.media_audit_tasks import audit_media_periodic
+    from lacos.storage.media_audit_tasks import media_status_lock
+
+    with (
+        media_status_lock,
+        patch(
+            "lacos.storage.services.media_audit_service.MediaAuditService",
+        ) as mock_service,
+    ):
+        result = audit_media_periodic.call_local()
+
+    assert result == {"success": False, "skipped": "media_status_task_running"}
+    mock_service.assert_not_called()
+
+
+def test_periodic_tasks_release_the_lock_after_an_error():
+    from lacos.storage.media_audit_tasks import media_status_lock
+
+    with (
+        patch(
+            "lacos.storage.media_audit_tasks.recheck_derivative_rows",
+            side_effect=RuntimeError("database gone"),
+        ),
+        pytest.raises(RuntimeError),
+    ):
+        check_media_derivatives_periodic.call_local()
+
+    assert not media_status_lock.is_locked()
+
+
+def test_huey_consumer_clears_stale_locks_on_start():
+    from django.conf import settings
+
+    assert settings.HUEY["consumer"]["flush_locks"] is True
